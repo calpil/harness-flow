@@ -1,0 +1,91 @@
+#!/usr/bin/env python3
+"""Panorama del proyecto: que hay abierto, que gate falta, que tan viejo esta el grafo."""
+from __future__ import annotations
+
+import sys
+import time
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).parent))
+from comun import (cubre_acs, impl_path, load_backlog, paths, review_path,  # noqa: E402
+                   sello_revision, sig_fresh, spec_acs, spec_estado, spec_path)
+
+ABIERTOS = ("todo", "in_progress", "blocked", "review")
+
+
+def main() -> None:
+    p = paths()
+    data = load_backlog(p)
+    print(f"== {data.get('project','(sin nombre)')} == {p['root']}")
+
+    reglas = [k for k, v in data["rules"].items() if k.startswith("require_") and v]
+    print(f"   reglas activas: {', '.join(reglas) or 'ninguna'}")
+
+    if p["graph"].exists():
+        edad = (time.time() - p["graph"].stat().st_mtime) / 3600
+        marca = "" if edad < 24 else "  <- viejo, corre: graphify update ."
+        print(f"   grafo: {p['graph'].name}, {edad:.1f}h de antiguedad{marca}")
+    else:
+        print("   grafo: ausente (corre: graphify .)")
+    print(f"   vault: {'ok' if p['vault'].exists() else 'ausente (vault.py build)'}")
+    print(f"   jira:  {'configurado' if p['atlassian'].exists() else 'sin binding'}")
+
+    abiertas = [f for f in data["features"] if f.get("status") in ABIERTOS]
+    cerradas = len(data["features"]) - len(abiertas)
+    print(f"\n   features: {len(abiertas)} abiertas, {cerradas} cerradas\n")
+
+    if not abiertas:
+        print("   Nada en curso. Para arrancar: add.py --name '<nombre>'")
+        return
+
+    for f in abiertas:
+        _fila(p, f)
+
+    print("\nSiguiente paso sugerido:")
+    en_curso = [f for f in abiertas if f.get("status") == "in_progress"]
+    if en_curso:
+        print(f"   retoma la feature #{en_curso[0]['id']} (ya esta in_progress)")
+    else:
+        print(f"   arranca la #{abiertas[0]['id']}: worktree.py start --feature {abiertas[0]['id']}")
+
+
+def _fila(p, f) -> None:
+    fid = f["id"]
+    sp = spec_path(p, f)
+    marcas = []
+    acs: list[str] = []
+    if not sp.exists():
+        marcas.append("sin spec")
+    else:
+        t = sp.read_text(encoding="utf-8")
+        acs = spec_acs(t)
+        est = spec_estado(t)
+        if est != "approved":
+            marcas.append(f"spec {est}")
+        elif not sig_fresh(sp, f.get("last_spec_sig")):
+            marcas.append("spec sello invalido")
+        else:
+            marcas.append(f"spec ok ({len(acs)} AC)")
+
+    ip = impl_path(p, f)
+    if ip.exists():
+        _, faltan = cubre_acs(ip.read_text(encoding="utf-8"), acs)
+        marcas.append("evidencia ok" if not faltan else f"faltan {len(faltan)} AC")
+    else:
+        marcas.append("sin evidencia")
+
+    rp = review_path(p, f)
+    if rp.exists():
+        s = sello_revision(rp.read_text(encoding="utf-8"))
+        marcas.append(f"review {s or 'sin sello'}")
+    else:
+        marcas.append("sin review")
+
+    wt = f.get("worktree")
+    marcas.append(f"wt {Path(wt).name}" if wt else "SIN worktree")
+    print(f"   #{fid} [{f.get('status')}] {f.get('name')}")
+    print(f"        {' · '.join(marcas)}")
+
+
+if __name__ == "__main__":
+    main()
