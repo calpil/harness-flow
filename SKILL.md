@@ -106,10 +106,14 @@ Si el subagente no está disponible, `$PY "$H/revision.py" --feature <id>` da el
 ### 4. Cierre
 
 ```bash
-$PY "$H/gate.py" close --feature <id> --status done --to <rama> --leccion <clase>
+python "$H/gate.py" close --feature <id> --status done --to <rama> --leccion <clase>
 ```
 
-El gate exige, según `rules`: spec approved y fresco, review approved, check limpio, lección declarada. Se niega sin `--to`: PREGÚNTALE al usuario a qué rama integra. Integra LOCAL; publicar es aparte.
+El gate exige, según `rules`: spec approved y fresco, review approved, check limpio, lección declarada. Se niega sin `--to`: PREGÚNTALE al usuario a qué rama integra.
+
+`close` **ejecuta el merge de verdad** (`git merge --no-ff` de la rama de la feature en `--to`) y guarda el sha en `merge_commit`. Aborta sin tocar el backlog si el árbol está sucio, la rama no existe o el merge conflictúa: es preferible una feature que no cierra a un `done` sobre una rama que nunca entró. Integra LOCAL; publicar es aparte.
+
+Verifica el resultado (`git log --oneline -1` en la rama destino) antes de dar por integrada una feature: el mensaje de un script no es evidencia de que el merge ocurrió.
 
 ## Gates (todos con exit≠0)
 
@@ -186,6 +190,8 @@ Solo si existe `harness/atlassian.json`. Sin ese archivo el flujo se comporta ig
 ## Reglas duras
 
 - Todo hallazgo relevante se escribe en `harness/progress/`. Una respuesta en el chat no reemplaza evidencia persistida.
+- `gate.py verify` corre desde la RAÍZ del proyecto, no desde el worktree de la feature. Si el código todavía vive sólo en su worktree, los AC miden un árbol que no lo contiene y salen rojos por un motivo falso. Integra primero (o corre los comandos a mano en el worktree y dilo); un rojo de verify sobre el árbol equivocado no es un veredicto sobre el código.
+- Cuando varias features tocan el mismo artefacto, ciérralas en orden de dependencia: un AC que compara contra un respaldo pre-cambio queda obsoleto en cuanto otra feature aplica el suyo.
 - El cuerpo del PRD y la constitution son del USUARIO. No los reescribas.
 - Aislamiento: una feature sin worktree bloquea a las demás sin worktree.
 - No afirmes lo que no puedes comprobar. Si un gate no corrió, dilo.

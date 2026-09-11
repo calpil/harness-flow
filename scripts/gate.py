@@ -284,6 +284,52 @@ def cmd_verify(args) -> None:
 
 # --- close -----------------------------------------------------------------
 
+def git_merge(p: dict, f: dict, destino: str) -> str:
+    """Integra la rama de la feature en <destino>. Devuelve el sha del merge.
+
+    Existe porque close SOLO escribia 'integrado_en' en el backlog e imprimia
+    'integra en <rama>': afirmaba una integracion que nunca ocurria, y la
+    feature quedaba 'done' con su rama sin mergear. Un arnes que combate los
+    falsos verdes no puede permitirse uno propio.
+
+    Cualquier problema aborta con exit 1 ANTES de que el backlog se toque: es
+    preferible una feature que no cierra a un 'done' que miente.
+    """
+    repo = p["root"]
+    rama = f.get("branch")
+    if not rama:
+        sys.exit(f"[!!] la feature #{f['id']} no tiene rama registrada: "
+                 "no se puede integrar sola.\n"
+                 f"     Mergeala a mano y volve a cerrar, o arranca con worktree.py start.")
+
+    code, _ = git(["rev-parse", "--verify", rama], repo)
+    if code != 0:
+        sys.exit(f"[!!] la rama '{rama}' de la feature #{f['id']} no existe en {repo}.")
+
+    code, out = git(["status", "--porcelain"], repo)
+    if code != 0 or out.strip():
+        sys.exit(f"[!!] el repo tiene cambios sin commitear: no mergeo sobre un arbol sucio.\n"
+                 f"     Commitealos o guardalos antes de cerrar.\n{out}")
+
+    code, actual = git(["rev-parse", "--abbrev-ref", "HEAD"], repo)
+    if code != 0:
+        sys.exit(f"[!!] no pude leer la rama actual de {repo}:\n{actual}")
+    if actual.strip() != destino:
+        code, out = git(["checkout", destino], repo)
+        if code != 0:
+            sys.exit(f"[!!] no pude pararme en '{destino}':\n{out}")
+
+    code, out = git(["merge", "--no-ff", rama,
+                     "-m", f"merge: {rama} -> {destino} (cierre de feature del arnes)"], repo)
+    if code != 0:
+        git(["merge", "--abort"], repo)
+        sys.exit(f"[!!] el merge de '{rama}' en '{destino}' fallo (abortado, nada quedo a medias):\n{out}\n"
+                 "     Resolvelo a mano y volve a cerrar.")
+
+    code, sha = git(["rev-parse", "--short", "HEAD"], repo)
+    return sha.strip() if code == 0 else "?"
+
+
 def cmd_close(args) -> None:
     p = paths()
     data = load_backlog(p)
@@ -357,10 +403,19 @@ def cmd_close(args) -> None:
             print(f"     - {x}")
         sys.exit(1)
 
+    # La integracion se hace ANTES de tocar el backlog: si el merge falla, la
+    # feature NO queda marcada como cerrada. Al reves quedaria un 'done' sobre
+    # una rama que nunca entro, que es el falso verde que este arnes combate.
+    merged = None
+    if args.status == "done" and args.to:
+        merged = git_merge(p, f, args.to)
+
     f["status"] = args.status
     f["closed_at"] = now_iso()
     if args.to:
         f["integrado_en"] = args.to
+    if merged:
+        f["merge_commit"] = merged
     if args.leccion:
         f["leccion"] = args.leccion
     if args.leccion_motivo:
@@ -370,9 +425,11 @@ def cmd_close(args) -> None:
     save_backlog(p, data)
     bitacora(p, f"close #{fid} status={args.status}" +
              (f" -> {args.to}" if args.to else "") +
+             (f" merge={merged}" if merged else "") +
              (f" leccion={args.leccion}" if args.leccion else ""))
-    print(f"[ok] feature #{fid} cerrada como {args.status}"
-          + (f", integra en {args.to}" if args.to else ""))
+    print(f"[ok] feature #{fid} cerrada como {args.status}")
+    if merged:
+        print(f"[ok] rama integrada en {args.to} (merge {merged})")
     print("[i]  la integracion es LOCAL: publicar es una decision aparte.")
     if (p["atlassian"]).exists():
         print("[i]  hay atlassian.json: corre atlassian.py push --feature "
