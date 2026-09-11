@@ -5,7 +5,8 @@ gate.py revision --veredicto.
   revision.py --feature <id>              resumen legible
   revision.py --feature <id> --briefing   contexto para delegar a un subagente
 
-El review lo hace un SUBAGENTE en contexto aislado (delegate_task), que no vio
+El review lo hace un SUBAGENTE en contexto aislado (delegate_task en Hermes,
+la tool Task con subagente general-purpose en Claude Code), que no vio
 como se implemento. Un revisor que recuerda haber escrito el codigo se aprueba
 solo; uno que solo ve spec + diff, no.
 """
@@ -85,7 +86,7 @@ def cmd_briefing(a) -> None:
     diff = diff[:60000]
 
     print("=" * 72)
-    print("CONTEXTO PARA EL SUBAGENTE REVISOR (pegalo en delegate_task.context)")
+    print("CONTEXTO PARA EL SUBAGENTE REVISOR (delegate_task.context | prompt de Task)")
     print("=" * 72)
     print(f"""
 Eres el REVISOR de la feature #{f['id']} '{f.get('name')}' del proyecto
@@ -140,7 +141,7 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--feature", required=True)
     ap.add_argument("--briefing", action="store_true",
-                    help="imprime el contexto para delegate_task")
+                    help="imprime el contexto para el subagente revisor")
     a = ap.parse_args()
     (cmd_briefing if a.briefing else cmd_resumen)(a)
 

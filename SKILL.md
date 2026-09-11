@@ -5,7 +5,9 @@ description: "Use in repos with harness/: spec-driven flow + gates."
 
 # Harness Flow
 
-Proceso spec-driven para proyectos multi-repo. Puerto del arnés Rust (`harness_process`) a Hermes: sin binario, sin instalador, sin compilar por SO. El proceso vive aquí; los gates son scripts Python que devuelven exit≠0.
+Proceso spec-driven para proyectos multi-repo. Puerto del arnés Rust (`harness_process`) a un agente: sin binario, sin instalador, sin compilar por SO. El proceso vive aquí; los gates son scripts Python que devuelven exit≠0.
+
+**Host-neutral**: funciona igual en Hermes y en Claude Code. Lo único que cambia son las herramientas del agente (subagente y escritura de skills); los scripts se autodetectan. Ver "Equivalencias por host".
 
 **Idioma: responde SIEMPRE en español.** Los documentos generados van en español, sin tildes en los nombres de archivo.
 
@@ -29,10 +31,9 @@ El arnés NO se copia a cada repo. Una instalación por PROYECTO (raíz multi-re
 
 Credenciales del hub: `~/.harness-hub/.env` (fuera del repo, por máquina).
 
-Los scripts viven en el directorio de esta skill, y hay que correrlos con el
-**python del venv de Hermes**, no con el `python`/`python3` del sistema: las
-dependencias (`psycopg`) viven solo ahí. Ambas rutas cambian según el SO y el
-perfil, así que **no las hardcodees**: `entorno.py` las detecta.
+Los scripts viven en el directorio de esta skill y necesitan un intérprete con
+las dependencias del hub (`psycopg`). Esa ruta cambia según el host, el SO y el
+perfil, así que **no la hardcodees**: `entorno.py` la detecta.
 
 ```bash
 # bash / zsh  (macOS, Linux)
@@ -42,22 +43,26 @@ eval "$(python3 <skill>/scripts/entorno.py --shell)"
 python <skill>\scripts\entorno.py --powershell | Invoke-Expression
 ```
 
-Eso define `H` (scripts de la skill) y `PY` (python de Hermes). A partir de ahí
-todos los comandos de este documento funcionan tal cual en los tres SO:
+Eso define `H` (scripts), `PY` (intérprete con dependencias) y `HARNESS_HOST`
+(`hermes`, `claude` o `generic`). A partir de ahí todos los comandos de este
+documento funcionan tal cual en los tres SO y en ambos hosts:
 
 ```bash
 $PY "$H/estado.py"
 ```
 
-Sin flags, `entorno.py` imprime un diagnóstico (SO, HERMES_HOME, H, PY, si
-`psycopg` está) y sale con exit≠0 si algo falta. `entorno.py --instalar-deps`
-instala `psycopg[binary]` en el intérprete correcto.
+Sin flags, `entorno.py` imprime un diagnóstico (SO, host, H, PY, si `psycopg`
+está) y sale con exit≠0 si no puede resolver un intérprete usable. La falta de
+`psycopg` solo es error con `--hub`: quien usa nada más los gates locales no
+necesita el Memory Hub. `entorno.py --instalar-deps` instala
+`psycopg[binary]` en el intérprete correcto (en Claude Code crea un venv propio
+en `~/.harness-flow/venv` en vez de tocar el python del sistema).
 
-Detecta en este orden: `HERMES_PYTHON` / `HERMES_HOME` → el propio intérprete si
-ya trae `psycopg` → el launcher `hermes` del PATH (lee la ruta que ejecuta) →
-rutas por SO (`~/.hermes`, `%LOCALAPPDATA%\hermes`, `~/.local/share/hermes`,
-`~/Library/Application Support/hermes`), con `bin/python` o `Scripts\python.exe`
-según corresponda. Si nada resuelve, exporta `HERMES_PYTHON` a mano.
+Detecta en este orden: `HARNESS_PYTHON` → venv neutro (`HARNESS_VENV` o
+`~/.harness-flow/venv`) → en host Hermes, `HERMES_PYTHON`/`HERMES_HOME`, el
+launcher `hermes` del PATH y las rutas por SO → el propio intérprete. Si nada
+resuelve, exporta `HARNESS_PYTHON` a mano. `--host claude|hermes|generic` fuerza
+el host cuando la detección no aplica.
 
 ## Arranque de sesión
 
@@ -95,7 +100,9 @@ Tres roles, en orden. No los saltes.
 El review NO lo haces tú mismo. Un revisor que recuerda haber escrito el código se aprueba solo; uno que solo ve spec + diff, no.
 
 1. Arma el briefing: `$PY "$H/revision.py" --feature <id> --briefing`
-2. Lanza el revisor con `delegate_task`, pegando esa salida en `context`. Goal: "Revisa la feature #<id> y escribe docs/review-<id>.md". El subagente lee spec y código por su cuenta, no modifica nada más.
+2. Lanza el revisor con el subagente de tu host, pegando esa salida como contexto. Goal: "Revisa la feature #<id> y escribe docs/review-<id>.md". El subagente lee spec y código por su cuenta, no modifica nada más.
+   - Hermes: `delegate_task` con la salida en `context`.
+   - Claude Code: la tool `Task` con `subagent_type: general-purpose`, pegando la salida en el prompt. NO uses un fork de la sesión: hereda tu historial y con él el sesgo que el aislamiento evita.
 3. Cuando vuelva, LEE tú `docs/review-<id>.md`. El veredicto del subagente es un autoinforme: verifica que cada fila cite `archivo:linea` real antes de sellar.
 4. Sella:
    `$PY "$H/gate.py" revision --feature <id> --veredicto approved|changes_requested|blocked`
@@ -153,7 +160,7 @@ el hub es compartido con el arnés Rust en la otra máquina y debe seguir cuadra
 
 ## Lecciones (memoria procedural)
 
-Una lección es una **skill de Hermes** por CLASE de trabajo, nunca por id de feature. Vive en tu perfil (`~/.../hermes/skills/`), no en el repo: viaja contigo entre proyectos y Hermes la carga sola cuando aplica.
+Una lección es una **skill del agente** por CLASE de trabajo, nunca por id de feature. Vive en tu perfil (`~/.hermes/.../skills/` o `~/.claude/skills/`), no en el repo: viaja contigo entre proyectos y el agente la carga sola cuando aplica.
 
 ```bash
 $PY "$H/leccion.py" list            # ANTES de diseñar
@@ -161,7 +168,12 @@ $PY "$H/leccion.py" ver <clase>
 $PY "$H/leccion.py" plantilla <clase>   # esqueleto para skill_manage
 ```
 
-Escribir y patchear se hace con **`skill_manage`**, no con el script: crear los archivos a mano se salta la validación de frontmatter. PATCHEA la lección que estuvo en juego antes de crear otra.
+`donde` lista las raíces en orden de precedencia (en Claude Code, la personal
+gana a la del proyecto). `HARNESS_SKILLS_DIR` fuerza una raíz única.
+
+Escribir y patchear: en Hermes con **`skill_manage`** (valida el frontmatter); en
+Claude Code escribiendo `<raíz>/<clase>/SKILL.md` con frontmatter `name` +
+`description`. PATCHEA la lección que estuvo en juego antes de crear otra.
 
 El gate de cierre verifica que la skill exista de verdad: `--leccion <clase>` con una skill inexistente bloquea el `close`.
 
@@ -200,7 +212,21 @@ Solo si existe `harness/atlassian.json`. Sin ese archivo el flujo se comporta ig
 - La evidencia cubre un AC si la cita `archivo:linea` está en la **sección** del AC
   (encabezado `## AC-1` con la cita debajo), no necesariamente en la misma línea.
   Prosa sin cita nunca cuenta como cobertura.
-- `psycopg` debe estar en el venv de Hermes, no en el del proyecto ni en el python
-  del sistema. Si `hub.py` tira `ModuleNotFoundError: psycopg`, casi siempre es que
-  estás usando `python3` en vez de `$PY`. Diagnostica y arregla con el mismo script,
-  sin rutas a mano: `python3 "$H/entorno.py"` y luego `python3 "$H/entorno.py" --instalar-deps`.
+- `psycopg` debe estar en el intérprete que resuelve `entorno.py` (`$PY`), no en el
+  del proyecto ni en el python del sistema. Si `hub.py` tira `ModuleNotFoundError:
+  psycopg`, casi siempre es que estás usando `python3` en vez de `$PY`. Diagnostica
+  y arregla con el mismo script, sin rutas a mano: `python3 "$H/entorno.py"` y luego
+  `python3 "$H/entorno.py" --instalar-deps`.
+
+## Equivalencias por host
+
+| Necesitas | Hermes | Claude Code |
+| --- | --- | --- |
+| Subagente revisor aislado | `delegate_task` | tool `Task`, `subagent_type: general-purpose` |
+| Crear/patchear una lección | `skill_manage` | escribir `<raíz>/<clase>/SKILL.md` |
+| Raíz de skills | `~/.hermes/skills` (o perfil) | `~/.claude/skills`, luego `.claude/skills` del proyecto |
+| Intérprete con `psycopg` | venv de Hermes | venv neutro `~/.harness-flow/venv` |
+
+Todo lo demás (gates, worktrees, specs, hub, vault, atlassian) es Python puro y
+se comporta idéntico. Si no puedes lanzar un subagente aislado, revisa tú mismo
+con `revision.py --feature <id>` y **dilo explícitamente**: el rigor baja.

@@ -1,11 +1,16 @@
 # harness-flow
 
-Skill de [Hermes Agent](https://hermes-agent.nousresearch.com) que implementa un
-proceso de desarrollo spec-driven para proyectos multi-repo, con gates ejecutables.
+Skill para [Hermes Agent](https://hermes-agent.nousresearch.com) y
+[Claude Code](https://code.claude.com) que implementa un proceso de desarrollo
+spec-driven para proyectos multi-repo, con gates ejecutables.
 
-Es el puerto del arnés Rust `harness_process` a Hermes: **sin binario, sin
+Es el puerto del arnés Rust `harness_process` a un agente: **sin binario, sin
 instalador por proyecto, sin compilar por sistema operativo**. El proceso vive en
 esta skill; los gates son scripts Python que devuelven exit≠0 cuando algo falta.
+
+Los scripts son stdlib puro (salvo `psycopg` para el hub Postgres) y detectan el
+host solos; lo único que cambia entre Hermes y Claude Code son las herramientas
+del agente para lanzar el subagente revisor y escribir lecciones.
 
 ## Qué hace
 
@@ -22,31 +27,45 @@ esta skill; los gates son scripts Python que devuelven exit≠0 cuando algo falt
 
 ## Instalación
 
-No hay instalador ni binario: la skill es un clone de git dentro del directorio de
-skills de Hermes. Este lo escanea al iniciar la sesión y la carga por su
-`SKILL.md`.
+No hay instalador ni binario: la skill es un clone de git dentro del directorio
+de skills de tu agente, que lo escanea y la carga por su `SKILL.md`.
+
+**Hermes** (perfil `default`; con otro perfil va bajo
+`~/.hermes/profiles/<perfil>/skills/`). Se carga en la **próxima** sesión;
+verifica con `/skills`:
 
 ```bash
 git clone https://github.com/calpil/harness-flow.git \
   ~/.hermes/skills/software-development/harness-flow
 ```
 
-Esa es la ruta del perfil `default`. Si usas otro perfil, va en
-`~/.hermes/profiles/<perfil>/skills/software-development/harness-flow`. En
-Windows es la misma ruta bajo tu carpeta de usuario (`%USERPROFILE%\.hermes\...`).
-
-Hermes la carga en la **próxima** sesión; verifica con `/skills`.
-
-Luego instala la dependencia del hub Postgres en el intérprete correcto — el del
-venv de Hermes, no el del sistema. El script lo detecta solo en Windows, Linux y
-macOS:
+**Claude Code** (personal, disponible en todos tus proyectos; para una sola
+repo usa `<repo>/.claude/skills/harness-flow`). Verifica con `/skills`:
 
 ```bash
-python3 ~/.hermes/skills/software-development/harness-flow/scripts/entorno.py --instalar-deps
+git clone https://github.com/calpil/harness-flow.git \
+  ~/.claude/skills/harness-flow
 ```
 
-Sin flags, `entorno.py` imprime un diagnóstico (SO, rutas detectadas, si
-`psycopg` está presente) y sale con exit≠0 si falta algo.
+En Windows son las mismas rutas bajo `%USERPROFILE%`.
+
+Luego instala la dependencia del hub Postgres en el intérprete correcto. El
+script lo detecta solo en Windows, Linux y macOS (en Claude Code crea un venv
+propio en `~/.harness-flow/venv` en vez de tocar el python del sistema):
+
+```bash
+# Hermes
+python3 ~/.hermes/skills/software-development/harness-flow/scripts/entorno.py --instalar-deps
+# Claude Code
+python3 ~/.claude/skills/harness-flow/scripts/entorno.py --instalar-deps
+```
+
+Sin flags, `entorno.py` imprime un diagnóstico (SO, host detectado, rutas, si
+`psycopg` está presente) y sale con exit≠0 si no puede resolver un intérprete
+usable. La falta de `psycopg` solo es error con `--hub`, porque los gates
+locales funcionan sin el Memory Hub. Si la detección no
+acierta, `--host claude|hermes|generic` la fuerza, y `HARNESS_PYTHON` /
+`HARNESS_SKILLS_DIR` sobrescriben intérprete y raíz de skills.
 
 Credenciales en `~/.harness-hub/.env` (fuera de todo repo, por máquina):
 
@@ -61,24 +80,26 @@ DB_SSL_MODE=require
 
 ## Actualización
 
-Es un clone, así que se actualiza con git. Los cambios aplican en la **siguiente**
-sesión de Hermes, porque el `SKILL.md` se lee al iniciar.
+Es un clone, así que se actualiza con git. Los cambios aplican en la
+**siguiente** sesión, porque el `SKILL.md` se lee al iniciar.
 
 ```bash
-cd ~/.hermes/skills/software-development/harness-flow
+cd ~/.hermes/skills/software-development/harness-flow   # o ~/.claude/skills/harness-flow
 git pull
 ```
 
 ## Uso en un proyecto
 
-Primero define `H` (scripts) y `PY` (python de Hermes) sin hardcodear rutas:
+Primero define `H` (scripts), `PY` (intérprete con dependencias) y
+`HARNESS_HOST` sin hardcodear rutas — sustituye `<skill>` por el directorio
+donde clonaste:
 
 ```bash
 # bash / zsh
-eval "$(python3 ~/.hermes/skills/software-development/harness-flow/scripts/entorno.py --shell)"
+eval "$(python3 <skill>/scripts/entorno.py --shell)"
 
 # PowerShell
-python $env:USERPROFILE\.hermes\skills\software-development\harness-flow\scripts\entorno.py --powershell | Invoke-Expression
+python <skill>\scripts\entorno.py --powershell | Invoke-Expression
 ```
 
 Después, desde la raíz multi-repo (la carpeta que contiene tus microservicios):
@@ -99,7 +120,7 @@ multi-repo, no por microservicio.
 ```
 SKILL.md                 el proceso que sigue el agente
 scripts/
-  entorno.py             detecta H y PY por SO (Windows/Linux/macOS)
+  entorno.py             detecta host, H y PY por SO (Windows/Linux/macOS)
   comun.py               rutas, backlog, firmas, parsers de AC
   init.py add.py         alta de proyecto y de features
   gate.py                TODOS los gates (exit≠0)
@@ -110,6 +131,7 @@ scripts/
   vault.py               generación del vault Obsidian
   atlassian.py           Jira / Confluence
   estado.py              panorama al entrar al proyecto
+tests/                   regresiones del port neutro
 templates/               spec, evidencia, review
 references/              Obsidian, Atlassian
 ```
