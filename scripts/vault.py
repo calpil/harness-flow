@@ -11,7 +11,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-from pathlib import Path
+from pathlib import Path  # noqa: F401  (lo usa la carga de lecciones)
 
 sys.path.insert(0, str(Path(__file__).parent))
 from comun import (cubre_acs, impl_path, load_backlog, now_iso, paths,  # noqa: E402
@@ -93,15 +93,23 @@ def main() -> None:
             "\n".join(cuerpo) + "\n", encoding="utf-8")
         escritos += 1
 
-    # --- lecciones ---
-    for lf in sorted(p["lecciones"].glob("*.md")) if p["lecciones"].exists() else []:
+    # --- lecciones (son SKILLS de Hermes, no archivos del repo) ---
+    sys.path.insert(0, str(Path(__file__).parent))
+    from leccion import buscar as buscar_leccion
+    clases = sorted({x["leccion"] for x in data["features"]
+                     if x.get("leccion") and x["leccion"] != "ninguna"})
+    for clase in clases:
         usada = [f"[[Feature-{x['id']}]]" for x in data["features"]
-                 if x.get("leccion") == lf.stem]
-        rel = lf.relative_to(p["root"]).as_posix()
-        (v / "lecciones" / f"{lf.stem}.md").write_text("\n".join([
+                 if x.get("leccion") == clase]
+        sm = buscar_leccion(clase)
+        origen = (f"Skill de Hermes: `{clase}`" if sm
+                  else f"**FALTA**: la skill `{clase}` no esta instalada aqui")
+        (v / "lecciones" / f"{clase}.md").write_text("\n".join([
             "---", "tipo: leccion", "tags: [harness, leccion]", "---", AVISO, "",
-            f"# {esc(lf.stem)}", "",
-            f"Fuente: [{lf.name}](../../../{rel})", "",
+            f"# {esc(clase)}", "",
+            origen, "",
+            "_Vive en tus skills de Hermes y viaja contigo entre proyectos;",
+            "aqui solo queda la traza de donde se aplico._", "",
             "## Usada en", "",
             *(usada or ["_todavia no se declaro en ningun cierre_"]),
         ]) + "\n", encoding="utf-8")
@@ -153,7 +161,7 @@ def main() -> None:
         f"# {esc(proyecto)}", "", f"Actualizado: {now_iso()}", "",
         f"- Features: {len(data['features'])} ({len(abiertas)} abiertas)",
         f"- Microservicios: {len(servicios)}",
-        f"- Lecciones: {len(list(p['lecciones'].glob('*.md'))) if p['lecciones'].exists() else 0}",
+        f"- Lecciones aplicadas: {len(clases)}",
         "", "## En curso", "",
         *([f"- [[Feature-{f['id']}]] — {esc(f.get('name',''))} ({f.get('status')})"
            for f in abiertas] or ["_nada abierto_"]),

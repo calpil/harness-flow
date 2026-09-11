@@ -32,7 +32,6 @@ def paths(root: Path | None = None) -> dict:
         "backlog": r / "harness" / "feature_list.json",
         "progress": r / "harness" / "progress",
         "docs": r / "docs",
-        "lecciones": r / "docs" / "lecciones",
         "vault": r / "docs" / "vault",
         "graph": r / "graphify-out" / "graph.json",
         "atlassian": r / "harness" / "atlassian.json",
@@ -65,7 +64,6 @@ DEFAULT_RULES = {
     "require_leccion": True,
     "require_verify_green": True,
     "require_docs_al_dia": True,
-    "leccion_max_lineas": 250,
     "rutas_protegidas": ["docs/prd/**", "docs/constitution.md", ".env"],
 }
 

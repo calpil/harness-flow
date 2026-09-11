@@ -1,118 +1,160 @@
 #!/usr/bin/env python3
-"""Memoria procedural por CLASE de trabajo (nunca por id de feature).
+"""Memoria procedural: vive en las SKILLS de Hermes, no en el repo.
 
-  leccion.py list
-  leccion.py usar <clase>
-  leccion.py nueva <clase> --titulo "..."
-  leccion.py partir <clase> [--aplicar]
+Una leccion es una skill de Hermes por CLASE de trabajo (nunca por id de
+feature). Asi viaja contigo entre proyectos y Hermes la carga sola cuando
+aplica, en vez de quedarse enterrada en el docs/ de un repo.
+
+  leccion.py list                skills disponibles (candidatas a leccion)
+  leccion.py ver <clase>         imprime la skill
+  leccion.py existe <clase>      exit 0 si existe (lo usa el gate de cierre)
+  leccion.py donde               raiz de skills detectada
+  leccion.py plantilla <clase>   esqueleto para pasarle a skill_manage
+
+El AGENTE escribe y patchea las lecciones con skill_manage(), no este script:
+crear los archivos a mano se salta la validacion de frontmatter de Hermes.
 """
 from __future__ import annotations
 
 import argparse
+import os
 import sys
-from datetime import datetime, timezone
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent))
-from comun import load_backlog, now_iso, paths  # noqa: E402
-
-PLANTILLA = """# {titulo}
-
-Clase de trabajo: {clase}
-
-## Cuando aplica
-
-<!-- El disparador: como reconoces que estas en esta clase de trabajo. -->
-
-## Reglas
-
-- <regla imperativa> — <por que>
-
-## Referencias
-
-<!-- El detalle por feature va en referencias/<tema>.md, no aqui. -->
-"""
+TOPE_LINEAS = 250
 
 
-def dir_lecciones(p):
-    d = p["lecciones"]; d.mkdir(parents=True, exist_ok=True); return d
+def skills_root() -> Path:
+    """Raiz de skills de Hermes, respetando perfil y sistema operativo."""
+    env = os.environ.get("HERMES_SKILLS_DIR")
+    if env:
+        return Path(env)
+    home = os.environ.get("HERMES_HOME")
+    if home and (Path(home) / "skills").is_dir():
+        return Path(home) / "skills"
+    # esta skill vive dentro de la raiz: .../skills/<categoria>/harness-flow/scripts
+    for padre in Path(__file__).resolve().parents:
+        if padre.name == "skills":
+            return padre
+    candidatos = [
+        Path.home() / "AppData" / "Local" / "hermes" / "skills",                # Windows
+        Path.home() / ".local" / "share" / "hermes" / "skills",                 # Linux
+        Path.home() / "Library" / "Application Support" / "hermes" / "skills",  # macOS
+        Path.home() / ".hermes" / "skills",
+    ]
+    for c in candidatos:
+        if c.is_dir():
+            return c
+    sys.exit("[!!] no encuentro la raiz de skills de Hermes.\n"
+             "     Define HERMES_HOME o HERMES_SKILLS_DIR.")
+
+
+def buscar(clase: str) -> Path | None:
+    """La skill <clase>, con o sin categoria intermedia."""
+    raiz = skills_root()
+    directo = raiz / clase / "SKILL.md"
+    if directo.exists():
+        return directo
+    for hit in sorted(raiz.glob("*/" + clase + "/SKILL.md")):
+        return hit
+    return None
+
+
+def descripcion(skill_md: Path) -> str:
+    for ln in skill_md.read_text(encoding="utf-8").splitlines():
+        s = ln.strip()
+        if s.startswith("description:"):
+            return s.split(":", 1)[1].strip().strip('"').strip("'")
+    return ""
 
 
 def cmd_list(args) -> None:
-    p = paths()
-    d = dir_lecciones(p)
-    tope = int(load_backlog(p)["rules"].get("leccion_max_lineas", 250))
-    archivos = sorted(d.glob("*.md"))
-    if not archivos:
-        print("[i]  sin lecciones todavia. La primera se escribe al cerrar una feature.")
-        return
-    print(f"Lecciones ({len(archivos)}), tope {tope} lineas:\n")
-    for f in archivos:
-        n = len(f.read_text(encoding="utf-8").splitlines())
-        titulo = next((l[2:] for l in f.read_text(encoding="utf-8").splitlines()
-                       if l.startswith("# ")), f.stem)
-        marca = "  <- SOBRE EL TOPE: parte antes de usarla" if n > tope else ""
-        refs = len(list((d / f.stem / "referencias").glob("*.md"))) if (d / f.stem).exists() else 0
-        print(f"   {f.stem:<45} {n:>4} lineas" +
-              (f", {refs} refs" if refs else "") + marca)
-        print(f"      {titulo}")
-    print("\n[i]  PATCHEA la que estuvo en juego antes de crear otra.")
+    raiz = skills_root()
+    print("Skills en " + str(raiz) + "\n")
+    encontradas = sorted(raiz.glob("*/*/SKILL.md")) + sorted(raiz.glob("*/SKILL.md"))
+    vistos: set[str] = set()
+    for sm in encontradas:
+        nombre = sm.parent.name
+        if nombre in vistos or nombre == "harness-flow":
+            continue
+        vistos.add(nombre)
+        n = len(sm.read_text(encoding="utf-8").splitlines())
+        marca = "  <- sobre el tope: muevele detalle a references/" if n > TOPE_LINEAS else ""
+        cat = sm.parent.parent.name
+        prefijo = "" if cat == raiz.name else cat + "/"
+        print("   %-46s %4d lineas%s" % (prefijo + nombre, n, marca))
+        d = descripcion(sm)
+        if d:
+            print("      " + d[:100])
+    if not vistos:
+        print("   (ninguna todavia)")
+    print("\n[i]  PATCHEA con skill_manage la que estuvo en juego antes de crear otra.")
 
 
-def cmd_usar(args) -> None:
-    p = paths()
-    f = dir_lecciones(p) / f"{args.clase}.md"
-    if not f.exists():
-        sys.exit(f"[!!] no existe {f}")
-    tope = int(load_backlog(p)["rules"].get("leccion_max_lineas", 250))
-    txt = f.read_text(encoding="utf-8")
+def cmd_ver(args) -> None:
+    sm = buscar(args.clase)
+    if not sm:
+        sys.exit("[!!] no existe la skill '%s' en %s" % (args.clase, skills_root()))
+    txt = sm.read_text(encoding="utf-8")
     n = len(txt.splitlines())
-    if n > tope:
-        sys.exit(f"[!!] {args.clase} tiene {n} lineas (tope {tope}).\n"
-                 "     Mueve el detalle a referencias/<tema>.md antes de usarla:\n"
-                 f"     leccion.py partir {args.clase}")
+    if n > TOPE_LINEAS:
+        print("[!] %s: %d lineas (tope %d). Mueve el detalle a references/<tema>.md.\n"
+              % (args.clase, n, TOPE_LINEAS), file=sys.stderr)
     print(txt)
 
 
-def cmd_nueva(args) -> None:
-    p = paths()
-    f = dir_lecciones(p) / f"{args.clase}.md"
-    if f.exists():
-        sys.exit(f"[!!] ya existe {f}. PATCHEALA en vez de crear otra.")
-    f.write_text(PLANTILLA.format(titulo=args.titulo or args.clase, clase=args.clase),
-                 encoding="utf-8")
-    print(f"[ok] {f}")
+def cmd_existe(args) -> None:
+    sm = buscar(args.clase)
+    if not sm:
+        sys.exit("[!!] la leccion '%s' no existe como skill de Hermes.\n"
+                 "     Raiz: %s\n"
+                 "     Creala con skill_manage(action='create', name='%s'), o cierra con\n"
+                 "     --leccion ninguna --leccion-motivo '<por que>'."
+                 % (args.clase, skills_root(), args.clase))
+    print("[ok] %s -> %s" % (args.clase, sm))
 
 
-def cmd_partir(args) -> None:
-    p = paths()
-    f = dir_lecciones(p) / f"{args.clase}.md"
-    if not f.exists():
-        sys.exit(f"[!!] no existe {f}")
-    lines = f.read_text(encoding="utf-8").splitlines()
-    tope = int(load_backlog(p)["rules"].get("leccion_max_lineas", 250))
-    if len(lines) <= tope:
-        print(f"[ok] {args.clase}: {len(lines)} lineas, bajo el tope ({tope}). Nada que partir.")
-        return
-    secciones = [(i, l) for i, l in enumerate(lines) if l.startswith("## ")]
-    print(f"[!] {args.clase}: {len(lines)} lineas, {len(lines)-tope} sobre el tope.")
-    print("    Secciones candidatas a mover a referencias/:")
-    for i, (idx, titulo) in enumerate(secciones):
-        fin = secciones[i+1][0] if i+1 < len(secciones) else len(lines)
-        print(f"      {titulo[3:]:<50} {fin-idx:>4} lineas")
-    print("\n[i]  esto informa; mover el detalle es decision tuya (y del usuario).")
+def cmd_donde(args) -> None:
+    print(skills_root())
+
+
+PLANTILLA = """---
+name: {clase}
+description: "Use when <disparador en una linea>. <que hace>."
+---
+
+# {clase}
+
+## Cuando aplica
+
+<El disparador: como reconoces que estas en esta clase de trabajo.>
+
+## Reglas
+
+- <regla imperativa> - <por que>
+
+## Referencias
+
+<El detalle largo va en references/<tema>.md, no aqui.>
+"""
+
+
+def cmd_plantilla(args) -> None:
+    print(PLANTILLA.format(clase=args.clase))
+    print("[i]  pasalo a skill_manage(action='create', name='%s', content=...)"
+          % args.clase, file=sys.stderr)
 
 
 def main() -> None:
-    ap = argparse.ArgumentParser()
+    ap = argparse.ArgumentParser(description="Lecciones = skills de Hermes")
     sub = ap.add_subparsers(dest="cmd", required=True)
     sub.add_parser("list").set_defaults(fn=cmd_list)
-    s = sub.add_parser("usar"); s.add_argument("clase"); s.set_defaults(fn=cmd_usar)
-    s = sub.add_parser("nueva"); s.add_argument("clase"); s.add_argument("--titulo")
-    s.set_defaults(fn=cmd_nueva)
-    s = sub.add_parser("partir"); s.add_argument("clase")
-    s.add_argument("--aplicar", action="store_true"); s.set_defaults(fn=cmd_partir)
-    a = ap.parse_args(); a.fn(a)
+    s = sub.add_parser("ver"); s.add_argument("clase"); s.set_defaults(fn=cmd_ver)
+    s = sub.add_parser("existe"); s.add_argument("clase"); s.set_defaults(fn=cmd_existe)
+    sub.add_parser("donde").set_defaults(fn=cmd_donde)
+    s = sub.add_parser("plantilla"); s.add_argument("clase"); s.set_defaults(fn=cmd_plantilla)
+    a = ap.parse_args()
+    a.fn(a)
 
 
 if __name__ == "__main__":

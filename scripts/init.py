@@ -30,7 +30,7 @@ def main() -> None:
 
     root = Path(a.root).resolve()
     h = root / "harness"
-    for d in (h / "progress", root / "docs" / "lecciones", root / "docs" / "prd",
+    for d in (h / "progress", root / "docs" / "prd",
               root / "docs" / "vault"):
         d.mkdir(parents=True, exist_ok=True)
 

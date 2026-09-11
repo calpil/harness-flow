@@ -20,7 +20,7 @@ El arnés NO se copia a cada repo. Una instalación por PROYECTO (raíz multi-re
     progress/current-<id>.md     <- estado vivo por feature
     progress/history.md          <- bitácora append-only
     atlassian.json               <- sitio/proyecto/space (NUNCA credenciales)
-  docs/                          <- specs, planes, evidencia, PRDs, lecciones
+  docs/                          <- specs, planes, evidencia, PRDs
   docs/vault/                    <- vault Obsidian (versionado)
   graphify-out/                  <- grafo local (gitignored)
   ms-orders-service/             <- repo git propio = "microservicio"
@@ -63,13 +63,18 @@ Tres roles, en orden. No los saltes.
 2. Trabaja DENTRO del worktree de la feature (`python "$H/worktree.py" start --feature <id>`).
 3. Escribe evidencia en `docs/impl-<id>.md`: una fila por AC-n citando `archivo:linea`.
 
-### 3. Reviewer — veredicto sellado
+### 3. Reviewer — subagente aislado, veredicto sellado
 
-1. Arma el paquete: `python "$H/revision.py" --feature <id>` (solo lectura).
-2. Escribe `docs/review-<id>.md` con una fila por cada AC-n del spec, nombrándolo y citando `archivo:linea`.
-3. Registra el veredicto:
+El review NO lo haces tú mismo. Un revisor que recuerda haber escrito el código se aprueba solo; uno que solo ve spec + diff, no.
+
+1. Arma el briefing: `python "$H/revision.py" --feature <id> --briefing`
+2. Lanza el revisor con `delegate_task`, pegando esa salida en `context`. Goal: "Revisa la feature #<id> y escribe docs/review-<id>.md". El subagente lee spec y código por su cuenta, no modifica nada más.
+3. Cuando vuelva, LEE tú `docs/review-<id>.md`. El veredicto del subagente es un autoinforme: verifica que cada fila cite `archivo:linea` real antes de sellar.
+4. Sella:
    `python "$H/gate.py" revision --feature <id> --veredicto approved|changes_requested|blocked`
    El script estampa `Revisado: ...`. Un `Veredicto:` tipeado a mano NO cuenta.
+
+Si el subagente no está disponible, `python "$H/revision.py" --feature <id>` da el paquete y revisas tú — dicéndolo explícitamente, porque el rigor baja.
 
 ### 4. Cierre
 
@@ -117,14 +122,19 @@ el hub es compartido con el arnés Rust en la otra máquina y debe seguir cuadra
 
 ## Lecciones (memoria procedural)
 
-Por CLASE de trabajo, nunca por id de feature. `docs/lecciones/<clase>.md`.
+Una lección es una **skill de Hermes** por CLASE de trabajo, nunca por id de feature. Vive en tu perfil (`~/.../hermes/skills/`), no en el repo: viaja contigo entre proyectos y Hermes la carga sola cuando aplica.
 
 ```bash
-python "$H/leccion.py" list                 # ANTES de diseñar
-python "$H/leccion.py" usar <clase>
+python "$H/leccion.py" list            # ANTES de diseñar
+python "$H/leccion.py" ver <clase>
+python "$H/leccion.py" plantilla <clase>   # esqueleto para skill_manage
 ```
 
-PATCHEA la lección que estuvo en juego antes de crear otra. NO captures: fallas de entorno, negativas sobre herramientas, errores transitorios, narrativas de tarea única, ni fracasos disfrazados de práctica.
+Escribir y patchear se hace con **`skill_manage`**, no con el script: crear los archivos a mano se salta la validación de frontmatter. PATCHEA la lección que estuvo en juego antes de crear otra.
+
+El gate de cierre verifica que la skill exista de verdad: `--leccion <clase>` con una skill inexistente bloquea el `close`.
+
+NO captures: fallas de entorno, negativas sobre herramientas, errores transitorios, narrativas de tarea única, ni fracasos disfrazados de práctica.
 
 ## Obsidian
 

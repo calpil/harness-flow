@@ -342,6 +342,14 @@ def cmd_close(args) -> None:
             fallos.append("falta --leccion <clase> (o --leccion ninguna --leccion-motivo '<por que>')")
         if args.leccion == "ninguna" and not args.leccion_motivo:
             fallos.append("--leccion ninguna exige --leccion-motivo")
+        # la leccion vive como SKILL de Hermes: exigimos que exista de verdad
+        if args.leccion and args.leccion != "ninguna":
+            sys.path.insert(0, str(Path(__file__).parent))
+            from leccion import buscar as buscar_leccion
+            if not buscar_leccion(args.leccion):
+                fallos.append(
+                    f"la leccion '{args.leccion}' no existe como skill de Hermes "
+                    "(creala con skill_manage antes de cerrar)")
 
     if fallos:
         print(f"[!!] close #{fid} BLOQUEADO por {len(fallos)} regla(s):")
