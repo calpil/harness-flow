@@ -141,8 +141,14 @@ NO captures: fallas de entorno, negativas sobre herramientas, errores transitori
 `docs/vault/` dentro del repo, versionado. Se regenera desde el grafo y los docs del proceso:
 
 ```bash
-python "$H/vault.py" build
+python "$H/vault.py" build                # regenera docs/vault/ + siembra .obsidian/
+python "$H/vault.py" build --sin-config   # sin tocar la config de Obsidian
 ```
+
+La primera vez siembra `docs/vault/.obsidian/` (tema oscuro, grafo coloreado por
+carpeta, wikilinks cortos, Dataview habilitado, `.gitignore` del ruido de
+sesión). Nunca sobrescribe un archivo existente: en cuanto Obsidian o el usuario
+tocan la config, es suya. Obsidian es gratis y no pide cuenta.
 
 Enlaza specs ↔ AC ↔ evidencia ↔ lecciones ↔ nodos de graphify con wikilinks. Ver `references/obsidian.md`.
 

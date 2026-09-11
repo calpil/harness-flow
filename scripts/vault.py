@@ -25,18 +25,158 @@ def esc(s: str) -> str:
     return str(s).replace("[[", "").replace("]]", "").replace("|", "-")
 
 
+# Config base del vault. Se SIEMBRA (solo si el archivo no existe) para que el
+# vault se vea igual en todas tus maquinas sin configurarlo a mano. Una vez
+# sembrado es tuyo: Obsidian lo reescribe al vuelo y vault.py no lo vuelve a
+# tocar. Para volver al default: borra docs/vault/.obsidian y regenera.
+SEMILLA_OBSIDIAN: dict[str, dict] = {
+    # Markdown estricto: wikilinks relativos al vault y sin "ayudas" que
+    # reescriban los .md generados.
+    "app.json": {
+        "newLinkFormat": "shortest",
+        "useMarkdownLinks": False,
+        "attachmentFolderPath": "notas/adjuntos",
+        "alwaysUpdateLinks": True,
+        "showUnsupportedFiles": True,
+        "defaultViewMode": "preview",
+        "livePreview": True,
+        "readableLineLength": True,
+        "strictLineBreaks": False,
+        "promptDelete": True,
+        "newFileLocation": "folder",
+        "newFileFolderPath": "notas",
+    },
+    "appearance.json": {
+        "theme": "obsidian",          # oscuro
+        "accentColor": "#4c8dff",
+        "baseFontSize": 15,
+        "showInlineTitle": True,
+        "showViewHeader": True,
+    },
+    # Plugins de nucleo: no hay nada que descargar, vienen con Obsidian.
+    "core-plugins.json": {
+        "file-explorer": True,
+        "global-search": True,
+        "switcher": True,
+        "graph": True,
+        "backlink": True,
+        "outgoing-link": True,
+        "tag-pane": True,
+        "properties": True,
+        "outline": True,
+        "word-count": True,
+        "command-palette": True,
+        "editor-status": True,
+        "bookmarks": True,
+        "file-recovery": True,
+        "templates": False,
+        "daily-notes": False,
+        "canvas": False,
+        "slides": False,
+        "audio-recorder": False,
+        "zk-prefixer": False,
+        "random-note": False,
+        "workspaces": False,
+        "markdown-importer": False,
+        "note-composer": False,
+        "slash-command": False,
+        "sync": False,
+        "publish": False,
+        "webviewer": False,
+    },
+    # Vista de grafo util de entrada: features y servicios coloreados, y la
+    # carpeta grafo/ fuera para que no ahogue el dibujo.
+    "graph.json": {
+        "collapse-filter": False,
+        "search": "-path:grafo",
+        "showTags": False,
+        "showAttachments": False,
+        "hideUnresolved": True,
+        "showOrphans": True,
+        "collapse-color-groups": False,
+        "colorGroups": [
+            {"query": "path:features", "color": {"a": 1, "rgb": 5021439}},
+            {"query": "path:servicios", "color": {"a": 1, "rgb": 5025616}},
+            {"query": "path:lecciones", "color": {"a": 1, "rgb": 16745472}},
+            {"query": "path:notas", "color": {"a": 1, "rgb": 12633088}},
+        ],
+        "collapse-display": False,
+        "showArrow": True,
+        "textFadeMultiplier": -0.3,
+        "nodeSizeMultiplier": 1.2,
+        "lineSizeMultiplier": 1,
+        "collapse-forces": False,
+        "centerStrength": 0.5,
+        "repelStrength": 11,
+        "linkStrength": 1,
+        "linkDistance": 260,
+        "scale": 0.8,
+    },
+    # Dataview es un plugin de comunidad: esto solo lo deja HABILITADO para
+    # cuando lo instales desde Obsidian. No lo descarga (seria bajar binarios
+    # de terceros a tu repo sin que lo pidas).
+    "community-plugins.json": ["dataview"],
+}
+
+
+def sembrar_obsidian(v) -> tuple[int, bool]:
+    """Escribe la config base del vault. Devuelve (archivos nuevos, primera vez)."""
+    import json as _json
+
+    od = v / ".obsidian"
+    od.mkdir(parents=True, exist_ok=True)
+
+    # Obsidian reescribe estos en cada sesion (posicion de paneles, cache).
+    # Versionarlos llenaria tus diffs de ruido sin aportar nada.
+    gi = od / ".gitignore"
+    if not gi.exists():
+        gi.write_text("\n".join([
+            "# ruido de sesion de Obsidian: no versionar",
+            "workspace.json",
+            "workspace-mobile.json",
+            "cache/",
+            "plugins/",
+            "themes/",
+        ]) + "\n", encoding="utf-8")
+
+    marca = od / ".harness-seed"
+    primera = not marca.exists()
+    nuevos = 0
+    for nombre, contenido in SEMILLA_OBSIDIAN.items():
+        destino = od / nombre
+        if destino.exists():
+            continue  # ya es tuyo: Obsidian manda
+        destino.write_text(
+            _json.dumps(contenido, indent=2, ensure_ascii=False) + "\n",
+            encoding="utf-8")
+        nuevos += 1
+    if nuevos:
+        marca.write_text(
+            "Config base sembrada por harness-flow vault.py.\n"
+            "Los archivos de .obsidian/ NO se vuelven a tocar: son tuyos y\n"
+            "Obsidian los reescribe al usarlos. Para volver al default,\n"
+            "borra esta carpeta y ejecuta vault.py de nuevo.\n",
+            encoding="utf-8")
+    return nuevos, primera
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     # 'build' es el unico modo; se acepta como palabra opcional para que
     # `vault.py build` y `vault.py` sean equivalentes.
     ap.add_argument("cmd", nargs="?", default="build", choices=["build"])
     ap.add_argument("--con-grafo", action="store_true", dest="con_grafo")
+    ap.add_argument("--sin-config", action="store_true", dest="sin_config",
+                    help="no sembrar docs/vault/.obsidian (config de Obsidian)")
     a = ap.parse_args()
     p = paths(); data = load_backlog(p)
     v = p["vault"]
     for d in ("features", "lecciones", "servicios", "notas"):
         (v / d).mkdir(parents=True, exist_ok=True)
-    (v / ".obsidian").mkdir(exist_ok=True)
+
+    cfg_nuevos, cfg_primera = (0, False)
+    if not a.sin_config:
+        cfg_nuevos, cfg_primera = sembrar_obsidian(v)
 
     proyecto = data.get("project", p["root"].name)
     escritos = 0
@@ -171,6 +311,12 @@ def main() -> None:
     escritos += 1
 
     print(f"[ok] vault regenerado: {escritos} notas en {v}")
+    if cfg_nuevos:
+        print(f"[ok] config de Obsidian sembrada ({cfg_nuevos} archivos en .obsidian/)")
+        if cfg_primera:
+            print("[i]  tema oscuro, grafo coloreado por carpeta y wikilinks cortos.")
+            print("[i]  Dataview queda habilitado: instalalo en Obsidian ->")
+            print("     Settings > Community plugins > Browse > Dataview.")
     print(f"[i]  abrelo en Obsidian con 'Open folder as vault' -> {v}")
 
 
