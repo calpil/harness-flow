@@ -76,8 +76,14 @@ class RaicesTests(Base):
         self.skill(self.home / ".claude" / "skills", "solo-claude")
         os.environ["HERMES_HOME"] = str(self.home / ".hermes")
         os.environ["HARNESS_HOST"] = "hermes"
-        self.assertEqual(leccion.skills_roots(), [hermes.resolve()])
-        self.assertIsNone(leccion.buscar("solo-claude"))
+        # la copia bajo prueba vive en el home simulado: si no, _raiz_propia()
+        # aportaria la instalacion real de la maquina y el test leeria el entorno
+        instalada = hermes / "cat" / "harness-flow" / "scripts" / "leccion.py"
+        instalada.parent.mkdir(parents=True, exist_ok=True)
+        instalada.touch()
+        with mock.patch.object(leccion, "__file__", str(instalada)):
+            self.assertEqual(leccion.skills_roots(), [hermes.resolve()])
+            self.assertIsNone(leccion.buscar("solo-claude"))
 
     def test_sin_host_conocido_cae_a_la_raiz_que_contiene_esta_skill(self):
         # la skill puede estar instalada en cualquier arbol .../skills/<cat>/harness-flow

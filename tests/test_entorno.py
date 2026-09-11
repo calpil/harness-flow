@@ -176,10 +176,14 @@ class EntornoTests(unittest.TestCase):
                      mock.patch.object(entorno.subprocess, "run", side_effect=comando):
                     rc, out, err = self.cli("--instalar-deps", "--shell")
                 self.assertEqual(rc, 0, err)
-                self.assertIn([sys.executable, "-m", "venv", str(venv)], invocados)
-                self.assertIn([str(py), "-m", "pip", "install", "psycopg[binary]"], invocados)
-                self.assertNotIn([sys.executable, "-m", "pip", "install", "psycopg[binary]"],
-                                 invocados, "nunca pip en el interprete que no es venv")
+                # se crea el venv neutro (con el interprete que resuelva el host,
+                # que en hermes puede ser el del propio agente y no sys.executable)
+                self.assertIn(["-m", "venv", str(venv)],
+                              [c[1:] for c in invocados if "venv" in c])
+                # y psycopg se instala AHI, en ningun otro interprete
+                pips = [c for c in invocados if "pip" in c]
+                self.assertEqual(pips, [[str(py), "-m", "pip", "install", "psycopg[binary]"]],
+                                 "nunca pip en un interprete que no sea el venv neutro")
                 self.assertTrue(all(line.startswith("export ") for line in out.splitlines()))
 
     def test_dentro_de_un_venv_de_proyecto_no_instala_ahi(self):
