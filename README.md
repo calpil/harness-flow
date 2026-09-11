@@ -22,23 +22,33 @@ esta skill; los gates son scripts Python que devuelven exit≠0 cuando algo falt
 
 ## Instalación
 
-```bash
-# Windows
-git clone <este-repo> "$LOCALAPPDATA/hermes/skills/software-development/harness-flow"
-
-# macOS / Linux
-git clone <este-repo> ~/.local/share/hermes/skills/software-development/harness-flow
-```
-
-Hermes la carga sola en la próxima sesión. Verifica con `/skills`.
-
-Para el hub Postgres:
+No hay instalador ni binario: la skill es un clone de git dentro del directorio de
+skills de Hermes. Este lo escanea al iniciar la sesión y la carga por su
+`SKILL.md`.
 
 ```bash
-uv pip install --python "<venv de hermes>/bin/python" "psycopg[binary]"
+git clone https://github.com/calpil/harness-flow.git \
+  ~/.hermes/skills/software-development/harness-flow
 ```
 
-Credenciales en `~/.harness-hub/.env` (fuera de todo repo):
+Esa es la ruta del perfil `default`. Si usas otro perfil, va en
+`~/.hermes/profiles/<perfil>/skills/software-development/harness-flow`. En
+Windows es la misma ruta bajo tu carpeta de usuario (`%USERPROFILE%\.hermes\...`).
+
+Hermes la carga en la **próxima** sesión; verifica con `/skills`.
+
+Luego instala la dependencia del hub Postgres en el intérprete correcto — el del
+venv de Hermes, no el del sistema. El script lo detecta solo en Windows, Linux y
+macOS:
+
+```bash
+python3 ~/.hermes/skills/software-development/harness-flow/scripts/entorno.py --instalar-deps
+```
+
+Sin flags, `entorno.py` imprime un diagnóstico (SO, rutas detectadas, si
+`psycopg` está presente) y sale con exit≠0 si falta algo.
+
+Credenciales en `~/.harness-hub/.env` (fuera de todo repo, por máquina):
 
 ```
 DB_HOST=...
@@ -49,18 +59,36 @@ DB_PASSWORD=...
 DB_SSL_MODE=require
 ```
 
-## Uso en un proyecto
+## Actualización
 
-Desde la raíz multi-repo (la carpeta que contiene tus microservicios):
+Es un clone, así que se actualiza con git. Los cambios aplican en la **siguiente**
+sesión de Hermes, porque el `SKILL.md` se lee al iniciar.
 
 ```bash
-H=~/.local/share/hermes/skills/software-development/harness-flow/scripts
+cd ~/.hermes/skills/software-development/harness-flow
+git pull
+```
 
-python "$H/init.py" --project mi-proyecto
-python "$H/add.py" --name "Checkout con cupon"
-python "$H/worktree.py" start --feature 1 --repo front-app
+## Uso en un proyecto
+
+Primero define `H` (scripts) y `PY` (python de Hermes) sin hardcodear rutas:
+
+```bash
+# bash / zsh
+eval "$(python3 ~/.hermes/skills/software-development/harness-flow/scripts/entorno.py --shell)"
+
+# PowerShell
+python $env:USERPROFILE\.hermes\skills\software-development\harness-flow\scripts\entorno.py --powershell | Invoke-Expression
+```
+
+Después, desde la raíz multi-repo (la carpeta que contiene tus microservicios):
+
+```bash
+$PY "$H/init.py" --project mi-proyecto
+$PY "$H/add.py" --name "Checkout con cupon"
+$PY "$H/worktree.py" start --feature 1 --repo front-app
 # ... escribes el spec, el usuario lo aprueba, implementas, revisas ...
-python "$H/gate.py" close --feature 1 --status done --to main --leccion checkout
+$PY "$H/gate.py" close --feature 1 --status done --to main --leccion checkout
 ```
 
 No se copia nada al repo salvo `harness/` y `docs/`. Una instalación por proyecto
@@ -71,6 +99,7 @@ multi-repo, no por microservicio.
 ```
 SKILL.md                 el proceso que sigue el agente
 scripts/
+  entorno.py             detecta H y PY por SO (Windows/Linux/macOS)
   comun.py               rutas, backlog, firmas, parsers de AC
   init.py add.py         alta de proyecto y de features
   gate.py                TODOS los gates (exit≠0)
