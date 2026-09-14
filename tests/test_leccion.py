@@ -48,6 +48,52 @@ class Base(unittest.TestCase):
 
 
 class RaicesTests(Base):
+    def test_gpt_codex_usa_agents_skills_personal_y_repo(self):
+        personal = self.home / ".agents" / "skills"
+        repo = Path(self.tmp.name) / "repo"
+        repo_skills = repo / ".agents" / "skills"
+        self.skill(personal, "tdd", "personal-gpt")
+        self.skill(repo_skills, "repo-only", "repo-gpt")
+        os.environ["HARNESS_HOST"] = "gpt"
+        os.chdir(repo)
+        raices = leccion.skills_roots()
+        self.assertEqual(raices[0], repo_skills.resolve())
+        self.assertIn(personal.resolve(), raices)
+        self.assertIn("repo-gpt", leccion.buscar("repo-only").read_text(encoding="utf-8"))
+        self.assertIn("personal-gpt", leccion.buscar("tdd").read_text(encoding="utf-8"))
+
+    def test_gpt_no_escanea_agents_por_arriba_del_repo_root(self):
+        import subprocess
+        fuera = Path(self.tmp.name) / ".agents" / "skills"
+        repo = Path(self.tmp.name) / "repo"
+        repo.mkdir()
+        subprocess.run(["git", "init"], cwd=repo, check=True, capture_output=True)
+        repo_skills = repo / ".agents" / "skills"
+        self.skill(fuera, "fuera-del-repo")
+        self.skill(repo_skills, "dentro-del-repo")
+        os.environ["HARNESS_HOST"] = "gpt"
+        os.chdir(repo)
+
+        raices = leccion.skills_roots()
+
+        self.assertIn(repo_skills.resolve(), raices)
+        self.assertNotIn(fuera.resolve(), raices)
+        self.assertIsNone(leccion.buscar("fuera-del-repo"))
+
+    def test_gpt_por_symlink_agents_no_cola_skills_de_hermes(self):
+        hermes = self.home / ".hermes" / "skills"
+        agents = self.home / ".agents" / "skills"
+        self.skill(hermes / "cat", "solo-hermes")
+        self.skill(agents, "solo-gpt")
+        target = hermes / "software-development" / "harness-flow"
+        (target / "scripts").mkdir(parents=True, exist_ok=True)
+        link = agents / "harness-flow"
+        link.parent.mkdir(parents=True, exist_ok=True)
+        link.symlink_to(target, target_is_directory=True)
+        with mock.patch.object(leccion, "__file__", str(link / "scripts" / "leccion.py")):
+            self.assertIsNotNone(leccion.buscar("solo-gpt"))
+            self.assertIsNone(leccion.buscar("solo-hermes"))
+
     def test_claude_prioriza_personal_sobre_proyecto(self):
         # docs de Claude Code: las skills personales ganan a las del proyecto
         personal = self.home / ".claude" / "skills"

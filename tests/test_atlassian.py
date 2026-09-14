@@ -222,6 +222,21 @@ class AtlassianSyncTests(unittest.TestCase):
         put = next(c for m, r, c in llamadas if m == "PUT" and r == "/wiki/rest/api/content/999")
         self.assertEqual(put["version"]["number"], 8)
         self.assertEqual(put["title"], "Feature #3 - Checkout con cupon")
+    def test_confluence_body_incluye_prd_y_sdd_si_existen(self):
+        prd = self.root / "docs" / "prd" / "PRD-master.md"
+        prd.parent.mkdir(parents=True)
+        prd.write_text("# PRD maestro\n\nFeature #3 - Checkout con cupon\n", encoding="utf-8")
+        (self.root / "docs" / "sdd.md").write_text(
+            "# SDD\n\nDiseno implementado por feature\n", encoding="utf-8")
+        p = atlassian.paths()
+        data = atlassian.load_backlog(p)
+        f = atlassian.get_feature(data, 3)
+
+        body = atlassian.cuerpo_confluence(p, f, ["AC-1", "AC-2"])
+
+        self.assertIn("PRD maestro", body)
+        self.assertIn("SDD", body)
+        self.assertIn("Diseno implementado por feature", body)
 
 
 if __name__ == "__main__":

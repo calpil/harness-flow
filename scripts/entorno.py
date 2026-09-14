@@ -22,16 +22,26 @@ from pathlib import Path
 ES_WINDOWS = os.name == "nt"
 
 
+HOSTS_VALIDOS = ("hermes", "claude", "gpt", "codex", "generic")
+
+
+def _canon_host(host: str) -> str:
+    return "gpt" if host == "codex" else host
+
+
 def host_agente() -> str:
     """Host de ejecucion, no necesariamente el dueno del archivo enlazado."""
     explicit = os.environ.get("HARNESS_HOST")
     if explicit:
-        if explicit not in ("hermes", "claude", "generic"):
-            raise ValueError("HARNESS_HOST debe ser hermes, claude o generic")
-        return explicit
+        if explicit not in HOSTS_VALIDOS:
+            raise ValueError("HARNESS_HOST debe ser hermes, claude, gpt, codex o generic")
+        return _canon_host(explicit)
+    # No resolve(): un symlink en .agents o .claude puede apuntar al clone de Hermes.
+    for padre in Path(__file__).absolute().parents:
+        if padre.name == "skills" and padre.parent.name == ".agents":
+            return "gpt"
     if os.environ.get("CLAUDECODE") == "1" or os.environ.get("CLAUDE_CONFIG_DIR"):
         return "claude"
-    # No resolve(): un symlink en .claude puede apuntar al clone de Hermes.
     for padre in Path(__file__).absolute().parents:
         if padre.name == "skills" and padre.parent.name == ".claude":
             return "claude"
@@ -157,7 +167,7 @@ def main() -> int:
     g = ap.add_mutually_exclusive_group()
     g.add_argument("--shell", action="store_true", help="exports para bash/zsh (usar con eval)")
     g.add_argument("--powershell", action="store_true", help="asignaciones para PowerShell")
-    ap.add_argument("--host", choices=("hermes", "claude", "generic"),
+    ap.add_argument("--host", choices=("hermes", "claude", "gpt", "codex", "generic"),
                     help="host explicito; gana sobre la autodeteccion")
     ap.add_argument("--hub", action="store_true",
                     help="exige psycopg (el Memory Hub Postgres): exit!=0 si falta")

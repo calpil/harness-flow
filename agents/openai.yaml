@@ -1,0 +1,7 @@
+interface:
+  display_name: "Harness Flow"
+  short_description: "Spec-driven development workflow with gates, PRD/SDD, Jira and Confluence sync."
+  default_prompt: "Use harness-flow to run the spec-driven workflow for this repository."
+
+policy:
+  allow_implicit_invocation: true

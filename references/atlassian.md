@@ -36,7 +36,7 @@ python "$H/atlassian.py" push --feature 3    # Jira + Confluence
 
 - la historia Jira (Story/Bug/Task segun el binding) y sus subtasks por AC;
 - una pagina Confluence `Feature #<id> - <nombre>` en el space configurado, con
-  spec, evidencia, review y AC embebidos.
+  PRD/SDD si existen, spec, evidencia, review y AC embebidos.
 
 Para que el cierre publique al terminar:
 
@@ -70,6 +70,7 @@ python "$H/atlassian.py" ack --feature 3 --key ADR-142
 | --- | --- |
 | feature | Pagina `Feature #<id> - <nombre>` |
 | spec/evidencia/review | Secciones dentro de la pagina |
+| `docs/prd/PRD-master.md` / `docs/sdd.md` | Secciones embebidas si existen |
 | AC-n | Lista de criterios de aceptacion |
 | `confluence_page_id` | id de la pagina remota |
 

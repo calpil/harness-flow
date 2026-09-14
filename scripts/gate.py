@@ -107,6 +107,59 @@ def _check_feature(p, f, rules, r) -> None:
                 r.ok(f"#{fid} review approved y sellado")
 
 
+def _porcelain_path(line: str) -> str:
+    """Extrae path de una linea porcelain aun si git() recorto espacios."""
+    if len(line) >= 4 and line[2] == " ":
+        return line[3:].strip().strip('"')
+    if len(line) >= 3 and line[1] == " ":
+        return line[2:].strip().strip('"')
+    if len(line) >= 3:
+        return line[3:].strip().strip('"')
+    return ""
+
+
+def _entre_marcadores(texto: str) -> tuple[str, str] | None:
+    inicio = "<!-- harness-flow:features:start -->"
+    fin = "<!-- harness-flow:features:end -->"
+    if inicio not in texto or fin not in texto:
+        return None
+    antes, resto = texto.split(inicio, 1)
+    _, despues = resto.split(fin, 1)
+    return antes, despues
+
+
+def _prd_master_seguro(p: dict, rel: str) -> bool:
+    """Permite solo cambios dentro del bloque generado del PRD maestro."""
+    if rel != "docs/prd/PRD-master.md":
+        return False
+    actual = p["root"] / rel
+    if not actual.exists():
+        return False
+    actual_partes = _entre_marcadores(actual.read_text(encoding="utf-8"))
+    if not actual_partes:
+        return False
+    code, base = git(["show", f"HEAD:{rel}"], p["root"])
+    if code == 0:
+        base_partes = _entre_marcadores(base)
+        return bool(base_partes and tuple(x.strip() for x in actual_partes) == tuple(x.strip() for x in base_partes))
+    base_default = "# PRD maestro\n\nContenido manual arriba; harness-flow mantiene solo el bloque generado."
+    return tuple(x.strip() for x in actual_partes) == (base_default, "")
+
+
+def _rutas_prd_tocadas(p: dict, rel: str) -> list[str]:
+    if rel.rstrip("/") == "docs/prd":
+        raiz = p["root"] / "docs" / "prd"
+        return [x.relative_to(p["root"]).as_posix() for x in raiz.rglob("*") if x.is_file()]
+    return [rel]
+
+
+def _ruta_protegida_permitida(p: dict, rel: str) -> bool:
+    prd_tocadas = _rutas_prd_tocadas(p, rel) if rel.startswith("docs/prd") else []
+    if not prd_tocadas:
+        return False
+    return all(_prd_master_seguro(p, x) for x in prd_tocadas)
+
+
 def _check_rutas_protegidas(p, rules, r) -> None:
     pats = rules.get("rutas_protegidas") or []
     code, out = git(["status", "--porcelain"], p["root"])
@@ -115,10 +168,11 @@ def _check_rutas_protegidas(p, rules, r) -> None:
         return
     tocadas = []
     for line in out.splitlines():
-        f = line[3:].strip().strip('"')
+        f = _porcelain_path(line)
         for pat in pats:
             if fnmatch.fnmatch(f, pat) or (pat.endswith("/**") and f.startswith(pat[:-3])):
-                tocadas.append(f)
+                if not _ruta_protegida_permitida(p, f):
+                    tocadas.append(f)
     if tocadas:
         r.fallo("rutas protegidas modificadas: " + ", ".join(sorted(set(tocadas))),
                 "son del USUARIO; revierte esos cambios")
@@ -330,6 +384,37 @@ def git_merge(p: dict, f: dict, destino: str) -> str:
     return sha.strip() if code == 0 else "?"
 
 
+def _rel(root: Path, path: Path) -> str:
+    return path.relative_to(root).as_posix()
+
+
+def archivar_progress_actual(p: dict, f: dict) -> Path | None:
+    """Mueve progress/current-<id>.md a progress/archive/ al cerrar."""
+    origen = p["progress"] / f"current-{f['id']}.md"
+    if not origen.exists():
+        return None
+    destino = p["progress"] / "archive" / origen.name
+    destino.parent.mkdir(parents=True, exist_ok=True)
+    if destino.exists():
+        destino = destino.with_name(f"current-{f['id']}-{now_iso().replace(':', '').replace('-', '')}.md")
+    origen.rename(destino)
+    f["progress_archive"] = _rel(p["root"], destino)
+    return destino
+
+
+def restaurar_progress_actual(p: dict, f: dict, archivado: Path | None, original_cierre: dict) -> None:
+    if not archivado or not archivado.exists():
+        return
+    destino = p["progress"] / f"current-{f['id']}.md"
+    destino.parent.mkdir(parents=True, exist_ok=True)
+    if not destino.exists():
+        archivado.rename(destino)
+    if "progress_archive" in original_cierre:
+        f["progress_archive"] = original_cierre["progress_archive"]
+    else:
+        f.pop("progress_archive", None)
+
+
 def cmd_close(args) -> None:
     p = paths()
     data = load_backlog(p)
@@ -338,7 +423,7 @@ def cmd_close(args) -> None:
     fid = f["id"]
     original_cierre = {k: f[k] for k in (
         "status", "closed_at", "integrado_en", "merge_commit",
-        "leccion", "leccion_motivo", "note") if k in f}
+        "leccion", "leccion_motivo", "note", "progress_archive") if k in f}
 
     if args.status == "done" and not args.to:
         sys.exit("[!!] close --status done requiere --to <rama>.\n"
@@ -400,7 +485,7 @@ def cmd_close(args) -> None:
             if not buscar_leccion(args.leccion):
                 fallos.append(
                     f"la leccion '{args.leccion}' no existe como skill "
-                    "(creala antes de cerrar: skill_manage en Hermes, SKILL.md en Claude Code)")
+                    "(creala antes de cerrar: skill_manage en Hermes, SKILL.md en Claude Code/GPT)")
 
     if fallos:
         print(f"[!!] close #{fid} BLOQUEADO por {len(fallos)} regla(s):")
@@ -427,7 +512,13 @@ def cmd_close(args) -> None:
         f["leccion_motivo"] = args.leccion_motivo
     if args.nota:
         f["note"] = args.nota
+    progress_archivado = archivar_progress_actual(p, f) if args.status == "done" else None
     save_backlog(p, data)
+    docs_sincronizados = []
+    if args.status == "done":
+        sys.path.insert(0, str(Path(__file__).parent))
+        import documentacion
+        docs_sincronizados = documentacion.sync(p, data)
     atlassian_sync = False
     if args.publicar_atlassian:
         try:
@@ -443,13 +534,20 @@ def cmd_close(args) -> None:
             actual = load_backlog(p)
             af = get_feature(actual, fid)
             for k in ("status", "closed_at", "integrado_en", "merge_commit",
-                      "leccion", "leccion_motivo", "note"):
+                      "leccion", "leccion_motivo", "note", "progress_archive"):
                 if k in original_cierre:
                     af[k] = original_cierre[k]
                 else:
                     af.pop(k, None)
+            restaurar_progress_actual(p, af, progress_archivado, original_cierre)
             save_backlog(p, actual)
+            import documentacion
+            documentacion.sync(p, actual)
             raise
+    if progress_archivado:
+        bitacora(p, f"progress #{fid} archivado en {f['progress_archive']}")
+    if docs_sincronizados:
+        bitacora(p, f"documentacion PRD/SDD sincronizada para #{fid}")
     bitacora(p, f"close #{fid} status={args.status}" +
              (f" -> {args.to}" if args.to else "") +
              (f" merge={merged}" if merged else "") +
@@ -457,6 +555,10 @@ def cmd_close(args) -> None:
     print(f"[ok] feature #{fid} cerrada como {args.status}")
     if merged:
         print(f"[ok] rama integrada en {args.to} (merge {merged})")
+    if progress_archivado:
+        print(f"[ok] progreso archivado en {f['progress_archive']}")
+    if docs_sincronizados:
+        print("[ok] documentacion PRD/SDD sincronizada")
     print("[i]  la integracion es LOCAL: publicar es una decision aparte.")
     if atlassian_sync:
         print(f"[ok] Atlassian sincronizado para feature #{fid}")

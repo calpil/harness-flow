@@ -111,12 +111,17 @@ def _doc_md(path: Path) -> str:
 def cuerpo_confluence(p: dict, f: dict, acs: list[str]) -> str:
     """HTML storage simple: documentacion del harness embebida en una pagina."""
     sp, ip, rp = spec_path(p, f), p["docs"] / f"impl-{f['id']}.md", p["docs"] / f"review-{f['id']}.md"
+    prd, sdd = p["docs"] / "prd" / "PRD-master.md", p["docs"] / "sdd.md"
     filas = "".join(f"<li>{html.escape(ac)}</li>" for ac in acs) or "<li>Sin AC declarados</li>"
-    secciones = [
+    secciones = []
+    for titulo, path in (("PRD", prd), ("SDD", sdd)):
+        if path.exists():
+            secciones.append((titulo, path))
+    secciones.extend([
         ("Spec", sp),
         ("Evidencia", ip),
         ("Review", rp),
-    ]
+    ])
     docs = "".join(
         f"<h2>{html.escape(titulo)}</h2><p><code>{html.escape(str(path.relative_to(p['root'])) if path.exists() else str(path))}</code></p>"
         f"<pre>{html.escape(_doc_md(path))}</pre>"

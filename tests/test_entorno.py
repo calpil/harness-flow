@@ -37,9 +37,20 @@ class EntornoTests(unittest.TestCase):
     def test_host_explicito_gana_y_no_normaliza_invalidos(self):
         os.environ.update(HARNESS_HOST="hermes", CLAUDECODE="1")
         self.assertEqual(entorno.host_agente(), "hermes")
+        os.environ["HARNESS_HOST"] = "gpt"
+        self.assertEqual(entorno.host_agente(), "gpt")
+        os.environ["HARNESS_HOST"] = "codex"
+        self.assertEqual(entorno.host_agente(), "gpt")
         os.environ["HARNESS_HOST"] = "Claude"
         with self.assertRaises(ValueError):
             entorno.host_agente()
+
+    def test_copia_openai_agents_skills_detecta_host_gpt(self):
+        script = self.home / ".agents/skills/harness-flow/scripts/entorno.py"
+        script.parent.mkdir(parents=True)
+        script.touch()
+        with mock.patch.object(entorno, "__file__", str(script)):
+            self.assertEqual(entorno.host_agente(), "gpt")
 
     def test_symlink_claude_no_hereda_host_de_destino(self):
         target = self.home / ".hermes/skills/software-development/harness-flow/scripts"
@@ -162,7 +173,7 @@ class EntornoTests(unittest.TestCase):
     def test_instalacion_sin_venv_no_toca_python_del_sistema(self):
         # El invariante es del comando, no del host: en NINGUN host se instala
         # psycopg en un interprete que no sea un venv.
-        for host in ("claude", "hermes", "generic"):
+        for host in ("claude", "hermes", "gpt", "generic"):
             with self.subTest(host=host):
                 os.environ["HARNESS_HOST"] = host
                 invocados = []

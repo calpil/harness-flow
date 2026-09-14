@@ -3,8 +3,8 @@
 
 Una leccion es una skill por CLASE de trabajo (nunca por id de feature). Asi
 viaja contigo entre proyectos y el agente la carga sola cuando aplica, en vez
-de quedarse enterrada en el docs/ de un repo. Funciona con Hermes y con Claude
-Code: la raiz de skills se detecta segun el host.
+de quedarse enterrada en el docs/ de un repo. Funciona con Hermes, Claude
+Code y GPT/Codex: la raiz de skills se detecta segun el host.
 
   leccion.py list                skills disponibles (candidatas a leccion)
   leccion.py ver <clase>         imprime la skill
@@ -19,7 +19,9 @@ script. HARNESS_SKILLS_DIR fuerza una raiz unica si la deteccion no aplica.
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import os
+import subprocess
 import sys
 from pathlib import Path
 
@@ -34,15 +36,20 @@ def _casa() -> Path:
 def _host() -> str:
     """Host de ejecucion. Un solo detector: el de entorno.py, para no divergir."""
     try:
-        propio = str(Path(__file__).resolve().parent)
-        if propio not in sys.path:  # no acumular copias en cada llamada
-            sys.path.insert(0, propio)
-        from entorno import host_agente
-        return host_agente()
+        propio = Path(__file__).absolute().parent
+        spec = importlib.util.spec_from_file_location("_harness_flow_entorno_runtime", propio / "entorno.py")
+        if spec is None or spec.loader is None:
+            raise ImportError("entorno.py no disponible")
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        return mod.host_agente()
     except ValueError as exc:
         sys.exit("[!!] %s" % exc)
     except Exception:
         # entorno.py ausente o roto (copia parcial): heuristica minima equivalente
+        for padre in Path(__file__).absolute().parents:
+            if padre.name == "skills" and padre.parent.name == ".agents":
+                return "gpt"
         if os.environ.get("CLAUDECODE") == "1" or os.environ.get("CLAUDE_CONFIG_DIR"):
             return "claude"
         if os.environ.get("HERMES_HOME") or os.environ.get("HERMES_SKILLS_DIR"):
@@ -63,6 +70,37 @@ def _raices_claude() -> list[Path]:
         return raices
     for padre in [cwd, *cwd.parents]:
         raices.append(padre / ".claude" / "skills")
+    return raices
+
+
+def _repo_root(cwd: Path) -> Path | None:
+    try:
+        r = subprocess.run(["git", "rev-parse", "--show-toplevel"], cwd=str(cwd),
+                           capture_output=True, text=True, timeout=10)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if r.returncode != 0:
+        return None
+    return Path(r.stdout.strip()).resolve()
+
+
+def _raices_gpt() -> list[Path]:
+    """Codex/ChatGPT: repo .agents/skills cerca primero, luego user/admin."""
+    raices: list[Path] = []
+    try:
+        cwd = Path.cwd()
+        root = _repo_root(cwd)
+        padres = [cwd, *cwd.parents]
+        if root is not None:
+            padres = [p for p in padres if p.resolve() == root or root in p.resolve().parents]
+        else:
+            padres = [cwd]
+        for padre in padres:
+            raices.append(padre / ".agents" / "skills")
+    except OSError:
+        pass
+    raices.append(_casa() / ".agents" / "skills")
+    raices.append(Path("/etc/codex/skills"))
     return raices
 
 
@@ -106,12 +144,16 @@ def skills_roots() -> list[Path]:
         # _raiz_propia(): con un symlink desde ~/.claude al clone de Hermes colaria
         # las skills de Hermes en un host que no es el suyo.
         candidatas = _raices_claude()
+    elif host == "gpt":
+        # Codex/ChatGPT usa .agents/skills. No se anade _raiz_propia(): un symlink
+        # desde ~/.agents al clone de Hermes no debe colar las skills de Hermes.
+        candidatas = _raices_gpt()
     elif host == "hermes":
         # La raiz que contiene a esta skill va PRIMERO: si corres la copia instalada
         # en el perfil 'trabajo', mandan las skills de ese perfil, no las del default.
         candidatas = _raiz_propia() + _raices_hermes()
     else:
-        candidatas = _raiz_propia() + _raices_hermes() + _raices_claude()
+        candidatas = _raiz_propia() + _raices_hermes() + _raices_claude() + _raices_gpt()
 
     vistas: list[Path] = []
     for c in candidatas:
@@ -215,7 +257,7 @@ def cmd_existe(args) -> None:
         raices = "\n       ".join(str(r) for r in skills_roots())
         sys.exit("[!!] la leccion '%s' no existe como skill.\n"
                  "     Raices consultadas:\n       %s\n"
-                 "     Creala (skill_manage en Hermes; SKILL.md en Claude Code), o cierra con\n"
+                 "     Creala (skill_manage en Hermes; SKILL.md en Claude Code/GPT), o cierra con\n"
                  "     --leccion ninguna --leccion-motivo '<por que>'."
                  % (args.clase, raices))
     print("[ok] %s -> %s" % (args.clase, sm))
@@ -250,8 +292,9 @@ description: "Use when <disparador en una linea>. <que hace>."
 def cmd_plantilla(args) -> None:
     print(PLANTILLA.format(clase=args.clase))
     print("[i]  Hermes: skill_manage(action='create', name='%s', content=...)\n"
-          "     Claude Code: escribelo en <raiz>/%s/SKILL.md (leccion.py donde)"
-          % (args.clase, args.clase), file=sys.stderr)
+          "     Claude Code: escribelo en <raiz>/%s/SKILL.md (leccion.py donde)\n"
+          "     GPT/Codex: escribelo en <raiz>/%s/SKILL.md, tipicamente ~/.agents/skills/%s/SKILL.md"
+          % (args.clase, args.clase, args.clase, args.clase), file=sys.stderr)
 
 
 def main() -> None:
