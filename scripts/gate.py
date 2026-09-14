@@ -336,10 +336,15 @@ def cmd_close(args) -> None:
     rules = data["rules"]
     f = get_feature(data, args.feature)
     fid = f["id"]
+    original_cierre = {k: f[k] for k in (
+        "status", "closed_at", "integrado_en", "merge_commit",
+        "leccion", "leccion_motivo", "note") if k in f}
 
     if args.status == "done" and not args.to:
         sys.exit("[!!] close --status done requiere --to <rama>.\n"
                  "     PREGUNTALE AL USUARIO a que rama se integra: no lo adivines.")
+    if args.publicar_atlassian and not p["atlassian"].exists():
+        sys.exit("[!!] --publicar-atlassian exige harness/atlassian.json")
 
     fallos: list[str] = []
     sp = spec_path(p, f)
@@ -423,6 +428,28 @@ def cmd_close(args) -> None:
     if args.nota:
         f["note"] = args.nota
     save_backlog(p, data)
+    atlassian_sync = False
+    if args.publicar_atlassian:
+        try:
+            sys.path.insert(0, str(Path(__file__).parent))
+            import atlassian
+            atlassian.cmd_push(argparse.Namespace(feature=str(fid)))
+            atlassian_sync = True
+        except SystemExit:
+            # El merge local ya ocurrio, pero el cierre no puede quedar sellado si
+            # publicar remoto era parte explicita del comando. Relee el backlog por
+            # si atlassian.py alcanzo a guardar jira_key/confluence_page_id y solo
+            # revierte los campos propios del cierre.
+            actual = load_backlog(p)
+            af = get_feature(actual, fid)
+            for k in ("status", "closed_at", "integrado_en", "merge_commit",
+                      "leccion", "leccion_motivo", "note"):
+                if k in original_cierre:
+                    af[k] = original_cierre[k]
+                else:
+                    af.pop(k, None)
+            save_backlog(p, actual)
+            raise
     bitacora(p, f"close #{fid} status={args.status}" +
              (f" -> {args.to}" if args.to else "") +
              (f" merge={merged}" if merged else "") +
@@ -431,9 +458,11 @@ def cmd_close(args) -> None:
     if merged:
         print(f"[ok] rama integrada en {args.to} (merge {merged})")
     print("[i]  la integracion es LOCAL: publicar es una decision aparte.")
-    if (p["atlassian"]).exists():
+    if atlassian_sync:
+        print(f"[ok] Atlassian sincronizado para feature #{fid}")
+    elif (p["atlassian"]).exists():
         print("[i]  hay atlassian.json: corre atlassian.py push --feature "
-              f"{fid} para reflejarlo en Jira.")
+              f"{fid} para reflejarlo en Jira y Confluence, o usa close --publicar-atlassian.")
 
 
 def main() -> None:
@@ -461,6 +490,8 @@ def main() -> None:
     s.add_argument("--status", required=True, choices=["done", "blocked"])
     s.add_argument("--to"); s.add_argument("--leccion")
     s.add_argument("--leccion-motivo", dest="leccion_motivo"); s.add_argument("--nota")
+    s.add_argument("--publicar-atlassian", action="store_true", dest="publicar_atlassian",
+                   help="despues del cierre, sincroniza Jira y Confluence con atlassian.py push")
     s.set_defaults(fn=cmd_close)
 
     args = ap.parse_args()

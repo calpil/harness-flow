@@ -23,7 +23,10 @@ del agente para lanzar el subagente revisor y escribir lecciones.
   (`graph_nodes` / `graph_edges`). Responde "¿quién se rompe si toco esto?".
 - **Vault Obsidian**: `docs/vault/` generado desde el grafo y los documentos del
   proceso, versionado con el repo.
-- **Jira / Confluence**: opcional, apagado si no hay binding.
+- **Jira / Confluence**: opcional, apagado si no hay binding. `atlassian.py push`
+  crea/actualiza la issue Jira, subtasks por AC y una pagina Confluence con
+  spec, evidencia y review; `gate.py close --publicar-atlassian` lo dispara al
+  cerrar.
 
 ## Instalación
 

@@ -114,11 +114,14 @@ Si el subagente no está disponible, `$PY "$H/revision.py" --feature <id>` da el
 
 ```bash
 python "$H/gate.py" close --feature <id> --status done --to <rama> --leccion <clase>
+# si harness/atlassian.json existe y el usuario pidio publicar remoto:
+python "$H/gate.py" close --feature <id> --status done --to <rama> \
+  --leccion <clase> --publicar-atlassian
 ```
 
-El gate exige, según `rules`: spec approved y fresco, review approved, check limpio, lección declarada. Se niega sin `--to`: PREGÚNTALE al usuario a qué rama integra.
+El gate exige, segun `rules`: spec approved y fresco, review approved, check limpio, leccion declarada. Se niega sin `--to`: PREGUNTALE al usuario a que rama integra.
 
-`close` **ejecuta el merge de verdad** (`git merge --no-ff` de la rama de la feature en `--to`) y guarda el sha en `merge_commit`. Aborta sin tocar el backlog si el árbol está sucio, la rama no existe o el merge conflictúa: es preferible una feature que no cierra a un `done` sobre una rama que nunca entró. Integra LOCAL; publicar es aparte.
+`close` **ejecuta el merge de verdad** (`git merge --no-ff` de la rama de la feature en `--to`) y guarda el sha en `merge_commit`. Aborta sin tocar el backlog si el arbol esta sucio, la rama no existe o el merge conflictua: es preferible una feature que no cierra a un `done` sobre una rama que nunca entro. Integra LOCAL; publicar es aparte salvo que pases `--publicar-atlassian`, que luego corre `atlassian.py push` para sincronizar Jira y Confluence.
 
 Verifica el resultado (`git log --oneline -1` en la rama destino) antes de dar por integrada una feature: el mensaje de un script no es evidencia de que el merge ocurrió.
 
@@ -197,7 +200,12 @@ Enlaza specs ↔ AC ↔ evidencia ↔ lecciones ↔ nodos de graphify con wikili
 
 ## Jira / Confluence
 
-Solo si existe `harness/atlassian.json`. Sin ese archivo el flujo se comporta igual, sin tocar nada. Si el usuario quiere integrar y no hay binding, PREGÚNTALE a qué proyecto Jira y space pertenece el repo: no lo adivines. Mapeo y comandos en `references/atlassian.md`.
+Solo si existe `harness/atlassian.json`. Sin ese archivo el flujo se comporta igual, sin tocar nada. Si el usuario quiere integrar y no hay binding, PREGUNTALE a que proyecto Jira y space pertenece el repo: no lo adivines. Mapeo y comandos en `references/atlassian.md`.
+
+`atlassian.py push --feature <id>` crea/actualiza la historia Jira, subtasks por
+AC y una pagina Confluence con spec, evidencia y review. `gate.py close ...
+--publicar-atlassian` dispara ese push automaticamente despues del cierre; sin
+esa bandera, `close` solo avisa y no toca sistemas remotos.
 
 ## Reglas duras
 

@@ -7,17 +7,19 @@ ATLASSIAN_API_TOKEN.
 
   atlassian.py status
   atlassian.py bind --site x.atlassian.net --jira-project K --confluence-space S
-  atlassian.py push --feature <id>          # crea/actualiza historia + subtasks AC
+  atlassian.py push --feature <id>          # crea/actualiza Jira + Confluence
   atlassian.py outbox                       # lo pendiente, para drenar con MCP
 """
 from __future__ import annotations
 
 import argparse
 import base64
+import html
 import json
 import os
 import sys
 import urllib.error
+import urllib.parse
 import urllib.request
 from pathlib import Path
 
@@ -98,6 +100,83 @@ def _intent(p, tipo, payload):
     return f
 
 
+def titulo_confluence(f: dict) -> str:
+    return f"Feature #{f['id']} - {f.get('name','')}"
+
+
+def _doc_md(path: Path) -> str:
+    return path.read_text(encoding="utf-8") if path.exists() else "_(no existe)_"
+
+
+def cuerpo_confluence(p: dict, f: dict, acs: list[str]) -> str:
+    """HTML storage simple: documentacion del harness embebida en una pagina."""
+    sp, ip, rp = spec_path(p, f), p["docs"] / f"impl-{f['id']}.md", p["docs"] / f"review-{f['id']}.md"
+    filas = "".join(f"<li>{html.escape(ac)}</li>" for ac in acs) or "<li>Sin AC declarados</li>"
+    secciones = [
+        ("Spec", sp),
+        ("Evidencia", ip),
+        ("Review", rp),
+    ]
+    docs = "".join(
+        f"<h2>{html.escape(titulo)}</h2><p><code>{html.escape(str(path.relative_to(p['root'])) if path.exists() else str(path))}</code></p>"
+        f"<pre>{html.escape(_doc_md(path))}</pre>"
+        for titulo, path in secciones
+    )
+    jira = f.get("jira_key") or "sin Jira"
+    return (
+        f"<h1>{html.escape(titulo_confluence(f))}</h1>"
+        f"<p><strong>Estado:</strong> {html.escape(str(f.get('status','')))}<br />"
+        f"<strong>Jira:</strong> {html.escape(str(jira))}</p>"
+        f"<h2>Criterios de aceptacion</h2><ul>{filas}</ul>"
+        f"{docs}"
+    )
+
+
+def sync_confluence(p: dict, b: dict, email: str, token: str, data: dict, f: dict, acs: list[str]) -> None:
+    space = b.get("confluence_space")
+    if not space:
+        return
+    code, r = api(b["site"], email, token, "GET", f"/wiki/rest/api/space/{space}")
+    if code >= 300 or code == 0:
+        sys.exit(f"[!!] Confluence rechazo el space {space} ({code}): {r.get('error','')[:300]}")
+    title = titulo_confluence(f)
+    body = {"storage": {"value": cuerpo_confluence(p, f, acs), "representation": "storage"}}
+    results = []
+    if f.get("confluence_page_id"):
+        page_id = f["confluence_page_id"]
+        code, r = api(b["site"], email, token, "GET",
+                      f"/wiki/rest/api/content/{page_id}?expand=version")
+        if code == 200:
+            results = [r]
+        elif code not in (404,):
+            sys.exit(f"[!!] Confluence rechazo la pagina guardada {page_id} ({code}): {r.get('error','')[:300]}")
+    if not results:
+        q = urllib.parse.urlencode({"spaceKey": space, "title": title, "expand": "version"})
+        code, r = api(b["site"], email, token, "GET", f"/wiki/rest/api/content?{q}")
+        if code >= 300 or code == 0:
+            sys.exit(f"[!!] Confluence rechazo la busqueda de pagina ({code}): {r.get('error','')[:300]}")
+        results = r.get("results") or []
+    if results:
+        page = results[0]
+        page_id = page["id"]
+        version = int((page.get("version") or {}).get("number", 1)) + 1
+        code, r = api(b["site"], email, token, "PUT", f"/wiki/rest/api/content/{page_id}", {
+            "id": page_id, "type": "page", "title": title, "space": {"key": space},
+            "version": {"number": version}, "body": body})
+        accion = "actualizada"
+    else:
+        code, r = api(b["site"], email, token, "POST", "/wiki/rest/api/content", {
+            "type": "page", "title": title, "space": {"key": space}, "body": body})
+        accion = "creada"
+    if code >= 300 or code == 0:
+        sys.exit(f"[!!] Confluence rechazo la pagina ({code}): {r.get('error','')[:300]}")
+    f["confluence_page_id"] = r.get("id") or (results[0]["id"] if results else None)
+    f["confluence_page_title"] = title
+    f["confluence_synced_at"] = now_iso()
+    save_backlog(p, data)
+    print(f"[ok] Confluence {accion}: {title} -> {f.get('confluence_page_id')}")
+
+
 def cmd_push(args) -> None:
     p = paths(); b = binding(p)
     data = load_backlog(p); f = get_feature(data, args.feature)
@@ -108,10 +187,17 @@ def cmd_push(args) -> None:
     email, token = credenciales()
 
     if not (email and token):
+        confluence = None
+        if b.get("confluence_space"):
+            confluence = _intent(p, "confluence-upsert", {
+                "feature": f["id"], "space": b["confluence_space"],
+                "title": titulo_confluence(f), "body": cuerpo_confluence(p, f, acs)})
         ruta = _intent(p, "jira-upsert", {"feature": f["id"], "issue_type": tipo,
                                           "resumen": resumen, "acs": acs,
                                           "project": b["jira_project"]})
-        print(f"[ok] intent en la outbox: {ruta}")
+        print(f"[ok] intent Jira en la outbox: {ruta}")
+        if confluence:
+            print(f"[ok] intent Confluence en la outbox: {confluence}")
         print("[i]  drenalo con tu MCP de Atlassian y registra la clave con:")
         print(f"     atlassian.py ack --feature {f['id']} --key <KEY-123>")
         return
@@ -120,7 +206,9 @@ def cmd_push(args) -> None:
         code, r = api(b["site"], email, token, "PUT",
                       f"/rest/api/3/issue/{f['jira_key']}",
                       {"fields": {"summary": resumen}})
-        print(f"[{'ok' if code < 300 else '!!'}] actualizado {f['jira_key']} ({code})")
+        if code >= 300 or code == 0:
+            sys.exit(f"[!!] Jira rechazo la actualizacion de {f['jira_key']} ({code}): {r.get('error','')[:300]}")
+        print(f"[ok] actualizado {f['jira_key']} ({code})")
     else:
         code, r = api(b["site"], email, token, "POST", "/rest/api/3/issue", {
             "fields": {"project": {"key": b["jira_project"]},
@@ -133,6 +221,7 @@ def cmd_push(args) -> None:
     padre = f.get("jira_key")
     creadas = f.setdefault("jira_ac_keys", {})
     stext = sp.read_text(encoding="utf-8") if sp.exists() else ""
+    errores_subtasks: list[str] = []
     for ac in acs:
         if ac in creadas:
             continue
@@ -145,8 +234,12 @@ def cmd_push(args) -> None:
             creadas[ac] = r.get("key")
             print(f"   [ok] subtask {ac} -> {r.get('key')}")
         else:
+            errores_subtasks.append(f"{ac} fallo ({code}): {r.get('error','')[:200]}")
             print(f"   [!] subtask {ac} fallo ({code})")
     save_backlog(p, data)
+    if errores_subtasks:
+        sys.exit("[!!] Jira rechazo subtask(s): " + "; ".join(errores_subtasks))
+    sync_confluence(p, b, email, token, data, f, acs)
 
 
 def cmd_ack(args) -> None:
