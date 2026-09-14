@@ -10,7 +10,8 @@ sys.path.insert(0, str(Path(__file__).parent))
 from comun import (cubre_acs, impl_path, load_backlog, paths, review_path,  # noqa: E402
                    sello_revision, sig_fresh, spec_acs, spec_estado, spec_path)
 
-ABIERTOS = ("todo", "in_progress", "blocked", "review")
+ABIERTOS = ("todo", "pending", "in_progress", "blocked", "review")
+CERRADOS = ("done", "superseded")
 
 
 def main() -> None:
@@ -31,11 +32,27 @@ def main() -> None:
     print(f"   jira:  {'configurado' if p['atlassian'].exists() else 'sin binding'}")
 
     abiertas = [f for f in data["features"] if f.get("status") in ABIERTOS]
-    cerradas = len(data["features"]) - len(abiertas)
-    print(f"\n   features: {len(abiertas)} abiertas, {cerradas} cerradas\n")
+    # Un estado nuevo o ausente no prueba un cierre; nunca contar por descarte.
+    cerradas = [f for f in data["features"] if f.get("status") in CERRADOS]
+    desconocidas = [f for f in data["features"]
+                   if f.get("status") not in ABIERTOS + CERRADOS]
+    resumen = f"\n   features: {len(abiertas)} abiertas, {len(cerradas)} cerradas"
+    desglose = ", ".join(f"{sum(f.get('status') == s for f in cerradas)} {s}"
+                         for s in CERRADOS)
+    resumen += f" ({desglose})"
+    if desconocidas:
+        resumen += f", {len(desconocidas)} con estado desconocido"
+    print(resumen + "\n")
+
+    for f in desconocidas:
+        print(f"   [!] #{f['id']} [{f.get('status')}] {f.get('name')}: "
+              "estado desconocido; revisa status en feature_list.json")
 
     if not abiertas:
-        print("   Nada en curso. Para arrancar: add.py --name '<nombre>'")
+        if desconocidas:
+            print("   Revisa los estados desconocidos antes de iniciar otra feature.")
+        else:
+            print("   Nada en curso. Para arrancar: add.py --name '<nombre>'")
         return
 
     for f in abiertas:
@@ -43,10 +60,14 @@ def main() -> None:
 
     print("\nSiguiente paso sugerido:")
     en_curso = [f for f in abiertas if f.get("status") == "in_progress"]
+    pendientes = [f for f in abiertas if f.get("status") in ("todo", "pending")]
     if en_curso:
         print(f"   retoma la feature #{en_curso[0]['id']} (ya esta in_progress)")
+    elif pendientes:
+        fid = pendientes[0]["id"]
+        print(f"   arranca la #{fid}: worktree.py start --feature {fid}")
     else:
-        print(f"   arranca la #{abiertas[0]['id']}: worktree.py start --feature {abiertas[0]['id']}")
+        print("   revisa las features blocked/review antes de iniciar otra.")
 
 
 def _fila(p, f) -> None:

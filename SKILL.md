@@ -76,6 +76,14 @@ $PY "$H/estado.py"
 
 Muestra features abiertas, gates pendientes y edad del grafo. Si hay una feature `in_progress`, retómala; no arranques otra.
 
+Al listar pendientes, contrasta el resumen con un conteo programatico de
+`feature_list.json` por `status`. `estado.py` cuenta `todo`, `pending`,
+`in_progress`, `blocked` y `review` como abiertas; solo `done` y `superseded`
+como cerradas, con desglose separado. Los estados desconocidos o ausentes se
+cuentan y muestran aparte: nunca calcules cierres como total menos abiertas.
+No reescribas estados para cuadrar el resumen. Los gates y el aislamiento de
+worktrees comprueban trabajo iniciado, no toda la cola pendiente.
+
 ## El flujo
 
 Tres roles, en orden. No los saltes.
