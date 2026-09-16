@@ -24,10 +24,24 @@ def main() -> None:
 
     if p["graph"].exists():
         edad = (time.time() - p["graph"].stat().st_mtime) / 3600
-        marca = "" if edad < 24 else "  <- viejo, corre: graphify update ."
+        marca = "" if edad < 24 else "  <- viejo, corre: contexto.py refrescar"
         print(f"   grafo: {p['graph'].name}, {edad:.1f}h de antiguedad{marca}")
     else:
-        print("   grafo: ausente (corre: graphify .)")
+        print(f"   grafo: ausente en {p['graph']} (corre: contexto.py refrescar)")
+    try:
+        import contexto
+        est = contexto.estado_contexto(p)
+        if len(est["raices"]) > 1:
+            partes = []
+            for r in est["raices"]:
+                edad_r = "ausente" if not r["existe"] else f"{r['edad_h']:.1f}h"
+                partes.append(f"{r['nombre']}={edad_r}")
+            print("   raices del grafo: " + ", ".join(partes))
+        if not est["fresco"]:
+            print(f"   [!] contexto vencido ({', '.join(est['vencidas'])}): "
+                  "corre contexto.py refrescar")
+    except Exception as exc:
+        print(f"   [!] no se pudo evaluar el contexto: {exc}")
     print(f"   vault: {'ok' if p['vault'].exists() else 'ausente (vault.py build)'}")
     print(f"   jira:  {'configurado' if p['atlassian'].exists() else 'sin binding'}")
 

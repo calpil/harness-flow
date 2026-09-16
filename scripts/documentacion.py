@@ -111,11 +111,15 @@ def _bloque_sdd(p: dict, data: dict) -> str:
             f"- Microservicios: {', '.join(micros) if micros else 'no declarado'}",
             f"- Rama: {f.get('branch', 'no declarada')}",
             f"- Integrado en: {f.get('integrado_en', 'no declarado')}",
-            f"- Merge commit: {f.get('merge_commit', 'no declarado')}",
+            *([] if f.get("integraciones") else [f"- Merge commit: {f.get('merge_commit', 'no declarado')}"]),
             f"- Spec: `{_rel(root, sp)}`" if sp.exists() else "- Spec: sin archivo",
             f"- Evidencia: `{_rel(root, ip)}`" if ip.exists() else "- Evidencia: sin archivo",
             f"- Review: `{_rel(root, rp)}`" if rp.exists() else "- Review: sin archivo",
         ]
+        for repo in f.get("integraciones", []):
+            lines.append(f"- Integracion manual `{repo['microservicio']}`: "
+                         f"fuente `{repo['source_sha']}` -> `{repo['target_branch']}` "
+                         f"tip validado `{repo['target_sha']}` (sin merge creado por close)")
         if f.get("progress_archive"):
             lines.append(f"- Progreso archivado: `{f['progress_archive']}`")
         if f.get("jira_key"):
@@ -128,20 +132,18 @@ def _bloque_sdd(p: dict, data: dict) -> str:
 
 
 def _actualizar_bloque(path: Path, titulo: str, bloque: str) -> bool:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    if path.exists():
-        previo = _leer(path)
+    from bloques import parts, START, END
+    previo = path.read_bytes() if path.exists() else (
+        f"# {titulo}\n\nContenido manual arriba; harness-flow mantiene solo el bloque generado.\n\n".encode())
+    manual = parts(previo)  # rechaza marcador parcial/duplicado antes de escribir
+    generated = bloque.encode().split(START, 1)[1].split(END, 1)[0]
+    if manual is not None:
+        nuevo = manual[0] + START + generated + END + manual[1]
     else:
-        previo = f"# {titulo}\n\nContenido manual arriba; harness-flow mantiene solo el bloque generado.\n\n"
-
-    if INICIO in previo and FIN in previo:
-        antes, resto = previo.split(INICIO, 1)
-        _, despues = resto.split(FIN, 1)
-        nuevo = antes.rstrip() + "\n\n" + bloque.rstrip() + "\n" + despues.lstrip("\n")
-    else:
-        nuevo = previo.rstrip() + "\n\n" + bloque.rstrip() + "\n"
-    if nuevo != previo:
-        path.write_text(nuevo, encoding="utf-8")
+        nuevo = previo + START + generated + END + b"\n"
+    if not path.exists() or nuevo != previo:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(nuevo)
         return True
     return False
 
@@ -152,23 +154,27 @@ def sync(p: dict | None = None, data: dict | None = None) -> list[Path]:
     prd = p["docs"] / "prd" / "PRD-master.md"
     sdd = p["docs"] / "sdd.md"
     cambiados: list[Path] = []
-    if _actualizar_bloque(prd, "PRD maestro", _bloque_prd(p, data)):
-        cambiados.append(prd)
-    if _actualizar_bloque(sdd, "SDD", _bloque_sdd(p, data)):
-        cambiados.append(sdd)
+    from cierre_local import transaction
+    with transaction(p, "documentacion"):
+        if _actualizar_bloque(prd, "PRD maestro", _bloque_prd(p, data)):
+            cambiados.append(prd)
+        if _actualizar_bloque(sdd, "SDD", _bloque_sdd(p, data)):
+            cambiados.append(sdd)
     return cambiados
 
 
 def cmd_sync(args) -> None:
     p = paths()
     data = load_backlog(p)
-    cambiados = sync(p, data)
+    from cierre_local import transaction
+    with transaction(p, "documentacion"):
+        cambiados = sync(p, data)
+        bitacora(p, "documentacion PRD/SDD sincronizada")
+        save_backlog(p, data)
     for path in cambiados:
         print(f"[ok] documentacion sincronizada: {_rel(p['root'], path)}")
     if not cambiados:
         print("[ok] documentacion ya estaba sincronizada")
-    bitacora(p, "documentacion PRD/SDD sincronizada")
-    save_backlog(p, data)
 
 
 def main() -> None:

@@ -242,6 +242,10 @@ class DocumentacionTests(unittest.TestCase):
             "jira_project": "ADR",
             "confluence_space": "ARQ",
         }), encoding="utf-8")
+        # Preestado explicito: el rollback nuevo conserva bytes, no genera
+        # documentos que no existian antes de un cierre fallido.
+        documentacion.sync()
+        previous = [(self.root / "docs" / name).read_bytes() for name in ("prd/PRD-master.md", "sdd.md")]
         def falla_push(args):
             raise SystemExit("[!!] Jira rechazo el cierre")
 
@@ -258,6 +262,7 @@ class DocumentacionTests(unittest.TestCase):
         self.assertIn("No hay features cerradas todavia", sdd)
         self.assertNotIn("Feature #7 - Historial vivo", prd)
         self.assertNotIn("Feature #7 - Historial vivo", sdd)
+        self.assertEqual(previous, [(self.root / "docs" / name).read_bytes() for name in ("prd/PRD-master.md", "sdd.md")])
 
 
 if __name__ == "__main__":

@@ -119,16 +119,43 @@ eval "$(python3 <skill>/scripts/entorno.py --shell)"
 python <skill>\scripts\entorno.py --powershell | Invoke-Expression
 ```
 
-Después, desde la raíz multi-repo (la carpeta que contiene tus microservicios):
+En un monorepo, desde su raiz Git:
 
 ```bash
 $PY "$H/init.py" --project mi-proyecto
 $PY "$H/add.py" --name "Checkout con cupon"
-$PY "$H/worktree.py" start --feature 1 --repo front-app
+$PY "$H/worktree.py" start --feature 1
 # ... escribes el spec, el usuario lo aprueba, implementas, revisas ...
 $PY "$H/gate.py" close --feature 1 --status done --to main --leccion checkout
 $PY "$H/documentacion.py" sync        # opcional; close done lo corre automaticamente
 ```
+
+En una raiz multi-repo SIN `.git`, con repos/worktrees existentes, no usar ese
+merge legacy. Declarar el mapa completo y SHAs reales segun
+[`references/multirepo.md`](references/multirepo.md):
+
+```bash
+$PY "$H/worktree.py" register --feature 1 --manifest /ruta/registro.json
+# Integracion MANUAL autorizada, registro del tip final, verify y review fresco:
+$PY "$H/gate.py" verify --feature 1
+$PY "$H/revision.py" --feature 1 --briefing
+# Delegar review independiente; leerlo y sellarlo antes del close.
+$PY "$H/gate.py" revision --feature 1 --veredicto approved
+$PY "$H/gate.py" close --feature 1 --status done --to develop \
+  --integrated --postmerge /ruta/bases-postmerge.json --leccion <clase-existente>
+```
+
+No crea ramas ni worktrees, ni instala nada; `--integrated` comprueba integracion
+ya realizada por ancestria, limpieza y tips exactos por repo. Guarda fuentes/tips
+en `integraciones` y SDD, sin un merge global ficticio. El registro no autoriza
+roles ni ediciones protegidas y no elimina bloqueos de otras features. Los mismos
+comandos funcionan por symlink desde `.claude/skills`. El cierre exige el mapa de
+bases reales `--postmerge` y ejecuta Go JSON/-exec o Angular22/Vitest4+Node22 de ADR
+en TODOS los tips destino antes de done; no admite recibos manuales ni exit0 sin
+pruebas. Protocolos ajenos permanecen bloqueados (no hay comandos genericos).
+El `postmerge.py` heredado se conserva; `postmerge_medido.py` y el nuevo CLI
+`postmerge_frontend.py` respaldan este cierre. Contrato, comandos para bases,
+procedencia, evidencia durable y limites: `references/multirepo.md`.
 
 `close --status done` archiva `harness/progress/current-<id>.md` en
 `harness/progress/archive/` y sincroniza `docs/prd/PRD-master.md` +
@@ -150,6 +177,7 @@ scripts/
   gate.py                TODOS los gates (exit≠0)
   documentacion.py       PRD/SDD generados desde features cerradas
   worktree.py            aislamiento por feature
+  multirepo.py           validacion estricta de repos/fuentes/destinos existentes
   revision.py            paquete de revisión (solo lectura)
   leccion.py             memoria procedural por clase de trabajo
   hub.py                 Memory Hub Postgres

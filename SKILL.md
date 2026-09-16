@@ -19,6 +19,7 @@ El arnés NO se copia a cada repo. Una instalación por PROYECTO (raíz multi-re
 ~/proyectos/adr/                 <- raíz multi-repo = "proyecto" en el hub
   harness/                       <- estado del proceso (versionado)
     feature_list.json            <- backlog + rules
+    grafos.json                  <- raices de graphify a combinar (opcional)
     progress/current-<id>.md     <- estado vivo por feature
     progress/archive/current-<id>.md <- progreso archivado al cerrar done
     progress/history.md          <- bitácora append-only
@@ -91,7 +92,10 @@ Tres roles, en orden. No los saltes.
 ### 1. Leader — spec antes que código
 
 1. Lee el backlog y `progress/current-<id>.md`. Consulta el grafo antes de leer archivos a ciegas:
-   `graphify query "<pregunta>"` si existe `graphify-out/graph.json`.
+   `$PY "$H/contexto.py" brief --feature <id>` (indice compacto: AC, reglas, lecciones,
+   impacto del hub y superficie de contacto del grafo). Si el contexto esta vencido lo dice;
+   refresca con `$PY "$H/contexto.py" refrescar`. Para una pregunta puntual que el brief no
+   cubre, `graphify query "<pregunta>" --graph <combinado>`.
 2. Consulta impacto cross-repo: `$PY "$H/hub.py" impacto --microservicio <proyecto>/<servicio>`.
 3. Revisa lecciones aplicables: `$PY "$H/leccion.py" list` **antes** de diseñar.
 4. Escribe `docs/spec-feature-<id>-<slug>.md` con `Estado: draft` usando `templates/spec.md`. Los AC-n en Given/When/Then son obligatorios.
@@ -124,6 +128,35 @@ Si el subagente no está disponible, `$PY "$H/revision.py" --feature <id>` da el
 
 ### 4. Cierre
 
+**Raiz multi-repo sin `.git`, con worktrees ya existentes:** usar el registro
+estricto y el cierre de integracion MANUAL verificada; no inventar una rama o
+`.git` en la raiz. Declarar TODOS los microservicios y SHAs en el manifiesto de
+[`references/multirepo.md`](references/multirepo.md), sin autodetectar solo exitos:
+
+```bash
+$PY "$H/worktree.py" register --feature <id> --manifest <registro.json>
+# Integracion externa autorizada + registro actualizado al tip destino;
+# verify y revision INDEPENDIENTE ligados al mapa completo, despues:
+$PY "$H/gate.py" close --feature <id> --status done --to <rama> \
+  --integrated --postmerge /ruta/bases-postmerge.json --leccion <clase-existente>
+```
+
+`--integrated` NO hace merges: revalida repos/worktrees reales, limpieza,
+ancestria y tips exactos. ANTES de done ejecuta suites completas sobre cada
+destino: Go mediante `postmerge_medido.py` (JSON + exits reales -exec), o el
+contrato Angular22/Vitest4+Node22 de ADR mediante `postmerge_frontend.py`, con
+bases preintegracion genuinas y el mapa `--postmerge`. No acepta recibos PASS
+manuales ni comandos genericos: protocolos ajenos/base ausente quedan bloqueados.
+Para el contrato frontend, configuracion cerrada y evidencia durable, lee
+`references/multirepo.md` (mismos CLI en Hermes y Claude, sin instalar dependencias).
+Persiste `integraciones` POR REPO (fuente y destino),
+no un `merge_commit` inventado. El recibo no da permisos de implementacion/docs
+ni sustituye spec, review, verify, leccion, rutas protegidas o aislamiento.
+Cambiar mapa/SHAs/spec/evidencia invalida los contextos de review y verify.
+Ver la referencia para el caso ya integrado, protecciones y limites de la foto.
+
+**Monorepo legacy (raiz Git sin registro multi-repo):**
+
 ```bash
 python "$H/gate.py" close --feature <id> --status done --to <rama> --leccion <clase>
 # si harness/atlassian.json existe y el usuario pidio publicar remoto:
@@ -133,14 +166,19 @@ python "$H/gate.py" close --feature <id> --status done --to <rama> \
 
 El gate exige, segun `rules`: spec approved y fresco, review approved, check limpio, leccion declarada. Se niega sin `--to`: PREGUNTALE al usuario a que rama integra.
 
-`close` **ejecuta el merge de verdad** (`git merge --no-ff` de la rama de la feature en `--to`) y guarda el sha en `merge_commit`. Aborta sin tocar el backlog si el arbol esta sucio, la rama no existe o el merge conflictua: es preferible una feature que no cierra a un `done` sobre una rama que nunca entro. Integra LOCAL; publicar es aparte salvo que pases `--publicar-atlassian`, que luego corre `atlassian.py push` para sincronizar Jira y Confluence.
+`close` sin `--integrated` **ejecuta el merge de verdad** (`git merge --no-ff` de la rama de la feature en `--to`) y guarda el sha en `merge_commit`. Aborta sin tocar el backlog si el arbol esta sucio, la rama no existe o el merge conflictua: es preferible una feature que no cierra a un `done` sobre una rama que nunca entro. Integra LOCAL; publicar es aparte salvo que pases `--publicar-atlassian`, que luego corre `atlassian.py push` para sincronizar Jira y Confluence.
 
 Cuando el cierre queda en `done`, el gate tambien:
 - mueve `harness/progress/current-<id>.md` a `harness/progress/archive/current-<id>.md` si existe;
 - guarda `progress_archive` en `feature_list.json`;
 - sincroniza `docs/prd/PRD-master.md` y `docs/sdd.md` desde las features cerradas.
 
-Si `--publicar-atlassian` falla despues del cierre provisional, el gate revierte los campos de cierre, restaura el `current-<id>.md` y regenera PRD/SDD para no dejar un falso historial.
+Ante fallo de sync/cierre local (tambien `--publicar-atlassian`), se restaura el
+preestado byte-identico de backlog, PRD/SDD, progreso e historia; no se regeneran
+documentos distintos como sustituto de rollback. Un merge Git ya hecho se
+conserva y se informa. Atlassian puede haber publicado parcialmente: reconciliar
+remoto antes de reintentar, sin prometer rollback remoto. Ver limites de caidas
+y concurrencia en `references/multirepo.md`.
 
 Verifica el resultado (`git log --oneline -1` en la rama destino) antes de dar por integrada una feature: el mensaje de un script no es evidencia de que el merge ocurrió.
 
@@ -153,10 +191,96 @@ Verifica el resultado (`git log --oneline -1` en la rama destino) antes de dar p
 | `gate.py approve-spec --feature <id> --yes` | Solo con SÍ del usuario; sella quién/cuándo |
 | `gate.py revision --feature <id> --veredicto <v>` | Review responde por CADA AC-n con `archivo:linea` |
 | `gate.py close --feature <id> --status done --to <rama>` | Todas las reglas activas |
+| `postmerge.py base --repo <r> --guardar <j>` | Foto de los rojos ANTES del merge |
+| `postmerge.py check --repo <r> --base <j>` | Rojos NUEVOS que agrego el merge (exit 1) |
+
+**Despues de cada `close ... --to <rama>`, corre `postmerge.py`** sobre la rama
+destino. Los AC de una feature miden su worktree y no pueden ver los choques
+entre features. El gate compara nombres de test contra la base pre-merge y solo
+falla por rojos NUEVOS, asi que la deuda tolerada no lo vuelve inservible:
+
+```bash
+$PY "$H/postmerge.py" base  --repo <ruta> --guardar /tmp/base-<svc>.json   # ANTES
+$PY "$H/gate.py" close --feature <id> --status done --to develop --leccion <clase>
+$PY "$H/postmerge.py" check --repo <ruta> --base /tmp/base-<svc>.json      # DESPUES
+```
+
+Si aparecen rojos nuevos: ficha el choque, no bajes la asercion que lo detecto.
+Al verificar el exit a mano no uses un pipe (`| tail`): te devuelve el status
+del tail, no el del gate.
 
 Reglas en `harness/feature_list.json` → `rules`: `require_spec_approved`, `require_review`, `require_leccion`, `require_verify_green`, `require_docs_al_dia`.
 
 **Rutas protegidas**: `docs/prd/**`, `docs/constitution.md`, `.env`. Son del USUARIO. Ningún agente las reescribe a mano — `documentacion.py sync` solo actualiza el bloque generado `harness-flow:features`, y `gate.py check` reporta violaciones fuera de ese contrato.
+
+## Contexto: grafo, hub y vault (contexto.py)
+
+El grafo, el Memory Hub y el vault son el ahorro de tokens del flujo: si estan
+frescos, un implementer o un revisor arranca con un indice en vez de leer el
+repo a ciegas. Si estan viejos, mienten — y nadie los refrescaba solo.
+
+**Una raiz de grafo no alcanza cuando el proyecto vive en varios directorios.**
+El arnes esta instalado en UNA raiz (p.ej. el front), pero los microservicios
+pueden vivir en otro lado del disco. Con un solo `graphify-out`, `graphify
+query "ms-foo ..."` devuelve nodos de la mitad equivocada o nada: el servicio
+que preguntas ni siquiera esta en ese grafo. Se declaran en
+`harness/grafos.json` (nunca autodetectado: barrer el disco mete repos ajenos
+en tu grafo y en el hub):
+
+```json
+{
+  "max_horas": 12,
+  "raices": [
+    {"nombre": "front",  "path": "."},
+    {"nombre": "micros", "path": "~/GolandProjects/miproyecto"}
+  ],
+  "combinado": "graphify-out/merged-graph.json"
+}
+```
+
+Con dos o mas raices, `comun.paths()["graph"]` apunta al **combinado**
+(`graphify merge-graphs`), y ese es el grafo que ven `hub.py
+derivar-graphify`, `vault.py` y el brief. Sin `grafos.json`, todo funciona
+como antes contra `<raiz>/graphify-out/graph.json`.
+
+```bash
+$PY "$H/contexto.py" estado              # edad por raiz + combinado + vault
+$PY "$H/contexto.py" refrescar           # update por raiz vencida, merge, hub, vault
+$PY "$H/contexto.py" brief --feature <id>  # indice compacto para trabajar
+```
+
+`refrescar` solo toca lo vencido (`max_horas`, 12 por defecto); `--forzar`
+reconstruye todo. Nunca lanza excepcion: devuelve un parte JSON y sale con
+exit≠0 si algo fallo, asi que **un refresco a medias no se reporta como
+exito**.
+
+`HARNESS_SIN_CONTEXTO=1` apaga el refresco **automatico** (los ganchos de
+`start`/`close`), para CI y para los tests del propio arnes, que si no lanzarian
+un `graphify update` real sobre el arbol y tardan minutos. **No** apaga
+`contexto.py refrescar`: un comando explicito que devolviera un parte vacio y en
+verde seria una mentira.
+
+Cuando se refresca solo:
+
+- `worktree.py start` — antes de que el implementer toque nada: refresca si
+  esta vencido e imprime el brief de la feature. `--sin-contexto` lo salta.
+- `gate.py close --status done` — DESPUES del cierre (el arbol cambio, el grafo
+  y el vault describen el codigo anterior). Fuera de la transaccion de
+  rollback: si el refresco falla, avisa; no desarma un cierre ya hecho.
+- `estado.py` reporta la edad por raiz y avisa si el contexto vencio.
+
+**El brief reemplaza al `graphify query` crudo en el flujo.** Una consulta cruda
+devuelve decenas de nodos planos y se trunca a mitad de camino; el brief agrega
+por archivo, se queda con las relaciones de acoplamiento (`imports`, `calls`,
+`references`, `implements`...; descarta `contains`/`method`, que son estructura
+interna) y ordena por cuanto cruza el limite del archivo. Trae ademas los AC con
+su comando, las reglas activas, las rutas protegidas, las lecciones instaladas y
+el impacto cross-repo del hub. `revision.py --briefing` lo incrusta al principio
+del paquete del revisor, con `--max-lineas-brief` para acotarlo.
+
+El brief es un INDICE, no evidencia: ningun AC se da por cumplido porque el
+brief lo mencione. Si el contexto esta vencido, tanto el brief como el briefing
+del revisor lo dicen en la primera linea en vez de fingir estar al dia.
 
 ## Memory Hub Postgres
 
@@ -229,6 +353,11 @@ carpeta, wikilinks cortos, Dataview habilitado, `.gitignore` del ruido de
 sesión). Nunca sobrescribe un archivo existente: en cuanto Obsidian o el usuario
 tocan la config, es suya. Obsidian es gratis y no pide cuenta.
 
+`contexto.py refrescar` ya corre `vault.py build` (y lo dispara `worktree.py
+start` y `gate.py close --status done`), asi que en el flujo normal no hace
+falta invocarlo a mano. Un `vault: ok` de `estado.py` solo dice que la carpeta
+existe: la frescura la reporta `contexto.py estado`.
+
 Enlaza specs ↔ AC ↔ evidencia ↔ lecciones ↔ nodos de graphify con wikilinks. Ver `references/obsidian.md`.
 
 ## GPT/Codex
@@ -251,6 +380,10 @@ esa bandera, `close` solo avisa y no toca sistemas remotos.
 - Todo hallazgo relevante se escribe en `harness/progress/`. Una respuesta en el chat no reemplaza evidencia persistida.
 - `gate.py verify` corre desde la RAÍZ del proyecto, no desde el worktree de la feature. Si el código todavía vive sólo en su worktree, los AC miden un árbol que no lo contiene y salen rojos por un motivo falso. Integra primero (o corre los comandos a mano en el worktree y dilo); un rojo de verify sobre el árbol equivocado no es un veredicto sobre el código.
 - Cuando varias features tocan el mismo artefacto, ciérralas en orden de dependencia: un AC que compara contra un respaldo pre-cambio queda obsoleto en cuanto otra feature aplica el suyo.
+- **Los AC de una feature miden SU worktree, así que por construcción no ven los choques ENTRE features.** Varias ramas pueden estar verdes cada una y romperse al convivir en la rama de integración: dos migraciones que toman el mismo número, una que inserta una fila donde otra fija un conteo exacto, un CHECK que choca con un vocabulario ampliado. Después de cada `close ... --to <rama>`, corre la suite de integración COMPLETA sobre la rama destino y compara los rojos contra los que ya había antes del merge. Un `15/15 en verde` de `verify` es un veredicto sobre la rama de la feature, NO sobre la integración: no lo reportes como si lo fuera.
+- **Migraciones numeradas + features en paralelo = colisión garantizada.** Cada rama toma "el siguiente número libre" que ve, y ve un árbol distinto. Antes de sellar el spec de una feature con migración, reserva el número contra la rama de integración, no contra el worktree. Al renumerar: `git mv` para conservar historia, regenerar los manifiestos con el comando del repo (suelen decir "GENERADO, no editar a mano") y verificar que el blob quede idéntico entre todos los repos que lo replican.
+- **Los comandos de los AC nunca citan la carpeta compartida de un repo cuando hay features en paralelo.** Con varias features vivas, `/ruta/ms-foo` está parado en la rama de quien hizo checkout último, así que el AC mide un árbol ajeno: da verde falso si el `-run` no engancha nada, o rojo falso si la rama vecina tiene otro código. Escribe los comandos contra el worktree de la feature (`<repos>-wt/<id>/ms-foo`) y créalo antes de sellar el spec. Ya produjo ambos errores en el mismo proyecto el mismo día.
+- Antes de creer un rojo de `verify`, comprueba en qué rama está cada repo que el AC toca (`git -C <ruta> branch --show-current`). Un rojo sobre el árbol equivocado no es un veredicto sobre el código, y un verde tampoco.
 - El cuerpo manual del PRD y la constitution son del USUARIO. No los reescribas; `documentacion.py sync` solo puede tocar su bloque generado `harness-flow:features`.
 - Aislamiento: una feature sin worktree bloquea a las demás sin worktree.
 - No afirmes lo que no puedes comprobar. Si un gate no corrió, dilo.

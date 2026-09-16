@@ -26,16 +26,73 @@ def find_root(start: Path | None = None) -> Path:
 
 def paths(root: Path | None = None) -> dict:
     r = root or find_root()
-    return {
+    p = {
         "root": r,
         "harness": r / "harness",
         "backlog": r / "harness" / "feature_list.json",
         "progress": r / "harness" / "progress",
         "docs": r / "docs",
         "vault": r / "docs" / "vault",
-        "graph": r / "graphify-out" / "graph.json",
+        "grafos": r / "harness" / "grafos.json",
         "atlassian": r / "harness" / "atlassian.json",
     }
+    # "graph" es el grafo que TODO el arnes consulta. Con varias raices
+    # declaradas es el combinado; con una sola, el de esa raiz. Nunca se
+    # inventa: si no hay combinado se cae al de la raiz del arnes.
+    p["graph"] = graph_path(p)
+    return p
+
+# --- grafos (una o varias raices) ------------------------------------------
+
+def grafos_config(p: dict) -> dict:
+    """harness/grafos.json: raices declaradas. Ausente = solo la raiz del arnes.
+
+    Formato:
+      {"max_horas": 12,
+       "raices": [{"nombre": "front", "path": "."},
+                  {"nombre": "micros", "path": "~/GolandProjects/realestate"}],
+       "combinado": "graphify-out/merged-graph.json"}
+    Se DECLARA a proposito: autodetectar graphify-out por el disco mete repos
+    ajenos al proyecto en el grafo y en el hub sin que nadie lo pida.
+    """
+    f = p.get("grafos") or (p["root"] / "harness" / "grafos.json")
+    if not Path(f).exists():
+        return {}
+    try:
+        d = json.loads(Path(f).read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        raise SystemExit(f"[!!] harness/grafos.json ilegible: {exc}")
+    if not isinstance(d, dict):
+        raise SystemExit("[!!] harness/grafos.json debe ser un objeto JSON")
+    return d
+
+def raices_grafo(p: dict) -> list[dict]:
+    cfg = grafos_config(p)
+    raices = cfg.get("raices") or []
+    if not raices:
+        return [{"nombre": p["root"].name, "path": p["root"], "declarada": False}]
+    out = []
+    for r in raices:
+        if not isinstance(r, dict) or not r.get("path"):
+            raise SystemExit("[!!] cada raiz de grafos.json necesita 'path'")
+        ruta = Path(str(r["path"])).expanduser()
+        if not ruta.is_absolute():
+            ruta = (p["root"] / ruta).resolve()
+        if not ruta.exists():
+            raise SystemExit(f"[!!] raiz de grafo inexistente: {ruta}\n"
+                             "     corrige harness/grafos.json; no la ignoro en silencio.")
+        out.append({"nombre": r.get("nombre") or ruta.name, "path": ruta,
+                    "declarada": True})
+    return out
+
+def graph_path(p: dict) -> Path:
+    cfg = grafos_config(p)
+    if len(cfg.get("raices") or []) > 1:
+        rel = cfg.get("combinado") or "graphify-out/merged-graph.json"
+        q = Path(str(rel)).expanduser()
+        return q if q.is_absolute() else p["root"] / q
+    raices = raices_grafo(p)
+    return raices[0]["path"] / "graphify-out" / "graph.json"
 
 def hub_env() -> dict:
     """Credenciales del hub: entorno gana sobre ~/.harness-hub/.env."""

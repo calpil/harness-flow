@@ -80,14 +80,42 @@ def cmd_briefing(a) -> None:
     ip = impl_path(p, f)
     rp = review_path(p, f)
 
-    code, diff = git(["diff", "HEAD~1"], wt)
-    if code != 0 or not diff:
-        code, diff = git(["diff", "HEAD"], wt)
-    diff = diff[:60000]
+    if "multi_repo" in f:
+        from multirepo import Invalid, check_registered, git as repo_git
+        import json
+        try:
+            manifest = check_registered(p, f, load_backlog(p)["rules"])
+            parts = ["MAPA MULTI-REPO VALIDADO (fuente y tip destino):", json.dumps(manifest, indent=2),
+                     "Revisa TODOS los repos y ambos SHAs; el recibo no prueba los AC."]
+            for row in manifest["repos"]:
+                parts.append(f"\n{row['microservicio']} — inventario base..fuente:")
+                parts.append(repo_git(row["repo"], "diff", "--stat", "--no-ext-diff", "--no-textconv",
+                                      row["base_sha"], row["source_sha"], "--"))
+            diff = "\n".join(parts)
+        except Invalid as exc:
+            sys.exit(f"[!!] multi-repo: {exc}")
+    else:
+        code, diff = git(["diff", "HEAD~1"], wt)
+        if code != 0 or not diff:
+            code, diff = git(["diff", "HEAD"], wt)
+        diff = diff[:60000]
 
     print("=" * 72)
     print("CONTEXTO PARA EL SUBAGENTE REVISOR (delegate_task.context | prompt de Task)")
     print("=" * 72)
+    try:
+        import contexto
+        est = contexto.estado_contexto(p)
+        if not est["fresco"]:
+            print(f"[!] CONTEXTO VENCIDO ({', '.join(est['vencidas'])}): el brief de "
+                  "abajo puede no reflejar el arbol actual. Refresca con "
+                  "contexto.py refrescar antes de delegar.\n")
+        contexto.cmd_brief(argparse.Namespace(
+            feature=str(f["id"]), max_lineas=a.max_lineas_brief,
+            max_archivos=10, max_lecciones=10))
+        print()
+    except Exception as exc:
+        print(f"[!] sin brief de contexto ({exc}); el revisor arranca solo con spec + diff.\n")
     print(f"""
 Eres el REVISOR de la feature #{f['id']} '{f.get('name')}' del proyecto
 {load_backlog(p).get('project')}. No implementaste esto y no debes asumir que
@@ -97,7 +125,7 @@ Tu trabajo: decidir si CADA criterio de aceptacion esta realmente cumplido en el
 codigo, citando `archivo:linea`. No aceptes la palabra del implementer.
 
 Raiz del proyecto: {p['root']}
-Worktree de la feature: {wt}
+Worktree de la feature: {'ver mapa multi-repo completo abajo' if 'multi_repo' in f else wt}
 
 Criterios de aceptacion a verificar ({len(acs)}):""")
     for ac in acs:
@@ -142,6 +170,9 @@ def main() -> None:
     ap.add_argument("--feature", required=True)
     ap.add_argument("--briefing", action="store_true",
                     help="imprime el contexto para el subagente revisor")
+    ap.add_argument("--max-lineas-brief", type=int, default=70,
+                    dest="max_lineas_brief",
+                    help="tope de lineas del brief de contexto dentro del briefing")
     a = ap.parse_args()
     (cmd_briefing if a.briefing else cmd_resumen)(a)
 

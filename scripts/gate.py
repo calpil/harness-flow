@@ -48,7 +48,7 @@ def cmd_check(args) -> None:
         _check_feature(p, f, rules, r)
 
     _check_rutas_protegidas(p, rules, r)
-    _check_aislamiento(abiertas, r)
+    _check_aislamiento(abiertas, r, p, rules)
     r.salir()
 
 
@@ -118,32 +118,16 @@ def _porcelain_path(line: str) -> str:
     return ""
 
 
-def _entre_marcadores(texto: str) -> tuple[str, str] | None:
-    inicio = "<!-- harness-flow:features:start -->"
-    fin = "<!-- harness-flow:features:end -->"
-    if inicio not in texto or fin not in texto:
-        return None
-    antes, resto = texto.split(inicio, 1)
-    _, despues = resto.split(fin, 1)
-    return antes, despues
-
-
 def _prd_master_seguro(p: dict, rel: str) -> bool:
-    """Permite solo cambios dentro del bloque generado del PRD maestro."""
+    """Misma excepcion en snapshot y Git: solo bloque, bytes manuales exactos."""
+    from bloques import allowed
     if rel != "docs/prd/PRD-master.md":
         return False
     actual = p["root"] / rel
-    if not actual.exists():
+    if not actual.is_file() or actual.is_symlink():
         return False
-    actual_partes = _entre_marcadores(actual.read_text(encoding="utf-8"))
-    if not actual_partes:
-        return False
-    code, base = git(["show", f"HEAD:{rel}"], p["root"])
-    if code == 0:
-        base_partes = _entre_marcadores(base)
-        return bool(base_partes and tuple(x.strip() for x in actual_partes) == tuple(x.strip() for x in base_partes))
-    base_default = "# PRD maestro\n\nContenido manual arriba; harness-flow mantiene solo el bloque generado."
-    return tuple(x.strip() for x in actual_partes) == (base_default, "")
+    base = subprocess.run(["git", "show", f"HEAD:{rel}"], cwd=p["root"], capture_output=True)
+    return allowed(base.stdout if base.returncode == 0 else None, actual.read_bytes())
 
 
 def _rutas_prd_tocadas(p: dict, rel: str) -> list[str]:
@@ -180,11 +164,35 @@ def _check_rutas_protegidas(p, rules, r) -> None:
         r.ok(f"{len(pats)} ruta(s) protegida(s) intactas")
 
 
-def _check_aislamiento(abiertas, r) -> None:
-    sin_wt = [f for f in abiertas if not f.get("worktree")]
+def _check_aislamiento(abiertas, r, p, rules) -> None:
+    from multirepo import Invalid, check_registered, _path, git as repo_git
+    sin_wt, usados = [], {}
+    for f in abiertas:
+        worktrees = []
+        try:
+            if "multi_repo" in f:
+                manifest = check_registered(p, f, rules)
+                worktrees = [x["worktree"] for x in manifest["repos"]]
+                aislada = all(x["worktree"] != x["repo"] for x in manifest["repos"])
+            elif f.get("worktree"):
+                wt = _path(f["worktree"])
+                common = Path(repo_git(wt, "rev-parse", "--path-format=absolute", "--git-common-dir")).resolve()
+                aislada = (wt / ".git").is_file() and common != wt / ".git"
+                worktrees = [str(wt)]
+            else:
+                aislada = False
+        except Invalid as exc:
+            aislada = False
+            r.fallo(f"aislamiento #{f['id']} no verificable: {exc}")
+        if not aislada:
+            sin_wt.append(f)
+        for wt in worktrees:
+            if wt in usados:
+                r.fallo(f"worktree compartido entre #{usados[wt]} y #{f['id']}: {wt}")
+            usados[wt] = f["id"]
     if len(sin_wt) > 1:
         ids = ", ".join(f"#{f['id']}" for f in sin_wt)
-        r.fallo(f"{len(sin_wt)} features abiertas sin worktree ({ids})",
+        r.fallo(f"aislamiento: {len(sin_wt)} features abiertas sin worktree ({ids})",
                 "solo una feature puede trabajar sin aislamiento")
 
 
@@ -267,6 +275,7 @@ def cmd_revision(args) -> None:
     if not rp.exists():
         sys.exit(f"[!!] no existe {rp}: escribe el review antes de sellarlo.")
     acs = spec_acs(sp.read_text(encoding="utf-8"))
+    contexto = _multi_context(p, f, data["rules"]) if "multi_repo" in f else None
     rtext = rp.read_text(encoding="utf-8")
     _, faltan = cubre_acs(rtext, acs)
     if faltan:
@@ -284,6 +293,8 @@ def cmd_revision(args) -> None:
     rp.write_text(rtext, encoding="utf-8")
 
     f["last_review_sig"] = sign(rp)
+    if contexto:
+        f["last_review_context"] = contexto
     f["veredicto"] = args.veredicto
     save_backlog(p, data)
     bitacora(p, f"review #{f['id']} sellado: {args.veredicto} por {quien}")
@@ -292,6 +303,13 @@ def cmd_revision(args) -> None:
 
 
 # --- verify ----------------------------------------------------------------
+
+def _multi_context(p, f, rules):
+    from multirepo import Invalid, context
+    try:
+        return context(p, f, rules)
+    except Invalid as exc:
+        sys.exit(f"[!!] multi-repo: {exc}")
 
 def cmd_verify(args) -> None:
     p = paths()
@@ -306,6 +324,9 @@ def cmd_verify(args) -> None:
         sys.exit(f"[!!] el spec de #{f['id']} esta '{spec_estado(text)}', no 'approved'.\n"
                  "     Verify corre sobre un spec aprobado por el usuario.")
     cmds = ac_comandos(text)
+    contexto = _multi_context(p, f, data["rules"]) if "multi_repo" in f else None
+    if contexto and not sig_fresh(sp, f.get("last_spec_sig")):
+        sys.exit("[!!] spec stale: no verificar multi-repo sin aprobacion fresca")
     if not cmds:
         print("[i]  ningun AC declara comando: los verifica el reviewer a mano.")
         return
@@ -330,6 +351,17 @@ def cmd_verify(args) -> None:
     vp.parent.mkdir(parents=True, exist_ok=True)
     vp.write_text("\n".join(out), encoding="utf-8")
     f["last_verify"] = {"at": now_iso(), "fallos": fallos, "total": len(cmds)}
+    if contexto:
+        from multirepo import Invalid, context
+        try:
+            vigente = context(p, f, data["rules"]) == contexto
+        except Invalid:
+            vigente = False
+        if not vigente:
+            fallos += 1
+            f["last_verify"]["fallos"] = fallos
+            print("[!!] contexto multi-repo cambio durante verify")
+        f["last_verify"].update(context=contexto, report_sig=sign(vp))
     save_backlog(p, data)
     print(f"\n[{'ok' if not fallos else '!!'}] {len(cmds)-fallos}/{len(cmds)} AC en verde -> {vp.name}")
     if fallos:
@@ -421,9 +453,16 @@ def cmd_close(args) -> None:
     rules = data["rules"]
     f = get_feature(data, args.feature)
     fid = f["id"]
-    original_cierre = {k: f[k] for k in (
-        "status", "closed_at", "integrado_en", "merge_commit",
-        "leccion", "leccion_motivo", "note", "progress_archive") if k in f}
+    multi = "multi_repo" in f or args.integrated
+    if multi and args.status == "done":
+        rules = dict(rules, require_spec_approved=True, require_review=True,
+                     require_verify_green=True, require_leccion=True)
+        if not args.integrated:
+            sys.exit("[!!] multi-repo requiere close --status done --integrated --to <rama>")
+    if args.integrated and args.status != "done":
+        sys.exit("[!!] --integrated solo aplica a --status done")
+    if args.integrated and not args.postmerge:
+        sys.exit("[!!] postmerge obligatorio: declara bases por repo con --postmerge <mapa.json>")
 
     if args.status == "done" and not args.to:
         sys.exit("[!!] close --status done requiere --to <rama>.\n"
@@ -432,6 +471,7 @@ def cmd_close(args) -> None:
         sys.exit("[!!] --publicar-atlassian exige harness/atlassian.json")
 
     fallos: list[str] = []
+    stext = ""
     sp = spec_path(p, f)
     if not sp.exists():
         fallos.append(f"no existe {sp.name}")
@@ -439,6 +479,8 @@ def cmd_close(args) -> None:
     else:
         stext = sp.read_text(encoding="utf-8")
         acs = spec_acs(stext)
+        if not acs:
+            fallos.append("spec sin AC-n")
         if rules.get("require_spec_approved"):
             if spec_estado(stext) != "approved":
                 fallos.append(f"spec en '{spec_estado(stext)}', se requiere approved")
@@ -471,13 +513,40 @@ def cmd_close(args) -> None:
 
         if rules.get("require_verify_green"):
             lv = f.get("last_verify")
-            if lv and lv.get("fallos"):
+            if (not isinstance(lv, dict) or type(lv.get("total")) is not int or lv["total"] <= 0
+                    or type(lv.get("fallos")) is not int or not lv.get("at")):
+                fallos.append("verify ausente, vacio o no registrado")
+            elif lv["fallos"] != 0:
                 fallos.append(f"verify con {lv['fallos']} AC en rojo")
+
+        if multi:
+            from multirepo import Invalid, context
+            try:
+                contexto = context(p, f, data["rules"])
+                if f.get("last_review_context") != contexto:
+                    fallos.append("review no corresponde al contexto multi-repo actual")
+                lv = f.get("last_verify") or {}
+                vp = p["docs"] / f"verify-{fid}.md"
+                if (not isinstance(lv, dict) or lv.get("context") != contexto
+                        or not sig_fresh(vp, lv.get("report_sig"))
+                        or lv.get("total") != len(ac_comandos(stext))):
+                    fallos.append("verify no corresponde al contexto/reporte actual")
+            except Invalid as exc:
+                fallos.append(f"multi-repo: {exc}")
+            check = Reporte()
+            abiertas = [x for x in data["features"] if x.get("status") in ABIERTOS]
+            for other in abiertas:
+                _check_feature(p, other, rules, check)
+            _check_rutas_protegidas(p, rules, check)
+            _check_aislamiento(abiertas, check, p, data["rules"])
+            fallos.extend(check.fallos)
 
         if rules.get("require_leccion") and not args.leccion:
             fallos.append("falta --leccion <clase> (o --leccion ninguna --leccion-motivo '<por que>')")
         if args.leccion == "ninguna" and not args.leccion_motivo:
             fallos.append("--leccion ninguna exige --leccion-motivo")
+        if multi and args.leccion == "ninguna":
+            fallos.append("multi-repo exige leccion real, no 'ninguna'")
         # la leccion vive como SKILL del agente: exigimos que exista de verdad
         if args.leccion and args.leccion != "ninguna":
             sys.path.insert(0, str(Path(__file__).parent))
@@ -493,65 +562,76 @@ def cmd_close(args) -> None:
             print(f"     - {x}")
         sys.exit(1)
 
-    # La integracion se hace ANTES de tocar el backlog: si el merge falla, la
-    # feature NO queda marcada como cerrada. Al reves quedaria un 'done' sobre
-    # una rama que nunca entro, que es el falso verde que este arnes combate.
+    from cierre_local import preflight, transaction
+    try:
+        preflight(p, fid)
+    except (OSError, ValueError) as exc:
+        sys.exit(f"[!!] cierre local bloqueado: {exc}")
+
     merged = None
-    if args.status == "done" and args.to:
+    manifest = None
+    if args.status == "done" and args.integrated:
+        from multirepo import Invalid, check_registered
+        try:
+            manifest = check_registered(p, f, rules, integrated=True, target=args.to)
+            from medicion_destino import measure
+            f["mediciones_destino"] = measure(p, f, data["rules"], manifest, args.postmerge)
+            # Las suites pueden tener efectos laterales: revalidar todos los tips.
+            check_registered(p, f, rules, integrated=True, target=args.to)
+        except Invalid as exc:
+            sys.exit(f"[!!] multi-repo: {exc}")
+        f["integraciones"] = manifest["repos"]
+        f.pop("merge_commit", None)
+    elif args.status == "done" and args.to:
         merged = git_merge(p, f, args.to)
 
-    f["status"] = args.status
-    f["closed_at"] = now_iso()
-    if args.to:
-        f["integrado_en"] = args.to
-    if merged:
-        f["merge_commit"] = merged
-    if args.leccion:
-        f["leccion"] = args.leccion
-    if args.leccion_motivo:
-        f["leccion_motivo"] = args.leccion_motivo
-    if args.nota:
-        f["note"] = args.nota
-    progress_archivado = archivar_progress_actual(p, f) if args.status == "done" else None
-    save_backlog(p, data)
-    docs_sincronizados = []
-    if args.status == "done":
-        sys.path.insert(0, str(Path(__file__).parent))
-        import documentacion
-        docs_sincronizados = documentacion.sync(p, data)
-    atlassian_sync = False
-    if args.publicar_atlassian:
-        try:
-            sys.path.insert(0, str(Path(__file__).parent))
-            import atlassian
-            atlassian.cmd_push(argparse.Namespace(feature=str(fid)))
-            atlassian_sync = True
-        except SystemExit:
-            # El merge local ya ocurrio, pero el cierre no puede quedar sellado si
-            # publicar remoto era parte explicita del comando. Relee el backlog por
-            # si atlassian.py alcanzo a guardar jira_key/confluence_page_id y solo
-            # revierte los campos propios del cierre.
-            actual = load_backlog(p)
-            af = get_feature(actual, fid)
-            for k in ("status", "closed_at", "integrado_en", "merge_commit",
-                      "leccion", "leccion_motivo", "note", "progress_archive"):
-                if k in original_cierre:
-                    af[k] = original_cierre[k]
-                else:
-                    af.pop(k, None)
-            restaurar_progress_actual(p, af, progress_archivado, original_cierre)
-            save_backlog(p, actual)
-            import documentacion
-            documentacion.sync(p, actual)
-            raise
-    if progress_archivado:
-        bitacora(p, f"progress #{fid} archivado en {f['progress_archive']}")
-    if docs_sincronizados:
-        bitacora(p, f"documentacion PRD/SDD sincronizada para #{fid}")
-    bitacora(p, f"close #{fid} status={args.status}" +
-             (f" -> {args.to}" if args.to else "") +
-             (f" merge={merged}" if merged else "") +
-             (f" leccion={args.leccion}" if args.leccion else ""))
+    try:
+        with transaction(p, fid):
+            f["status"] = args.status
+            f["closed_at"] = now_iso()
+            if args.to:
+                f["integrado_en"] = args.to
+            if merged:
+                f["merge_commit"] = merged
+            if args.leccion:
+                f["leccion"] = args.leccion
+            if args.leccion_motivo:
+                f["leccion_motivo"] = args.leccion_motivo
+            if args.nota:
+                f["note"] = args.nota
+            progress_archivado = archivar_progress_actual(p, f) if args.status == "done" else None
+            save_backlog(p, data)
+            docs_sincronizados = []
+            if args.status == "done":
+                import documentacion
+                docs_sincronizados = documentacion.sync(p, data)
+                if args.integrated:
+                    assert manifest is not None  # Validado antes de medir destinos.
+                    from multirepo import protected_snapshot, snapshot_matches
+                    current_protected = protected_snapshot(p, manifest, rules)
+                    if not snapshot_matches(f['multi_repo_protected'], current_protected):
+                        raise ValueError('generacion modifico bytes protegidos fuera del contrato')
+                    f['multi_repo_protected'] = current_protected
+                    save_backlog(p, data)
+            atlassian_sync = False
+            if args.publicar_atlassian:
+                import atlassian
+                atlassian.cmd_push(argparse.Namespace(feature=str(fid)))
+                atlassian_sync = True
+            if progress_archivado:
+                bitacora(p, f"progress #{fid} archivado en {f['progress_archive']}")
+            if docs_sincronizados:
+                bitacora(p, f"documentacion PRD/SDD sincronizada para #{fid}")
+            bitacora(p, f"close #{fid} status={args.status}" +
+                     (f" -> {args.to}" if args.to else "") +
+                     (f" merge={merged}" if merged else "") +
+                     (f" leccion={args.leccion}" if args.leccion else ""))
+    except (Exception, SystemExit, KeyboardInterrupt) as exc:
+        if merged:
+            print(f"[!] merge local conservado: {merged}; no resetear ni repetir a ciegas.")
+        if args.publicar_atlassian:
+            print("[!] publicacion remota puede ser parcial; reconciliar antes de reintentar.")
+        sys.exit(f"[!!] cierre local fallo; rollback intentado: {exc}")
     print(f"[ok] feature #{fid} cerrada como {args.status}")
     if merged:
         print(f"[ok] rama integrada en {args.to} (merge {merged})")
@@ -560,6 +640,27 @@ def cmd_close(args) -> None:
     if docs_sincronizados:
         print("[ok] documentacion PRD/SDD sincronizada")
     print("[i]  la integracion es LOCAL: publicar es una decision aparte.")
+    if args.status == "done" and not getattr(args, "sin_contexto", False):
+        # El cierre cambio el arbol: el grafo, el hub y el vault que quedaron
+        # describen el codigo de antes. Se refresca DESPUES del cierre para no
+        # mezclarlo con la transaccion de rollback.
+        try:
+            import contexto
+            if contexto._desactivado():
+                print("[i]  HARNESS_SIN_CONTEXTO: no se refresca el contexto.")
+                parte = None
+            else:
+                print("[i]  refrescando contexto (grafo/hub/vault) tras el cierre...")
+                parte = contexto.refrescar(p, con_vault=True, con_hub=True)
+            if parte and parte["fallos"]:
+                print("[!] contexto NO quedo refrescado; corre contexto.py refrescar:")
+                for x in parte["fallos"]:
+                    print(f"     - {x}")
+            else:
+                if parte:
+                    print("[ok] contexto refrescado")
+        except Exception as exc:
+            print(f"[!] no se pudo refrescar el contexto: {exc}")
     if atlassian_sync:
         print(f"[ok] Atlassian sincronizado para feature #{fid}")
     elif (p["atlassian"]).exists():
@@ -591,7 +692,12 @@ def main() -> None:
     s = sub.add_parser("close"); s.add_argument("--feature", required=True)
     s.add_argument("--status", required=True, choices=["done", "blocked"])
     s.add_argument("--to"); s.add_argument("--leccion")
+    s.add_argument("--integrated", action="store_true",
+                   help="verifica integracion manual multi-repo registrada, sin merge")
+    s.add_argument("--postmerge", help="mapa de bases preintegracion; close ejecuta suites reales en TODOS los destinos")
     s.add_argument("--leccion-motivo", dest="leccion_motivo"); s.add_argument("--nota")
+    s.add_argument("--sin-contexto", action="store_true", dest="sin_contexto",
+                   help="no refrescar grafo/hub/vault despues del cierre")
     s.add_argument("--publicar-atlassian", action="store_true", dest="publicar_atlassian",
                    help="despues del cierre, sincroniza Jira y Confluence con atlassian.py push")
     s.set_defaults(fn=cmd_close)

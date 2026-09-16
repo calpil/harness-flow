@@ -67,8 +67,10 @@ class EntornoTests(unittest.TestCase):
         (self.home / ".hermes").mkdir()
         perfil = self.home / ".hermes/profiles/nuevo"
         os.environ["HERMES_HOME"] = str(perfil)
-        self.assertEqual(entorno.host_agente(), "hermes")
-        self.assertEqual(entorno.hermes_home(), perfil)
+        # Este escenario usa HERMES_HOME, no la ruta de otra instalacion.
+        with mock.patch.object(entorno, "__file__", str(self.home / "scripts/entorno.py")):
+            self.assertEqual(entorno.host_agente(), "hermes")
+            self.assertEqual(entorno.hermes_home(), perfil)
 
     def test_copia_claude_no_se_confunde_con_hermes_home(self):
         script = self.home / ".claude/skills/harness-flow/scripts/entorno.py"
@@ -96,7 +98,10 @@ class EntornoTests(unittest.TestCase):
         py = self.home / ".harness-flow/venv/bin/python"
         py.parent.mkdir(parents=True)
         py.symlink_to(sys.executable)
-        with mock.patch.object(entorno, "ES_WINDOWS", False):
+        # El symlink no hereda los paquetes del venv del interprete actual.
+        # Este caso representa dos interpretes con psycopg disponible.
+        with mock.patch.object(entorno, "ES_WINDOWS", False), \
+             mock.patch.object(entorno, "tiene_psycopg", return_value=True):
             self.assertEqual(entorno.python_harness(), py)
 
     def test_alias_hermes_y_launcher_siguen_disponibles(self):
