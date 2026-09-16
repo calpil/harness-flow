@@ -218,8 +218,12 @@ def cmd_push(args) -> None:
         code, r = api(b["site"], email, token, "POST", "/rest/api/3/issue", {
             "fields": {"project": {"key": b["jira_project"]},
                        "summary": resumen, "issuetype": {"name": tipo}}})
-        if code >= 300:
+        # code == 0 es el fallo de red de api() (timeout/DNS/TLS): sin esto, una
+        # issue quizas creada quedaba con jira_key null y el reintento duplicaba.
+        if code >= 300 or code == 0:
             sys.exit(f"[!!] Jira rechazo la creacion ({code}): {r.get('error','')[:300]}")
+        if not r.get("key"):
+            sys.exit("[!!] Jira respondio sin 'key': no persisto un enlace vacio.")
         f["jira_key"] = r.get("key"); save_backlog(p, data)
         print(f"[ok] creado {f['jira_key']}")
 

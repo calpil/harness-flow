@@ -186,15 +186,23 @@ def nombre_valido(clase: str) -> bool:
 
 
 def buscar(clase: str) -> Path | None:
-    """La skill <clase>, con o sin categoria intermedia, en orden de precedencia."""
+    """La skill <clase>, con o sin categoria intermedia, en orden de precedencia.
+
+    is_file() y no exists(): un directorio llamado SKILL.md daba el gate por
+    cumplido y luego reventaba con IsADirectoryError al leerlo. Y se buscan dos
+    niveles de categoria porque las skills instaladas anidadas (mlops/inference/
+    llama-cpp) eran invisibles: el gate bloqueaba un cierre legitimo.
+    """
     if not nombre_valido(clase):
         return None
     for raiz in skills_roots():
         directo = raiz / clase / "SKILL.md"
-        if directo.exists():
+        if directo.is_file():
             return directo
-        for hit in sorted(raiz.glob("*/" + clase + "/SKILL.md")):
-            return hit
+        for patron in ("*/" + clase + "/SKILL.md", "*/*/" + clase + "/SKILL.md"):
+            for hit in sorted(raiz.glob(patron)):
+                if hit.is_file():
+                    return hit
     return None
 
 

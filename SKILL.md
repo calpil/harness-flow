@@ -191,19 +191,26 @@ Verifica el resultado (`git log --oneline -1` en la rama destino) antes de dar p
 | `gate.py approve-spec --feature <id> --yes` | Solo con SÍ del usuario; sella quién/cuándo |
 | `gate.py revision --feature <id> --veredicto <v>` | Review responde por CADA AC-n con `archivo:linea` |
 | `gate.py close --feature <id> --status done --to <rama>` | Todas las reglas activas |
-| `postmerge.py base --repo <r> --guardar <j>` | Foto de los rojos ANTES del merge |
-| `postmerge.py check --repo <r> --base <j>` | Rojos NUEVOS que agrego el merge (exit 1) |
+| `postmerge_medido.py base --repo <r> --guardar <j>` | Foto medida de los rojos ANTES del merge |
+| `postmerge_medido.py check --repo <r> --base <j>` | Rojos NUEVOS, build roto o tests desaparecidos (exit 2) |
 
-**Despues de cada `close ... --to <rama>`, corre `postmerge.py`** sobre la rama
-destino. Los AC de una feature miden su worktree y no pueden ver los choques
-entre features. El gate compara nombres de test contra la base pre-merge y solo
+**Despues de cada `close ... --to <rama>`, corre `postmerge_medido.py`** sobre la
+rama destino. Los AC de una feature miden su worktree y no pueden ver los choques
+entre features. El gate compara `(paquete, test)` contra la base pre-merge y solo
 falla por rojos NUEVOS, asi que la deuda tolerada no lo vuelve inservible:
 
 ```bash
-$PY "$H/postmerge.py" base  --repo <ruta> --guardar /tmp/base-<svc>.json   # ANTES
+$PY "$H/postmerge_medido.py" base  --repo <ruta> --guardar /tmp/base-<svc>.json   # ANTES
 $PY "$H/gate.py" close --feature <id> --status done --to develop --leccion <clase>
-$PY "$H/postmerge.py" check --repo <ruta> --base /tmp/base-<svc>.json      # DESPUES
+$PY "$H/postmerge_medido.py" check --repo <ruta> --base /tmp/base-<svc>.json      # DESPUES
 ```
+
+`postmerge.py` (el gate viejo de regex) **no sirve como gate**: deduce el veredicto
+de `--- FAIL:` sobre la salida `-v` y nunca lee el exit code de `go test`, asi que
+da VERDE con un paquete que no compila, con un `panic` en `init()`, y con tests
+borrados; ademas identifica los tests por nombre sin paquete, con lo que un rojo
+nuevo en un paquete se confunde con deuda tolerada de otro. Usa siempre la version
+medida, que cubre los cuatro casos y valida la base contra repo/rama/comando/SHA.
 
 Si aparecen rojos nuevos: ficha el choque, no bajes la asercion que lo detecto.
 Al verificar el exit a mano no uses un pipe (`| tail`): te devuelve el status
@@ -378,7 +385,19 @@ esa bandera, `close` solo avisa y no toca sistemas remotos.
 ## Reglas duras
 
 - Todo hallazgo relevante se escribe en `harness/progress/`. Una respuesta en el chat no reemplaza evidencia persistida.
-- `gate.py verify` corre desde la RAÍZ del proyecto, no desde el worktree de la feature. Si el código todavía vive sólo en su worktree, los AC miden un árbol que no lo contiene y salen rojos por un motivo falso. Integra primero (o corre los comandos a mano en el worktree y dilo); un rojo de verify sobre el árbol equivocado no es un veredicto sobre el código.
+- `gate.py verify` corre en el WORKTREE de la feature cuando existe (antes corría
+  desde la raíz y medía la rama de integración: verde falso si el comando no
+  engancha nada, rojo falso si develop tiene otro código). Si el worktree
+  declarado no existe, `verify` **bloquea** en vez de caer a la raíz. Sin
+  worktree, avisa que está midiendo la raíz. Un rojo sobre el árbol equivocado
+  no es un veredicto sobre el código, y un verde tampoco.
+- **La feature sale de `rules.rama_base` (por defecto `develop`), no del HEAD del
+  repo.** `worktree.py start` resuelve la base explícitamente y crea la rama
+  desde ese SHA; si la rama ya existía y no desciende de la base, aborta. La
+  base queda registrada en `base_branch`/`base_sha` y es contra ella que
+  `revision.py` calcula el diff (`merge-base base HEAD`, no `HEAD~1`: una
+  feature son N commits, y `HEAD~1` le muestra al revisor sólo el último).
+  `--base <rama>` para un caso puntual.
 - Cuando varias features tocan el mismo artefacto, ciérralas en orden de dependencia: un AC que compara contra un respaldo pre-cambio queda obsoleto en cuanto otra feature aplica el suyo.
 - **Los AC de una feature miden SU worktree, así que por construcción no ven los choques ENTRE features.** Varias ramas pueden estar verdes cada una y romperse al convivir en la rama de integración: dos migraciones que toman el mismo número, una que inserta una fila donde otra fija un conteo exacto, un CHECK que choca con un vocabulario ampliado. Después de cada `close ... --to <rama>`, corre la suite de integración COMPLETA sobre la rama destino y compara los rojos contra los que ya había antes del merge. Un `15/15 en verde` de `verify` es un veredicto sobre la rama de la feature, NO sobre la integración: no lo reportes como si lo fuera.
 - **Migraciones numeradas + features en paralelo = colisión garantizada.** Cada rama toma "el siguiente número libre" que ve, y ve un árbol distinto. Antes de sellar el spec de una feature con migración, reserva el número contra la rama de integración, no contra el worktree. Al renumerar: `git mv` para conservar historia, regenerar los manifiestos con el comando del repo (suelen decir "GENERADO, no editar a mano") y verificar que el blob quede idéntico entre todos los repos que lo replican.
@@ -391,12 +410,74 @@ esa bandera, `close` solo avisa y no toca sistemas remotos.
   `- AC-1: ... \`verificar: pytest -q\`` o una línea `Comando: \`pytest -q\`` debajo del AC.
 - La evidencia cubre un AC si la cita `archivo:linea` está en la **sección** del AC
   (encabezado `## AC-1` con la cita debajo), no necesariamente en la misma línea.
-  Prosa sin cita nunca cuenta como cobertura.
+  Prosa sin cita nunca cuenta como cobertura. Una **mención** del AC en medio de
+  una frase (`...que también cubre lo pedido en AC-1`) no abre sección: sólo
+  cuentan las líneas que lo **declaran** (`## AC-1`, `- AC-1:`, `| AC-1 |`). Antes
+  una mención heredaba la cita del AC vecino y daba por cubierto un AC sin
+  evidencia, además de truncar la sección del AC que sí la tenía.
+- `verify` sólo mide los AC que declaran comando. Si el spec tiene 12 AC y 3
+  traen `verificar:`, un `3/3 en verde` **no** dice nada de los otros 9: el
+  script ahora los lista como `NO se midieron` y `close` los repite como aviso.
+  Ese hueco lo cubre la revisión, no el verify.
+- El sello `Revisado:` sólo vale con la firma completa que estampa
+  `gate.py revision` (veredicto · fecha ISO · autor · `estampado por gate.py
+  revision`). Un `Revisado: approved - ok` escrito a mano ya no pasa.
+- `close` rechaza un `last_verify` medido contra una firma de spec distinta de
+  la vigente: si el spec cambió después de medir, hay que re-correr `verify`.
 - `psycopg` debe estar en el intérprete que resuelve `entorno.py` (`$PY`), no en el
   del proyecto ni en el python del sistema. Si `hub.py` tira `ModuleNotFoundError:
   psycopg`, casi siempre es que estás usando `python3` en vez de `$PY`. Diagnostica
   y arregla con el mismo script, sin rutas a mano: `python3 "$H/entorno.py"` y luego
   `python3 "$H/entorno.py" --instalar-deps`.
+
+## Lecciones del arnés sobre sí mismo
+
+Salieron de auditar sus propios gates; todas tienen repro verificada.
+
+- **Un gate que deduce el veredicto de un regex sobre texto no es un gate.** El
+  `postmerge.py` viejo parseaba `--- FAIL:` de la salida `-v` y nunca leía el
+  exit code: daba verde con build roto, con `panic` en `init()` y con tests
+  borrados. Si un runner puede fallar sin imprimir la línea que buscás, medí el
+  exit code y el inventario, no el texto.
+- **Cuando existan dos versiones de un gate, la doc tiene que mandar a la buena.**
+  Este SKILL.md documentaba el roto mientras `medicion_destino.py` usaba el
+  medido: quien seguía la doc al pie de la letra usaba el que miente.
+- **Un identificador de test sin su paquete colapsa tests distintos.** Identificá
+  por `(paquete, test)`, o un rojo nuevo se confunde con deuda tolerada de otro.
+- **Contar sólo los rojos nuevos deja pasar los tests que desaparecen.** Sin
+  inventario de lo medido antes, borrar un test es indistinguible de arreglarlo.
+- **Un conteo parcial nunca se reporta como total.** `verify` medía sólo los AC
+  con comando y anunciaba `1/1 en verde` con 3 AC en el spec. Si mediste 3 de 12,
+  decilo en la misma línea del verde.
+- **Una medición vale para la firma con la que se tomó.** Si el spec cambia
+  después del `verify`, el verde viejo habla de otro documento: re-medir.
+- **Un sello contra falsificación debe exigir la firma entera.** Un
+  `Revisado: approved - ok` tipeado a mano pasaba como sellado por el gate.
+- **Una mención no es una declaración.** Al parsear documentos por secciones, una
+  frase que nombra `AC-1` de pasada abría sección y heredaba la cita del AC
+  vecino: daba por cubierto un AC sin evidencia y truncaba el que sí la tenía.
+- **`exists()` no es `is_file()`**, y un glob de un solo nivel no ve las skills
+  anidadas (`mlops/inference/llama-cpp`): el gate de lección bloqueaba cierres
+  legítimos y aceptaba un directorio llamado `SKILL.md`.
+- **Un valor del backlog que termina en una ruta necesita `slugify` + chequeo de
+  contención.** Una lección `../../../README` pisaba archivos del repo.
+- **En un cliente HTTP, el fallo de red debe tratarse como fallo en TODAS las
+  ramas.** `code == 0` faltaba sólo en la creación de issue: persistía
+  `jira_key: null` y el reintento duplicaba la issue en Jira.
+
+## Cómo auditar este arnés
+
+Los tests de regresión sólo valen si fallan contra el código previo: escribilos,
+`git stash push` los scripts arreglados, correlos y confirmá que se ponen rojos.
+Un test nuevo que pasa en ambos lados no está probando el arreglo.
+
+La suite es **unittest**, no pytest, y hay que correrla desde `tests/`:
+`cd tests && python3 -m unittest <módulo>`. Un `unittest discover` desde la raíz
+cuelga y falla por path de import. Las suites multi-repo y de runner medido
+tardan varios minutos: correlas en segundo plano.
+
+Al auditar, sospechá de los tests existentes tanto como del código: cinco tests
+de `test_postmerge.py` certificaban en verde el gate que mentía.
 
 ## Equivalencias por host
 

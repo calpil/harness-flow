@@ -324,6 +324,8 @@ def cmd_verify(args) -> None:
         sys.exit(f"[!!] el spec de #{f['id']} esta '{spec_estado(text)}', no 'approved'.\n"
                  "     Verify corre sobre un spec aprobado por el usuario.")
     cmds = ac_comandos(text)
+    acs = spec_acs(text)
+    sin_comando = [a for a in acs if a not in cmds]
     contexto = _multi_context(p, f, data["rules"]) if "multi_repo" in f else None
     if contexto and not sig_fresh(sp, f.get("last_spec_sig")):
         sys.exit("[!!] spec stale: no verificar multi-repo sin aprobacion fresca")
@@ -331,12 +333,28 @@ def cmd_verify(args) -> None:
         print("[i]  ningun AC declara comando: los verifica el reviewer a mano.")
         return
     timeout = int(data["rules"].get("verify_timeout_segundos", 900))
-    out = [f"# Verify - Feature #{f['id']}", "", f"Corrido: {now_iso()}", ""]
+    # Los AC miden el arbol de la FEATURE. Correrlos desde la raiz mide develop:
+    # verde falso si el comando no engancha nada, rojo falso si la rama vecina
+    # tiene otro codigo. Se corre en el worktree cuando existe.
+    cwd = p["root"]
+    wt = f.get("worktree")
+    if "multi_repo" not in f:
+        if wt and Path(wt).is_dir():
+            cwd = Path(wt)
+            print(f"[i]  verify corre en el worktree de #{f['id']}: {cwd}")
+        elif wt:
+            sys.exit(f"[!!] el worktree declarado de #{f['id']} no existe: {wt}\n"
+                     "     No corro los AC contra la raiz: mediria otra rama.")
+        else:
+            print(f"[!] #{f['id']} sin worktree: los AC se miden sobre la raiz "
+                  f"({p['root']}), que esta en la rama de integracion.")
+    out = [f"# Verify - Feature #{f['id']}", "", f"Corrido: {now_iso()}",
+           f"Arbol: {cwd}", ""]
     fallos = 0
     for ac, cmd in cmds.items():
         print(f"-- {ac}: {cmd}")
         try:
-            r = subprocess.run(cmd, shell=True, cwd=str(p["root"]),
+            r = subprocess.run(cmd, shell=True, cwd=str(cwd),
                                capture_output=True, text=True, timeout=timeout)
             code, salida = r.returncode, (r.stdout + r.stderr)[-4000:]
         except subprocess.TimeoutExpired:
@@ -350,7 +368,9 @@ def cmd_verify(args) -> None:
     vp = p["docs"] / f"verify-{f['id']}.md"
     vp.parent.mkdir(parents=True, exist_ok=True)
     vp.write_text("\n".join(out), encoding="utf-8")
-    f["last_verify"] = {"at": now_iso(), "fallos": fallos, "total": len(cmds)}
+    f["last_verify"] = {"at": now_iso(), "fallos": fallos, "total": len(cmds),
+                        "acs_declarados": len(acs),
+                        "sin_comando": sin_comando}
     if contexto:
         from multirepo import Invalid, context
         try:
@@ -364,6 +384,10 @@ def cmd_verify(args) -> None:
         f["last_verify"].update(context=contexto, report_sig=sign(vp))
     save_backlog(p, data)
     print(f"\n[{'ok' if not fallos else '!!'}] {len(cmds)-fallos}/{len(cmds)} AC en verde -> {vp.name}")
+    if sin_comando:
+        print(f"[!] {len(sin_comando)}/{len(acs)} AC NO se midieron (sin comando "
+              f"declarado): {', '.join(sin_comando)}\n"
+              "    Ese verde NO cubre esos AC: los verifica el reviewer a mano.")
     if fallos:
         sys.exit(1)
 
@@ -471,6 +495,7 @@ def cmd_close(args) -> None:
         sys.exit("[!!] --publicar-atlassian exige harness/atlassian.json")
 
     fallos: list[str] = []
+    avisos_cierre: list[str] = []
     stext = ""
     sp = spec_path(p, f)
     if not sp.exists():
@@ -518,6 +543,21 @@ def cmd_close(args) -> None:
                 fallos.append("verify ausente, vacio o no registrado")
             elif lv["fallos"] != 0:
                 fallos.append(f"verify con {lv['fallos']} AC en rojo")
+            else:
+                # Un verify viejo, corrido cuando el spec tenia otros AC, no es
+                # un veredicto sobre el spec actual: 'N/N verde' puede venir de
+                # medir un subconjunto que ya no existe.
+                declarados = lv.get("acs_declarados")
+                if type(declarados) is int and declarados != len(acs):
+                    fallos.append(
+                        f"verify obsoleto: midio un spec de {declarados} AC y "
+                        f"el actual tiene {len(acs)}; vuelve a correr verify")
+                sin_cmd = lv.get("sin_comando") or []
+                if sin_cmd:
+                    avisos_cierre.append(
+                        f"{len(sin_cmd)}/{len(acs)} AC no los midio ninguna suite "
+                        f"(sin comando declarado): {', '.join(sin_cmd)}. "
+                        "El verde de verify NO habla de ellos; responde el review.")
 
         if multi:
             from multirepo import Invalid, context
@@ -561,6 +601,9 @@ def cmd_close(args) -> None:
         for x in fallos:
             print(f"     - {x}")
         sys.exit(1)
+
+    for x in avisos_cierre:
+        print(f"[!] {x}")
 
     from cierre_local import preflight, transaction
     try:

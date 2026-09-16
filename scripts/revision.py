@@ -22,6 +22,37 @@ from comun import (cubre_acs, get_feature, git, impl_path, load_backlog,  # noqa
                    spec_estado, spec_path)
 
 
+def arbol_feature(p, f) -> tuple[Path, str | None]:
+    """Devuelve (arbol a revisar, aviso). NUNCA cae en silencio a la raiz.
+
+    La raiz esta parada en la rama de integracion (develop): revisar ahi es
+    revisar el trabajo de todos menos el de la feature.
+    """
+    wt = f.get("worktree")
+    if wt and Path(wt).is_dir():
+        return Path(wt), None
+    if wt:
+        return Path(p["root"]), (f"worktree declarado INEXISTENTE ({wt}); "
+                                 "lo de abajo NO es el arbol de la feature")
+    return Path(p["root"]), ("la feature no tiene worktree: lo de abajo es la raiz "
+                             f"({p['root']}), parada en la rama de integracion")
+
+
+def diff_feature(p, f, stat=False) -> tuple[str, str | None]:
+    """Diff base..HEAD del worktree. Sin HEAD~1: una feature son N commits."""
+    arbol, aviso = arbol_feature(p, f)
+    base = f.get("base_sha") or f.get("base_branch") or "develop"
+    code, out = git(["merge-base", base, "HEAD"], arbol)
+    if code == 0 and out.strip():
+        code, diff = git(["diff", *(["--stat"] if stat else []), out.strip(), "HEAD"], arbol)
+        if code == 0:
+            return diff, aviso
+        return "", (aviso or "") + f" | no se pudo diffear contra {base}"
+    nuevo = (f"no pude resolver la base '{base}' en {arbol}: sin diff de feature "
+             "confiable, el revisor debe leer los archivos")
+    return "", (f"{aviso} | {nuevo}" if aviso else nuevo)
+
+
 def datos(a):
     p = paths()
     data = load_backlog(p)
@@ -60,11 +91,14 @@ def cmd_resumen(a) -> None:
     if rp.exists():
         print(f"   sello actual: {sello_revision(rp.read_text(encoding='utf-8')) or 'sin sellar'}")
 
-    wt = f.get("worktree") or str(p["root"])
-    code, out = git(["diff", "--stat", "HEAD~1"], Path(wt))
-    print(f"\nArchivos tocados (en {Path(wt).name}):")
-    print("   " + ("\n   ".join(out.splitlines()[:25]) if code == 0 and out
-                   else "(sin diff disponible)"))
+    arbol, aviso = arbol_feature(p, f)
+    diff, aviso_diff = diff_feature(p, f, stat=True)
+    print(f"\nArchivos tocados (en {arbol}):")
+    if aviso or aviso_diff:
+        print(f"   [!!] {aviso or aviso_diff}")
+    print("   " + ("\n   ".join(
+        [l for l in diff.splitlines() if l.strip()][:25]) if diff
+        else "(sin diff disponible)"))
 
     print("\n[i]  Esto es SOLO LECTURA. Delega el review a un subagente:")
     print(f"     revision.py --feature {f['id']} --briefing")
@@ -76,7 +110,8 @@ def cmd_briefing(a) -> None:
     """Contexto autocontenido para delegate_task: el subagente no sabe nada."""
     p, f, sp, stext = datos(a)
     acs = spec_acs(stext)
-    wt = Path(f.get("worktree") or p["root"])
+    wt, aviso_arbol = arbol_feature(p, f)
+    aviso_diff = None
     ip = impl_path(p, f)
     rp = review_path(p, f)
 
@@ -95,14 +130,17 @@ def cmd_briefing(a) -> None:
         except Invalid as exc:
             sys.exit(f"[!!] multi-repo: {exc}")
     else:
-        code, diff = git(["diff", "HEAD~1"], wt)
-        if code != 0 or not diff:
-            code, diff = git(["diff", "HEAD"], wt)
+        diff, aviso_diff = diff_feature(p, f)
         diff = diff[:60000]
 
     print("=" * 72)
     print("CONTEXTO PARA EL SUBAGENTE REVISOR (delegate_task.context | prompt de Task)")
     print("=" * 72)
+    for x in (aviso_arbol, aviso_diff):
+        if x:
+            print(f"[!!] {x}\n"
+                  "     NO selles un veredicto sobre este paquete: arregla el arbol\n"
+                  "     de la feature primero (worktree.py start / --base).\n")
     try:
         import contexto
         est = contexto.estado_contexto(p)
@@ -125,7 +163,10 @@ Tu trabajo: decidir si CADA criterio de aceptacion esta realmente cumplido en el
 codigo, citando `archivo:linea`. No aceptes la palabra del implementer.
 
 Raiz del proyecto: {p['root']}
-Worktree de la feature: {'ver mapa multi-repo completo abajo' if 'multi_repo' in f else wt}
+Arbol QUE DEBES REVISAR: {'ver mapa multi-repo completo abajo' if 'multi_repo' in f else wt}
+Lee el codigo DENTRO de ese arbol. La raiz del proyecto esta parada en la rama
+de integracion y NO contiene el trabajo de esta feature: citar `archivo:linea`
+leido ahi es citar codigo de otra rama.
 
 Criterios de aceptacion a verificar ({len(acs)}):""")
     for ac in acs:

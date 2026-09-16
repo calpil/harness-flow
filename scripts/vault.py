@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from pathlib import Path  # noqa: F401  (lo usa la carga de lecciones)
 
@@ -244,7 +245,12 @@ def main() -> None:
         sm = buscar_leccion(clase)
         origen = (f"Skill de Hermes: `{clase}`" if sm
                   else f"**FALTA**: la skill `{clase}` no esta instalada aqui")
-        (v / "lecciones" / f"{clase}.md").write_text("\n".join([
+        # slugify: el valor viene del backlog sin sanitizar y Path resuelve '..',
+        # asi que una leccion '../../../README' pisaba archivos del repo.
+        destino = (v / "lecciones" / f"{slugify(clase)}.md").resolve()
+        if not str(destino).startswith(str((v / "lecciones").resolve()) + os.sep):
+            raise SystemExit(f"[!!] leccion con ruta fuera del vault: {clase!r}")
+        destino.write_text("\n".join([
             "---", "tipo: leccion", "tags: [harness, leccion]", "---", AVISO, "",
             f"# {esc(clase)}", "",
             origen, "",

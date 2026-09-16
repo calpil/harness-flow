@@ -129,4 +129,17 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    # Este gate deduce el veredicto de un regex sobre la salida -v y NUNCA lee el
+    # exit code de `go test`: da verde con un paquete que no compila, con un panic
+    # en init(), y con tests borrados; ademas identifica los tests por nombre sin
+    # paquete, asi que un rojo nuevo se confunde con deuda tolerada de otro.
+    # Se niega a opinar en vez de mentir. postmerge_medido.py cubre los 4 casos.
+    print("[!!] postmerge.py esta RETIRADO como gate: da verdes falsos "
+          "(build roto, panic en init, tests borrados).", file=sys.stderr)
+    print("     Usa postmerge_medido.py, que mide en vez de adivinar:",
+          file=sys.stderr)
+    print("     postmerge_medido.py base  --repo <ruta> --guardar <json>",
+          file=sys.stderr)
+    print("     postmerge_medido.py check --repo <ruta> --base <json>",
+          file=sys.stderr)
+    sys.exit(2)

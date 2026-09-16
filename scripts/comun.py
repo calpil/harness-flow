@@ -116,6 +116,10 @@ def hub_env() -> dict:
 # --- backlog ---------------------------------------------------------------
 
 DEFAULT_RULES = {
+    # Rama de la que SALEN las features y contra la que se miden los diffs.
+    # Se declara aqui porque "el HEAD del repo" es la rama de quien hizo
+    # checkout ultimo: arrancar desde ahi mete trabajo ajeno en la feature.
+    "rama_base": "develop",
     "require_spec_approved": True,
     "require_review": True,
     "require_leccion": True,
@@ -229,20 +233,38 @@ def ac_comandos(text: str) -> dict[str, str]:
             actual = None
     return out
 
+def declara_ac(linea: str, ac: str) -> bool:
+    """True si la linea DECLARA la seccion del AC, no si solo lo menciona.
+
+    Una mencion en prosa ('...que tambien cubre lo pedido en AC-1') no puede
+    abrir una seccion: heredaba la cita de la seccion vecina y daba por
+    cubierto un AC sin evidencia propia, mientras truncaba la seccion del AC
+    que si la tenia. Declarar es empezar la linea con el AC, admitiendo el
+    adorno de markdown: '## AC-1', '- AC-1:', '* AC-1', '| AC-1 |', '3. AC-1'.
+    """
+    limpia = linea.strip()
+    limpia = re.sub(r"^[>\s]*", "", limpia)           # citas
+    limpia = re.sub(r"^#{1,6}\s*", "", limpia)        # encabezados
+    limpia = re.sub(r"^\|\s*", "", limpia)            # filas de tabla
+    limpia = re.sub(r"^(?:[-*+]|\d+[.)])\s+", "", limpia)  # listas
+    limpia = re.sub(r"^[*_`]+", "", limpia)           # enfasis
+    return bool(re.match(rf"{re.escape(ac)}\b", limpia))
+
+
 def cubre_acs(text: str, acs: list[str]) -> tuple[list[str], list[str]]:
     """Devuelve (cubiertos, faltantes).
 
-    Un AC esta cubierto si aparece nombrado y hay una cita archivo:linea en su
-    SECCION: la misma linea, o las lineas que le siguen hasta que empieza otro
-    AC o un nuevo encabezado. Asi vale tanto '- AC-1: ... (src/a.ts:42)' como
-    un '## AC-1' con la cita debajo.
+    Un AC esta cubierto si DECLARA una seccion (ver declara_ac) y hay una cita
+    archivo:linea en ella: la misma linea, o las que le siguen hasta que
+    empieza otro AC o un nuevo encabezado. Asi vale tanto
+    '- AC-1: ... (src/a.ts:42)' como un '## AC-1' con la cita debajo.
     """
     lines = text.splitlines()
-    # indice de arranque de cada AC nombrado
+    # indice de arranque de cada AC DECLARADO (no de cada mencion)
     arranques: list[tuple[int, str]] = []
     for i, ln in enumerate(lines):
         for ac in acs:
-            if re.search(rf"\b{re.escape(ac)}\b", ln):
+            if declara_ac(ln, ac):
                 arranques.append((i, ac))
                 break
     cubiertos, faltan = [], []
@@ -269,9 +291,18 @@ def cubre_acs(text: str, acs: list[str]) -> tuple[list[str], list[str]]:
 # --- sellos ----------------------------------------------------------------
 
 REVISADO_RE = re.compile(
-    r"^Revisado:\s*(approved|changes_requested|blocked)\s*[·|-]", re.MULTILINE)
+    r"^Revisado:\s*(approved|changes_requested|blocked)\s*·\s*"
+    r"\d{4}-\d{2}-\d{2}T[\d:]+Z\s*·\s*.+?\s*·\s*"
+    r"estampado por gate\.py revision\s*$",
+    re.MULTILINE)
 
 def sello_revision(text: str) -> str | None:
+    """Solo reconoce el sello COMPLETO que estampa gate.py revision.
+
+    Antes bastaba 'Revisado: approved -' para pasar por sellado: cualquiera
+    podia tipear el veredicto a mano, que es justo lo que el sello existe para
+    impedir. Se exige la firma entera (fecha ISO, autor y la frase del gate).
+    """
     m = REVISADO_RE.search(text or "")
     return m.group(1) if m else None
 

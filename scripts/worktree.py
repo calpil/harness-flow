@@ -18,6 +18,27 @@ from comun import (bitacora, get_feature, git, load_backlog, now_iso, paths,  # 
 ABIERTOS = ("in_progress", "blocked", "review")
 
 
+def rama_base(data: dict, args) -> str:
+    """Rama de la que sale la feature: --base > rules.rama_base > develop."""
+    return (getattr(args, "base", None)
+            or data.get("rules", {}).get("rama_base")
+            or "develop")
+
+
+def resolver_base(repo, base: str) -> str:
+    """SHA de la base. No cae al HEAD del repo: un HEAD ajeno es trabajo ajeno."""
+    code, sha = git(["rev-parse", "--verify", f"refs/heads/{base}"], repo)
+    if code != 0:
+        code, sha = git(["rev-parse", "--verify", f"refs/remotes/origin/{base}"], repo)
+    if code != 0:
+        sys.exit(f"[!!] la rama base '{base}' no existe en {repo}.\n"
+                 f"     Declara la correcta en harness/feature_list.json -> "
+                 f"rules.rama_base, o pasa --base <rama>.\n"
+                 f"     NO arranco desde el HEAD actual: seria la rama de quien\n"
+                 f"     hizo checkout ultimo.")
+    return sha.strip()
+
+
 def _contexto(p, fid, args) -> None:
     """Refresca grafo/hub/vault si estan vencidos e imprime el brief.
 
@@ -57,7 +78,8 @@ def cmd_start(args) -> None:
             ids = ", ".join(f"#{x['id']}" for x in no_aisladas)
             sys.exit(f"[!!] no puedes arrancar sin worktree: {ids} ya esta(n) sin aislar.\n"
                      "     Una sola feature no aislada a la vez.")
-        f.update(status="in_progress", started_at=now_iso(), aislada=False, branch=rama)
+        f.update(status="in_progress", started_at=now_iso(), aislada=False,
+                 branch=rama, base_branch=rama_base(data, args))
         save_backlog(p, data)
         bitacora(p, f"start #{fid} SIN worktree (no aislada)")
         print(f"[!] feature #{fid} arrancada SIN aislamiento. Trabaja en {p['root']}")
@@ -70,15 +92,26 @@ def cmd_start(args) -> None:
                  "     Proyecto multi-repo: pasa --repo <microservicio>, o prepara el\n"
                  "     arbol a mano y declaralo con --worktree <ruta>.")
 
+    base = rama_base(data, args)
+    base_sha = resolver_base(repo, base)
+
     destino = repo.parent / f"{repo.name}-wt" / f"{fid}-{slug}"
-    code, out = git(["worktree", "add", "-b", rama, str(destino)], repo)
+    code, out = git(["worktree", "add", "-b", rama, str(destino), base_sha], repo)
     if code != 0 and "already exists" in out:
+        # La rama ya existe: se reusa, pero se exige que salga de la base.
         code, out = git(["worktree", "add", str(destino), rama], repo)
+        if code == 0:
+            cod2, _ = git(["merge-base", "--is-ancestor", base_sha, rama], repo)
+            if cod2 != 0:
+                sys.exit(f"[!!] la rama '{rama}' ya existe y NO desciende de '{base}'.\n"
+                         f"     Rebasea o borrala antes de arrancar: el diff de la\n"
+                         f"     feature mediria trabajo ajeno.")
     if code != 0:
         sys.exit(f"[!!] no se pudo crear el worktree, la feature NO arranca:\n{out}")
 
     f.update(status="in_progress", started_at=now_iso(), aislada=True,
-             branch=rama, worktree=str(destino))
+             branch=rama, base_branch=base, base_sha=base_sha,
+             worktree=str(destino))
     save_backlog(p, data)
     bitacora(p, f"start #{fid} rama={rama} worktree={destino}")
     print(f"[ok] feature #{fid} arrancada\n     rama:     {rama}\n     worktree: {destino}")
@@ -136,6 +169,8 @@ def main() -> None:
     s = sub.add_parser("start"); s.add_argument("--feature", required=True)
     s.add_argument("--repo"); s.add_argument("--sin-worktree", action="store_true",
                                              dest="sin_worktree")
+    s.add_argument("--base", help="rama de la que sale la feature "
+                                  "(por defecto rules.rama_base, o develop)")
     s.add_argument("--sin-contexto", action="store_true", dest="sin_contexto",
                    help="no refrescar grafo/hub/vault ni imprimir el brief")
     s.set_defaults(fn=cmd_start)
