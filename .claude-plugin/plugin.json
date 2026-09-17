@@ -1,0 +1,31 @@
+{
+  "$schema": "https://anthropic.com/claude-code/plugin.schema.json",
+  "name": "harness-flow",
+  "version": "1.0.0",
+  "description": "Proceso spec-driven con gates ejecutables para proyectos multi-repo: spec aprobado por el usuario, evidencia por AC, review aislado y cierre medido.",
+  "author": {
+    "name": "calpil",
+    "url": "https://github.com/calpil"
+  },
+  "repository": "https://github.com/calpil/harness-flow",
+  "keywords": [
+    "spec-driven",
+    "gates",
+    "multi-repo",
+    "code-review",
+    "prd",
+    "jira"
+  ],
+  "skills": [
+    "./"
+  ],
+  "commands": [
+    "./commands/estado.md",
+    "./commands/spec.md",
+    "./commands/review.md",
+    "./commands/cierre.md"
+  ],
+  "agents": [
+    "./agents/revisor.md"
+  ]
+}

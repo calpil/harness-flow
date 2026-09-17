@@ -1,0 +1,79 @@
+---
+description: Cierre de harness-flow — verify, base pre-merge medida, close hacia la rama destino y chequeo postmerge de rojos nuevos.
+argument-hint: <id-feature> [rama-destino]
+---
+
+# harness-flow: cierre
+
+Cierra la feature `$1` hacia `$2`. Si no te dieron rama destino, **preguntale al
+usuario a que rama integra**: el gate se niega sin `--to` y adivinarla es
+exactamente lo que no debe pasar.
+
+## 1. Verify en el arbol correcto
+
+```bash
+eval "$(python3 "${CLAUDE_PLUGIN_ROOT}/scripts/entorno.py" --shell)" && "$PY" "$H/gate.py" verify --feature $1
+```
+
+`verify` corre en el WORKTREE de la feature. Si el worktree declarado no existe,
+bloquea — no cae a la raiz. Antes de creerle a un rojo, comprueba en que rama
+esta cada repo que el AC toca (`git -C <ruta> branch --show-current`): un rojo
+sobre el arbol equivocado no es un veredicto sobre el codigo, y un verde tampoco.
+
+**Un conteo parcial no se reporta como total.** `verify` solo mide los AC que
+declaran comando. Si el spec tiene 12 AC y 3 traen `verificar:`, un `3/3 en
+verde` no dice nada de los otros 9 — el script los lista como `NO se midieron` y
+tienes que repetirlo en la misma linea del verde. Ese hueco lo cubre la revision,
+no el verify.
+
+## 2. Foto medida ANTES del merge
+
+Los AC de una feature miden SU worktree, asi que por construccion no ven los
+choques ENTRE features: dos migraciones que toman el mismo numero, una que
+inserta una fila donde otra fija un conteo exacto, un CHECK que choca con un
+vocabulario ampliado. Por eso la base se toma antes:
+
+```bash
+eval "$(python3 "${CLAUDE_PLUGIN_ROOT}/scripts/entorno.py" --shell)" && "$PY" "$H/postmerge_medido.py" base --repo <ruta> --guardar /tmp/base-<svc>.json
+```
+
+Usa siempre `postmerge_medido.py`. El viejo `postmerge.py` deduce el veredicto de
+un regex `--- FAIL:` sobre la salida `-v` y nunca lee el exit code: da VERDE con
+un paquete que no compila, con un `panic` en `init()` y con tests borrados.
+
+## 3. Close
+
+Pregunta primero si la raiz es multi-repo sin `.git` (registro estricto, cierre
+`--integrated`) o monorepo legacy. La diferencia esta en
+`${CLAUDE_PLUGIN_ROOT}/references/multirepo.md` y no se improvisa.
+
+```bash
+eval "$(python3 "${CLAUDE_PLUGIN_ROOT}/scripts/entorno.py" --shell)" && "$PY" "$H/gate.py" close --feature $1 --status done --to $2 --leccion <clase>
+```
+
+Sin `--integrated`, `close` **ejecuta el merge de verdad** (`git merge --no-ff`).
+Aborta sin tocar el backlog si el arbol esta sucio o el merge conflictua. Agrega
+`--publicar-atlassian` SOLO si existe `harness/atlassian.json` y el usuario pidio
+publicar remoto.
+
+## 4. Postmerge sobre la rama destino
+
+```bash
+eval "$(python3 "${CLAUDE_PLUGIN_ROOT}/scripts/entorno.py" --shell)" && "$PY" "$H/postmerge_medido.py" check --repo <ruta> --base /tmp/base-<svc>.json
+```
+
+Compara `(paquete, test)` contra la base y falla (exit 2) por rojos NUEVOS, build
+roto o tests desaparecidos. Al verificar el exit a mano **no uses un pipe**
+(`| tail`): te devuelve el status del tail, no el del gate.
+
+Si aparecen rojos nuevos: ficha el choque, no bajes la asercion que lo detecto.
+
+## 5. Comprueba que el merge existe
+
+```bash
+git -C <ruta> log --oneline -1 $2
+```
+
+El mensaje de un script no es evidencia de que el merge ocurrio. Y un `15/15 en
+verde` de `verify` es un veredicto sobre la rama de la feature, NO sobre la
+integracion: no lo reportes como si lo fuera.

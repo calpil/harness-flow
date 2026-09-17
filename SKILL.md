@@ -116,7 +116,8 @@ El review NO lo haces tú mismo. Un revisor que recuerda haber escrito el códig
 1. Arma el briefing: `$PY "$H/revision.py" --feature <id> --briefing`
 2. Lanza el revisor con el subagente de tu host, pegando esa salida como contexto. Goal: "Revisa la feature #<id> y escribe docs/review-<id>.md". El subagente lee spec y código por su cuenta, no modifica nada más.
    - Hermes: `delegate_task` con la salida en `context`.
-   - Claude Code: la tool `Task` con `subagent_type: general-purpose`, pegando la salida en el prompt.
+   - Claude Code: la tool `Agent` con `subagent_type: harness-flow:revisor`, pegando la salida en el prompt.
+     Ese subagente viene en la propia skill (`agents/revisor.md`); sin el, `general-purpose` sirve igual.
    - GPT/Codex: `codex exec` o el revisor/subagente disponible, pegando el briefing; si no hay aislamiento real, decláralo.
    NO uses un fork de la sesión como revisor: hereda tu historial y con él el sesgo que el aislamiento evita.
 3. Cuando vuelva, LEE tú `docs/review-<id>.md`. El veredicto del subagente es un autoinforme: verifica que cada fila cite `archivo:linea` real antes de sellar.
@@ -367,6 +368,24 @@ existe: la frescura la reporta `contexto.py estado`.
 
 Enlaza specs ↔ AC ↔ evidencia ↔ lecciones ↔ nodos de graphify con wikilinks. Ver `references/obsidian.md`.
 
+## Claude Code
+
+La instalacion personal va en `~/.claude/skills/harness-flow`; por repo, en
+`<repo>/.claude/skills/harness-flow`. Sirve un symlink al clone de Hermes: Claude
+Code lee `SKILL.md` a traves del enlace y `entorno.py` sigue detectando host
+`claude` porque no resuelve el symlink.
+
+El directorio trae `.claude-plugin/plugin.json`, asi que ademas carga como plugin
+skills-dir y aporta piezas nativas que los otros hosts ignoran:
+
+- subagente `harness-flow:revisor` (`agents/revisor.md`) para el paso 3 del flujo;
+- comandos `/harness-flow:estado`, `:spec`, `:review`, `:cierre`.
+
+**`$PY` y `$H` no sobreviven entre llamadas Bash**: cada llamada abre un shell
+nuevo. Pega el `eval` al comando en la misma llamada, siempre. Detalles,
+verificacion de la instalacion y raices de lecciones en
+[`references/claude.md`](references/claude.md).
+
 ## GPT/Codex
 
 La instalacion personal va en `~/.agents/skills/harness-flow`; por repo, en `<repo>/.agents/skills/harness-flow`. Codex/GPT puede invocarla implicitamente por `agents/openai.yaml` y explicitamente como skill. Ver `references/openai.md`.
@@ -483,10 +502,11 @@ de `test_postmerge.py` certificaban en verde el gate que mentía.
 
 | Necesitas | Hermes | Claude Code | GPT/Codex |
 | --- | --- | --- | --- |
-| Subagente revisor aislado | `delegate_task` | tool `Task`, `subagent_type: general-purpose` | `codex exec`/revisor aislado disponible |
+| Subagente revisor aislado | `delegate_task` | tool `Agent`, `subagent_type: harness-flow:revisor` | `codex exec`/revisor aislado disponible |
 | Crear/patchear una lección | `skill_manage` | escribir `<raíz>/<clase>/SKILL.md` | escribir `~/.agents/skills/<clase>/SKILL.md` o `<repo>/.agents/skills/<clase>/SKILL.md` |
 | Raíz de skills | `~/.hermes/skills` (o perfil) | `~/.claude/skills`, luego `.claude/skills` del proyecto | `.agents/skills` del repo, luego `~/.agents/skills`, luego `/etc/codex/skills` |
 | Intérprete con `psycopg` | venv de Hermes | venv neutro `~/.harness-flow/venv` | venv neutro `~/.harness-flow/venv` |
+| Atajos del flujo | — | `/harness-flow:estado\|spec\|review\|cierre` | — |
 
 Todo lo demás (gates, worktrees, specs, hub, vault, documentacion, atlassian) es Python puro y
 se comporta idéntico en los hosts soportados. Si no puedes lanzar un subagente aislado, revisa tú mismo

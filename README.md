@@ -53,6 +53,20 @@ git clone https://github.com/calpil/harness-flow.git \
   ~/.claude/skills/harness-flow
 ```
 
+Si ya tienes el clone para Hermes, enlazalo en vez de duplicarlo — Claude Code
+lee la skill a traves del symlink:
+
+```bash
+ln -s ~/.hermes/skills/software-development/harness-flow \
+  ~/.claude/skills/harness-flow
+```
+
+Ademas de la skill, Claude Code carga la capa nativa que trae el repo
+(`.claude-plugin/plugin.json`): el subagente revisor `harness-flow:revisor` y los
+comandos `/harness-flow:estado`, `:spec`, `:review` y `:cierre`. Comprueba con
+`claude plugin list` que aparezca `harness-flow@skills-dir` como `loaded`. Los
+otros hosts ignoran esos archivos. Ver [`references/claude.md`](references/claude.md).
+
 **OpenAI GPT/Codex** (personal, disponible en todos tus proyectos; para repo usa
 `<repo>/.agents/skills/harness-flow`). ChatGPT/Codex detecta cambios de skills
 automaticamente; si no aparece, reinicia Codex/ChatGPT:
@@ -169,7 +183,10 @@ multi-repo, no por microservicio.
 
 ```
 SKILL.md                 el proceso que sigue el agente
+.claude-plugin/          manifiesto del plugin skills-dir (solo Claude Code)
 agents/openai.yaml       metadata para invocacion automatica en GPT/Codex
+agents/revisor.md        subagente revisor aislado (solo Claude Code)
+commands/                atajos /harness-flow:... (solo Claude Code)
 scripts/
   entorno.py             detecta host, H y PY por SO (Windows/Linux/macOS)
   comun.py               rutas, backlog, firmas, parsers de AC
@@ -186,7 +203,7 @@ scripts/
   estado.py              panorama al entrar al proyecto
 tests/                   regresiones del port neutro
 templates/               spec, evidencia, review
-references/              Obsidian, Atlassian
+references/              Claude Code, OpenAI, Obsidian, Atlassian, multirepo
 ```
 
 ## Licencia
