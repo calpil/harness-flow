@@ -184,7 +184,10 @@ def now_iso() -> str:
 
 # --- spec: estado y AC -----------------------------------------------------
 
-AC_RE = re.compile(r"^\s*[-*]?\s*(AC-\d+)\s*:", re.MULTILINE)
+# El id puede llevar un titulo corto entre parentesis antes de los dos puntos:
+# "- AC-1 (cola por estado): ...". El parentesis describe el AC, no lo anula.
+# [^()\n]* no cruza lineas: un parentesis sin cerrar no se come el documento.
+AC_RE = re.compile(r"^\s*[-*]?\s*(AC-\d+)\s*(?:\([^()\n]*\))?\s*:", re.MULTILINE)
 CITA_RE = re.compile(r"[\w./\\-]+\.\w+:\d+")
 
 def spec_estado(text: str) -> str:
