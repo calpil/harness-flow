@@ -128,8 +128,16 @@ def _raiz_propia() -> list[Path]:
     return []
 
 
-def skills_roots() -> list[Path]:
-    """Raices de skills en orden de precedencia, ya filtradas a las existentes."""
+def skills_roots(todos_los_hosts: bool = False) -> list[Path]:
+    """Raices de skills en orden de precedencia, ya filtradas a las existentes.
+
+    todos_los_hosts=True agrega las raices de los demas hosts al final, para
+    BUSCAR. Una leccion es memoria procedural del usuario, no del host: si la
+    escribiste desde Claude Code y cerras desde Hermes, el gate debe encontrarla
+    igual, o bloquea un cierre legitimo por donde la tipeaste. Para CREAR se usa
+    la precedencia del host (skills_roots() a secas), asi que una skill nueva
+    sigue naciendo donde corresponde y no se cuela en un host ajeno.
+    """
     override = os.environ.get("HARNESS_SKILLS_DIR")
     if override:
         raiz = Path(override)
@@ -154,6 +162,11 @@ def skills_roots() -> list[Path]:
         candidatas = _raiz_propia() + _raices_hermes()
     else:
         candidatas = _raiz_propia() + _raices_hermes() + _raices_claude() + _raices_gpt()
+
+    if todos_los_hosts:
+        # Al final: la precedencia del host propio se respeta, los demas son fallback.
+        for extra in (_raiz_propia(), _raices_hermes(), _raices_claude(), _raices_gpt()):
+            candidatas = candidatas + extra
 
     vistas: list[Path] = []
     for c in candidatas:
@@ -195,7 +208,7 @@ def buscar(clase: str) -> Path | None:
     """
     if not nombre_valido(clase):
         return None
-    for raiz in skills_roots():
+    for raiz in skills_roots(todos_los_hosts=True):
         directo = raiz / clase / "SKILL.md"
         if directo.is_file():
             return directo
@@ -215,7 +228,7 @@ def descripcion(skill_md: Path) -> str:
 
 
 def cmd_list(args) -> None:
-    raices = skills_roots()
+    raices = skills_roots(todos_los_hosts=True)
     vistos: set[str] = set()
     filas = 0
     for raiz in raices:
@@ -248,7 +261,7 @@ def cmd_list(args) -> None:
 def cmd_ver(args) -> None:
     sm = buscar(args.clase)
     if not sm:
-        raices = "\n       ".join(str(r) for r in skills_roots())
+        raices = "\n       ".join(str(r) for r in skills_roots(todos_los_hosts=True))
         sys.exit("[!!] no existe la skill '%s'.\n     Raices consultadas:\n       %s"
                  % (args.clase, raices))
     txt = sm.read_text(encoding="utf-8")
@@ -262,7 +275,7 @@ def cmd_ver(args) -> None:
 def cmd_existe(args) -> None:
     sm = buscar(args.clase)
     if not sm:
-        raices = "\n       ".join(str(r) for r in skills_roots())
+        raices = "\n       ".join(str(r) for r in skills_roots(todos_los_hosts=True))
         sys.exit("[!!] la leccion '%s' no existe como skill.\n"
                  "     Raices consultadas:\n       %s\n"
                  "     Creala (skill_manage en Hermes; SKILL.md en Claude Code/GPT), o cierra con\n"
@@ -272,7 +285,7 @@ def cmd_existe(args) -> None:
 
 
 def cmd_donde(args) -> None:
-    for raiz in skills_roots():
+    for raiz in skills_roots(todos_los_hosts=True):
         print(raiz)
 
 
