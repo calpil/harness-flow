@@ -349,10 +349,13 @@ El script solo mantiene el bloque entre `<!-- harness-flow:features:start -->` y
 
 ## Obsidian
 
-`docs/vault/` dentro del repo, versionado. Se regenera desde el grafo y los docs del proceso:
+`docs/vault/` dentro del repo, versionado. Se regenera desde los documentos del
+proceso (features, specs, AC, evidencia, reviews, lecciones, servicios). Los
+nodos del grafo NO entran por defecto: son opt-in con `--con-grafo`.
 
 ```bash
 $PY "$H/vault.py" build                # regenera docs/vault/ + siembra .obsidian/
+$PY "$H/vault.py" build --con-grafo    # ademas, una nota por nodo del grafo
 $PY "$H/vault.py" build --sin-config   # sin tocar la config de Obsidian
 ```
 
@@ -366,7 +369,15 @@ start` y `gate.py close --status done`), asi que en el flujo normal no hace
 falta invocarlo a mano. Un `vault: ok` de `estado.py` solo dice que la carpeta
 existe: la frescura la reporta `contexto.py estado`.
 
-Enlaza specs ↔ AC ↔ evidencia ↔ lecciones ↔ nodos de graphify con wikilinks. Ver `references/obsidian.md`.
+Enlaza specs ↔ AC ↔ evidencia ↔ lecciones ↔ servicios con wikilinks.
+
+**Los nodos de graphify solo aparecen con `--con-grafo`**, que ni el comando de
+arriba ni el refresco automatico pasan: `contexto.py refrescar` corre `vault.py
+build` pelado. Es deliberado, porque `--con-grafo` escribe una nota por nodo
+(tope 2000) y eso en cada refresco ahoga el vault. Si esperas navegar del spec
+al nodo de codigo y `docs/vault/grafo/` no existe, no es un fallo: es que nadie
+paso la bandera. Corre `vault.py build --con-grafo` a mano cuando quieras ese
+mapa. Ver `references/obsidian.md`.
 
 ## Claude Code
 

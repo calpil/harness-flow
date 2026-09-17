@@ -263,6 +263,56 @@ class ContextoTests(unittest.TestCase):
 
     # --- escape para CI y para los tests del propio arnes -------------------
 
+    # --- vault: contrato de los nodos del grafo ----------------------------
+
+    def _vault_build(self, *flags):
+        """Corre vault.py como lo corre el flujo, sobre este proyecto."""
+        import subprocess
+        (self.root / "graphify-out").mkdir(exist_ok=True)
+        (self.root / "graphify-out" / "graph.json").write_text(json.dumps(_grafo(
+            [{"id": "a", "label": "cobrar", "type": "function", "source_file": "app.py"},
+             {"id": "b", "label": "validar", "type": "function", "source_file": "app.py"}],
+            [{"source": "a", "target": "b", "relation": "calls"}])), encoding="utf-8")
+        r = subprocess.run([sys.executable, str(SCRIPTS / "vault.py"), "build", *flags],
+                           cwd=str(self.root), capture_output=True, text=True)
+        self.assertEqual(0, r.returncode, r.stderr[-400:])
+        return self.root / "docs" / "vault" / "grafo"
+
+    def test_el_vault_por_defecto_no_trae_nodos_del_grafo(self):
+        """SKILL.md prometia 'wikilinks a nodos de graphify' sobre `vault.py build`.
+
+        Nunca los trajo: son opt-in con --con-grafo, y ni el comando documentado
+        ni contexto.py refrescar la pasan. Quien abria el vault buscando navegar
+        del spec al nodo de codigo no encontraba la carpeta.
+        """
+        self.assertFalse(self._vault_build().exists())
+
+    def test_con_grafo_si_escribe_una_nota_por_nodo(self):
+        gd = self._vault_build("--con-grafo")
+        self.assertTrue(gd.is_dir())
+        self.assertEqual(2, len(list(gd.glob("*.md"))))
+        self.assertIn("[[validar]]", (gd / "cobrar.md").read_text(encoding="utf-8"))
+
+    def test_el_refresco_automatico_no_pasa_con_grafo(self):
+        """Deliberado: una nota por nodo (tope 2000) en cada refresco ahoga el vault.
+
+        Si alguien lo cambia, este rojo obliga a corregir SKILL.md en el mismo
+        commit, en vez de dejar la doc contando otra cosa.
+        """
+        vistos = []
+
+        def fake_run(cmd, cwd):
+            vistos.append(cmd)
+            return 0, ""
+
+        with mock.patch.object(contexto, "_run", fake_run), \
+             mock.patch.object(contexto.shutil, "which", lambda _: "/usr/bin/graphify"):
+            contexto.refrescar(comun.paths(), con_vault=True, con_hub=False, verboso=False)
+
+        vault = [c for c in vistos if any("vault.py" in str(x) for x in c)]
+        self.assertEqual(1, len(vault), f"vault.py no se invoco: {vistos}")
+        self.assertNotIn("--con-grafo", vault[0])
+
     def test_variable_de_entorno_apaga_el_refresco(self):
         with mock.patch.dict(os.environ, {"HARNESS_SIN_CONTEXTO": "1"}):
             self.assertTrue(contexto._desactivado())
