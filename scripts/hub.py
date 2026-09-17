@@ -41,10 +41,14 @@ def conectar():
     if faltan:
         sys.exit(f"[!!] el Memory Hub requiere: {', '.join(faltan)}\n"
                  "     Ponlos en ~/.harness-hub/.env o en el entorno.")
-    dsn = (f"host={e['DB_HOST']} port={e['DB_PORT']} dbname={e['DB_NAME']} "
-           f"user={e['DB_USER']} password={e['DB_PASSWORD']} "
-           f"sslmode={e['DB_SSL_MODE']}")
-    conn = psycopg.connect(dsn, connect_timeout=20)
+    # Parametros sueltos, NO un DSN concatenado: en el formato keyword/value
+    # un espacio, una comilla simple o una barra invertida en la password
+    # parte la cadena y psycopg termina leyendo basura (o conectando a otro
+    # host). psycopg escapa cada valor por su cuenta.
+    conn = psycopg.connect(
+        host=e["DB_HOST"], port=e["DB_PORT"], dbname=e["DB_NAME"],
+        user=e["DB_USER"], password=e["DB_PASSWORD"],
+        sslmode=e["DB_SSL_MODE"], connect_timeout=20)
     with conn.cursor() as cur:   # mismo DDL que el arnes Rust: IF NOT EXISTS
         cur.execute("""
             CREATE TABLE IF NOT EXISTS graph_nodes (

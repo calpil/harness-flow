@@ -127,6 +127,29 @@ def _desactivado() -> bool:
     return os.environ.get("HARNESS_SIN_CONTEXTO", "").strip() not in ("", "0", "false")
 
 
+def _grafo_utilizable(g: Path) -> tuple[bool, str]:
+    """Decide si un grafo recien generado sirve, sin confiar en el exit code.
+
+    graphify puede salir 0 y no dejar nada util: raiz sin codigo que reconozca,
+    escritura interrumpida, JSON truncado. Contar esos casos como exito es el
+    falso verde: el parte dice "actualizada" y el merge posterior corre sobre
+    datos viejos sin que nadie se entere.
+    """
+    if not g.exists():
+        return False, f"no dejo el grafo en {g}"
+    try:
+        datos = json.loads(g.read_text(encoding="utf-8"))
+    except OSError as exc:
+        return False, f"el grafo no se puede leer: {exc}"
+    except ValueError as exc:
+        return False, f"el grafo no es JSON valido: {exc}"
+    if not isinstance(datos, dict):
+        return False, "el grafo no es un objeto JSON"
+    if not datos.get("nodes"):
+        return False, "el grafo quedo sin nodos"
+    return True, ""
+
+
 def refrescar(p: dict, *, forzar=False, max_horas=None, con_vault=True,
               con_hub=True, verboso=True) -> dict:
     """Actualiza grafos vencidos, combina, deriva al hub y regenera el vault.
@@ -157,16 +180,35 @@ def refrescar(p: dict, *, forzar=False, max_horas=None, con_vault=True,
         sub = "update" if r["existe"] else "extract"
         cmd = ["graphify", sub, str(raiz)] + (["--code-only"] if sub == "extract" else [])
         code, out = _run(cmd, raiz)
+        # exit 0 no alcanza: graphify puede salir limpio sin dejar el grafo
+        # (raiz sin codigo reconocible, permisos, escritura a medias). Si lo
+        # contaramos por el codigo de salida, el parte diria "actualizadas" y
+        # el merge de mas abajo se saltearia en silencio sobre datos viejos.
+        ok, motivo = (False, "") if code != 0 else _grafo_utilizable(Path(r["graph"]))
         if code != 0:
             parte["fallos"].append(f"graphify {sub} {r['nombre']}: {out[-400:]}")
+        elif not ok:
+            parte["fallos"].append(
+                f"graphify {sub} {r['nombre']}: salio 0 pero {motivo}")
         else:
             parte["actualizadas"].append(r["nombre"])
         if verboso:
-            print(f"   graphify {sub} {r['nombre']}: {'ok' if code == 0 else 'FALLO'}")
+            print(f"   graphify {sub} {r['nombre']}: {'ok' if ok else 'FALLO'}")
 
-    # combinar solo si hay mas de una raiz declarada
-    grafos = [Path(r["graph"]) for r in e["raices"] if Path(r["graph"]).exists()]
-    if len(grafos) > 1:
+    # Combinar solo si hay mas de una raiz declarada. Ojo: se comparan los
+    # grafos PRESENTES contra los DECLARADOS. Si una raiz no dejo el suyo,
+    # 'len(grafos) > 1' podia ser falso y el merge se salteaba sin dejar
+    # rastro: el parte quedaba con combinado=None y sin un solo fallo, o
+    # peor, combinaba un subconjunto silencioso y el briefing salia mocho.
+    declaradas = [Path(r["graph"]) for r in e["raices"]]
+    grafos = [g for g in declaradas if g.exists()]
+    faltantes = [str(g) for g in declaradas if not g.exists()]
+    if len(declaradas) > 1 and faltantes:
+        parte["fallos"].append(
+            "no se combina el grafo: faltan " + ", ".join(faltantes))
+        if verboso:
+            print(f"   merge-graphs: OMITIDO, faltan {len(faltantes)} grafo(s)")
+    elif len(grafos) > 1:
         destino = graph_path(p)
         destino.parent.mkdir(parents=True, exist_ok=True)
         # cwd neutro y rutas ABSOLUTAS: graphify etiqueta los repos por el

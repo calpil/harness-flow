@@ -124,9 +124,13 @@ class ContextoTests(unittest.TestCase):
 
     def test_refrescar_combina_las_raices_con_rutas_absolutas(self):
         self._declarar()
+        # grafo con nodos: '{}' lo rechaza _grafo_utilizable, y con razon.
+        # Aca lo que se prueba son las rutas absolutas del merge, no el
+        # contenido, pero el stub igual debe parecerse a un grafo real.
+        grafo = json.dumps({"nodes": [{"id": "a"}], "edges": []})
         (self.root / "graphify-out").mkdir(parents=True, exist_ok=True)
-        (self.root / "graphify-out" / "graph.json").write_text("{}", encoding="utf-8")
-        (self.otra / "graphify-out" / "graph.json").write_text("{}", encoding="utf-8")
+        (self.root / "graphify-out" / "graph.json").write_text(grafo, encoding="utf-8")
+        (self.otra / "graphify-out" / "graph.json").write_text(grafo, encoding="utf-8")
         llamadas = []
 
         def fake_run(cmd, cwd):
