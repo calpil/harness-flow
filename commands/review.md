@@ -8,6 +8,14 @@ argument-hint: <id-feature>
 Review de la feature `$1`. **El review no lo haces tu.** Un revisor que recuerda
 haber escrito el codigo se aprueba solo; uno que solo ve spec + diff, no.
 
+> **Shell.** Cada llamada Bash abre un shell nuevo: `$PY` y `$H` no sobreviven,
+> asi que el bootstrap va pegado a cada comando, siempre. Los bloques de abajo
+> usan bash (macOS, Linux, WSL, y Windows con Git for Windows). En **Windows sin
+> Git for Windows la tool Bash es PowerShell**: ahi el interprete se llama
+> `python` y el prefijo equivalente es
+> `python "${CLAUDE_PLUGIN_ROOT}/scripts/entorno.py" --powershell | Invoke-Expression`,
+> invocando despues con `& $PY ...`. Detalle en `references/claude.md`.
+
 ## 1. Arma el briefing
 
 ```bash

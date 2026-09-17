@@ -8,8 +8,13 @@ argument-hint: <id-feature>
 Escribe el spec de la feature `$1` ANTES de tocar codigo. Si no te dieron id,
 pregunta cual, o corre `/harness-flow:estado` para listarlas.
 
-Recordatorio de shell: en Claude Code cada llamada Bash abre un shell nuevo, asi
-que el `eval` de entorno va en la misma llamada que el script, siempre.
+> **Shell.** Cada llamada Bash abre un shell nuevo: `$PY` y `$H` no sobreviven,
+> asi que el bootstrap va pegado a cada comando, siempre. Los bloques de abajo
+> usan bash (macOS, Linux, WSL, y Windows con Git for Windows). En **Windows sin
+> Git for Windows la tool Bash es PowerShell**: ahi el interprete se llama
+> `python` y el prefijo equivalente es
+> `python "${CLAUDE_PLUGIN_ROOT}/scripts/entorno.py" --powershell | Invoke-Expression`,
+> invocando despues con `& $PY ...`. Detalle en `references/claude.md`.
 
 ## 1. Contexto antes de leer archivos a ciegas
 

@@ -77,7 +77,54 @@ git clone https://github.com/calpil/harness-flow.git \
   ~/.agents/skills/harness-flow
 ```
 
-En Windows son las mismas rutas bajo `%USERPROFILE%`.
+### Windows
+
+No son "las mismas rutas bajo `%USERPROFILE%`": Hermes busca primero en
+`%LOCALAPPDATA%`, y el enlace entre hosts no se hace con `ln -s`.
+
+**Claude Code** (PowerShell):
+
+```powershell
+git clone https://github.com/calpil/harness-flow.git `
+  $env:USERPROFILE\.claude\skills\harness-flow
+```
+
+**Hermes**. La raiz que mira primero es `%LOCALAPPDATA%\hermes\skills`; tambien
+acepta `%USERPROFILE%\.hermes\skills`, y `HERMES_SKILLS_DIR` gana sobre ambas:
+
+```powershell
+git clone https://github.com/calpil/harness-flow.git `
+  $env:LOCALAPPDATA\hermes\skills\software-development\harness-flow
+```
+
+**GPT/Codex**: `$env:USERPROFILE\.agents\skills\harness-flow`.
+
+**Compartir un solo clone entre hosts.** `ln -s` no existe en Windows. Un
+*junction* es la opcion practica porque no pide permisos de administrador ni
+Modo Desarrollador (solo sirve para directorios en el mismo volumen):
+
+```cmd
+mklink /J "%USERPROFILE%\.claude\skills\harness-flow" ^
+  "%LOCALAPPDATA%\hermes\skills\software-development\harness-flow"
+```
+
+Con Modo Desarrollador activo tambien sirve un symlink real, que si cruza
+volumenes:
+
+```powershell
+New-Item -ItemType SymbolicLink -Force `
+  -Path  "$env:USERPROFILE\.claude\skills\harness-flow" `
+  -Target "$env:LOCALAPPDATA\hermes\skills\software-development\harness-flow"
+```
+
+**Instala Git for Windows.** Sin el, Claude Code no usa Bash y cae a PowerShell
+como shell, donde `eval "$(...)"` no existe y el interprete se llama `python`,
+no `python3`. Los comandos `/harness-flow:*` traen las dos formas; cual usar lo
+explica [`references/claude.md`](references/claude.md).
+
+El venv neutro queda en `%USERPROFILE%\.harness-flow\venv`, con el interprete
+en `Scripts\python.exe` (no `bin/python`). `entorno.py` lo resuelve solo.
+
 
 Luego instala la dependencia del hub Postgres en el intérprete correcto. El
 script lo detecta solo en Windows, Linux y macOS (en Claude Code crea un venv
@@ -90,6 +137,12 @@ python3 ~/.hermes/skills/software-development/harness-flow/scripts/entorno.py --
 python3 ~/.claude/skills/harness-flow/scripts/entorno.py --instalar-deps
 # GPT/Codex
 python3 ~/.agents/skills/harness-flow/scripts/entorno.py --instalar-deps
+```
+
+En Windows el interprete se llama `python` (o `py -3`), no `python3`:
+
+```powershell
+python $env:USERPROFILE\.claude\skills\harness-flow\scripts\entorno.py --instalar-deps
 ```
 
 Sin flags, `entorno.py` imprime un diagnóstico (SO, host detectado, rutas, si

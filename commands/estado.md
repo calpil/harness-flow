@@ -7,22 +7,29 @@ description: Arranque de sesion de harness-flow — features abiertas, gates pen
 Arranque de sesion en un proyecto con `harness/feature_list.json`. Corre esto
 ANTES de responder nada sustantivo sobre el proyecto.
 
+> **Shell.** Cada llamada Bash abre un shell nuevo: `$PY` y `$H` no sobreviven,
+> asi que el bootstrap va pegado a cada comando, siempre. Los bloques de abajo
+> usan bash (macOS, Linux, WSL, y Windows con Git for Windows). En **Windows sin
+> Git for Windows la tool Bash es PowerShell**: ahi el interprete se llama
+> `python` y el prefijo equivalente es
+> `python "${CLAUDE_PLUGIN_ROOT}/scripts/entorno.py" --powershell | Invoke-Expression`,
+> invocando despues con `& $PY ...`. Detalle en `references/claude.md`.
+
 ## Preflight
 
 1. Comprueba que existe `harness/feature_list.json` desde el directorio actual
    hacia arriba. Si no existe, este proyecto no tiene arnes instalado: dilo y
    detente — no lo inicialices sin que el usuario lo pida.
-2. Resuelve el entorno. **En Claude Code cada llamada Bash abre un shell nuevo:
-   `$PY` y `$H` no sobreviven entre llamadas**, asi que el `eval` va pegado al
-   comando en la MISMA llamada, siempre:
+2. Resuelve el entorno y mira el panorama:
 
    ```bash
    eval "$(python3 "${CLAUDE_PLUGIN_ROOT}/scripts/entorno.py" --shell)" && "$PY" "$H/estado.py"
    ```
 
-   Si `entorno.py` sale con exit≠0, corre `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/entorno.py"`
-   a secas para ver el diagnostico y arregla con `--instalar-deps`. No hardcodees
-   rutas de interprete.
+   Si `entorno.py` sale con exit distinto de 0, correlo a secas
+   (`python3 "${CLAUDE_PLUGIN_ROOT}/scripts/entorno.py"`) para ver el diagnostico
+   y arregla con `--instalar-deps`. No hardcodees rutas de interprete: cambian
+   por host, SO y perfil.
 
 ## Que reportar
 

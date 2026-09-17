@@ -9,6 +9,14 @@ Cierra la feature `$1` hacia `$2`. Si no te dieron rama destino, **preguntale al
 usuario a que rama integra**: el gate se niega sin `--to` y adivinarla es
 exactamente lo que no debe pasar.
 
+> **Shell.** Cada llamada Bash abre un shell nuevo: `$PY` y `$H` no sobreviven,
+> asi que el bootstrap va pegado a cada comando, siempre. Los bloques de abajo
+> usan bash (macOS, Linux, WSL, y Windows con Git for Windows). En **Windows sin
+> Git for Windows la tool Bash es PowerShell**: ahi el interprete se llama
+> `python` y el prefijo equivalente es
+> `python "${CLAUDE_PLUGIN_ROOT}/scripts/entorno.py" --powershell | Invoke-Expression`,
+> invocando despues con `& $PY ...`. Detalle en `references/claude.md`.
+
 ## 1. Verify en el arbol correcto
 
 ```bash

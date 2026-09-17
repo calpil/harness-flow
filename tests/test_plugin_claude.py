@@ -90,6 +90,19 @@ class ComponentesTests(unittest.TestCase):
                 self.assertNotIn("/.claude/skills/harness-flow", texto)
                 self.assertNotIn("/.hermes/skills/", texto)
 
+    def test_cada_comando_documenta_el_fallback_de_powershell(self):
+        """En Windows sin Git for Windows, la tool Bash de Claude Code ES PowerShell.
+
+        Ahi `eval "$(...)"` no existe y el interprete se llama `python`, no
+        `python3`: un comando que solo trae la forma bash no corre. La primera
+        version de estos comandos solo traia esa forma.
+        """
+        for md in sorted((RAIZ / "commands").glob("*.md")):
+            texto = md.read_text(encoding="utf-8")
+            with self.subTest(comando=md.name):
+                self.assertIn("--powershell", texto)
+                self.assertIn("Invoke-Expression", texto)
+
     def test_cada_llamada_a_un_script_trae_su_eval(self):
         """En Claude Code $PY y $H no sobreviven entre llamadas Bash."""
         for md in sorted((RAIZ / "commands").glob("*.md")):

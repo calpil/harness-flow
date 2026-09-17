@@ -393,9 +393,16 @@ skills-dir y aporta piezas nativas que los otros hosts ignoran:
 - comandos `/harness-flow:estado`, `:spec`, `:review`, `:cierre`.
 
 **`$PY` y `$H` no sobreviven entre llamadas Bash**: cada llamada abre un shell
-nuevo. Pega el `eval` al comando en la misma llamada, siempre. Detalles,
-verificacion de la instalacion y raices de lecciones en
-[`references/claude.md`](references/claude.md).
+nuevo. Pega el `eval` al comando en la misma llamada, siempre.
+
+**En Windows, instala Git for Windows.** Sin el, Claude Code no usa Bash y cae a
+PowerShell: `eval "$(...)"` no existe ahi y el interprete se llama `python`, no
+`python3`. Usa entonces `entorno.py --powershell | Invoke-Expression` y `& $PY`.
+Para compartir un solo clone con Hermes no sirve `ln -s`: es `mklink /J`
+(junction, sin permisos de administrador).
+
+Detalles, rutas de Windows, verificacion de la instalacion y raices de lecciones
+en [`references/claude.md`](references/claude.md).
 
 ## GPT/Codex
 
