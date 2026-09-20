@@ -13,7 +13,7 @@ harness-flow/
   SKILL.md                  <- la skill (host-neutral, igual en los tres hosts)
   .claude-plugin/plugin.json <- solo lo lee Claude Code; Hermes y Codex lo ignoran
   agents/revisor.md         <- subagente revisor aislado
-  commands/*.md             <- estado, spec, review, cierre
+  commands/*.md             <- estado, producto, spec, review, cierre
 ```
 
 Hermes y GPT/Codex no miran `.claude-plugin/` ni `commands/`, asi que la capa
@@ -57,6 +57,7 @@ abre una sesion nueva y mira `/agents` y la lista de skills.
 | --- | --- | --- |
 | Subagente revisor | `harness-flow:revisor` | pegar el briefing en un `general-purpose` a mano |
 | `/harness-flow:estado` | arranque de sesion | recordar correr `estado.py` |
+| `/harness-flow:producto` | rol producto: PRD inicial / SDD de arquitectura | leer el flujo entero del SKILL.md |
 | `/harness-flow:spec` | rol leader | leer el flujo entero del SKILL.md |
 | `/harness-flow:review` | rol reviewer | idem |
 | `/harness-flow:cierre` | verify + base + close + postmerge | idem |

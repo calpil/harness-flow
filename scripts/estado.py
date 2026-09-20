@@ -44,6 +44,12 @@ def main() -> None:
         print(f"   [!] no se pudo evaluar el contexto: {exc}")
     print(f"   vault: {'ok' if p['vault'].exists() else 'ausente (vault.py build)'}")
     print(f"   jira:  {'configurado' if p['atlassian'].exists() else 'sin binding'}")
+    try:
+        import producto
+        for doc, texto in producto.estado_documentos(p, data).items():
+            print(f"   {doc}:   {texto}")
+    except Exception as exc:
+        print(f"   [!] no se pudo evaluar PRD/SDD: {exc}")
 
     abiertas = [f for f in data["features"] if f.get("status") in ABIERTOS]
     # Un estado nuevo o ausente no prueba un cierre; nunca contar por descarte.

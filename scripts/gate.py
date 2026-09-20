@@ -47,7 +47,7 @@ def cmd_check(args) -> None:
     for f in abiertas:
         _check_feature(p, f, rules, r)
 
-    _check_rutas_protegidas(p, rules, r)
+    _check_rutas_protegidas(p, rules, r, data)
     _check_aislamiento(abiertas, r, p, rules)
     r.salir()
 
@@ -128,16 +128,32 @@ def _porcelain_path(line: str) -> str:
     return ""
 
 
-def _prd_master_seguro(p: dict, rel: str) -> bool:
-    """Misma excepcion en snapshot y Git: solo bloque, bytes manuales exactos."""
-    from bloques import allowed
+def _prd_master_seguro(p: dict, rel: str, data: dict | None = None) -> bool:
+    """Misma excepcion en snapshot y Git: solo bloque, bytes manuales exactos.
+
+    Segunda via, la unica en que el cuerpo manual puede diferir de HEAD: el
+    sello de `producto.py aprobar --yes` (`documentos.prd` en el backlog). El
+    usuario aprobo ESE cuerpo en el chat; vale para bytes identicos a los
+    sellados (o su primera insercion del bloque generado) y hasta que lo
+    commitea. No autoriza otros archivos bajo docs/prd/ ni ediciones posteriores.
+    """
+    from bloques import allowed, compatible, fingerprint
     if rel != "docs/prd/PRD-master.md":
         return False
     actual = p["root"] / rel
     if not actual.is_file() or actual.is_symlink():
         return False
+    contenido = actual.read_bytes()
     base = subprocess.run(["git", "show", f"HEAD:{rel}"], cwd=p["root"], capture_output=True)
-    return allowed(base.stdout if base.returncode == 0 else None, actual.read_bytes())
+    if allowed(base.stdout if base.returncode == 0 else None, contenido):
+        return True
+    sello = ((data or {}).get("documentos") or {}).get("prd") or {}
+    if not isinstance(sello.get("fingerprint"), dict):
+        return False
+    try:
+        return compatible(sello["fingerprint"], fingerprint(contenido))
+    except ValueError:
+        return False
 
 
 def _rutas_prd_tocadas(p: dict, rel: str) -> list[str]:
@@ -147,16 +163,20 @@ def _rutas_prd_tocadas(p: dict, rel: str) -> list[str]:
     return [rel]
 
 
-def _ruta_protegida_permitida(p: dict, rel: str) -> bool:
+def _ruta_protegida_permitida(p: dict, rel: str, data: dict | None = None) -> bool:
     prd_tocadas = _rutas_prd_tocadas(p, rel) if rel.startswith("docs/prd") else []
     if not prd_tocadas:
         return False
-    return all(_prd_master_seguro(p, x) for x in prd_tocadas)
+    return all(_prd_master_seguro(p, x, data) for x in prd_tocadas)
 
 
-def _check_rutas_protegidas(p, rules, r) -> None:
+def _check_rutas_protegidas(p, rules, r, data: dict | None = None) -> None:
     pats = rules.get("rutas_protegidas") or []
-    code, out = git(["status", "--porcelain"], p["root"])
+    if data is None:
+        data = load_backlog(p)
+    # -uall: sin el, un docs/ entero sin trackear sale como `?? docs/`, que no
+    # matchea docs/prd/** y escondia un PRD-master.md nuevo bajo ese directorio.
+    code, out = git(["status", "--porcelain", "-uall"], p["root"])
     if code != 0:
         r.info("sin repo git en la raiz: no se puede auditar rutas protegidas")
         return
@@ -166,7 +186,7 @@ def _check_rutas_protegidas(p, rules, r) -> None:
         for pat in pats:
             # pat[:-3] sin el separador marcaba docs/prdX/ como si fuera docs/prd/.
             if fnmatch.fnmatch(f, pat) or (pat.endswith("/**") and f.startswith(pat[:-2])):
-                if not _ruta_protegida_permitida(p, f):
+                if not _ruta_protegida_permitida(p, f, data):
                     tocadas.append(f)
     if tocadas:
         r.fallo("rutas protegidas modificadas: " + ", ".join(sorted(set(tocadas))),
@@ -594,7 +614,7 @@ def cmd_close(args) -> None:
             abiertas = [x for x in data["features"] if x.get("status") in ABIERTOS]
             for other in abiertas:
                 _check_feature(p, other, rules, check)
-            _check_rutas_protegidas(p, rules, check)
+            _check_rutas_protegidas(p, rules, check, data)
             _check_aislamiento(abiertas, check, p, data["rules"])
             fallos.extend(check.fallos)
 

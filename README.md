@@ -14,8 +14,9 @@ del agente para lanzar el subagente revisor y escribir lecciones.
 
 ## Qué hace
 
-- **Flujo en tres roles**: leader escribe el spec, implementer deja evidencia por
-  criterio de aceptación, reviewer sella un veredicto. En ese orden.
+- **Flujo en cuatro roles**: producto redacta el PRD inicial / SDD de arquitectura
+  (solo al arrancar o cuando cambian), leader escribe el spec, implementer deja
+  evidencia por criterio de aceptación, reviewer sella un veredicto. En ese orden.
 - **Gates reales**: no puedes implementar sin spec aprobado por el usuario, ni
   cerrar sin evidencia que cite `archivo:linea` por cada AC, ni sellar un review
   que no responda por todos los AC. Los scripts se niegan con exit≠0.
@@ -24,6 +25,12 @@ del agente para lanzar el subagente revisor y escribir lecciones.
 - **Vault Obsidian**: `docs/vault/` generado desde los documentos del proceso,
   versionado con el repo. Los nodos del grafo son opt-in (`vault.py build
   --con-grafo`): una nota por nodo ahoga el vault en cada refresco.
+- **PRD inicial / SDD de arquitectura**: `producto.py borrador` redacta en
+  `docs/borrador-<doc>.md` (sin proteger) y `producto.py aprobar --yes`, solo con
+  el SÍ del usuario, copia el cuerpo a su destino y lo sella; `gate.py check`
+  reconoce el sello. Ningún agente escribe `docs/prd/**` a mano. El PRD sigue
+  la anatomía historia → objetivos → flujo → datos → pseudo-código, y `aprobar`
+  se niega si trae código final.
 - **PRD / SDD generados**: `documentacion.py sync` crea o actualiza
   `docs/prd/PRD-master.md` y `docs/sdd.md` desde las features cerradas,
   preservando el contenido manual fuera del bloque generado.
@@ -261,6 +268,7 @@ scripts/
   comun.py               rutas, backlog, firmas, parsers de AC
   init.py add.py         alta de proyecto y de features
   gate.py                TODOS los gates (exit≠0)
+  producto.py            rol producto: borrador y aprobacion del PRD inicial / SDD
   documentacion.py       PRD/SDD generados desde features cerradas
   worktree.py            aislamiento por feature
   multirepo.py           validacion estricta de repos/fuentes/destinos existentes
@@ -271,7 +279,7 @@ scripts/
   atlassian.py           Jira / Confluence
   estado.py              panorama al entrar al proyecto
 tests/                   regresiones del port neutro
-templates/               spec, evidencia, review
+templates/               spec, evidencia, review, prd, sdd
 references/              Claude Code, OpenAI, Obsidian, Atlassian, multirepo
 ```
 

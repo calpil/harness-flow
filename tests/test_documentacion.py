@@ -206,6 +206,32 @@ class DocumentacionTests(unittest.TestCase):
         self.assertIn("rutas protegidas modificadas", out)
         self.assertIn("docs/prd/otro.md", out)
 
+    def test_gate_check_no_pierde_el_prd_bajo_un_directorio_sin_trackear(self):
+        """`git status --porcelain` colapsa un docs/ entero sin trackear en `?? docs/`.
+
+        Ese path no matchea `docs/prd/**`, asi que un PRD-master.md escrito a
+        mano debajo pasaba el gate en verde. Salio al probar el rol producto en
+        una raiz recien versionada, donde docs/ todavia no estaba commiteado.
+        """
+        import subprocess
+        subprocess.run(["git", "init"], cwd=self.root, check=True, capture_output=True)
+        subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=self.root, check=True)
+        subprocess.run(["git", "config", "user.name", "Test"], cwd=self.root, check=True)
+        subprocess.run(["git", "add", "harness/feature_list.json"], cwd=self.root, check=True)
+        subprocess.run(["git", "commit", "-m", "base sin docs"], cwd=self.root, check=True, capture_output=True)
+        prd_path = self.root / "docs" / "prd" / "PRD-master.md"
+        prd_path.parent.mkdir(parents=True)
+        prd_path.write_text("# PRD escrito por un agente\n", encoding="utf-8")
+        porcelain = subprocess.run(["git", "status", "--porcelain"], cwd=self.root,
+                                   capture_output=True, text=True, check=True).stdout
+        self.assertIn("?? docs/\n", porcelain, "la fixture ya no reproduce el directorio colapsado")
+
+        rc, out, err = self.cli_gate("check")
+
+        self.assertNotEqual(rc, 0, out + err)
+        self.assertIn("rutas protegidas modificadas", out)
+        self.assertIn("docs/prd/PRD-master.md", out)
+
     def test_fallo_publicando_atlassian_no_deja_historia_falsa_de_archivo(self):
         (self.root / "harness" / "atlassian.json").write_text(json.dumps({
             "site": "example.atlassian.net",

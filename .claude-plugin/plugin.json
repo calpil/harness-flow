@@ -21,6 +21,7 @@
   ],
   "commands": [
     "./commands/estado.md",
+    "./commands/producto.md",
     "./commands/spec.md",
     "./commands/review.md",
     "./commands/cierre.md"

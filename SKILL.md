@@ -5,7 +5,8 @@ description: >-
   Usar cuando el usuario pida gestionar features del backlog, arrancar sesion, redactar o aprobar
   specs con criterios de aceptacion (AC), registrar evidencia citando archivo:linea, lanzar subagente
   revisor aislado y sellar su veredicto, correr verify, cerrar features hacia su rama con lecciones y
-  postmerge medido, sincronizar PRD/SDD, o consultar impacto cross-repo con Memory Hub y Obsidian.
+  postmerge medido, redactar y aprobar el PRD inicial o el SDD de arquitectura (rol producto),
+  sincronizar PRD/SDD, o consultar impacto cross-repo con Memory Hub y Obsidian.
 ---
 
 # Harness Flow
@@ -29,7 +30,7 @@ El arnés NO se copia a cada repo. Una instalación por PROYECTO (raíz multi-re
     progress/archive/current-<id>.md <- progreso archivado al cerrar done
     progress/history.md          <- bitácora append-only
     atlassian.json               <- sitio/proyecto/space (NUNCA credenciales)
-  docs/                          <- specs, planes, evidencia, PRDs
+  docs/                          <- specs, borradores PRD/SDD, evidencia; prd/ es del usuario
   .agents/skills/                <- skills de GPT/Codex si se instala por repo
   docs/vault/                    <- vault Obsidian (versionado)
   graphify-out/                  <- grafo local (gitignored)
@@ -92,7 +93,15 @@ worktrees comprueban trabajo iniciado, no toda la cola pendiente.
 
 ## El flujo
 
-Tres roles, en orden. No los saltes.
+Cuatro roles, en orden. No los saltes. El 0 solo corre cuando el proyecto no tiene PRD/SDD aprobados o el usuario pide cambiarlos.
+
+### 0. Producto — PRD inicial y SDD de arquitectura, antes del backlog
+
+El agente NUNCA escribe `docs/prd/**`: redacta en `docs/borrador-prd.md` / `docs/borrador-sdd.md` (rutas sin proteger) y el usuario es quien aprueba. `estado.py` muestra en que paso esta cada documento.
+
+1. `$PY "$H/producto.py" borrador --doc prd|sdd` crea el borrador desde `templates/prd.md` / `templates/sdd.md`, o desde el cuerpo manual que ya exista. El PRD cuenta una historia (antes/despues, con nombre y momento), el flujo hoy/despues, los datos y el pseudo-codigo del acuerdo; NUNCA codigo final (un bloque ```go lo rechaza). Rellena cada seccion con lo que cuente el usuario; para el SDD cruza `contexto.py estado`, `hub.py impacto` y `leccion.py list`. Las guias `<!-- -->` se reemplazan: una seccion que solo tiene guia cuenta como vacia y la aprobacion se niega.
+2. **Ritual de aprobacion**, el mismo del spec: MUESTRA el borrador, PREGUNTA, y solo con el SI explicito corre `$PY "$H/producto.py" aprobar --doc prd|sdd --yes`. Copia el cuerpo a `docs/prd/PRD-master.md` / `docs/sdd.md` conservando el bloque generado, y sella `documentos.<doc>` en el backlog; `gate.py check` acepta ese cuerpo por el sello hasta que el usuario lo commitea. Sin `--yes` se niega, y tambien con features multi-repo registradas abiertas (su registro fijo los bytes del PRD).
+3. Cada `- F-n: nombre: resultado` de "Features candidatas" entra al backlog con `add.py --name "<nombre>" --prd docs/prd/PRD-master.md`; su spec se escribe en el rol 1.
 
 ### 1. Leader — spec antes que código
 
@@ -196,6 +205,7 @@ Verifica el resultado (`git log --oneline -1` en la rama destino) antes de dar p
 | `gate.py check` | Todo el proceso; es el gate maestro |
 | `gate.py check-spec --feature <id>` | Spec existe, `Estado: approved`, firma fresca |
 | `gate.py approve-spec --feature <id> --yes` | Solo con SÍ del usuario; sella quién/cuándo |
+| `producto.py aprobar --doc prd\|sdd --yes` | Solo con SÍ del usuario; borrador completo y sin bloque generado; copia al destino y sella |
 | `gate.py revision --feature <id> --veredicto <v>` | Review responde por CADA AC-n con `archivo:linea` |
 | `gate.py close --feature <id> --status done --to <rama>` | Todas las reglas activas |
 | `postmerge_medido.py base --repo <r> --guardar <j>` | Foto medida de los rojos ANTES del merge |
@@ -225,7 +235,7 @@ del tail, no el del gate.
 
 Reglas en `harness/feature_list.json` → `rules`: `require_spec_approved`, `require_review`, `require_leccion`, `require_verify_green`, `require_docs_al_dia`.
 
-**Rutas protegidas**: `docs/prd/**`, `docs/constitution.md`, `.env`. Son del USUARIO. Ningún agente las reescribe a mano — `documentacion.py sync` solo actualiza el bloque generado `harness-flow:features`, y `gate.py check` reporta violaciones fuera de ese contrato.
+**Rutas protegidas**: `docs/prd/**`, `docs/constitution.md`, `.env`. Son del USUARIO. Ningún agente las reescribe a mano — `documentacion.py sync` solo actualiza el bloque generado `harness-flow:features`, y `gate.py check` reporta violaciones fuera de ese contrato. La otra via, la unica que cambia el cuerpo manual del PRD, es el sello de `producto.py aprobar --yes` (`documentos.prd`): el usuario aprobo ESE cuerpo en el chat y vale hasta que lo commitea.
 
 ## Contexto: grafo, hub y vault (contexto.py)
 
@@ -285,16 +295,16 @@ NO captures: fallas de entorno, negativas sobre herramientas, errores transitori
 
 ## Documentacion PRD/SDD
 
-`documentacion.py sync` crea o actualiza dos archivos versionados dentro de `docs/`:
+Dos capas en los mismos archivos: el **cuerpo manual** (rol producto, aprobado por el usuario) y el **bloque generado** entre `<!-- harness-flow:features:start -->` y `<!-- harness-flow:features:end -->`, que `documentacion.py sync` mantiene desde las features `done` (lo corre `gate.py close --status done`):
 
 ```bash
 $PY "$H/documentacion.py" sync
 ```
 
-- `docs/prd/PRD-master.md`: vista de producto de las features con `status=done`.
-- `docs/sdd.md`: vista tecnica de diseno implementado, con microservicios, merge, evidencia, review, progreso archivado y enlaces remotos si existen.
+- `docs/prd/PRD-master.md`: vista de producto; el bloque lista las features cerradas con sus AC.
+- `docs/sdd.md`: vista tecnica; microservicios, merge, evidencia, review, progreso archivado y enlaces remotos si existen.
 
-El script solo mantiene el bloque entre `<!-- harness-flow:features:start -->` y `<!-- harness-flow:features:end -->`; cualquier contenido manual fuera de ese bloque se preserva. Esto aplica igual en Hermes y Claude Code porque no usa herramientas del agente.
+El sync solo toca su bloque; nada manual se reescribe, en ningun host. Rol producto, plantillas, sello y limites: [`references/documentacion.md`](references/documentacion.md).
 
 ## Obsidian
 
@@ -430,7 +440,7 @@ de `test_postmerge.py` certificaban en verde el gate que mentía.
 | Crear/patchear una lección | `skill_manage` | escribir `<raíz>/<clase>/SKILL.md` | escribir `~/.agents/skills/<clase>/SKILL.md` o `<repo>/.agents/skills/<clase>/SKILL.md` | escribir `~/.gemini/config/skills/<clase>/SKILL.md` o `<repo>/.agents/skills/<clase>/SKILL.md` |
 | Raíz de skills | `~/.hermes/skills` (o perfil) | `~/.claude/skills`, luego `.claude/skills` del proyecto | `.agents/skills` del repo, luego `~/.agents/skills`, luego `/etc/codex/skills` | `~/.gemini/config/skills`, luego `.gemini/skills`, luego `.agents/skills` |
 | Intérprete con `psycopg` | venv de Hermes | venv neutro `~/.harness-flow/venv` | venv neutro `~/.harness-flow/venv` | venv neutro `~/.harness-flow/venv` |
-| Atajos del flujo | — | `/harness-flow:estado\|spec\|review\|cierre` | — | — |
+| Atajos del flujo | — | `/harness-flow:estado\|producto\|spec\|review\|cierre` | — | — |
 
 Todo lo demás (gates, worktrees, specs, hub, vault, documentacion, atlassian) es Python puro y
 se comporta idéntico en los hosts soportados. Si no puedes lanzar un subagente aislado, revisa tú mismo
@@ -485,5 +495,5 @@ Code: en Kimi no se registran; el flujo de este SKILL.md se sigue a mano.
 | [`references/atlassian.md`](references/atlassian.md) | mapeo a Jira/Confluence y sus comandos |
 | [`references/claude.md`](references/claude.md) | Claude Code: plugin, comandos, Windows, raices de lecciones |
 | [`references/openai.md`](references/openai.md) | GPT/Codex: instalacion, deteccion y raices |
-| [`references/documentacion.md`](references/documentacion.md) | como se generan PRD y SDD |
+| [`references/documentacion.md`](references/documentacion.md) | rol producto (PRD inicial / SDD de arquitectura), su sello y como se sincronizan |
 
