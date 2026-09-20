@@ -33,9 +33,14 @@ Qué se puede romper. Cruzalo con `hub.py impacto`.
 ## Reglas del formato
 
 - Los AC se numeran `AC-1`, `AC-2`, ... sin saltos. `gate.py` los extrae con
-  `^\s*[-*]?\s*(AC-\d+)\s*:`.
+  `^[^\S\n]*[-*]?[^\S\n]*(AC-\d+)[^\S\n]*(?:\((?:[^()\n]|\([^()\n]*\))*\))?[^\S\n]*:`:
+  el id admite un título corto entre paréntesis, con un nivel de anidamiento,
+  y todo tiene que caber en UNA línea (`- AC-1 (cola por estado): ...`). Ese mismo parser alimenta
+  el PRD, el brief y el briefing del revisor. (La evidencia y el review usan
+  además `declara_ac`, que reconoce la *sección* de un AC — `## AC-1`, una fila
+  de tabla — no su declaración en el spec.)
 - El comando de verificacion admite dos formas: dentro del backtick
   (`` `verificar: <cmd>` ``) o fuera (`Comando: `` `<cmd>` ``). Las dos se parsean.
 - Un AC sin comando es legitimo: lo verifica el reviewer a mano y queda en su acta.
-- Cambiar el spec despues de aprobarlo INVALIDA el sello (firma sha1 del cuerpo).
+- Cambiar el spec despues de aprobarlo INVALIDA el sello (firma sha256 del cuerpo).
   Hay que volver a mostrarlo y re-aprobarlo. Esto es deliberado.

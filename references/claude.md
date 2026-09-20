@@ -201,3 +201,9 @@ proyecto. Crear o parchear una leccion en este host es escribir
 Si `harness-flow` entro por symlink desde `~/.claude/skills` al clone de Hermes,
 las lecciones que escribas caen en `~/.claude/skills/<clase>/`, fuera del clone:
 no se mezclan con las skills de Hermes ni ensucian el repo.
+
+Eso es donde se **crean**. Al **buscar** (el gate de `close --leccion`),
+`leccion.py` mira ademas las raices de los otros agentes -- Hermes, GPT/Codex,
+`~/.codex/skills`, `~/.grok/skills`, `~/.kimi-code/skills` -- porque una leccion
+es memoria procedural del usuario y no del CLI donde se tipeo. `leccion.py donde`
+imprime primero la raiz de creacion y marca las demas como solo consulta.

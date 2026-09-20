@@ -17,9 +17,11 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
+
+TOPE_DIFF = 60000
 from comun import (cubre_acs, get_feature, git, impl_path, load_backlog,  # noqa: E402
-                   paths, review_path, sello_revision, sig_fresh, spec_acs,
-                   spec_estado, spec_path)
+                   paths, review_path, sello_revision, sig_fresh, spec_ac_lineas,
+                   spec_acs, spec_estado, spec_path)
 
 
 def arbol_feature(p, f) -> tuple[Path, str | None]:
@@ -41,7 +43,10 @@ def arbol_feature(p, f) -> tuple[Path, str | None]:
 def diff_feature(p, f, stat=False) -> tuple[str, str | None]:
     """Diff base..HEAD del worktree. Sin HEAD~1: una feature son N commits."""
     arbol, aviso = arbol_feature(p, f)
-    base = f.get("base_sha") or f.get("base_branch") or "develop"
+    # 'develop' hardcodeado mentia en proyectos cuya rama_base es otra: el
+    # merge-base fallaba y el revisor se quedaba sin diff sin saber por que.
+    base = (f.get("base_sha") or f.get("base_branch")
+            or load_backlog(p)["rules"].get("rama_base") or "develop")
     code, out = git(["merge-base", base, "HEAD"], arbol)
     if code == 0 and out.strip():
         code, diff = git(["diff", *(["--stat"] if stat else []), out.strip(), "HEAD"], arbol)
@@ -72,11 +77,9 @@ def cmd_resumen(a) -> None:
           f"{'' if sig_fresh(sp, f.get('last_spec_sig')) else '  <- SELLO INVALIDO'}")
     print(f"AC declarados ({len(acs)}): {', '.join(acs) or 'NINGUNO'}\n")
 
+    lineas_ac = spec_ac_lineas(stext)
     for ac in acs:
-        for ln in stext.splitlines():
-            if ac in ln and ln.strip().startswith(("- " + ac, ac, "* " + ac)):
-                print(f"   {ln.strip()[:160]}")
-                break
+        print(f"   {lineas_ac.get(ac, ac)[:160]}")
 
     ip = impl_path(p, f)
     print(f"\nEvidencia: {ip.name if ip.exists() else 'AUSENTE'}")
@@ -131,7 +134,15 @@ def cmd_briefing(a) -> None:
             sys.exit(f"[!!] multi-repo: {exc}")
     else:
         diff, aviso_diff = diff_feature(p, f)
-        diff = diff[:60000]
+        if len(diff) > TOPE_DIFF:
+            # Un diff cortado en silencio es un revisor que cree haberlo visto
+            # entero: la cola, que es donde suele estar lo ultimo escrito,
+            # desaparecia sin una sola marca.
+            omitidas = len(diff[TOPE_DIFF:].splitlines())
+            diff = (diff[:TOPE_DIFF] +
+                    f"\n\n[!!] DIFF TRUNCADO por el briefing: faltan ~{omitidas} lineas "
+                    f"({len(diff) - TOPE_DIFF} caracteres). NO concluyas sobre lo que no "
+                    "ves: lee esos archivos en el arbol antes de dictaminar.")
 
     print("=" * 72)
     print("CONTEXTO PARA EL SUBAGENTE REVISOR (delegate_task.context | prompt de Task)")
@@ -169,13 +180,9 @@ de integracion y NO contiene el trabajo de esta feature: citar `archivo:linea`
 leido ahi es citar codigo de otra rama.
 
 Criterios de aceptacion a verificar ({len(acs)}):""")
+    lineas_ac = spec_ac_lineas(stext)
     for ac in acs:
-        for ln in stext.splitlines():
-            if ac in ln and ln.strip().startswith(("- " + ac, ac, "* " + ac)):
-                print(f"  {ln.strip()}")
-                break
-        else:
-            print(f"  {ac}")
+        print(f"  {lineas_ac.get(ac, ac)}")
 
     print(f"""
 Archivos que debes leer tu mismo (no confies en este resumen):

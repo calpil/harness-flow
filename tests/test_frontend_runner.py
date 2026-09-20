@@ -16,6 +16,21 @@ SCRIPTS = Path(os.environ.get('HARNESS_TEST_SCRIPTS', Path(__file__).resolve().p
 NODE_FILES = ['scripts/verificar-dist.test.mjs', 'scripts/catalogo-snapshot.test.mjs']
 
 
+def _modulos_requeridos() -> str:
+    """El toolchain es un prerequisito declarado, no algo que se omita.
+
+    Sigue siendo rojo si falta -- este arnes no da por buena una suite que no
+    corrio -- pero un KeyError crudo no decia que faltaba ni como resolverlo.
+    """
+    valor = os.environ.get('HARNESS_TEST_FRONTEND_MODULES')
+    if not valor:
+        raise AssertionError(  # falla, no omite: el prerequisito es parte del contrato
+            "falta HARNESS_TEST_FRONTEND_MODULES: apuntala a un node_modules ya "
+            "instalado con Angular 22 + Vitest 4 (ver references/multirepo.md). "
+            "Estas pruebas NO se omiten: miden el runner real.")
+    return valor
+
+
 class FrontendFixture(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory(prefix='frontend-fixture-')
@@ -23,7 +38,7 @@ class FrontendFixture(unittest.TestCase):
         self.home = Path(self.tmp.name).resolve()
         self.repo = self.home / 'repo con espacios'
         self.repo.mkdir()
-        modules = Path(os.environ['HARNESS_TEST_FRONTEND_MODULES']).resolve()
+        modules = Path(_modulos_requeridos()).resolve()
         self.assertTrue((modules / '@angular/cli/bin/ng.js').is_file())
         (self.repo / 'node_modules').symlink_to(modules, target_is_directory=True)
         self.env = dict(PATH=os.environ['PATH'], HOME=str(self.home), USERPROFILE=str(self.home),

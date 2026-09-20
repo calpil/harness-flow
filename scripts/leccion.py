@@ -104,6 +104,45 @@ def _raices_gpt() -> list[Path]:
     return raices
 
 
+def _raices_otros_agentes() -> list[Path]:
+    """Raices de los demas CLIs que leen SKILL.md, SOLO para buscar.
+
+    Una leccion es memoria procedural del usuario, no del host. Si la escribes
+    donde tu CLI la instala -- Codex en $CODEX_HOME/skills (~/.codex/skills),
+    Grok en ~/.grok/skills, Kimi Code en $KIMI_CODE_HOME/skills
+    (~/.kimi-code/skills) -- el gate no la encontraba y bloqueaba un cierre
+    legitimo por el mero hecho de donde la tipeaste. Es el mismo bug que
+    test_leccion_multihost.py mato entre Hermes/Claude/GPT, con las raices que
+    aparecieron despues.
+
+    No se usan para CREAR: eso sigue la precedencia del host detectado.
+    """
+    casa = _casa()
+    raices = []
+    for var, defecto in (("CODEX_HOME", casa / ".codex"),
+                         ("KIMI_CODE_HOME", casa / ".kimi-code")):
+        base = os.environ.get(var)
+        raices.append((Path(base) if base else defecto) / "skills")
+    raices.append(casa / ".grok" / "skills")
+    raices.append(casa / ".cursor" / "skills")   # Grok y Cursor la comparten
+    raices.append(Path("/etc/codex/skills"))
+    # Como _raices_gpt: el recorrido se corta en la raiz del repo. Subir hasta
+    # / haria que una skill de un proyecto vecino satisfaga el gate de otro.
+    try:
+        cwd = Path.cwd()
+    except OSError:
+        return raices
+    root = _repo_root(cwd)
+    padres = [cwd]
+    if root is not None:
+        padres = [x for x in [cwd, *cwd.parents]
+                  if x.resolve() == root or root in x.resolve().parents]
+    for padre in padres:
+        for marca in (".codex", ".grok", ".kimi-code", ".cursor"):
+            raices.append(padre / marca / "skills")
+    return raices
+
+
 def _raices_hermes() -> list[Path]:
     env = os.environ.get("HERMES_SKILLS_DIR")
     if env:
@@ -165,7 +204,8 @@ def skills_roots(todos_los_hosts: bool = False) -> list[Path]:
 
     if todos_los_hosts:
         # Al final: la precedencia del host propio se respeta, los demas son fallback.
-        for extra in (_raiz_propia(), _raices_hermes(), _raices_claude(), _raices_gpt()):
+        for extra in (_raiz_propia(), _raices_hermes(), _raices_claude(), _raices_gpt(),
+                      _raices_otros_agentes()):
             candidatas = candidatas + extra
 
     vistas: list[Path] = []
@@ -285,8 +325,26 @@ def cmd_existe(args) -> None:
 
 
 def cmd_donde(args) -> None:
-    for raiz in skills_roots(todos_los_hosts=True):
-        print(raiz)
+    """La primera es donde se CREA; el resto solo se consultan al buscar.
+
+    No puede morir si la raiz del host no existe todavia en disco: 'donde' es
+    justo lo que corres para averiguar cual crear.
+    """
+    todas = skills_roots(todos_los_hosts=True)
+    try:
+        propias = skills_roots()
+    except SystemExit:
+        propias = []
+    if propias:
+        print(propias[0])
+    else:
+        print(f"[!] ninguna raiz propia del host existe todavia; creala tu.",
+              file=sys.stderr)
+    for raiz in todas:
+        if propias and raiz == propias[0]:
+            continue
+        marca = "" if raiz in propias else "   # solo consulta (otro agente)"
+        print(f"{raiz}{marca}")
 
 
 PLANTILLA = """---

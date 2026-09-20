@@ -26,7 +26,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 from comun import (ac_comandos, get_feature, grafos_config, graph_path,  # noqa: E402
                    impl_path, load_backlog, now_iso, paths, raices_grafo,
-                   spec_acs, spec_path)
+                   spec_ac_lineas, spec_acs, spec_path)
 
 SERVICE_RE = re.compile(r"(ms-[a-z0-9-]+-service|[a-z0-9-]+-ui|fn-[a-z0-9-]+)")
 # Relaciones que dicen "esto usa aquello". `contains`/`method` son estructura
@@ -453,10 +453,9 @@ def cmd_brief(args) -> None:
 
     L.append("")
     L.append(f"AC ({len(acs)}):")
+    lineas_ac = spec_ac_lineas(stext)
     for ac in acs:
-        linea = next((l.strip() for l in stext.splitlines()
-                      if re.match(rf"\s*[-*]?\s*{re.escape(ac)}\s*:", l)), ac)
-        L.append(f"  {linea[:200]}")
+        L.append(f"  {lineas_ac.get(ac, ac)[:200]}")
         if ac in cmds:
             L.append(f"      comando: {cmds[ac]}")
 

@@ -520,7 +520,7 @@ de `test_postmerge.py` certificaban en verde el gate que mentía.
 
 | Necesitas | Hermes | Claude Code | GPT/Codex |
 | --- | --- | --- | --- |
-| Subagente revisor aislado | `delegate_task` | tool `Agent`, `subagent_type: harness-flow:revisor` | `codex exec`/revisor aislado disponible |
+| Subagente revisor aislado | `delegate_task` | tool `Agent`, `subagent_type: harness-flow:revisor` | `codex exec` en sesion nueva |
 | Crear/patchear una lección | `skill_manage` | escribir `<raíz>/<clase>/SKILL.md` | escribir `~/.agents/skills/<clase>/SKILL.md` o `<repo>/.agents/skills/<clase>/SKILL.md` |
 | Raíz de skills | `~/.hermes/skills` (o perfil) | `~/.claude/skills`, luego `.claude/skills` del proyecto | `.agents/skills` del repo, luego `~/.agents/skills`, luego `/etc/codex/skills` |
 | Intérprete con `psycopg` | venv de Hermes | venv neutro `~/.harness-flow/venv` | venv neutro `~/.harness-flow/venv` |
@@ -529,3 +529,21 @@ de `test_postmerge.py` certificaban en verde el gate que mentía.
 Todo lo demás (gates, worktrees, specs, hub, vault, documentacion, atlassian) es Python puro y
 se comporta idéntico en los hosts soportados. Si no puedes lanzar un subagente aislado, revisa tú mismo
 con `revision.py --feature <id>` y **dilo explícitamente**: el rigor baja.
+
+### Otros CLIs que leen SKILL.md
+
+No tienen host propio en `entorno.py` (se reportan como `gpt` si la skill está
+bajo `.agents/skills`, o `generic`). Los gates funcionan igual; lo que cambia es
+cómo lanzas el revisor. **No uses `codex exec` fuera de Codex.**
+
+| CLI | Raíz de skills que lee | Subagente revisor |
+| --- | --- | --- |
+| Codex | `$CODEX_HOME/skills` (`~/.codex/skills`), `.agents/skills` | `codex exec` con el briefing en el prompt |
+| Gemini CLI | `~/.agents/skills` (`gemini skills list` lo confirma) | subagente propio del CLI |
+| Grok | `.grok/`, `.claude/`, `.cursor/`, `.agents/skills` | `--agent <archivo>` / `--agents <json>` |
+| Kimi Code | `$KIMI_CODE_HOME/skills` (`~/.kimi-code/skills`), `~/.agents/skills` | tool `Agent` (`subagent_type`), o `kimi -p` en sesión nueva |
+
+`~/.agents/skills` es el mínimo común múltiplo: los cuatro lo leen. Instala ahí
+si usas más de un CLI. Para las lecciones, `leccion.py` **busca** en todas esas
+raíces (incluidas `.codex`, `.grok` y `.kimi-code`) y **crea** en la del host
+detectado; `leccion.py donde` marca cuál es cuál.

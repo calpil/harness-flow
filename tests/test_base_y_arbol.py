@@ -131,6 +131,49 @@ class BaseYArbolTests(unittest.TestCase):
         self.assertIn("no tiene worktree", out)
         self.assertIn("NO selles", out)
 
+    def _spec(self, extra=""):
+        (self.repo / "docs" / "spec-feature-1-probar-base.md").write_text(
+            "# Spec 1\nEstado: approved\n\n- AC-1: x\n" + extra, encoding="utf-8")
+
+    def test_el_briefing_avisa_cuando_trunca_el_diff(self):
+        """Un diff cortado en silencio es un revisor que cree haberlo visto entero.
+
+        El briefing hacia diff[:60000] sin una marca: la cola del diff -- donde
+        suele estar lo ultimo escrito -- desaparecia y el revisor dictaminaba
+        sobre un paquete mutilado creyendolo completo.
+        """
+        wt = self.start()
+        relleno = "\n".join(f"linea {n} de relleno para pasar el tope" for n in range(8000))
+        (wt / "grande.txt").write_text(relleno, encoding="utf-8")
+        sh("git", "add", "-A", cwd=wt)
+        sh("git", "commit", "-qm", "grande", cwd=wt)
+        self._spec()
+
+        out = harness("revision.py", "--feature", "1", "--briefing", cwd=self.repo).stdout
+
+        self.assertIn("DIFF TRUNCADO", out, "el briefing corto el diff sin decirlo")
+        self.assertIn("lee esos archivos", out, "no dice que hacer con lo que falta")
+
+    def test_el_diff_usa_la_rama_base_declarada_no_develop_hardcodeado(self):
+        """revision.py caia a 'develop' literal ignorando rules.rama_base."""
+        wt = self.start()
+        (wt / "f1.txt").write_text("uno", encoding="utf-8")
+        sh("git", "add", "-A", cwd=wt)
+        sh("git", "commit", "-qm", "f1", cwd=wt)
+        self._spec()
+        # Feature sin base propia (registrada a mano): manda la regla del proyecto.
+        datos = json.loads(self.backlog.read_text(encoding="utf-8"))
+        datos["rules"] = {"rama_base": "main"}
+        for campo in ("base_sha", "base_branch"):
+            datos["features"][0].pop(campo, None)
+        self.backlog.write_text(json.dumps(datos), encoding="utf-8")
+
+        out = harness("revision.py", "--feature", "1", cwd=self.repo).stdout
+
+        # d.txt solo esta en develop: aparece si la base fue main, no si fue develop.
+        self.assertIn("d.txt", out, "diffeo contra develop ignorando rules.rama_base")
+        self.assertIn("f1.txt", out)
+
 
 if __name__ == "__main__":
     unittest.main()

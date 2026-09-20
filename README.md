@@ -62,6 +62,12 @@ ln -s ~/.hermes/skills/software-development/harness-flow \
   ~/.claude/skills/harness-flow
 ```
 
+**Otros CLIs** (Gemini CLI, Grok, Kimi Code) leen el mismo `SKILL.md`. Los
+cuatro cargan `~/.agents/skills`, asi que un solo clone ahi los cubre; la tabla
+"Otros CLIs que leen SKILL.md" del `SKILL.md` dice que raiz usa cada uno y como
+se lanza su subagente revisor. `leccion.py` busca lecciones tambien en
+`~/.codex/skills`, `~/.grok/skills` y `~/.kimi-code/skills`.
+
 Ademas de la skill, Claude Code carga la capa nativa que trae el repo
 (`.claude-plugin/plugin.json`): el subagente revisor `harness-flow:revisor` y los
 comandos `/harness-flow:estado`, `:spec`, `:review` y `:cierre`. Comprueba con
@@ -69,8 +75,10 @@ comandos `/harness-flow:estado`, `:spec`, `:review` y `:cierre`. Comprueba con
 otros hosts ignoran esos archivos. Ver [`references/claude.md`](references/claude.md).
 
 **OpenAI GPT/Codex** (personal, disponible en todos tus proyectos; para repo usa
-`<repo>/.agents/skills/harness-flow`). ChatGPT/Codex detecta cambios de skills
-automaticamente; si no aparece, reinicia Codex/ChatGPT:
+`<repo>/.agents/skills/harness-flow`). Codex tambien lee `$CODEX_HOME/skills`
+(`~/.codex/skills`), que es donde instala su propio tooling. ChatGPT/Codex
+detecta cambios de skills automaticamente; si no aparece, reinicia
+Codex/ChatGPT:
 
 ```bash
 git clone https://github.com/calpil/harness-flow.git \

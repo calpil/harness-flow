@@ -74,6 +74,79 @@ class SelloTests(unittest.TestCase):
                 self.assertIsNone(sello_revision(falso))
 
 
+class ApproveSpecConAcInvisibleTests(unittest.TestCase):
+    """Aprobar un spec con un AC que el parser no ve sella una feature incompleta.
+
+    Todo el flujo aguas abajo consume la lista de AC parseados: el review
+    responde por menos criterios, close exige menos evidencia y el check sale
+    "[ok] limpio". El AC esta escrito y nadie lo verifica.
+    """
+
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.repo = Path(tmp.name) / "repo"
+        (self.repo / "harness").mkdir(parents=True)
+        (self.repo / "docs").mkdir()
+        (self.repo / "harness" / "feature_list.json").write_text(json.dumps(
+            {"project": "t", "features": [{"id": "1", "name": "cobro"}]}),
+            encoding="utf-8")
+        self.spec = self.repo / "docs" / "spec-feature-1-cobro.md"
+
+    def escribir(self, tercera):
+        self.spec.write_text("# Spec\n\nEstado: draft\n\n- AC-1: bien\n"
+                             "- AC-2: bien\n" + tercera + "\n", encoding="utf-8")
+
+    def aprobar(self):
+        return harness("gate.py", "approve-spec", "--feature", "1", "--yes",
+                       cwd=self.repo)
+
+    def test_no_aprueba_con_un_ac_que_el_parser_no_reconoce(self):
+        self.escribir("- AC-3 (cobro (Visa (credito))): tres niveles")
+        r = self.aprobar()
+        self.assertNotEqual(r.returncode, 0, "aprobo un spec al que le falta un AC")
+        self.assertIn("AC-3", r.stdout + r.stderr)
+        self.assertNotIn("Estado: approved", self.spec.read_text(encoding="utf-8"))
+
+    def test_aprueba_cuando_los_tres_estan_bien_escritos(self):
+        self.escribir("- AC-3 (cobro (auth + capture)): un nivel, valido")
+        r = self.aprobar()
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertIn("AC-1, AC-2, AC-3", r.stdout)
+
+
+class RevisionSinAcTests(unittest.TestCase):
+    """Sellar un review de un spec sin AC parseables es un veredicto sobre nada.
+
+    cubre_acs(texto, []) no tiene nada que exigir, asi que el sello salia
+    "cubre 0 AC" con forma de veredicto legitimo. approve-spec, check y close
+    ya se negaban con un spec sin AC; revision no.
+    """
+
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.repo = Path(tmp.name) / "repo"
+        (self.repo / "harness").mkdir(parents=True)
+        (self.repo / "docs").mkdir()
+        (self.repo / "harness" / "feature_list.json").write_text(json.dumps(
+            {"project": "t", "features": [{"id": "1", "name": "f uno"}]}),
+            encoding="utf-8")
+        # Spec cuyos "AC" no los ve el parser (prosa, sin declaracion).
+        (self.repo / "docs" / "spec-feature-1-f-uno.md").write_text(
+            "# Spec\n\nEstado: approved\n\nEl AC-1 quedo descrito arriba.\n",
+            encoding="utf-8")
+        (self.repo / "docs" / "review-1.md").write_text(
+            "# Review\n\nTodo bien, aprobado.\n", encoding="utf-8")
+
+    def test_no_sella_un_review_de_un_spec_sin_ac(self):
+        r = harness("gate.py", "revision", "--feature", "1",
+                    "--veredicto", "approved", cwd=self.repo)
+        self.assertNotEqual(r.returncode, 0, "sello un veredicto sobre cero AC")
+        self.assertIn("ningun AC-n", r.stdout + r.stderr)
+        self.assertNotIn("Revisado:", (self.repo / "docs" / "review-1.md").read_text())
+
+
 class VerifyParcialTests(unittest.TestCase):
     def setUp(self):
         tmp = tempfile.TemporaryDirectory()

@@ -182,13 +182,68 @@ def sig_fresh(path: Path, sig: dict | None) -> bool:
 def now_iso() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
-# --- spec: estado y AC -----------------------------------------------------
+# --- spec: el AC declarado --------------------------------------------------
+#
+# Una sola gramatica para declarar un AC, la misma que reconoce declara_ac para
+# abrir su seccion en la evidencia. Eran dos: "## AC-3: ..." abria seccion pero
+# NO declaraba el AC en el spec, asi que ese criterio desaparecia del flujo
+# entero -- sellado, review, PRD -- con el check en verde.
+#
+#   adorno   citas, encabezados, filas de tabla, listas y enfasis
+#   titulo   cero o mas grupos (...) o [...], con un nivel de anidamiento
+#   [^\S\n]  espacio que NO es salto de linea: todo tiene que caber en UNA
+#            linea. Con \s a secas el match arrancaba en la linea anterior (y
+#            la devolvia como la linea del AC) y aceptaba un 'AC-5' suelto cuyos
+#            dos puntos estaban en la siguiente.
+#
+# Lo que esta gramatica NO entiende no pasa en silencio: acs_no_reconocidos lo
+# denuncia y approve-spec se niega.
+_H = r"[^\S\n]*"
+_GRUPO = r"\((?:[^()\n]|\([^()\n]*\))*\)|\[[^\[\]\n]*\]"
+_TITULO = rf"(?:{_H}(?:{_GRUPO}))*"
+_ADORNO = (rf"{_H}(?:>{_H})*(?:#{{1,6}}{_H})?(?:\|{_H})?"
+           rf"(?:(?:[-*+]|\d+[.)]){_H})?[*_`]*")
+AC_RE = re.compile(
+    rf"^{_ADORNO}(AC-\d+)[*_`]*{_H}{_TITULO}{_H}:", re.MULTILINE)
+# --- la cita archivo:linea --------------------------------------------------
+#
+# Una cita es `archivo.ext:linea`, no cualquier cosa con dos puntos y un numero.
+# El regex anterior daba por cubierto un AC citado con la URL del ticket
+# (`https://jira.empresa.com:8080/...` casa como `//jira.empresa.com:8080`) o
+# con una version (`1.2:34`): el falso verde exacto que este gate existe para
+# impedir, y con atlassian.py en el flujo pegar URLs de Jira es lo natural.
+#
+# URL_RE borra las URL antes de buscar. No usa \S+ porque se llevaba por delante
+# la cita que venia pegada detras ('[ABC-1](https://jira.io/x)<br>src/pago.ts:88'):
+# corta en los cierres que en markdown no pueden ser parte del enlace.
+URL_RE = re.compile(r"\b[A-Za-z][A-Za-z0-9+.-]*://[^\s)\]|<>\"']+")
+# El cuerpo puede estar vacio antes del punto: '.env:3' y 'src/.env:12' son
+# citas legitimas (y .env es una ruta protegida, asi que se citan). La
+# extension empieza por letra -- eso es lo que mata '1.2:34' -- y se deja
+# margen para extensiones largas tipo '.cloudformation'.
+CITA_RE = re.compile(r"[\w.\\/-]*\.[A-Za-z][A-Za-z0-9]{0,15}:\d+(?!\d*/)")
 
-# El id puede llevar un titulo corto entre parentesis antes de los dos puntos:
-# "- AC-1 (cola por estado): ...". El parentesis describe el AC, no lo anula.
-# [^()\n]* no cruza lineas: un parentesis sin cerrar no se come el documento.
-AC_RE = re.compile(r"^\s*[-*]?\s*(AC-\d+)\s*(?:\([^()\n]*\))?\s*:", re.MULTILINE)
-CITA_RE = re.compile(r"[\w./\\-]+\.\w+:\d+")
+
+# Sufijos de red: nunca son la extension de un archivo que se cite. Sin esto,
+# la misma URL de Jira pegada SIN esquema ('jira.empresa.com:8080') o un
+# 'pagos.svc:8443' contaban como cita, que es el falso verde que URL_RE mata
+# solo cuando el autor escribio 'https://'.
+_SUFIJOS_DE_RED = frozenset((
+    "com", "net", "org", "io", "dev", "app", "local", "svc", "internal",
+    "cluster", "cloud", "es", "cl", "ar", "co", "uk", "ai", "me", "info", "tv",
+))
+
+
+def hay_cita(linea: str) -> bool:
+    """True si la linea trae una cita archivo:linea real (sin contar URLs)."""
+    for m in CITA_RE.finditer(URL_RE.sub(" ", linea or "")):
+        token = m.group(0)
+        ext = token.rsplit(".", 1)[1].split(":", 1)[0].lower()
+        # 'src/schema.io:12' SI es un archivo; 'pagos.svc:8443' es un host.
+        if ext in _SUFIJOS_DE_RED and "/" not in token and "\\" not in token:
+            continue
+        return True
+    return False
 
 def spec_estado(text: str) -> str:
     m = re.search(r"^Estado:\s*(\w+)", text, re.MULTILINE)
@@ -201,6 +256,59 @@ def spec_acs(text: str) -> list[str]:
         if m.group(1) not in out:
             out.append(m.group(1))
     return out
+
+def spec_ac_lineas(text: str) -> dict[str, str]:
+    """AC-n -> su linea declarada, ya sin el adorno de lista.
+
+    Existe porque cada consumidor se habia escrito su propio parser: el PRD
+    (documentacion.py) exigia `AC-n:` pegado y perdia los AC con titulo entre
+    parentesis, y el brief/briefing casaban con startswith, que hace que
+    'AC-1' enganche la linea de 'AC-10'. Un solo parser, el de spec_acs.
+    """
+    out: dict[str, str] = {}
+    for m in AC_RE.finditer(text):
+        ac = m.group(1)
+        if ac in out:
+            continue
+        pos = m.start(1)                    # anclado al id, no al adorno
+        ini = text.rfind("\n", 0, pos) + 1
+        fin = text.find("\n", pos)
+        linea = (text[ini:] if fin == -1 else text[ini:fin]).strip()
+        out[ac] = _sin_adorno(linea)
+    return out
+
+
+def acs_no_reconocidos(text: str, acs: list[str] | None = None) -> list[str]:
+    """Ids que una linea parece declarar y que spec_acs NO reconocio.
+
+    acs_faltantes solo ve huecos por debajo del mayor declarado: si el AC que el
+    parser se comio es el ultimo, no hay hueco y nadie se entera. Esto compara
+    contra la gramatica laxa de declara_ac, asi que cualquier "- AC-7 ..." mal
+    escrito sale a la luz aunque sea el de numero mas alto.
+    """
+    declarados = set(acs if acs is not None else spec_acs(text))
+    sospechosos: list[str] = []
+    for linea in text.splitlines():
+        for ac in set(re.findall(r"AC-\d+", linea)):
+            if ac in declarados or ac in sospechosos:
+                continue
+            if declara_ac(linea, ac):
+                sospechosos.append(ac)
+    return sorted(sospechosos, key=lambda x: int(x.split("-", 1)[1]))
+
+
+def acs_faltantes(acs: list[str]) -> list[str]:
+    """Numeros ausentes entre AC-1 y el mayor declarado.
+
+    templates/spec.md promete "sin saltos". Es una senal debil y complementaria
+    a acs_no_reconocidos: solo ve el hueco cuando el AC que falta esta por
+    debajo del mayor declarado, y no distingue un borrado a proposito.
+    """
+    numeros = sorted(int(x.split("-", 1)[1]) for x in acs)
+    if not numeros:
+        return []
+    return [f"AC-{n}" for n in range(1, numeros[-1]) if n not in numeros]
+
 
 def ac_comandos(text: str) -> dict[str, str]:
     """AC-n -> comando declarado bajo el, si lo hay."""
@@ -236,6 +344,16 @@ def ac_comandos(text: str) -> dict[str, str]:
             actual = None
     return out
 
+def _sin_adorno(linea: str) -> str:
+    """Quita el adorno markdown del principio de la linea. Uno solo, compartido."""
+    limpia = linea.strip()
+    limpia = re.sub(r"^[>\s]*", "", limpia)                 # citas
+    limpia = re.sub(r"^#{1,6}\s*", "", limpia)              # encabezados
+    limpia = re.sub(r"^\|\s*", "", limpia)                  # filas de tabla
+    limpia = re.sub(r"^(?:[-*+]|\d+[.)])\s+", "", limpia)   # listas
+    return re.sub(r"^[*_`]+", "", limpia)                   # enfasis
+
+
 def declara_ac(linea: str, ac: str) -> bool:
     """True si la linea DECLARA la seccion del AC, no si solo lo menciona.
 
@@ -245,13 +363,7 @@ def declara_ac(linea: str, ac: str) -> bool:
     que si la tenia. Declarar es empezar la linea con el AC, admitiendo el
     adorno de markdown: '## AC-1', '- AC-1:', '* AC-1', '| AC-1 |', '3. AC-1'.
     """
-    limpia = linea.strip()
-    limpia = re.sub(r"^[>\s]*", "", limpia)           # citas
-    limpia = re.sub(r"^#{1,6}\s*", "", limpia)        # encabezados
-    limpia = re.sub(r"^\|\s*", "", limpia)            # filas de tabla
-    limpia = re.sub(r"^(?:[-*+]|\d+[.)])\s+", "", limpia)  # listas
-    limpia = re.sub(r"^[*_`]+", "", limpia)           # enfasis
-    return bool(re.match(rf"{re.escape(ac)}\b", limpia))
+    return bool(re.match(re.escape(ac) + r"\b", _sin_adorno(linea)))
 
 
 def cubre_acs(text: str, acs: list[str]) -> tuple[list[str], list[str]]:
@@ -285,7 +397,7 @@ def cubre_acs(text: str, acs: list[str]) -> tuple[list[str], list[str]]:
                 if j > ini and lines[j].startswith("#"):
                     fin = min(fin, j)
                     break
-            if any(CITA_RE.search(l) for l in lines[ini:fin]):
+            if any(hay_cita(l) for l in lines[ini:fin]):
                 ok = True
                 break
         (cubiertos if ok else faltan).append(ac)
@@ -313,8 +425,11 @@ def sello_revision(text: str) -> str | None:
 
 def git(args: list[str], cwd: Path) -> tuple[int, str]:
     try:
+        # LC_ALL=C: el codigo compara mensajes de git ("already exists"). Con
+        # git localizado (gettext en Linux) esas ramas nunca disparaban.
+        env = dict(os.environ, LC_ALL="C", LANGUAGE="")
         r = subprocess.run(["git", *args], cwd=str(cwd), capture_output=True,
-                           text=True, timeout=60)
+                           text=True, timeout=60, env=env)
         return r.returncode, (r.stdout + r.stderr).strip()
     except Exception as e:  # git ausente o repo raro: no es fatal
         return 1, str(e)

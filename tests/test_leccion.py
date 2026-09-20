@@ -80,7 +80,7 @@ class RaicesTests(Base):
         self.assertNotIn(fuera.resolve(), raices)
         self.assertIsNone(leccion.buscar("fuera-del-repo"))
 
-    def test_gpt_por_symlink_agents_no_cola_skills_de_hermes(self):
+    def test_gpt_por_symlink_agents_crea_en_agents_no_en_hermes(self):
         hermes = self.home / ".hermes" / "skills"
         agents = self.home / ".agents" / "skills"
         self.skill(hermes / "cat", "solo-hermes")
@@ -91,8 +91,16 @@ class RaicesTests(Base):
         link.parent.mkdir(parents=True, exist_ok=True)
         link.symlink_to(target, target_is_directory=True)
         with mock.patch.object(leccion, "__file__", str(link / "scripts" / "leccion.py")):
+            # CREAR respeta el host: por el symlink en .agents manda GPT, y las
+            # raices de Hermes no se cuelan en la precedencia.
+            raices = leccion.skills_roots()
+            self.assertIn(agents.resolve(), raices)
+            self.assertNotIn((hermes / "cat").resolve(), raices)
+            self.assertNotIn(hermes.resolve(), raices)
+            # BUSCAR mira todas: la leccion es del usuario, no del host. Ver
+            # test_leccion_multihost.py; exigir None aqui contradecia ese contrato.
             self.assertIsNotNone(leccion.buscar("solo-gpt"))
-            self.assertIsNone(leccion.buscar("solo-hermes"))
+            self.assertIsNotNone(leccion.buscar("solo-hermes"))
 
     def test_claude_prioriza_personal_sobre_proyecto(self):
         # docs de Claude Code: las skills personales ganan a las del proyecto
@@ -116,7 +124,7 @@ class RaicesTests(Base):
         self.assertEqual(leccion.skills_roots(), [solo.resolve()])
         self.assertIsNone(leccion.buscar("otra"))
 
-    def test_hermes_no_busca_en_skills_de_claude(self):
+    def test_hermes_crea_en_su_raiz_pero_encuentra_la_de_claude(self):
         hermes = self.home / ".hermes" / "skills"
         self.skill(hermes, "tdd")
         self.skill(self.home / ".claude" / "skills", "solo-claude")
@@ -128,8 +136,13 @@ class RaicesTests(Base):
         instalada.parent.mkdir(parents=True, exist_ok=True)
         instalada.touch()
         with mock.patch.object(leccion, "__file__", str(instalada)):
+            # CREAR: solo la raiz de Hermes. BUSCAR: tambien la de Claude, o
+            # una leccion escrita desde Claude Code bloquearia un cierre
+            # legitimo hecho desde Hermes (test_leccion_multihost.py).
             self.assertEqual(leccion.skills_roots(), [hermes.resolve()])
-            self.assertIsNone(leccion.buscar("solo-claude"))
+            self.assertIsNotNone(leccion.buscar("solo-claude"))
+            self.assertIn((self.home / ".claude" / "skills").resolve(),
+                          leccion.skills_roots(todos_los_hosts=True))
 
     def test_sin_host_conocido_cae_a_la_raiz_que_contiene_esta_skill(self):
         # la skill puede estar instalada en cualquier arbol .../skills/<cat>/harness-flow
@@ -142,6 +155,20 @@ class RaicesTests(Base):
         with mock.patch.object(leccion, "__file__", str(instalada)):
             self.assertEqual(leccion.skills_roots()[0], raiz.resolve(),
                              "en generic manda la raiz que contiene a esta skill")
+
+    def test_donde_no_muere_cuando_la_raiz_del_host_no_existe(self):
+        """'donde' es justo lo que corres para saber que raiz crear."""
+        import subprocess
+        self.skill(self.home / ".hermes" / "skills", "mi-leccion")
+        env = dict(os.environ, HOME=str(self.home), HARNESS_HOST="claude")
+        for k in ("HARNESS_SKILLS_DIR", "HERMES_SKILLS_DIR", "HERMES_HOME",
+                  "CLAUDE_CONFIG_DIR", "CLAUDECODE", "CODEX_HOME", "KIMI_CODE_HOME"):
+            env.pop(k, None)
+        r = subprocess.run(
+            [sys.executable, str(Path(leccion.__file__).resolve()), "donde"],
+            capture_output=True, text=True, env=env, cwd=str(self.home))
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertTrue(r.stdout.strip(), "no dijo ni una raiz")
 
     def test_sin_ninguna_raiz_falla_con_mensaje_accionable_y_no_crea_nada(self):
         os.environ["HARNESS_SKILLS_DIR"] = str(self.home / "no-existe")

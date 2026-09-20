@@ -9,13 +9,12 @@ proyecto con harness/feature_list.json.
 from __future__ import annotations
 
 import argparse
-import re
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 from comun import (bitacora, impl_path, load_backlog, paths, review_path,  # noqa: E402
-                   save_backlog, spec_path)
+                   save_backlog, spec_ac_lineas, spec_path)
 
 INICIO = "<!-- harness-flow:features:start -->"
 FIN = "<!-- harness-flow:features:end -->"
@@ -33,14 +32,16 @@ def _leer(path: Path) -> str:
 
 
 def _acs_desde_spec(path: Path) -> list[str]:
+    """Los AC del spec, con el MISMO parser que usan los gates.
+
+    Tenia un regex propio que exigia `AC-n:` pegado, asi que perdia en silencio
+    los AC con titulo entre parentesis ("- AC-1 (cola por estado): ...") que
+    spec_acs si reconoce: el PRD listaba menos AC que el spec, o directamente
+    "sin AC en spec" para una feature que los tenia todos.
+    """
     if not path.exists():
         return []
-    out: list[str] = []
-    for line in path.read_text(encoding="utf-8").splitlines():
-        m = re.match(r"^\s*[-*]?\s*(AC-\d+\s*:\s*.+?)\s*$", line)
-        if m and m.group(1) not in out:
-            out.append(m.group(1))
-    return out
+    return list(spec_ac_lineas(path.read_text(encoding="utf-8")).values())
 
 
 def _features_done(data: dict) -> list[dict]:

@@ -23,7 +23,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 from comun import (  # noqa: E402
-    Reporte, bitacora, cubre_acs, get_feature, git, impl_path, load_backlog,
+    Reporte, acs_faltantes, acs_no_reconocidos, bitacora, cubre_acs, get_feature, git, impl_path, load_backlog,
     now_iso, paths, review_path, ac_comandos, save_backlog, sello_revision,
     sig_fresh, sign, spec_acs, spec_estado, spec_path,
 )
@@ -64,6 +64,16 @@ def _check_feature(p, f, rules, r) -> None:
     if not acs:
         r.fallo(f"#{fid} el spec no declara ningun AC-n",
                 "agrega AC-1: Given/When/Then")
+    ignorados = acs_no_reconocidos(text, acs)
+    if ignorados:
+        r.fallo(f"#{fid} hay lineas que declaran {', '.join(ignorados)} y el parser "
+                "NO los reconoce como AC",
+                "nadie los va a verificar y este check saldria en verde: escribelos "
+                "como '- AC-n: Given/When/Then' (el titulo entre parentesis vale)")
+    huecos = [x for x in acs_faltantes(acs) if x not in ignorados]
+    if huecos:
+        r.aviso(f"#{fid} la numeracion de AC salta: falta(n) {', '.join(huecos)}",
+                "si lo borraste a proposito, renumera")
     estado = spec_estado(text)
 
     if rules.get("require_spec_approved"):
@@ -154,7 +164,8 @@ def _check_rutas_protegidas(p, rules, r) -> None:
     for line in out.splitlines():
         f = _porcelain_path(line)
         for pat in pats:
-            if fnmatch.fnmatch(f, pat) or (pat.endswith("/**") and f.startswith(pat[:-3])):
+            # pat[:-3] sin el separador marcaba docs/prdX/ como si fuera docs/prd/.
+            if fnmatch.fnmatch(f, pat) or (pat.endswith("/**") and f.startswith(pat[:-2])):
                 if not _ruta_protegida_permitida(p, f):
                     tocadas.append(f)
     if tocadas:
@@ -238,6 +249,19 @@ def cmd_approve_spec(args) -> None:
     acs = spec_acs(text)
     if not acs:
         sys.exit("[!!] el spec no declara ningun AC-n: no se puede aprobar.")
+    ignorados = acs_no_reconocidos(text, acs)
+    if ignorados:
+        # Aprobar aqui sella un spec al que le falta un criterio: nadie lo
+        # verifica y todo el flujo sale en verde. El arreglo es reescribir una
+        # linea, y el usuario esta justo aqui.
+        sys.exit(f"[!!] estas lineas declaran {', '.join(ignorados)} y el parser NO\n"
+                 "     los reconoce como AC: se sellaria un spec sin esos criterios\n"
+                 "     y NADIE los verificaria (el check saldria en verde igual).\n"
+                 "     Escribelos como '- AC-n: Given/When/Then' -- el titulo entre\n"
+                 "     parentesis o corchetes vale -- y vuelve a aprobar.")
+    huecos = [x for x in acs_faltantes(acs) if x not in ignorados]
+    if huecos:
+        print(f"[!] OJO: la numeracion salta, falta(n) {', '.join(huecos)}.")
 
     quien = args.por or getpass.getuser()
     cuando = now_iso()
@@ -275,6 +299,12 @@ def cmd_revision(args) -> None:
     if not rp.exists():
         sys.exit(f"[!!] no existe {rp}: escribe el review antes de sellarlo.")
     acs = spec_acs(sp.read_text(encoding="utf-8"))
+    if not acs:
+        # Sin AC, cubre_acs no tiene nada que exigir y el sello diria
+        # "cubre 0 AC": un veredicto sobre nada, con forma de veredicto.
+        sys.exit(f"[!!] el spec de #{f['id']} no declara ningun AC-n: no hay nada "
+                 "que revisar.\n     Arregla el spec (revisa la forma de cada "
+                 "linea AC-n) antes de sellar.")
     contexto = _multi_context(p, f, data["rules"]) if "multi_repo" in f else None
     rtext = rp.read_text(encoding="utf-8")
     _, faltan = cubre_acs(rtext, acs)
@@ -456,19 +486,6 @@ def archivar_progress_actual(p: dict, f: dict) -> Path | None:
     origen.rename(destino)
     f["progress_archive"] = _rel(p["root"], destino)
     return destino
-
-
-def restaurar_progress_actual(p: dict, f: dict, archivado: Path | None, original_cierre: dict) -> None:
-    if not archivado or not archivado.exists():
-        return
-    destino = p["progress"] / f"current-{f['id']}.md"
-    destino.parent.mkdir(parents=True, exist_ok=True)
-    if not destino.exists():
-        archivado.rename(destino)
-    if "progress_archive" in original_cierre:
-        f["progress_archive"] = original_cierre["progress_archive"]
-    else:
-        f.pop("progress_archive", None)
 
 
 def cmd_close(args) -> None:

@@ -103,9 +103,17 @@ def cmd_start(args) -> None:
         if code == 0:
             cod2, _ = git(["merge-base", "--is-ancestor", base_sha, rama], repo)
             if cod2 != 0:
+                # El worktree YA esta creado: dejarlo puesto al abortar convertia
+                # el error en un callejon sin salida (drop no lo conoce porque el
+                # backlog nunca se escribio, y el proximo start choca con
+                # 'already exists' sobre la ruta). Se deshace antes de salir.
+                limpieza, salida = git(["worktree", "remove", "--force", str(destino)], repo)
+                resto = ("" if limpieza == 0 else
+                         f"\n     [!] no pude quitar el worktree {destino}: {salida}\n"
+                         f"     Quitalo a mano: git -C {repo} worktree remove --force {destino}")
                 sys.exit(f"[!!] la rama '{rama}' ya existe y NO desciende de '{base}'.\n"
                          f"     Rebasea o borrala antes de arrancar: el diff de la\n"
-                         f"     feature mediria trabajo ajeno.")
+                         f"     feature mediria trabajo ajeno." + resto)
     if code != 0:
         sys.exit(f"[!!] no se pudo crear el worktree, la feature NO arranca:\n{out}")
 
@@ -156,7 +164,10 @@ def cmd_drop(args) -> None:
     wt = f.get("worktree")
     if not wt:
         sys.exit(f"[!!] la feature #{f['id']} no tiene worktree registrado.")
-    repo = Path(wt).parent.parent / Path(wt).parent.name.replace("-wt", "")
+    # rsplit y no replace: un repo llamado 'front-wt-app' daba 'front-app'
+    # y el remove se intentaba sobre una ruta que no existe.
+    contenedor = Path(wt).parent
+    repo = contenedor.parent / contenedor.name.rsplit("-wt", 1)[0]
     code, out = git(["worktree", "remove", wt, "--force"], repo if repo.exists() else p["root"])
     print(out or f"[ok] worktree {wt} eliminado")
     f.pop("worktree", None)

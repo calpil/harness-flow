@@ -47,6 +47,8 @@ class MultiHostTests(unittest.TestCase):
         env.pop("HERMES_HOME", None)
         env.pop("CLAUDE_CONFIG_DIR", None)
         env.pop("CLAUDECODE", None)
+        env.pop("CODEX_HOME", None)
+        env.pop("KIMI_CODE_HOME", None)
         env["HARNESS_HOST"] = host
         return subprocess.run(
             [sys.executable, str(SCRIPTS / "leccion.py"), "existe", nombre],
@@ -83,6 +85,85 @@ class MultiHostTests(unittest.TestCase):
         self.assertEqual(todas[:len(propias)], propias,
                          "la precedencia del host propio debe mandar")
         self.assertGreaterEqual(len(todas), len(propias))
+
+    def test_leccion_escrita_donde_la_instala_cada_CLI_vale_igual(self):
+        """Codex, Grok y Kimi Code no guardan las skills en .agents/skills.
+
+        Codex instala en $CODEX_HOME/skills (~/.codex/skills), Grok en
+        ~/.grok/skills y Kimi Code en $KIMI_CODE_HOME/skills
+        (~/.kimi-code/skills). Escribir la leccion donde tu CLI la lee dejaba
+        a `gate.py close --leccion` sin encontrarla: un cierre legitimo
+        bloqueado por el mero hecho de donde la tipeaste. Es el mismo bug que
+        este archivo mato entre Hermes/Claude/GPT, con las raices nuevas.
+        """
+        for raiz, nombre in ((".codex", "leccion-de-codex"),
+                             (".grok", "leccion-de-grok"),
+                             (".kimi-code", "leccion-de-kimi")):
+            self.crear(raiz, nombre)
+            for host in ("hermes", "claude", "gpt", "generic"):
+                with self.subTest(raiz=raiz, host=host):
+                    r = self.existe(nombre, host)
+                    self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+
+    def test_CODEX_HOME_y_KIMI_CODE_HOME_mandan_sobre_el_default(self):
+        import os as _os
+        import subprocess as _sp
+        aparte = self.casa / "otro-codex"
+        (aparte / "skills" / "leccion-movida").mkdir(parents=True)
+        (aparte / "skills" / "leccion-movida" / "SKILL.md").write_text(
+            SKILL % "leccion-movida", encoding="utf-8")
+        env = dict(_os.environ, HOME=str(self.casa), CODEX_HOME=str(aparte))
+        for k in ("HARNESS_SKILLS_DIR", "HERMES_SKILLS_DIR", "HERMES_HOME",
+                  "CLAUDE_CONFIG_DIR", "CLAUDECODE", "KIMI_CODE_HOME"):
+            env.pop(k, None)
+        env["HARNESS_HOST"] = "gpt"
+        r = _sp.run([sys.executable, str(SCRIPTS / "leccion.py"), "existe", "leccion-movida"],
+                    capture_output=True, text=True, env=env, cwd=str(self.casa))
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+
+    def test_el_recorrido_por_padres_se_corta_en_la_raiz_del_repo(self):
+        """Una skill de un proyecto vecino no puede satisfacer el gate de otro.
+
+        Las raices nuevas (.codex/.grok/.kimi-code por directorio) se recorren
+        hacia arriba desde el cwd; sin cortar en la raiz del repo, subir hasta /
+        haria que la leccion de un proyecto ajeno diera por cumplido el cierre
+        de este. _raices_gpt ya cortaba asi.
+        """
+        import os as _os
+        import subprocess as _sp
+        vecino = self.casa / "vecino"           # padre del repo, no es el home
+        self.escribir(vecino / ".codex" / "skills" / "leccion-vecina")
+        repo = vecino / "repo"
+        repo.mkdir(parents=True)
+        _sp.run(["git", "init", "-q", "."], cwd=repo, capture_output=True)
+        self.escribir(repo / ".codex" / "skills" / "leccion-del-repo")
+        hondo = repo / "a" / "b"
+        hondo.mkdir(parents=True)
+
+        env = dict(_os.environ, HOME=str(self.casa), HARNESS_HOST="gpt")
+        for k in ("HARNESS_SKILLS_DIR", "HERMES_SKILLS_DIR", "HERMES_HOME",
+                  "CLAUDE_CONFIG_DIR", "CLAUDECODE", "CODEX_HOME", "KIMI_CODE_HOME"):
+            env.pop(k, None)
+
+        def existe_desde(nombre):
+            return _sp.run([sys.executable, str(SCRIPTS / "leccion.py"), "existe", nombre],
+                           capture_output=True, text=True, env=env, cwd=str(hondo)).returncode
+
+        self.assertEqual(existe_desde("leccion-del-repo"), 0, "la del propio repo debe valer")
+        self.assertNotEqual(existe_desde("leccion-vecina"), 0,
+                            "una skill de un proyecto vecino no cierra esta feature")
+
+    def escribir(self, directorio):
+        directorio.mkdir(parents=True, exist_ok=True)
+        (directorio / "SKILL.md").write_text(SKILL % directorio.name, encoding="utf-8")
+
+    def test_las_raices_ajenas_no_sirven_para_crear(self):
+        """Solo para buscar: una skill nueva no nace en el CLI de otro."""
+        propias = leccion.skills_roots()
+        for raiz in propias:
+            self.assertFalse(
+                any(parte in raiz.parts for parte in (".codex", ".grok", ".kimi-code")),
+                f"la raiz de creacion {raiz} es de otro agente")
 
 
 if __name__ == "__main__":
