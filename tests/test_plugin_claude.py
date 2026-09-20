@@ -15,15 +15,37 @@ MANIFIESTO = RAIZ / ".claude-plugin" / "plugin.json"
 
 
 def frontmatter(md: Path) -> dict:
+    """Frontmatter YAML, incluidos los escalares de bloque (`>-`, `|`, ...).
+
+    Un `description: >-` con el texto indentado debajo es YAML perfectamente
+    valido y es como se escribe una description larga sin una linea kilometrica.
+    Leyendo solo `k: v` el valor quedaba en ">-" y este archivo daba por buena
+    una description de dos caracteres.
+    """
     m = re.match(r"^---\n(.*?)\n---\n", md.read_text(encoding="utf-8"), re.S)
     if not m:
         return {}
-    campos = {}
+    campos, clave, bloque = {}, None, []
+
+    def cerrar():
+        if clave is not None:
+            campos[clave] = " ".join(x.strip() for x in bloque).strip()
+
     for linea in m.group(1).splitlines():
-        if linea.startswith((" ", "\t")) or ":" not in linea:
+        if clave is not None and (linea.startswith((" ", "\t")) or not linea.strip()):
+            bloque.append(linea)
+            continue
+        cerrar()
+        clave, bloque = None, []
+        if ":" not in linea or linea.startswith((" ", "\t")):
             continue
         k, _, v = linea.partition(":")
-        campos[k.strip()] = v.strip()
+        v = v.strip()
+        if v in (">", ">-", ">+", "|", "|-", "|+"):
+            clave = k.strip()          # el valor viene indentado en las lineas de abajo
+        else:
+            campos[k.strip()] = v.strip('"').strip("'")
+    cerrar()
     return campos
 
 
@@ -113,6 +135,39 @@ class ComponentesTests(unittest.TestCase):
                     self.assertIn("entorno.py", linea, "falta el eval de entorno en la misma llamada")
 
 
+class FrontmatterTests(unittest.TestCase):
+    """El parser de este archivo decide si los demas tests miden algo.
+
+    Con `description: >-` (bloque YAML) leia ">-" como valor: el test de la
+    description daba por buena una de dos caracteres.
+    """
+
+    def leer(self, texto):
+        import tempfile
+        f = Path(tempfile.mkdtemp()) / "SKILL.md"
+        f.write_text(texto, encoding="utf-8")
+        return frontmatter(f)
+
+    def test_escalar_de_bloque(self):
+        for marca in (">-", ">", "|", "|-"):
+            with self.subTest(marca=marca):
+                d = self.leer(f"---\nname: x\ndescription: {marca}\n  linea uno\n"
+                              "  linea dos\n---\n# t\n")
+                self.assertEqual(d["name"], "x")
+                self.assertEqual(d["description"], "linea uno linea dos")
+
+    def test_valor_en_la_misma_linea_con_y_sin_comillas(self):
+        d = self.leer('---\nname: x\ndescription: "una sola linea"\n---\n# t\n')
+        self.assertEqual(d["description"], "una sola linea")
+        d = self.leer("---\nname: x\ndescription: sin comillas\n---\n# t\n")
+        self.assertEqual(d["description"], "sin comillas")
+
+    def test_el_bloque_no_se_come_la_clave_siguiente(self):
+        d = self.leer("---\ndescription: >-\n  texto\nmodel: opus\n---\n# t\n")
+        self.assertEqual(d["description"], "texto")
+        self.assertEqual(d["model"], "opus")
+
+
 class PresupuestoDeContextoTests(unittest.TestCase):
     """SKILL.md se carga ENTERO y se queda en contexto mientras dura la sesion.
 
@@ -133,7 +188,7 @@ class PresupuestoDeContextoTests(unittest.TestCase):
 
     def test_la_description_sirve_para_decidir_si_activar_la_skill(self):
         """Es lo UNICO que ve Claude al decidir, y esta siempre en contexto."""
-        d = frontmatter(RAIZ / "SKILL.md").get("description", "").strip('"\'')
+        d = frontmatter(RAIZ / "SKILL.md").get("description", "")
         self.assertTrue(d, "sin description, Claude usa la primera linea del cuerpo")
         self.assertGreater(len(d), 120,
                            "una linea suelta no alcanza para que la active sola: "

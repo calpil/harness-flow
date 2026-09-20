@@ -1,13 +1,18 @@
 ---
 name: harness-flow
-description: "Proceso spec-driven con gates ejecutables para repos que tienen harness/feature_list.json. Usala para: arrancar sesion y ver que hay abierto; escribir un spec con criterios de aceptacion (AC) y llevarlo al ritual de aprobacion del usuario; dejar evidencia por AC citando archivo:linea; lanzar el review en un subagente aislado y sellar su veredicto; correr verify; cerrar una feature hacia su rama con leccion y postmerge medido; generar PRD/SDD; y consultar impacto cross-repo en proyectos multi-repo (Memory Hub, grafo, vault Obsidian, Jira/Confluence). Los gates son scripts que devuelven exit!=0 cuando falta algo: sin spec aprobado no se implementa, sin evidencia por AC no se cierra."
+description: >-
+  Proceso spec-driven con gates ejecutables para repos que tienen harness/feature_list.json.
+  Usar cuando el usuario pida gestionar features del backlog, arrancar sesion, redactar o aprobar
+  specs con criterios de aceptacion (AC), registrar evidencia citando archivo:linea, lanzar subagente
+  revisor aislado y sellar su veredicto, correr verify, cerrar features hacia su rama con lecciones y
+  postmerge medido, sincronizar PRD/SDD, o consultar impacto cross-repo con Memory Hub y Obsidian.
 ---
 
 # Harness Flow
 
 Proceso spec-driven para proyectos multi-repo. Puerto del arnés Rust (`harness_process`) a un agente: sin binario, sin instalador, sin compilar por SO. El proceso vive aquí; los gates son scripts Python que devuelven exit≠0.
 
-**Host-neutral**: funciona igual en Hermes, Claude Code y GPT/Codex. Lo único que cambia son las herramientas del agente (subagente y escritura de skills); los scripts se autodetectan. Ver "Equivalencias por host".
+**Host-neutral**: funciona igual en Hermes, Claude Code, GPT/Codex y AGY/Gemini. Lo único que cambia son las herramientas del agente (subagente y escritura de skills); los scripts se autodetectan. Ver "Equivalencias por host".
 
 **Idioma: responde SIEMPRE en español.** Los documentos generados van en español, sin tildes en los nombres de archivo.
 
@@ -119,6 +124,7 @@ El review NO lo haces tú mismo. Un revisor que recuerda haber escrito el códig
    - Claude Code: la tool `Agent` con `subagent_type: harness-flow:revisor`, pegando la salida en el prompt.
      Ese subagente viene en la propia skill (`agents/revisor.md`); sin el, `general-purpose` sirve igual.
    - GPT/Codex: `codex exec` o el revisor/subagente disponible, pegando el briefing; si no hay aislamiento real, decláralo.
+   - AGY / Gemini: `invoke_subagent` (tipo `research` o subagente definido), pegando el briefing en el prompt.
    NO uses un fork de la sesión como revisor: hereda tu historial y con él el sesgo que el aislamiento evita.
 3. Cuando vuelva, LEE tú `docs/review-<id>.md`. El veredicto del subagente es un autoinforme: verifica que cada fila cite `archivo:linea` real antes de sellar.
 4. Sella:
@@ -418,13 +424,13 @@ de `test_postmerge.py` certificaban en verde el gate que mentía.
 
 ## Equivalencias por host
 
-| Necesitas | Hermes | Claude Code | GPT/Codex |
-| --- | --- | --- | --- |
-| Subagente revisor aislado | `delegate_task` | tool `Agent`, `subagent_type: harness-flow:revisor` | `codex exec` en sesion nueva |
-| Crear/patchear una lección | `skill_manage` | escribir `<raíz>/<clase>/SKILL.md` | escribir `~/.agents/skills/<clase>/SKILL.md` o `<repo>/.agents/skills/<clase>/SKILL.md` |
-| Raíz de skills | `~/.hermes/skills` (o perfil) | `~/.claude/skills`, luego `.claude/skills` del proyecto | `.agents/skills` del repo, luego `~/.agents/skills`, luego `/etc/codex/skills` |
-| Intérprete con `psycopg` | venv de Hermes | venv neutro `~/.harness-flow/venv` | venv neutro `~/.harness-flow/venv` |
-| Atajos del flujo | — | `/harness-flow:estado\|spec\|review\|cierre` | — |
+| Necesitas | Hermes | Claude Code | GPT/Codex | AGY / Gemini |
+| --- | --- | --- | --- | --- |
+| Subagente revisor aislado | `delegate_task` | tool `Agent`, `subagent_type: harness-flow:revisor` | `codex exec` en sesion nueva | `invoke_subagent` (research o subagente propio) |
+| Crear/patchear una lección | `skill_manage` | escribir `<raíz>/<clase>/SKILL.md` | escribir `~/.agents/skills/<clase>/SKILL.md` o `<repo>/.agents/skills/<clase>/SKILL.md` | escribir `~/.gemini/config/skills/<clase>/SKILL.md` o `<repo>/.agents/skills/<clase>/SKILL.md` |
+| Raíz de skills | `~/.hermes/skills` (o perfil) | `~/.claude/skills`, luego `.claude/skills` del proyecto | `.agents/skills` del repo, luego `~/.agents/skills`, luego `/etc/codex/skills` | `~/.gemini/config/skills`, luego `.gemini/skills`, luego `.agents/skills` |
+| Intérprete con `psycopg` | venv de Hermes | venv neutro `~/.harness-flow/venv` | venv neutro `~/.harness-flow/venv` | venv neutro `~/.harness-flow/venv` |
+| Atajos del flujo | — | `/harness-flow:estado\|spec\|review\|cierre` | — | — |
 
 Todo lo demás (gates, worktrees, specs, hub, vault, documentacion, atlassian) es Python puro y
 se comporta idéntico en los hosts soportados. Si no puedes lanzar un subagente aislado, revisa tú mismo
@@ -439,13 +445,11 @@ cómo lanzas el revisor. **No uses `codex exec` fuera de Codex.**
 | CLI | Raíz de skills que lee | Subagente revisor |
 | --- | --- | --- |
 | Codex | `$CODEX_HOME/skills` (`~/.codex/skills`), `.agents/skills` | `codex exec` con el briefing en el prompt |
-| Gemini CLI | `~/.agents/skills` (`gemini skills list` lo confirma) | subagente propio del CLI |
 | Grok | `.grok/`, `.claude/`, `.cursor/`, `.agents/skills` | `--agent <archivo>` / `--agents <json>` |
 | Kimi Code | `$KIMI_CODE_HOME/skills` (`~/.kimi-code/skills`), `~/.agents/skills`, y las de proyecto `.kimi-code/skills` / `.agents/skills` | tool `Agent` (`subagent_type: "revisor"`, vía `kimi.plugin.json`), o `kimi -p --agent-file agents/revisor.md` |
 
-`~/.agents/skills` es el mínimo común múltiplo: los cuatro lo leen. Instala ahí
-si usas más de un CLI. Para las lecciones, `leccion.py` **busca** en todas esas
-raíces (incluidas `.codex`, `.grok` y `.kimi-code`) y **crea** en la del host
+`~/.agents/skills` es el mínimo común múltiplo compartido. Para las lecciones, `leccion.py` **busca** en todas esas
+raíces (incluidas `.gemini`, `.codex`, `.grok` y `.kimi-code`) y **crea** en la del host
 detectado — en `generic`, en la raíz donde está instalada la propia skill, que
 es la que ese CLI escanea; `leccion.py donde` marca cuál es cuál.
 
