@@ -34,6 +34,7 @@ class MultiHostTests(unittest.TestCase):
         (self.casa / ".claude" / "skills").mkdir(parents=True)
         (self.casa / ".hermes" / "skills").mkdir(parents=True)
         (self.casa / ".agents" / "skills").mkdir(parents=True)
+        (self.casa / ".gemini" / "config" / "skills").mkdir(parents=True)
 
     def crear(self, raiz, nombre):
         d = self.casa / raiz / "skills" / nombre
@@ -49,6 +50,7 @@ class MultiHostTests(unittest.TestCase):
         env.pop("CLAUDECODE", None)
         env.pop("CODEX_HOME", None)
         env.pop("KIMI_CODE_HOME", None)
+        env.pop("ANTIGRAVITY_AGENT", None)
         env["HARNESS_HOST"] = host
         return subprocess.run(
             [sys.executable, str(SCRIPTS / "leccion.py"), "existe", nombre],
@@ -64,15 +66,24 @@ class MultiHostTests(unittest.TestCase):
         r = self.existe("solo-en-hermes", "claude")
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
 
-    def test_leccion_de_agents_vale_desde_los_tres_hosts(self):
+    def test_leccion_de_agents_vale_desde_los_hosts(self):
         self.crear(".agents", "solo-en-agents")
-        for host in ("hermes", "claude", "gpt"):
+        for host in ("hermes", "claude", "gpt", "gemini"):
             with self.subTest(host=host):
                 r = self.existe("solo-en-agents", host)
                 self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
 
+    def test_leccion_de_gemini_vale_desde_otros_hosts(self):
+        d = self.casa / ".gemini" / "config" / "skills" / "solo-en-gemini"
+        d.mkdir(parents=True, exist_ok=True)
+        (d / "SKILL.md").write_text(SKILL % "solo-en-gemini", encoding="utf-8")
+        for host in ("hermes", "claude", "gpt", "gemini"):
+            with self.subTest(host=host):
+                r = self.existe("solo-en-gemini", host)
+                self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+
     def test_inexistente_sigue_bloqueando_en_todos_los_hosts(self):
-        for host in ("hermes", "claude", "gpt"):
+        for host in ("hermes", "claude", "gpt", "gemini"):
             with self.subTest(host=host):
                 r = self.existe("no-existe-xyz", host)
                 self.assertNotEqual(r.returncode, 0,
@@ -172,7 +183,7 @@ class MultiHostTests(unittest.TestCase):
         env = dict(os.environ, HOME=str(self.casa))
         for k in ("HARNESS_SKILLS_DIR", "HARNESS_HOST", "HERMES_SKILLS_DIR",
                   "HERMES_HOME", "HERMES_PYTHON", "CLAUDE_CONFIG_DIR", "CLAUDECODE",
-                  "CODEX_HOME", "KIMI_CODE_HOME"):
+                  "CODEX_HOME", "KIMI_CODE_HOME", "ANTIGRAVITY_AGENT", "GEMINI_CLI"):
             env.pop(k, None)
         r = subprocess.run(
             [sys.executable, str(kimi / "harness-flow" / "scripts" / "leccion.py"), "donde"],

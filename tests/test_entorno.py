@@ -279,6 +279,23 @@ class EntornoTests(unittest.TestCase):
         with mock.patch.object(entorno, "ES_WINDOWS", True):
             self.assertEqual(entorno._bin_python(entorno.venv_neutro()), self.home / "mi venv/Scripts/python.exe")
 
+    def test_gemini_antigravity_detecta_host_gemini(self):
+        os.environ["ANTIGRAVITY_AGENT"] = "1"
+        self.assertEqual(entorno.host_agente(), "gemini")
+
+    def test_gemini_skills_dir_detecta_host_gemini(self):
+        script = self.home / ".gemini/config/skills/harness-flow/scripts/entorno.py"
+        script.parent.mkdir(parents=True)
+        script.touch()
+        with mock.patch.object(entorno, "__file__", str(script)):
+            self.assertEqual(entorno.host_agente(), "gemini")
+
+    def test_host_explicito_gemini_y_agy(self):
+        os.environ["HARNESS_HOST"] = "gemini"
+        self.assertEqual(entorno.host_agente(), "gemini")
+        os.environ["HARNESS_HOST"] = "agy"
+        self.assertEqual(entorno.host_agente(), "gemini")
+
 
 if __name__ == "__main__":
     unittest.main()

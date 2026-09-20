@@ -40,12 +40,10 @@ def host_agente() -> str:
         if explicit not in HOSTS_VALIDOS:
             raise ValueError("HARNESS_HOST debe ser hermes, claude, gpt, codex, gemini, agy o generic")
         return _canon_host(explicit)
-    # No resolve(): un symlink en .agents, .gemini o .claude puede apuntar al clone de Hermes.
+    # No resolve(): un symlink en .gemini, .agents o .claude puede apuntar al clone de Hermes.
     for padre in Path(__file__).absolute().parents:
         if padre.name == "skills" and (padre.parent.name == ".gemini" or padre.parent.parent.name == ".gemini"):
             return "gemini"
-    if any(k.startswith("ANTIGRAVITY_") for k in os.environ) or os.environ.get("GEMINI_CLI"):
-        return "gemini"
     for padre in Path(__file__).absolute().parents:
         if padre.name == "skills" and padre.parent.name == ".agents":
             return "gpt"
@@ -54,6 +52,8 @@ def host_agente() -> str:
     for padre in Path(__file__).absolute().parents:
         if padre.name == "skills" and padre.parent.name == ".claude":
             return "claude"
+    if os.environ.get("ANTIGRAVITY_AGENT") == "1" or os.environ.get("GEMINI_CLI"):
+        return "gemini"
     if any(os.environ.get(k) for k in ("HERMES_HOME", "HERMES_PYTHON", "HERMES_SKILLS_DIR")):
         return "hermes"
     if _home_instalacion() is not None:

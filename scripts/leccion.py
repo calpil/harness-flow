@@ -47,17 +47,27 @@ def _host() -> str:
         sys.exit("[!!] %s" % exc)
     except Exception:
         # entorno.py ausente o roto (copia parcial): heuristica minima equivalente
+        explicit = os.environ.get("HARNESS_HOST")
+        if explicit:
+            if explicit == "codex":
+                return "gpt"
+            if explicit == "agy":
+                return "gemini"
+            return explicit
         for padre in Path(__file__).absolute().parents:
             if padre.name == "skills" and (padre.parent.name == ".gemini" or padre.parent.parent.name == ".gemini"):
                 return "gemini"
-        if any(k.startswith("ANTIGRAVITY_") for k in os.environ) or os.environ.get("GEMINI_CLI"):
-            return "gemini"
         for padre in Path(__file__).absolute().parents:
             if padre.name == "skills" and padre.parent.name == ".agents":
                 return "gpt"
         if os.environ.get("CLAUDECODE") == "1" or os.environ.get("CLAUDE_CONFIG_DIR"):
             return "claude"
-        if os.environ.get("HERMES_HOME") or os.environ.get("HERMES_SKILLS_DIR"):
+        for padre in Path(__file__).absolute().parents:
+            if padre.name == "skills" and padre.parent.name == ".claude":
+                return "claude"
+        if os.environ.get("ANTIGRAVITY_AGENT") == "1" or os.environ.get("GEMINI_CLI"):
+            return "gemini"
+        if any(os.environ.get(k) for k in ("HERMES_HOME", "HERMES_PYTHON", "HERMES_SKILLS_DIR")):
             return "hermes"
         return "generic"
 
