@@ -79,5 +79,5 @@ eval "$(python3 "${CLAUDE_PLUGIN_ROOT}/scripts/entorno.py" --shell)" && "$PY" "$
 Nunca corras eso por tu cuenta ni "para agilizar". El script se niega sin
 `--yes`, y `--yes` significa que el usuario dijo que si — no que tu lo asumiste.
 
-Cambiar el spec despues de aprobarlo invalida el sello (firma sha1 del cuerpo).
+Cambiar el spec despues de aprobarlo invalida el sello (firma sha256 del cuerpo).
 Eso es deliberado: hay que volver a mostrarlo y re-aprobarlo.

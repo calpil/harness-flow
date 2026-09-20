@@ -113,5 +113,51 @@ class ComponentesTests(unittest.TestCase):
                     self.assertIn("entorno.py", linea, "falta el eval de entorno en la misma llamada")
 
 
+class PresupuestoDeContextoTests(unittest.TestCase):
+    """SKILL.md se carga ENTERO y se queda en contexto mientras dura la sesion.
+
+    La doc de Claude Code lo dice sin rodeos: "Keep SKILL.md under 500 lines.
+    Move detailed reference material to separate files". Este arnes ya aplica un
+    tope de 250 lineas a las lecciones (leccion.py) y se saltaba a si mismo en
+    ese chequeo, con 549 lineas.
+    """
+
+    TOPE_LINEAS = 500
+
+    def test_skill_md_cabe_en_el_presupuesto(self):
+        n = len((RAIZ / "SKILL.md").read_text(encoding="utf-8").splitlines())
+        self.assertLessEqual(
+            n, self.TOPE_LINEAS,
+            f"SKILL.md tiene {n} lineas: muevele detalle a references/ y deja un "
+            "resumen con el enlace")
+
+    def test_la_description_sirve_para_decidir_si_activar_la_skill(self):
+        """Es lo UNICO que ve Claude al decidir, y esta siempre en contexto."""
+        d = frontmatter(RAIZ / "SKILL.md").get("description", "").strip('"\'')
+        self.assertTrue(d, "sin description, Claude usa la primera linea del cuerpo")
+        self.assertGreater(len(d), 120,
+                           "una linea suelta no alcanza para que la active sola: "
+                           "di que hace y cuando usarla")
+        self.assertLessEqual(len(d), 1536, "se trunca en el listado de skills")
+        self.assertIn("harness/feature_list.json", d,
+                      "el disparador concreto tiene que estar en la description")
+
+    def test_todas_las_referencias_enlazadas_existen(self):
+        texto = (RAIZ / "SKILL.md").read_text(encoding="utf-8")
+        for rel in sorted(set(re.findall(r"references/[a-z0-9-]+\.md", texto))):
+            with self.subTest(ruta=rel):
+                self.assertTrue((RAIZ / rel).is_file(), f"SKILL.md enlaza {rel}, que no existe")
+
+    def test_cada_referencia_del_repo_se_menciona_en_el_skill(self):
+        """Una referencia que SKILL.md no nombra no la va a abrir nadie."""
+        texto = (RAIZ / "SKILL.md").read_text(encoding="utf-8")
+        for md in sorted((RAIZ / "references").glob("*.md")):
+            with self.subTest(ruta=md.name):
+                self.assertIn(f"references/{md.name}", texto,
+                              f"{md.name} existe pero SKILL.md no dice cuando leerlo")
+
+
+
+
 if __name__ == "__main__":
     unittest.main()

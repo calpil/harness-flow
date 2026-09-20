@@ -1,0 +1,17 @@
+{
+  "name": "harness-flow",
+  "version": "1.0.0",
+  "description": "Proceso spec-driven con gates ejecutables para proyectos multi-repo: spec aprobado por el usuario, evidencia por AC, review aislado y cierre medido.",
+  "keywords": [
+    "spec-driven",
+    "gates",
+    "multi-repo",
+    "code-review",
+    "prd",
+    "jira"
+  ],
+  "license": "MIT",
+  "homepage": "https://github.com/calpil/harness-flow",
+  "skills": "./",
+  "agents": "./agents/revisor.md"
+}

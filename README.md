@@ -68,6 +68,12 @@ cuatro cargan `~/.agents/skills`, asi que un solo clone ahi los cubre; la tabla
 se lanza su subagente revisor. `leccion.py` busca lecciones tambien en
 `~/.codex/skills`, `~/.grok/skills` y `~/.kimi-code/skills`.
 
+Kimi Code ademas puede instalar el repo como plugin (`/plugins install
+<ruta-del-clone>`, manifiesto `kimi.plugin.json`): registra el agente `revisor`
+para la tool Agent (`subagent_type: "revisor"`). El plugin corre desde una
+copia en `$KIMI_CODE_HOME/plugins/managed/`, asi que tras un `git pull` del
+clone hay que reinstalarlo.
+
 Ademas de la skill, Claude Code carga la capa nativa que trae el repo
 (`.claude-plugin/plugin.json`): el subagente revisor `harness-flow:revisor` y los
 comandos `/harness-flow:estado`, `:spec`, `:review` y `:cierre`. Comprueba con
@@ -246,8 +252,9 @@ multi-repo, no por microservicio.
 ```
 SKILL.md                 el proceso que sigue el agente
 .claude-plugin/          manifiesto del plugin skills-dir (solo Claude Code)
+kimi.plugin.json         manifiesto de plugin para Kimi Code (skill + agente revisor)
 agents/openai.yaml       metadata para invocacion automatica en GPT/Codex
-agents/revisor.md        subagente revisor aislado (solo Claude Code)
+agents/revisor.md        subagente revisor aislado (Claude Code y Kimi Code)
 commands/                atajos /harness-flow:... (solo Claude Code)
 scripts/
   entorno.py             detecta host, H y PY por SO (Windows/Linux/macOS)

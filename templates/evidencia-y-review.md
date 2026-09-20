@@ -43,5 +43,5 @@ citando. Si falta uno, `gate.py revision` se niega a sellar.
 Deuda tecnica o riesgos que no bloquean el cierre.
 ```
 
-El sello `Revisado: <veredicto> · <quien> · <cuando>` lo estampa el script.
+El sello `Revisado: <veredicto> · <quien> · <cuando> · estampado por gate.py revision` lo estampa el script.
 Escribirlo a mano no cuenta: el gate valida el sello, no la prosa.

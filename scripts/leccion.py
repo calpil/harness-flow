@@ -48,6 +48,11 @@ def _host() -> str:
     except Exception:
         # entorno.py ausente o roto (copia parcial): heuristica minima equivalente
         for padre in Path(__file__).absolute().parents:
+            if padre.name == "skills" and (padre.parent.name == ".gemini" or padre.parent.parent.name == ".gemini"):
+                return "gemini"
+        if any(k.startswith("ANTIGRAVITY_") for k in os.environ) or os.environ.get("GEMINI_CLI"):
+            return "gemini"
+        for padre in Path(__file__).absolute().parents:
             if padre.name == "skills" and padre.parent.name == ".agents":
                 return "gpt"
         if os.environ.get("CLAUDECODE") == "1" or os.environ.get("CLAUDE_CONFIG_DIR"):
@@ -104,6 +109,27 @@ def _raices_gpt() -> list[Path]:
     return raices
 
 
+def _raices_gemini() -> list[Path]:
+    """Gemini / AGY: .gemini/skills y .agents/skills de repo, luego personal ~/.gemini/config/skills y ~/.agents/skills."""
+    raices: list[Path] = []
+    try:
+        cwd = Path.cwd()
+        root = _repo_root(cwd)
+        padres = [cwd, *cwd.parents]
+        if root is not None:
+            padres = [p for p in padres if p.resolve() == root or root in p.resolve().parents]
+        else:
+            padres = [cwd]
+        for padre in padres:
+            raices.append(padre / ".gemini" / "skills")
+            raices.append(padre / ".agents" / "skills")
+    except OSError:
+        pass
+    raices.append(_casa() / ".gemini" / "config" / "skills")
+    raices.append(_casa() / ".agents" / "skills")
+    return raices
+
+
 def _raices_otros_agentes() -> list[Path]:
     """Raices de los demas CLIs que leen SKILL.md, SOLO para buscar.
 
@@ -118,7 +144,7 @@ def _raices_otros_agentes() -> list[Path]:
     No se usan para CREAR: eso sigue la precedencia del host detectado.
     """
     casa = _casa()
-    raices = []
+    raices = [casa / ".gemini" / "config" / "skills"]
     for var, defecto in (("CODEX_HOME", casa / ".codex"),
                          ("KIMI_CODE_HOME", casa / ".kimi-code")):
         base = os.environ.get(var)
@@ -138,7 +164,7 @@ def _raices_otros_agentes() -> list[Path]:
         padres = [x for x in [cwd, *cwd.parents]
                   if x.resolve() == root or root in x.resolve().parents]
     for padre in padres:
-        for marca in (".codex", ".grok", ".kimi-code", ".cursor"):
+        for marca in (".gemini", ".codex", ".grok", ".kimi-code", ".cursor"):
             raices.append(padre / marca / "skills")
     return raices
 
@@ -160,8 +186,14 @@ def _raices_hermes() -> list[Path]:
 
 
 def _raiz_propia() -> list[Path]:
-    """La raiz que contiene a esta misma skill: .../skills/<cat>/harness-flow/scripts."""
-    for padre in Path(__file__).resolve().parents:
+    """La raiz que contiene a esta misma skill: .../skills/<cat>/harness-flow/scripts.
+
+    absolute() y no resolve(): si la skill entra por symlink (p.ej.
+    ~/.kimi-code/skills/harness-flow -> clone de Hermes), la raiz que el host
+    escanea es la del enlace; resolverla devolvia la del clone, y una leccion
+    creada ahi nace invisible para el host que la va a cargar.
+    """
+    for padre in Path(__file__).absolute().parents:
         if padre.name == "skills":
             return [padre]
     return []
@@ -195,30 +227,40 @@ def skills_roots(todos_los_hosts: bool = False) -> list[Path]:
         # Codex/ChatGPT usa .agents/skills. No se anade _raiz_propia(): un symlink
         # desde ~/.agents al clone de Hermes no debe colar las skills de Hermes.
         candidatas = _raices_gpt()
+    elif host == "gemini":
+        # Gemini / AGY usa .gemini/skills, .agents/skills y ~/.gemini/config/skills.
+        candidatas = _raices_gemini()
     elif host == "hermes":
         # La raiz que contiene a esta skill va PRIMERO: si corres la copia instalada
         # en el perfil 'trabajo', mandan las skills de ese perfil, no las del default.
         candidatas = _raiz_propia() + _raices_hermes()
     else:
-        candidatas = _raiz_propia() + _raices_hermes() + _raices_claude() + _raices_gpt()
+        candidatas = _raiz_propia() + _raices_hermes() + _raices_claude() + _raices_gpt() + _raices_gemini()
 
     if todos_los_hosts:
         # Al final: la precedencia del host propio se respeta, los demas son fallback.
         for extra in (_raiz_propia(), _raices_hermes(), _raices_claude(), _raices_gpt(),
-                      _raices_otros_agentes()):
+                      _raices_gemini(), _raices_otros_agentes()):
             candidatas = candidatas + extra
 
-    vistas: list[Path] = []
+    vistas: set[Path] = set()
+    raices: list[Path] = []
     for c in candidatas:
         if not c.is_dir():
             continue
-        real = c.resolve()  # /var vs /private/var, symlinks: una raiz es una sola
-        if real not in vistas:
-            vistas.append(real)
-    if not vistas:
+        real = c.resolve()  # /var vs /private/var, symlinks: una raiz fisica es una sola
+        if real in vistas:
+            continue
+        vistas.add(real)
+        # Se devuelve la ruta declarada (alias), no la resuelta: es la que el
+        # host escanea. Crear en el objetivo de un symlink dejaria la leccion
+        # donde el host no la lee (p.ej. skill de Kimi enlazada al clone de
+        # Hermes). Para buscar da igual: el filesystem sigue el enlace.
+        raices.append(c.absolute())
+    if not raices:
         sys.exit("[!!] no encuentro ninguna raiz de skills (host=%s).\n"
                  "     Define HARNESS_SKILLS_DIR con la raiz correcta." % host)
-    return vistas
+    return raices
 
 
 def skills_root() -> Path:

@@ -5,8 +5,8 @@ gate.py revision --veredicto.
   revision.py --feature <id>              resumen legible
   revision.py --feature <id> --briefing   contexto para delegar a un subagente
 
-El review lo hace un SUBAGENTE en contexto aislado (delegate_task en Hermes,
-la tool Task con subagente general-purpose en Claude Code), que no vio
+El review lo hace un SUBAGENTE en contexto aislado (delegate_task en Hermes;
+en Claude Code la tool Agent con subagent_type harness-flow:revisor), que no vio
 como se implemento. Un revisor que recuerda haber escrito el codigo se aprueba
 solo; uno que solo ve spec + diff, no.
 """
@@ -110,7 +110,7 @@ def cmd_resumen(a) -> None:
 
 
 def cmd_briefing(a) -> None:
-    """Contexto autocontenido para delegate_task: el subagente no sabe nada."""
+    """Contexto autocontenido para el subagente: no sabe nada de esta sesion."""
     p, f, sp, stext = datos(a)
     acs = spec_acs(stext)
     wt, aviso_arbol = arbol_feature(p, f)
@@ -145,7 +145,8 @@ def cmd_briefing(a) -> None:
                     "ves: lee esos archivos en el arbol antes de dictaminar.")
 
     print("=" * 72)
-    print("CONTEXTO PARA EL SUBAGENTE REVISOR (delegate_task.context | prompt de Task)")
+    print("CONTEXTO PARA EL SUBAGENTE REVISOR "
+          "(delegate_task.context en Hermes | prompt de la tool Agent en Claude Code)")
     print("=" * 72)
     for x in (aviso_arbol, aviso_diff):
         if x:

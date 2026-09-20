@@ -1,6 +1,6 @@
 ---
 name: harness-flow
-description: "Use in repos with harness/: spec-driven flow + gates."
+description: "Proceso spec-driven con gates ejecutables para repos que tienen harness/feature_list.json. Usala para: arrancar sesion y ver que hay abierto; escribir un spec con criterios de aceptacion (AC) y llevarlo al ritual de aprobacion del usuario; dejar evidencia por AC citando archivo:linea; lanzar el review en un subagente aislado y sellar su veredicto; correr verify; cerrar una feature hacia su rama con leccion y postmerge medido; generar PRD/SDD; y consultar impacto cross-repo en proyectos multi-repo (Memory Hub, grafo, vault Obsidian, Jira/Confluence). Los gates son scripts que devuelven exit!=0 cuando falta algo: sin spec aprobado no se implementa, sin evidencia por AC no se cierra."
 ---
 
 # Harness Flow
@@ -223,94 +223,37 @@ Reglas en `harness/feature_list.json` → `rules`: `require_spec_approved`, `req
 
 ## Contexto: grafo, hub y vault (contexto.py)
 
-El grafo, el Memory Hub y el vault son el ahorro de tokens del flujo: si estan
-frescos, un implementer o un revisor arranca con un indice en vez de leer el
-repo a ciegas. Si estan viejos, mienten — y nadie los refrescaba solo.
-
-**Una raiz de grafo no alcanza cuando el proyecto vive en varios directorios.**
-El arnes esta instalado en UNA raiz (p.ej. el front), pero los microservicios
-pueden vivir en otro lado del disco. Con un solo `graphify-out`, `graphify
-query "ms-foo ..."` devuelve nodos de la mitad equivocada o nada: el servicio
-que preguntas ni siquiera esta en ese grafo. Se declaran en
-`harness/grafos.json` (nunca autodetectado: barrer el disco mete repos ajenos
-en tu grafo y en el hub):
-
-```json
-{
-  "max_horas": 12,
-  "raices": [
-    {"nombre": "front",  "path": "."},
-    {"nombre": "micros", "path": "~/GolandProjects/miproyecto"}
-  ],
-  "combinado": "graphify-out/merged-graph.json"
-}
-```
-
-Con dos o mas raices, `comun.paths()["graph"]` apunta al **combinado**
-(`graphify merge-graphs`), y ese es el grafo que ven `hub.py
-derivar-graphify`, `vault.py` y el brief. Sin `grafos.json`, todo funciona
-como antes contra `<raiz>/graphify-out/graph.json`.
+Grafo, Memory Hub y vault son el ahorro de tokens del flujo: frescos, el
+implementer y el revisor arrancan con un indice en vez de leer el repo a ciegas;
+viejos, mienten.
 
 ```bash
-$PY "$H/contexto.py" estado              # edad por raiz + combinado + vault
-$PY "$H/contexto.py" refrescar           # update por raiz vencida, merge, hub, vault
-$PY "$H/contexto.py" brief --feature <id>  # indice compacto para trabajar
+$PY "$H/contexto.py" estado            # que hay y que tan viejo esta
+$PY "$H/contexto.py" refrescar         # grafo -> hub -> vault, con parte de fallos
+$PY "$H/contexto.py" brief --feature <id>
 ```
 
-`refrescar` solo toca lo vencido (`max_horas`, 12 por defecto); `--forzar`
-reconstruye todo. Nunca lanza excepcion: devuelve un parte JSON y sale con
-exit≠0 si algo fallo, asi que **un refresco a medias no se reporta como
-exito**.
+`worktree.py start` y `gate.py close --status done` lo refrescan solos si esta
+vencido, y dicen si NO quedo refrescado. `HARNESS_SIN_CONTEXTO=1` apaga solo ese
+refresco automatico.
 
-`HARNESS_SIN_CONTEXTO=1` apaga el refresco **automatico** (los ganchos de
-`start`/`close`), para CI y para los tests del propio arnes, que si no lanzarian
-un `graphify update` real sobre el arbol y tardan minutos. **No** apaga
-`contexto.py refrescar`: un comando explicito que devolviera un parte vacio y en
-verde seria una mentira.
-
-Cuando se refresca solo:
-
-- `worktree.py start` — antes de que el implementer toque nada: refresca si
-  esta vencido e imprime el brief de la feature. `--sin-contexto` lo salta.
-- `gate.py close --status done` — DESPUES del cierre (el arbol cambio, el grafo
-  y el vault describen el codigo anterior). Fuera de la transaccion de
-  rollback: si el refresco falla, avisa; no desarma un cierre ya hecho.
-- `estado.py` reporta la edad por raiz y avisa si el contexto vencio.
-
-**El brief reemplaza al `graphify query` crudo en el flujo.** Una consulta cruda
-devuelve decenas de nodos planos y se trunca a mitad de camino; el brief agrega
-por archivo, se queda con las relaciones de acoplamiento (`imports`, `calls`,
-`references`, `implements`...; descarta `contains`/`method`, que son estructura
-interna) y ordena por cuanto cruza el limite del archivo. Trae ademas los AC con
-su comando, las reglas activas, las rutas protegidas, las lecciones instaladas y
-el impacto cross-repo del hub. `revision.py --briefing` lo incrusta al principio
-del paquete del revisor, con `--max-lineas-brief` para acotarlo.
-
-El brief es un INDICE, no evidencia: ningun AC se da por cumplido porque el
-brief lo mencione. Si el contexto esta vencido, tanto el brief como el briefing
-del revisor lo dicen en la primera linea en vez de fingir estar al dia.
+**Varias raices**: si los microservicios viven fuera de la raiz del arnes, se
+declaran en `harness/grafos.json` y se combinan. Nunca se autodetectan. Formato,
+combinado, que hace cada paso del refresco y como se lee el parte:
+[`references/contexto.md`](references/contexto.md).
 
 ## Memory Hub Postgres
 
-Mismo esquema que el arnés Rust (`graph_nodes`, `graph_edges`), así que el histórico se conserva. Credenciales de `~/.harness-hub/.env` (`DB_HOST`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`, `DB_PORT`, `DB_SSL_MODE` por defecto `require`).
+Grafo multi-repo compartido entre maquinas (`graph_nodes` / `graph_edges`).
+Responde "quien se rompe si toco esto" cruzando repos que no estan en el disco.
 
 ```bash
-$PY "$H/hub.py" mapa                                    # panorama multi-proyecto
-$PY "$H/hub.py" descubrir [--aplicar]                   # repos git bajo la raíz
-$PY "$H/hub.py" impacto --microservicio <proy>/<svc>    # quién se rompe si toco esto
-$PY "$H/hub.py" vincular --consumer <a> --target <b>
-$PY "$H/hub.py" derivar-graphify                        # graphify-out/graph.json -> hub
+$PY "$H/hub.py" impacto --microservicio <proyecto>/<servicio>
 ```
 
-Esquema real del hub (verificado contra la base en producción): las dependencias
-entre microservicios son aristas de tipo **`DEPENDE_DE`**, y los commits son
-**nodos con label `Commit`**, no una propiedad del microservicio. Las props de un
-microservicio son `servicio`, `proyecto`, `path`. No inventes otro vocabulario:
-el hub es compartido con el arnés Rust en la otra máquina y debe seguir cuadrando.
-`props` se fusiona con `||`, así que nunca escribas claves de control (`_id`,
-`_label`) dentro de `props`.
-
-`derivar-graphify` detecta servicios con `(ms-[a-z0-9-]+-service|[a-z0-9-]+-ui)` sobre `source_file` y filtra relaciones `references|implements|depends_on|uses|cites|shares_data_with`.
+Opcional: sin `psycopg` ni `~/.harness-hub/.env` los gates locales funcionan
+igual. Credenciales, esquema, `derivar-graphify` y el resto de subcomandos:
+[`references/hub.md`](references/hub.md).
 
 ## Lecciones (memoria procedural)
 
@@ -349,35 +292,18 @@ El script solo mantiene el bloque entre `<!-- harness-flow:features:start -->` y
 
 ## Obsidian
 
-`docs/vault/` dentro del repo, versionado. Se regenera desde los documentos del
-proceso (features, specs, AC, evidencia, reviews, lecciones, servicios). Los
-nodos del grafo NO entran por defecto: son opt-in con `--con-grafo`.
+`docs/vault/` dentro del repo, versionado, generado desde los documentos del
+proceso (specs, AC, evidencia, reviews, lecciones, servicios) con wikilinks.
 
 ```bash
-$PY "$H/vault.py" build                # regenera docs/vault/ + siembra .obsidian/
+$PY "$H/vault.py" build                # lo corre solo contexto.py refrescar
 $PY "$H/vault.py" build --con-grafo    # ademas, una nota por nodo del grafo
-$PY "$H/vault.py" build --sin-config   # sin tocar la config de Obsidian
 ```
 
-La primera vez siembra `docs/vault/.obsidian/` (tema oscuro, grafo coloreado por
-carpeta, wikilinks cortos, Dataview habilitado, `.gitignore` del ruido de
-sesión). Nunca sobrescribe un archivo existente: en cuanto Obsidian o el usuario
-tocan la config, es suya. Obsidian es gratis y no pide cuenta.
-
-`contexto.py refrescar` ya corre `vault.py build` (y lo dispara `worktree.py
-start` y `gate.py close --status done`), asi que en el flujo normal no hace
-falta invocarlo a mano. Un `vault: ok` de `estado.py` solo dice que la carpeta
-existe: la frescura la reporta `contexto.py estado`.
-
-Enlaza specs ↔ AC ↔ evidencia ↔ lecciones ↔ servicios con wikilinks.
-
-**Los nodos de graphify solo aparecen con `--con-grafo`**, que ni el comando de
-arriba ni el refresco automatico pasan: `contexto.py refrescar` corre `vault.py
-build` pelado. Es deliberado, porque `--con-grafo` escribe una nota por nodo
-(tope 2000) y eso en cada refresco ahoga el vault. Si esperas navegar del spec
-al nodo de codigo y `docs/vault/grafo/` no existe, no es un fallo: es que nadie
-paso la bandera. Corre `vault.py build --con-grafo` a mano cuando quieras ese
-mapa. Ver `references/obsidian.md`.
+Los nodos del grafo son **opt-in**: el refresco automatico corre `build` pelado,
+asi que si `docs/vault/grafo/` no existe no es un fallo, es que nadie paso la
+bandera (una nota por nodo ahoga el vault en cada refresco). Config sembrada,
+que genera cada nota y plugins: [`references/obsidian.md`](references/obsidian.md).
 
 ## Claude Code
 
@@ -469,38 +395,12 @@ esa bandera, `close` solo avisa y no toca sistemas remotos.
 
 ## Lecciones del arnés sobre sí mismo
 
-Salieron de auditar sus propios gates; todas tienen repro verificada.
-
-- **Un gate que deduce el veredicto de un regex sobre texto no es un gate.** El
-  `postmerge.py` viejo parseaba `--- FAIL:` de la salida `-v` y nunca leía el
-  exit code: daba verde con build roto, con `panic` en `init()` y con tests
-  borrados. Si un runner puede fallar sin imprimir la línea que buscás, medí el
-  exit code y el inventario, no el texto.
-- **Cuando existan dos versiones de un gate, la doc tiene que mandar a la buena.**
-  Este SKILL.md documentaba el roto mientras `medicion_destino.py` usaba el
-  medido: quien seguía la doc al pie de la letra usaba el que miente.
-- **Un identificador de test sin su paquete colapsa tests distintos.** Identificá
-  por `(paquete, test)`, o un rojo nuevo se confunde con deuda tolerada de otro.
-- **Contar sólo los rojos nuevos deja pasar los tests que desaparecen.** Sin
-  inventario de lo medido antes, borrar un test es indistinguible de arreglarlo.
-- **Un conteo parcial nunca se reporta como total.** `verify` medía sólo los AC
-  con comando y anunciaba `1/1 en verde` con 3 AC en el spec. Si mediste 3 de 12,
-  decilo en la misma línea del verde.
-- **Una medición vale para la firma con la que se tomó.** Si el spec cambia
-  después del `verify`, el verde viejo habla de otro documento: re-medir.
-- **Un sello contra falsificación debe exigir la firma entera.** Un
-  `Revisado: approved - ok` tipeado a mano pasaba como sellado por el gate.
-- **Una mención no es una declaración.** Al parsear documentos por secciones, una
-  frase que nombra `AC-1` de pasada abría sección y heredaba la cita del AC
-  vecino: daba por cubierto un AC sin evidencia y truncaba el que sí la tenía.
-- **`exists()` no es `is_file()`**, y un glob de un solo nivel no ve las skills
-  anidadas (`mlops/inference/llama-cpp`): el gate de lección bloqueaba cierres
-  legítimos y aceptaba un directorio llamado `SKILL.md`.
-- **Un valor del backlog que termina en una ruta necesita `slugify` + chequeo de
-  contención.** Una lección `../../../README` pisaba archivos del repo.
-- **En un cliente HTTP, el fallo de red debe tratarse como fallo en TODAS las
-  ramas.** `code == 0` faltaba sólo en la creación de issue: persistía
-  `jira_key: null` y el reintento duplicaba la issue en Jira.
+Doce lecciones salidas de auditar sus propios gates, todas con repro verificada:
+por que un regex sobre texto no es un gate, por que un test sin su paquete
+colapsa identidades, por que un conteo parcial no se reporta como total, por que
+un sello tiene que exigir la firma entera. **Leelas antes de tocar un gate o de
+escribir uno nuevo**: cada una nacio de un falso verde que ya paso aqui.
+[`references/lecciones-del-arnes.md`](references/lecciones-del-arnes.md).
 
 ## Cómo auditar este arnés
 
@@ -541,9 +441,45 @@ cómo lanzas el revisor. **No uses `codex exec` fuera de Codex.**
 | Codex | `$CODEX_HOME/skills` (`~/.codex/skills`), `.agents/skills` | `codex exec` con el briefing en el prompt |
 | Gemini CLI | `~/.agents/skills` (`gemini skills list` lo confirma) | subagente propio del CLI |
 | Grok | `.grok/`, `.claude/`, `.cursor/`, `.agents/skills` | `--agent <archivo>` / `--agents <json>` |
-| Kimi Code | `$KIMI_CODE_HOME/skills` (`~/.kimi-code/skills`), `~/.agents/skills` | tool `Agent` (`subagent_type`), o `kimi -p` en sesión nueva |
+| Kimi Code | `$KIMI_CODE_HOME/skills` (`~/.kimi-code/skills`), `~/.agents/skills`, y las de proyecto `.kimi-code/skills` / `.agents/skills` | tool `Agent` (`subagent_type: "revisor"`, vía `kimi.plugin.json`), o `kimi -p --agent-file agents/revisor.md` |
 
 `~/.agents/skills` es el mínimo común múltiplo: los cuatro lo leen. Instala ahí
 si usas más de un CLI. Para las lecciones, `leccion.py` **busca** en todas esas
 raíces (incluidas `.codex`, `.grok` y `.kimi-code`) y **crea** en la del host
-detectado; `leccion.py donde` marca cuál es cuál.
+detectado — en `generic`, en la raíz donde está instalada la propia skill, que
+es la que ese CLI escanea; `leccion.py donde` marca cuál es cuál.
+
+### Kimi Code
+
+Dos instalaciones posibles:
+
+- **Como skill suelta**: clone en `~/.kimi-code/skills/harness-flow` o
+  `~/.agents/skills/harness-flow` (o las de proyecto). Los gates funcionan
+  igual y las lecciones se crean en la raíz donde vive la skill instalada.
+- **Como plugin**: el repo trae `kimi.plugin.json`. `/plugins install
+  <ruta-del-clone>` registra la skill y el agente `revisor`
+  (`agents/revisor.md`), disponible como `subagent_type: "revisor"` en la tool
+  `Agent`. Ojo: Kimi copia el plugin a
+  `$KIMI_CODE_HOME/plugins/managed/harness-flow/` y corre desde esa copia — un
+  `git pull` del clone NO actualiza el plugin; hay que reinstalar.
+
+Sin plugin, el revisor aislado se lanza en sesión nueva con
+`kimi -p --agent-file <skill>/agents/revisor.md "Revisa la feature #<id> ..."`
+pegando el briefing, o con un subagente genérico — declarando que el rigor
+baja. Los `commands/*.md` usan `${CLAUDE_PLUGIN_ROOT}` y son solo de Claude
+Code: en Kimi no se registran; el flujo de este SKILL.md se sigue a mano.
+
+## Referencias (cargalas cuando hagan falta, no antes)
+
+| Archivo | Cuando leerlo |
+| --- | --- |
+| [`references/multirepo.md`](references/multirepo.md) | raiz multi-repo sin `.git`: registro, `--integrated`, postmerge medido |
+| [`references/contexto.md`](references/contexto.md) | varias raices de grafo, el parte de `refrescar`, algo del contexto no cuadra |
+| [`references/lecciones-del-arnes.md`](references/lecciones-del-arnes.md) | **antes de tocar o escribir un gate** |
+| [`references/hub.md`](references/hub.md) | esquema del hub, `derivar-graphify`, credenciales |
+| [`references/obsidian.md`](references/obsidian.md) | que genera el vault, config sembrada, `--con-grafo` |
+| [`references/atlassian.md`](references/atlassian.md) | mapeo a Jira/Confluence y sus comandos |
+| [`references/claude.md`](references/claude.md) | Claude Code: plugin, comandos, Windows, raices de lecciones |
+| [`references/openai.md`](references/openai.md) | GPT/Codex: instalacion, deteccion y raices |
+| [`references/documentacion.md`](references/documentacion.md) | como se generan PRD y SDD |
+

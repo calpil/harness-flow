@@ -56,7 +56,7 @@ class RaicesTests(Base):
         self.skill(repo_skills, "repo-only", "repo-gpt")
         os.environ["HARNESS_HOST"] = "gpt"
         os.chdir(repo)
-        raices = leccion.skills_roots()
+        raices = [r.resolve() for r in leccion.skills_roots()]
         self.assertEqual(raices[0], repo_skills.resolve())
         self.assertIn(personal.resolve(), raices)
         self.assertIn("repo-gpt", leccion.buscar("repo-only").read_text(encoding="utf-8"))
@@ -74,7 +74,7 @@ class RaicesTests(Base):
         os.environ["HARNESS_HOST"] = "gpt"
         os.chdir(repo)
 
-        raices = leccion.skills_roots()
+        raices = [r.resolve() for r in leccion.skills_roots()]
 
         self.assertIn(repo_skills.resolve(), raices)
         self.assertNotIn(fuera.resolve(), raices)
@@ -93,7 +93,7 @@ class RaicesTests(Base):
         with mock.patch.object(leccion, "__file__", str(link / "scripts" / "leccion.py")):
             # CREAR respeta el host: por el symlink en .agents manda GPT, y las
             # raices de Hermes no se cuelan en la precedencia.
-            raices = leccion.skills_roots()
+            raices = [r.resolve() for r in leccion.skills_roots()]
             self.assertIn(agents.resolve(), raices)
             self.assertNotIn((hermes / "cat").resolve(), raices)
             self.assertNotIn(hermes.resolve(), raices)
@@ -110,7 +110,7 @@ class RaicesTests(Base):
         self.skill(proyecto, "tdd", "proyecto")
         os.environ["CLAUDECODE"] = "1"
         os.chdir(Path(self.tmp.name) / "repo")
-        raices = leccion.skills_roots()
+        raices = [r.resolve() for r in leccion.skills_roots()]
         self.assertEqual(raices[0], personal.resolve())
         self.assertIn(proyecto.resolve(), raices)
         self.assertIn("personal", leccion.buscar("tdd").read_text(encoding="utf-8"))
@@ -139,10 +139,11 @@ class RaicesTests(Base):
             # CREAR: solo la raiz de Hermes. BUSCAR: tambien la de Claude, o
             # una leccion escrita desde Claude Code bloquearia un cierre
             # legitimo hecho desde Hermes (test_leccion_multihost.py).
-            self.assertEqual(leccion.skills_roots(), [hermes.resolve()])
+            self.assertEqual([r.resolve() for r in leccion.skills_roots()],
+                             [hermes.resolve()])
             self.assertIsNotNone(leccion.buscar("solo-claude"))
             self.assertIn((self.home / ".claude" / "skills").resolve(),
-                          leccion.skills_roots(todos_los_hosts=True))
+                          [r.resolve() for r in leccion.skills_roots(todos_los_hosts=True)])
 
     def test_sin_host_conocido_cae_a_la_raiz_que_contiene_esta_skill(self):
         # la skill puede estar instalada en cualquier arbol .../skills/<cat>/harness-flow
@@ -153,7 +154,7 @@ class RaicesTests(Base):
         instalada.write_bytes(Path(leccion.__file__).read_bytes())
         os.environ["HARNESS_HOST"] = "generic"
         with mock.patch.object(leccion, "__file__", str(instalada)):
-            self.assertEqual(leccion.skills_roots()[0], raiz.resolve(),
+            self.assertEqual(leccion.skills_roots()[0].resolve(), raiz.resolve(),
                              "en generic manda la raiz que contiene a esta skill")
 
     def test_donde_no_muere_cuando_la_raiz_del_host_no_existe(self):
@@ -239,7 +240,7 @@ class PerfilesHermesTests(Base):
         os.environ["HARNESS_HOST"] = "hermes"
         with mock.patch.object(leccion, "__file__",
                                str(perfil / "cat" / "harness-flow" / "scripts" / "leccion.py")):
-            self.assertEqual(leccion.skills_roots()[0], perfil.resolve())
+            self.assertEqual(leccion.skills_roots()[0].resolve(), perfil.resolve())
             texto = leccion.buscar("tdd").read_text(encoding="utf-8")
         self.assertIn("SOY-DEL-PERFIL", texto)
 

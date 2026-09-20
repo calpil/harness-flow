@@ -157,10 +157,42 @@ class MultiHostTests(unittest.TestCase):
         directorio.mkdir(parents=True, exist_ok=True)
         (directorio / "SKILL.md").write_text(SKILL % directorio.name, encoding="utf-8")
 
+    def test_instalacion_kimi_por_symlink_crea_en_la_raiz_kimi(self):
+        """Skill instalada en ~/.kimi-code/skills via symlink a otro clone.
+
+        _raiz_propia() resolvia el symlink y la deduplicacion devolvia la ruta
+        fisica: `leccion.py donde` mandaba crear la leccion en el clone de
+        Hermes, una raiz que Kimi Code no escanea — la leccion nacia invisible
+        para el host que la iba a usar. Crear vale por la ruta declarada
+        (alias, la que el host escanea); deduplicar, por la ruta fisica.
+        """
+        kimi = self.casa / ".kimi-code" / "skills"
+        kimi.mkdir(parents=True)
+        os.symlink(ROOT, kimi / "harness-flow")
+        env = dict(os.environ, HOME=str(self.casa))
+        for k in ("HARNESS_SKILLS_DIR", "HARNESS_HOST", "HERMES_SKILLS_DIR",
+                  "HERMES_HOME", "HERMES_PYTHON", "CLAUDE_CONFIG_DIR", "CLAUDECODE",
+                  "CODEX_HOME", "KIMI_CODE_HOME"):
+            env.pop(k, None)
+        r = subprocess.run(
+            [sys.executable, str(kimi / "harness-flow" / "scripts" / "leccion.py"), "donde"],
+            capture_output=True, text=True, env=env, cwd=str(self.casa))
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        primera = r.stdout.splitlines()[0]
+        self.assertEqual(Path(primera).resolve(), kimi.resolve(),
+                         "la raiz de creacion debe ser la que Kimi escanea: " + r.stdout)
+
     def test_las_raices_ajenas_no_sirven_para_crear(self):
-        """Solo para buscar: una skill nueva no nace en el CLI de otro."""
+        """Solo para buscar: una skill nueva no nace en el CLI de otro.
+
+        Excepcion: si la propia harness-flow esta instalada ahi (p.ej. Kimi
+        Code en ~/.kimi-code/skills), ESA es la raiz del host que la corre.
+        """
         propias = leccion.skills_roots()
+        propia = {p.resolve() for p in leccion._raiz_propia()}
         for raiz in propias:
+            if raiz.resolve() in propia:
+                continue
             self.assertFalse(
                 any(parte in raiz.parts for parte in (".codex", ".grok", ".kimi-code")),
                 f"la raiz de creacion {raiz} es de otro agente")

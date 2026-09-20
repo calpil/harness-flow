@@ -22,11 +22,15 @@ from pathlib import Path
 ES_WINDOWS = os.name == "nt"
 
 
-HOSTS_VALIDOS = ("hermes", "claude", "gpt", "codex", "generic")
+HOSTS_VALIDOS = ("hermes", "claude", "gpt", "codex", "gemini", "agy", "generic")
 
 
 def _canon_host(host: str) -> str:
-    return "gpt" if host == "codex" else host
+    if host == "codex":
+        return "gpt"
+    if host == "agy":
+        return "gemini"
+    return host
 
 
 def host_agente() -> str:
@@ -34,9 +38,14 @@ def host_agente() -> str:
     explicit = os.environ.get("HARNESS_HOST")
     if explicit:
         if explicit not in HOSTS_VALIDOS:
-            raise ValueError("HARNESS_HOST debe ser hermes, claude, gpt, codex o generic")
+            raise ValueError("HARNESS_HOST debe ser hermes, claude, gpt, codex, gemini, agy o generic")
         return _canon_host(explicit)
-    # No resolve(): un symlink en .agents o .claude puede apuntar al clone de Hermes.
+    # No resolve(): un symlink en .agents, .gemini o .claude puede apuntar al clone de Hermes.
+    for padre in Path(__file__).absolute().parents:
+        if padre.name == "skills" and (padre.parent.name == ".gemini" or padre.parent.parent.name == ".gemini"):
+            return "gemini"
+    if any(k.startswith("ANTIGRAVITY_") for k in os.environ) or os.environ.get("GEMINI_CLI"):
+        return "gemini"
     for padre in Path(__file__).absolute().parents:
         if padre.name == "skills" and padre.parent.name == ".agents":
             return "gpt"
@@ -167,7 +176,7 @@ def main() -> int:
     g = ap.add_mutually_exclusive_group()
     g.add_argument("--shell", action="store_true", help="exports para bash/zsh (usar con eval)")
     g.add_argument("--powershell", action="store_true", help="asignaciones para PowerShell")
-    ap.add_argument("--host", choices=("hermes", "claude", "gpt", "codex", "generic"),
+    ap.add_argument("--host", choices=("hermes", "claude", "gpt", "codex", "gemini", "agy", "generic"),
                     help="host explicito; gana sobre la autodeteccion")
     ap.add_argument("--hub", action="store_true",
                     help="exige psycopg (el Memory Hub Postgres): exit!=0 si falta")
