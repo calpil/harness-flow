@@ -631,7 +631,7 @@ def cmd_close(args) -> None:
             if not buscar_leccion(args.leccion):
                 fallos.append(
                     f"la leccion '{args.leccion}' no existe como skill "
-                    "(creala antes de cerrar: skill_manage en Hermes, SKILL.md en Claude Code/GPT)")
+                    "(creala antes de cerrar: skill_manage en Hermes; SKILL.md en Claude Code, GPT o Grok)")
 
     if fallos:
         print(f"[!!] close #{fid} BLOQUEADO por {len(fallos)} regla(s):")

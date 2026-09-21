@@ -4,7 +4,7 @@
 Una leccion es una skill por CLASE de trabajo (nunca por id de feature). Asi
 viaja contigo entre proyectos y el agente la carga sola cuando aplica, en vez
 de quedarse enterrada en el docs/ de un repo. Funciona con Hermes, Claude
-Code y GPT/Codex: la raiz de skills se detecta segun el host.
+Code, GPT/Codex y Grok: la raiz de skills se detecta segun el host.
 
   leccion.py list                skills disponibles (candidatas a leccion)
   leccion.py ver <clase>         imprime la skill
@@ -13,8 +13,8 @@ Code y GPT/Codex: la raiz de skills se detecta segun el host.
   leccion.py plantilla <clase>   esqueleto de SKILL.md
 
 El AGENTE escribe y patchea las lecciones con la herramienta de su host
-(skill_manage en Hermes; escribiendo el SKILL.md en Claude Code), no este
-script. HARNESS_SKILLS_DIR fuerza una raiz unica si la deteccion no aplica.
+(skill_manage en Hermes; escribiendo el SKILL.md en Claude Code, GPT y Grok),
+no este script. HARNESS_SKILLS_DIR fuerza una raiz unica si la deteccion no aplica.
 """
 from __future__ import annotations
 
@@ -47,6 +47,7 @@ def _host() -> str:
         sys.exit("[!!] %s" % exc)
     except Exception:
         # entorno.py ausente o roto (copia parcial): heuristica minima equivalente
+        # Misma precedencia que entorno.host_agente, por si entorno.py no carga.
         explicit = os.environ.get("HARNESS_HOST")
         if explicit:
             if explicit == "codex":
@@ -54,6 +55,12 @@ def _host() -> str:
             if explicit == "agy":
                 return "gemini"
             return explicit
+        grok = os.environ.get("GROK_AGENT")
+        if grok is not None and grok.strip().lower() not in ("", "0", "false", "off", "no"):
+            return "grok"
+        for padre in Path(__file__).absolute().parents:
+            if padre.name == "skills" and padre.parent.name == ".grok":
+                return "grok"
         for padre in Path(__file__).absolute().parents:
             if padre.name == "skills" and (padre.parent.name == ".gemini" or padre.parent.parent.name == ".gemini"):
                 return "gemini"
@@ -117,6 +124,17 @@ def _raices_gpt() -> list[Path]:
     raices.append(_casa() / ".agents" / "skills")
     raices.append(Path("/etc/codex/skills"))
     return raices
+
+
+def _raices_grok() -> list[Path]:
+    """Perfil personal de Grok. Una leccion no se commitea en el repo.
+
+    Grok no escanea ~/.hermes/skills. Crear ahi (el clone, o el host equivocado
+    hermes) deja una leccion que el gate encuentra y la sesion siguiente no carga.
+    ~/.agents/skills tambien la lee, pero es la raiz de GPT: en grok se crea en
+    la raiz nativa.
+    """
+    return [_casa() / ".grok" / "skills"]
 
 
 def _raices_gemini() -> list[Path]:
@@ -240,6 +258,10 @@ def skills_roots(todos_los_hosts: bool = False) -> list[Path]:
     elif host == "gemini":
         # Gemini / AGY usa .gemini/skills, .agents/skills y ~/.gemini/config/skills.
         candidatas = _raices_gemini()
+    elif host == "grok":
+        # No se anade _raiz_propia(): el script vive en el clone de Hermes o
+        # entra por symlink desde .agents, y ninguna de las dos la carga Grok.
+        candidatas = _raices_grok()
     elif host == "hermes":
         # La raiz que contiene a esta skill va PRIMERO: si corres la copia instalada
         # en el perfil 'trabajo', mandan las skills de ese perfil, no las del default.
@@ -370,10 +392,19 @@ def cmd_existe(args) -> None:
         raices = "\n       ".join(str(r) for r in skills_roots(todos_los_hosts=True))
         sys.exit("[!!] la leccion '%s' no existe como skill.\n"
                  "     Raices consultadas:\n       %s\n"
-                 "     Creala (skill_manage en Hermes; SKILL.md en Claude Code/GPT), o cierra con\n"
+                 "     Creala (skill_manage en Hermes; SKILL.md en Claude Code, GPT o Grok), o cierra con\n"
                  "     --leccion ninguna --leccion-motivo '<por que>'."
                  % (args.clase, raices))
     print("[ok] %s -> %s" % (args.clase, sm))
+
+
+def _raiz_grok_aunque_no_exista() -> Path | None:
+    """~/.grok/skills aunque falte el directorio. 'donde' tiene que decir cual crear."""
+    if os.environ.get("HARNESS_SKILLS_DIR"):
+        return None
+    if _host() != "grok":
+        return None
+    return _raices_grok()[0]
 
 
 def cmd_donde(args) -> None:
@@ -382,18 +413,26 @@ def cmd_donde(args) -> None:
     No puede morir si la raiz del host no existe todavia en disco: 'donde' es
     justo lo que corres para averiguar cual crear.
     """
-    todas = skills_roots(todos_los_hosts=True)
+    try:
+        todas = skills_roots(todos_los_hosts=True)
+    except SystemExit:
+        todas = []
     try:
         propias = skills_roots()
     except SystemExit:
         propias = []
+    ausente = None if propias else _raiz_grok_aunque_no_exista()
     if propias:
         print(propias[0])
+    elif ausente is not None:
+        print(ausente)
     else:
-        print(f"[!] ninguna raiz propia del host existe todavia; creala tu.",
+        print("[!] ninguna raiz propia del host existe todavia; creala tu.",
               file=sys.stderr)
     for raiz in todas:
         if propias and raiz == propias[0]:
+            continue
+        if ausente is not None and raiz == ausente:
             continue
         marca = "" if raiz in propias else "   # solo consulta (otro agente)"
         print(f"{raiz}{marca}")
@@ -424,8 +463,9 @@ def cmd_plantilla(args) -> None:
     print(PLANTILLA.format(clase=args.clase))
     print("[i]  Hermes: skill_manage(action='create', name='%s', content=...)\n"
           "     Claude Code: escribelo en <raiz>/%s/SKILL.md (leccion.py donde)\n"
-          "     GPT/Codex: escribelo en <raiz>/%s/SKILL.md, tipicamente ~/.agents/skills/%s/SKILL.md"
-          % (args.clase, args.clase, args.clase, args.clase), file=sys.stderr)
+          "     GPT/Codex: escribelo en <raiz>/%s/SKILL.md, tipicamente ~/.agents/skills/%s/SKILL.md\n"
+          "     Grok: escribelo en ~/.grok/skills/%s/SKILL.md (leccion.py donde)"
+          % (args.clase, args.clase, args.clase, args.clase, args.clase), file=sys.stderr)
 
 
 def main() -> None:

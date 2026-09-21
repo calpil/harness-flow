@@ -16,7 +16,7 @@ harness-flow/
   commands/*.md             <- estado, producto, spec, review, cierre
 ```
 
-Hermes y GPT/Codex no miran `.claude-plugin/` ni `commands/`, asi que la capa
+Hermes, GPT/Codex y Grok no miran `.claude-plugin/` ni `commands/`, asi que la capa
 nativa de Claude no rompe la neutralidad de host: son archivos inertes para ellos.
 
 ## Instalacion

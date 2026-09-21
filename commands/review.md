@@ -3,6 +3,9 @@ description: Rol reviewer de harness-flow — lanza el subagente revisor aislado
 argument-hint: <id-feature>
 ---
 
+> **Grok.** Este archivo no se registra como comando. El revisor se lanza con
+> `spawn_subagent` segun `references/grok.md`. `${CLAUDE_PLUGIN_ROOT}` ahi no existe.
+
 # harness-flow: review (rol reviewer)
 
 Review de la feature `$1`. **El review no lo haces tu.** Un revisor que recuerda

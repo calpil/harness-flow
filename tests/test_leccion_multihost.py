@@ -35,6 +35,17 @@ class MultiHostTests(unittest.TestCase):
         (self.casa / ".hermes" / "skills").mkdir(parents=True)
         (self.casa / ".agents" / "skills").mkdir(parents=True)
         (self.casa / ".gemini" / "config" / "skills").mkdir(parents=True)
+        # Una sesion de Grok deja GROK_AGENT en el entorno. Estos tests fijan
+        # el host por HARNESS_HOST o por la ruta; la marca no puede pisarlos.
+        self._marcas = {k: os.environ.pop(k, None) for k in ("GROK_AGENT", "GROK_SESSION_ID")}
+        self.addCleanup(self._restaurar_marcas)
+
+    def _restaurar_marcas(self):
+        for k, v in self._marcas.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
 
     def crear(self, raiz, nombre):
         d = self.casa / raiz / "skills" / nombre
@@ -51,6 +62,8 @@ class MultiHostTests(unittest.TestCase):
         env.pop("CODEX_HOME", None)
         env.pop("KIMI_CODE_HOME", None)
         env.pop("ANTIGRAVITY_AGENT", None)
+        env.pop("GROK_AGENT", None)
+        env.pop("GROK_SESSION_ID", None)
         env["HARNESS_HOST"] = host
         return subprocess.run(
             [sys.executable, str(SCRIPTS / "leccion.py"), "existe", nombre],
@@ -68,7 +81,7 @@ class MultiHostTests(unittest.TestCase):
 
     def test_leccion_de_agents_vale_desde_los_hosts(self):
         self.crear(".agents", "solo-en-agents")
-        for host in ("hermes", "claude", "gpt", "gemini"):
+        for host in ("hermes", "claude", "gpt", "gemini", "grok"):
             with self.subTest(host=host):
                 r = self.existe("solo-en-agents", host)
                 self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
@@ -77,13 +90,13 @@ class MultiHostTests(unittest.TestCase):
         d = self.casa / ".gemini" / "config" / "skills" / "solo-en-gemini"
         d.mkdir(parents=True, exist_ok=True)
         (d / "SKILL.md").write_text(SKILL % "solo-en-gemini", encoding="utf-8")
-        for host in ("hermes", "claude", "gpt", "gemini"):
+        for host in ("hermes", "claude", "gpt", "gemini", "grok"):
             with self.subTest(host=host):
                 r = self.existe("solo-en-gemini", host)
                 self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
 
     def test_inexistente_sigue_bloqueando_en_todos_los_hosts(self):
-        for host in ("hermes", "claude", "gpt", "gemini"):
+        for host in ("hermes", "claude", "gpt", "gemini", "grok"):
             with self.subTest(host=host):
                 r = self.existe("no-existe-xyz", host)
                 self.assertNotEqual(r.returncode, 0,
@@ -111,7 +124,7 @@ class MultiHostTests(unittest.TestCase):
                              (".grok", "leccion-de-grok"),
                              (".kimi-code", "leccion-de-kimi")):
             self.crear(raiz, nombre)
-            for host in ("hermes", "claude", "gpt", "generic"):
+            for host in ("hermes", "claude", "gpt", "generic", "grok"):
                 with self.subTest(raiz=raiz, host=host):
                     r = self.existe(nombre, host)
                     self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
@@ -125,7 +138,8 @@ class MultiHostTests(unittest.TestCase):
             SKILL % "leccion-movida", encoding="utf-8")
         env = dict(_os.environ, HOME=str(self.casa), CODEX_HOME=str(aparte))
         for k in ("HARNESS_SKILLS_DIR", "HERMES_SKILLS_DIR", "HERMES_HOME",
-                  "CLAUDE_CONFIG_DIR", "CLAUDECODE", "KIMI_CODE_HOME"):
+                  "CLAUDE_CONFIG_DIR", "CLAUDECODE", "KIMI_CODE_HOME",
+                  "GROK_AGENT", "GROK_SESSION_ID"):
             env.pop(k, None)
         env["HARNESS_HOST"] = "gpt"
         r = _sp.run([sys.executable, str(SCRIPTS / "leccion.py"), "existe", "leccion-movida"],
@@ -153,7 +167,8 @@ class MultiHostTests(unittest.TestCase):
 
         env = dict(_os.environ, HOME=str(self.casa), HARNESS_HOST="gpt")
         for k in ("HARNESS_SKILLS_DIR", "HERMES_SKILLS_DIR", "HERMES_HOME",
-                  "CLAUDE_CONFIG_DIR", "CLAUDECODE", "CODEX_HOME", "KIMI_CODE_HOME"):
+                  "CLAUDE_CONFIG_DIR", "CLAUDECODE", "CODEX_HOME", "KIMI_CODE_HOME",
+                  "GROK_AGENT", "GROK_SESSION_ID"):
             env.pop(k, None)
 
         def existe_desde(nombre):
@@ -183,7 +198,8 @@ class MultiHostTests(unittest.TestCase):
         env = dict(os.environ, HOME=str(self.casa))
         for k in ("HARNESS_SKILLS_DIR", "HARNESS_HOST", "HERMES_SKILLS_DIR",
                   "HERMES_HOME", "HERMES_PYTHON", "CLAUDE_CONFIG_DIR", "CLAUDECODE",
-                  "CODEX_HOME", "KIMI_CODE_HOME", "ANTIGRAVITY_AGENT", "GEMINI_CLI"):
+                  "CODEX_HOME", "KIMI_CODE_HOME", "ANTIGRAVITY_AGENT", "GEMINI_CLI",
+                  "GROK_AGENT", "GROK_SESSION_ID"):
             env.pop(k, None)
         r = subprocess.run(
             [sys.executable, str(kimi / "harness-flow" / "scripts" / "leccion.py"), "donde"],
@@ -192,6 +208,21 @@ class MultiHostTests(unittest.TestCase):
         primera = r.stdout.splitlines()[0]
         self.assertEqual(Path(primera).resolve(), kimi.resolve(),
                          "la raiz de creacion debe ser la que Kimi escanea: " + r.stdout)
+
+    def test_grok_agent_crea_en_grok_aunque_el_script_viva_en_hermes(self):
+        """El clone esta en ~/.hermes. Sin la marca, 'donde' mandaria crear ahi."""
+        grok = self.casa / ".grok" / "skills"
+        grok.mkdir(parents=True)
+        env = dict(os.environ, HOME=str(self.casa), GROK_AGENT="1")
+        for k in ("HARNESS_SKILLS_DIR", "HARNESS_HOST", "HERMES_SKILLS_DIR",
+                  "HERMES_HOME", "HERMES_PYTHON", "CLAUDE_CONFIG_DIR", "CLAUDECODE"):
+            env.pop(k, None)
+        r = subprocess.run(
+            [sys.executable, str(SCRIPTS / "leccion.py"), "donde"],
+            capture_output=True, text=True, env=env, cwd=str(self.casa))
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertEqual(Path(r.stdout.splitlines()[0]).resolve(), grok.resolve(),
+                         r.stdout)
 
     def test_las_raices_ajenas_no_sirven_para_crear(self):
         """Solo para buscar: una skill nueva no nace en el CLI de otro.

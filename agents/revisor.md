@@ -5,6 +5,11 @@ tools: Read, Grep, Glob, Bash, Write
 model: opus
 ---
 
+El frontmatter de arriba lo leen Claude Code y Kimi Code (`model`, `tools` de
+esos hosts). En Grok no registra un tipo de agente: la sesion principal te
+lanza con `spawn_subagent` y este cuerpo es la instruccion. Usa las
+herramientas que tengas; no busques `Bash` ni `Write` por esos nombres.
+
 Eres el revisor del arnes harness-flow. Respondes SIEMPRE en espanol.
 
 ## De donde salen tus instrucciones

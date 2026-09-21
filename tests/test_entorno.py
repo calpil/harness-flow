@@ -296,6 +296,52 @@ class EntornoTests(unittest.TestCase):
         os.environ["HARNESS_HOST"] = "agy"
         self.assertEqual(entorno.host_agente(), "gemini")
 
+    def test_grok_en_ejecucion_gana_a_la_ruta_agents_y_al_clone_hermes(self):
+        # Grok carga la skill por symlink ~/.agents -> clone en ~/.hermes.
+        # La ruta sola diria gpt o hermes; el proceso es grok.
+        os.environ["GROK_AGENT"] = "1"
+        agents = self.home / ".agents/skills/harness-flow/scripts/entorno.py"
+        agents.parent.mkdir(parents=True)
+        agents.touch()
+        with mock.patch.object(entorno, "__file__", str(agents)):
+            self.assertEqual(entorno.host_agente(), "grok")
+        os.environ["HERMES_HOME"] = str(self.home / ".hermes")
+        hermes = self.home / ".hermes/skills/software-development/harness-flow/scripts/entorno.py"
+        hermes.parent.mkdir(parents=True)
+        hermes.touch()
+        with mock.patch.object(entorno, "__file__", str(hermes)):
+            self.assertEqual(entorno.host_agente(), "grok")
+
+    def test_marca_grok_apagada_no_pisa_la_ruta(self):
+        os.environ["GROK_AGENT"] = "0"
+        script = self.home / ".agents/skills/harness-flow/scripts/entorno.py"
+        script.parent.mkdir(parents=True)
+        script.touch()
+        with mock.patch.object(entorno, "__file__", str(script)):
+            self.assertEqual(entorno.host_agente(), "gpt")
+        os.environ["GROK_AGENT"] = "false"
+        with mock.patch.object(entorno, "__file__", str(script)):
+            self.assertEqual(entorno.host_agente(), "gpt")
+
+    def test_ruta_grok_skills_detecta_host_sin_env(self):
+        script = self.home / ".grok/skills/harness-flow/scripts/entorno.py"
+        script.parent.mkdir(parents=True)
+        script.touch()
+        with mock.patch.object(entorno, "__file__", str(script)):
+            self.assertEqual(entorno.host_agente(), "grok")
+
+    def test_host_explicito_gana_a_grok_agent(self):
+        os.environ.update(HARNESS_HOST="hermes", GROK_AGENT="1")
+        self.assertEqual(entorno.host_agente(), "hermes")
+        os.environ["HARNESS_HOST"] = "grok"
+        self.assertEqual(entorno.host_agente(), "grok")
+
+    def test_shell_acepta_host_grok(self):
+        os.environ["HARNESS_PYTHON"] = sys.executable
+        rc, out, err = self.cli("--host", "grok", "--shell")
+        self.assertEqual(rc, 0, err)
+        self.assertIn("HARNESS_HOST=grok", out.replace("'", ""))
+
 
 if __name__ == "__main__":
     unittest.main()

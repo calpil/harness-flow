@@ -1,7 +1,7 @@
 # harness-flow
 
 Skill para [Hermes Agent](https://hermes-agent.nousresearch.com),
-[Claude Code](https://code.claude.com) y OpenAI GPT/Codex que implementa un proceso de desarrollo
+[Claude Code](https://code.claude.com), OpenAI GPT/Codex y Grok que implementa un proceso de desarrollo
 spec-driven para proyectos multi-repo, con gates ejecutables.
 
 Es el puerto del arnés Rust `harness_process` a un agente: **sin binario, sin
@@ -9,7 +9,7 @@ instalador por proyecto, sin compilar por sistema operativo**. El proceso vive e
 esta skill; los gates son scripts Python que devuelven exit≠0 cuando algo falta.
 
 Los scripts son stdlib puro (salvo `psycopg` para el hub Postgres) y detectan el
-host solos; lo único que cambia entre Hermes, Claude Code y GPT/Codex son las herramientas
+host solos; lo único que cambia entre Hermes, Claude Code, GPT/Codex y Grok son las herramientas
 del agente para lanzar el subagente revisor y escribir lecciones.
 
 ## Qué hace
@@ -69,11 +69,22 @@ ln -s ~/.hermes/skills/software-development/harness-flow \
   ~/.claude/skills/harness-flow
 ```
 
-**Otros CLIs** (Gemini CLI, Grok, Kimi Code) leen el mismo `SKILL.md`. Los
-cuatro cargan `~/.agents/skills`, asi que un solo clone ahi los cubre; la tabla
-"Otros CLIs que leen SKILL.md" del `SKILL.md` dice que raiz usa cada uno y como
-se lanza su subagente revisor. `leccion.py` busca lecciones tambien en
-`~/.codex/skills`, `~/.grok/skills` y `~/.kimi-code/skills`.
+**Grok** lee `~/.agents/skills` y `~/.grok/skills` (tambien `.claude/skills` y
+`.cursor/skills` si esa compatibilidad esta encendida). No lee `~/.hermes/skills`.
+Con el clone de Hermes, un symlink basta:
+
+```bash
+ln -s ~/.hermes/skills/software-development/harness-flow \
+  ~/.agents/skills/harness-flow
+```
+
+En una sesion de Grok `entorno.py` reporta host `grok` (`GROK_AGENT`), aunque
+el script resuelva al clone. El revisor es `spawn_subagent` y las lecciones se
+escriben en `~/.grok/skills`. Ver [`references/grok.md`](references/grok.md).
+
+**Otros CLIs** (Gemini CLI, Kimi Code) leen el mismo `SKILL.md`. Gemini carga
+`~/.agents/skills`. `leccion.py` busca lecciones tambien en `~/.codex/skills`,
+`~/.grok/skills` y `~/.kimi-code/skills`.
 
 Kimi Code ademas puede instalar el repo como plugin (`/plugins install
 <ruta-del-clone>`, manifiesto `kimi.plugin.json`): registra el agente `revisor`
@@ -170,7 +181,7 @@ Sin flags, `entorno.py` imprime un diagnóstico (SO, host detectado, rutas, si
 `psycopg` está presente) y sale con exit≠0 si no puede resolver un intérprete
 usable. La falta de `psycopg` solo es error con `--hub`, porque los gates
 locales funcionan sin el Memory Hub. Si la detección no
-acierta, `--host claude|hermes|gpt|codex|generic` la fuerza, y `HARNESS_PYTHON` /
+acierta, `--host claude|hermes|gpt|codex|gemini|agy|grok|generic` la fuerza, y `HARNESS_PYTHON` /
 `HARNESS_SKILLS_DIR` sobrescriben intérprete y raíz de skills.
 
 Credenciales en `~/.harness-hub/.env` (fuera de todo repo, por máquina):
@@ -261,7 +272,7 @@ SKILL.md                 el proceso que sigue el agente
 .claude-plugin/          manifiesto del plugin skills-dir (solo Claude Code)
 kimi.plugin.json         manifiesto de plugin para Kimi Code (skill + agente revisor)
 agents/openai.yaml       metadata para invocacion automatica en GPT/Codex
-agents/revisor.md        subagente revisor aislado (Claude Code y Kimi Code)
+agents/revisor.md        subagente revisor (Claude Code y Kimi lo registran; Grok lee el cuerpo)
 commands/                atajos /harness-flow:... (solo Claude Code)
 scripts/
   entorno.py             detecta host, H y PY por SO (Windows/Linux/macOS)
@@ -280,7 +291,7 @@ scripts/
   estado.py              panorama al entrar al proyecto
 tests/                   regresiones del port neutro
 templates/               spec, evidencia, review, prd, sdd
-references/              Claude Code, OpenAI, Obsidian, Atlassian, multirepo
+references/              Claude Code, OpenAI, Grok, Obsidian, Atlassian, multirepo
 ```
 
 ## Licencia

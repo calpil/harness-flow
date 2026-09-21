@@ -24,7 +24,9 @@ Codex moderno instala las skills en `$CODEX_HOME/skills` (por defecto
 `~/.codex/skills`) -- es donde las deja su propio tooling -- y ademas lee
 `.agents/skills`. En entornos administrados tambien mira `/etc/codex/skills`.
 Si usas varios CLIs, `~/.agents/skills` es el minimo comun multiplo: Codex,
-Gemini CLI, Grok y Kimi Code leen los cuatro esa raiz.
+Gemini CLI, Grok y Kimi Code leen esa raiz. Grok, cuando el host detectado es
+`grok`, crea las lecciones en `~/.grok/skills` (ver `references/grok.md`);
+seguir buscandolas aqui no cambia.
 
 ## Autodeteccion
 

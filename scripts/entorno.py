@@ -22,7 +22,11 @@ from pathlib import Path
 ES_WINDOWS = os.name == "nt"
 
 
-HOSTS_VALIDOS = ("hermes", "claude", "gpt", "codex", "gemini", "agy", "generic")
+HOSTS_VALIDOS = ("hermes", "claude", "gpt", "codex", "gemini", "agy", "grok", "generic")
+
+# GROK_AGENT lo pone el proceso de Grok. 0/false/off/no no cuentan: si no, un
+# valor apagado seguido de la ruta del clone clasificaria la sesion como grok.
+_MARCA_APAGADA = frozenset({"", "0", "false", "off", "no"})
 
 
 def _canon_host(host: str) -> str:
@@ -33,14 +37,35 @@ def _canon_host(host: str) -> str:
     return host
 
 
+def _marca_encendida(valor: str | None) -> bool:
+    if valor is None:
+        return False
+    return valor.strip().lower() not in _MARCA_APAGADA
+
+
+def _en_proceso_grok() -> bool:
+    """True cuando este proceso es una sesion de Grok, no cuando el archivo vive ahi.
+
+    El clone esta en ~/.hermes y Grok lo carga por symlink desde ~/.agents/skills.
+    La ruta diria hermes o gpt. GROK_AGENT dice quien esta ejecutando.
+    """
+    return _marca_encendida(os.environ.get("GROK_AGENT"))
+
+
 def host_agente() -> str:
     """Host de ejecucion, no necesariamente el dueno del archivo enlazado."""
     explicit = os.environ.get("HARNESS_HOST")
     if explicit:
         if explicit not in HOSTS_VALIDOS:
-            raise ValueError("HARNESS_HOST debe ser hermes, claude, gpt, codex, gemini, agy o generic")
+            raise ValueError("HARNESS_HOST debe ser " + ", ".join(HOSTS_VALIDOS))
         return _canon_host(explicit)
-    # No resolve(): un symlink en .gemini, .agents o .claude puede apuntar al clone de Hermes.
+    # Antes que la ruta: Grok ejecuta el script del symlink o del clone.
+    if _en_proceso_grok():
+        return "grok"
+    # No resolve(): un symlink en .grok, .gemini, .agents o .claude puede apuntar al clone de Hermes.
+    for padre in Path(__file__).absolute().parents:
+        if padre.name == "skills" and padre.parent.name == ".grok":
+            return "grok"
     for padre in Path(__file__).absolute().parents:
         if padre.name == "skills" and (padre.parent.name == ".gemini" or padre.parent.parent.name == ".gemini"):
             return "gemini"
@@ -176,7 +201,7 @@ def main() -> int:
     g = ap.add_mutually_exclusive_group()
     g.add_argument("--shell", action="store_true", help="exports para bash/zsh (usar con eval)")
     g.add_argument("--powershell", action="store_true", help="asignaciones para PowerShell")
-    ap.add_argument("--host", choices=("hermes", "claude", "gpt", "codex", "gemini", "agy", "generic"),
+    ap.add_argument("--host", choices=HOSTS_VALIDOS,
                     help="host explicito; gana sobre la autodeteccion")
     ap.add_argument("--hub", action="store_true",
                     help="exige psycopg (el Memory Hub Postgres): exit!=0 si falta")

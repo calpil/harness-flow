@@ -14,7 +14,7 @@ import leccion  # noqa: E402
 
 VARS = ("HARNESS_SKILLS_DIR", "HARNESS_HOST", "HERMES_SKILLS_DIR", "HERMES_HOME",
         "CLAUDECODE", "CLAUDE_CONFIG_DIR", "HOME", "USERPROFILE",
-        "ANTIGRAVITY_AGENT", "GEMINI_CLI")
+        "ANTIGRAVITY_AGENT", "GEMINI_CLI", "GROK_AGENT", "GROK_SESSION_ID")
 
 
 class Base(unittest.TestCase):
@@ -171,6 +171,29 @@ class RaicesTests(Base):
         with mock.patch.object(leccion, "__file__", str(instalada)):
             self.assertEqual(leccion.skills_roots()[0].resolve(), raiz.resolve(),
                              "en generic manda la raiz que contiene a esta skill")
+
+    def test_grok_crea_en_el_perfil_y_sigue_encontrando_las_de_hermes(self):
+        perfil = self.home / ".grok" / "skills"
+        self.skill(perfil, "tdd", "personal-grok")
+        self.skill(self.home / ".hermes" / "skills", "solo-hermes")
+        os.environ["HARNESS_HOST"] = "grok"
+        raices = [r.resolve() for r in leccion.skills_roots()]
+        self.assertEqual(raices, [perfil.resolve()])
+        self.assertIn("personal-grok", leccion.buscar("tdd").read_text(encoding="utf-8"))
+        self.assertIsNotNone(leccion.buscar("solo-hermes"))
+
+    def test_donde_dice_la_raiz_grok_aunque_no_exista(self):
+        import subprocess
+        env = dict(os.environ, HOME=str(self.home), HARNESS_HOST="grok")
+        for k in ("HARNESS_SKILLS_DIR", "HERMES_SKILLS_DIR", "HERMES_HOME",
+                  "CLAUDE_CONFIG_DIR", "CLAUDECODE", "GROK_AGENT"):
+            env.pop(k, None)
+        r = subprocess.run(
+            [sys.executable, str(Path(leccion.__file__).resolve()), "donde"],
+            capture_output=True, text=True, env=env, cwd=str(self.home))
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertEqual(Path(r.stdout.splitlines()[0]).resolve(),
+                         (self.home / ".grok" / "skills").resolve())
 
     def test_donde_no_muere_cuando_la_raiz_del_host_no_existe(self):
         """'donde' es justo lo que corres para saber que raiz crear."""
