@@ -6,6 +6,7 @@ import json
 import os
 import re
 import subprocess
+import sys
 import unicodedata
 from datetime import datetime, timezone
 from pathlib import Path
@@ -424,13 +425,20 @@ def sello_revision(text: str) -> str | None:
 # --- git / bitacora --------------------------------------------------------
 
 def git(args: list[str], cwd: Path) -> tuple[int, str]:
+    """Datos de stdout al tener exito; diagnostico completo al fallar."""
     try:
         # LC_ALL=C: el codigo compara mensajes de git ("already exists"). Con
         # git localizado (gettext en Linux) esas ramas nunca disparaban.
         env = dict(os.environ, LC_ALL="C", LANGUAGE="")
         r = subprocess.run(["git", *args], cwd=str(cwd), capture_output=True,
                            text=True, timeout=60, env=env)
-        return r.returncode, (r.stdout + r.stderr).strip()
+        if r.returncode != 0:
+            return r.returncode, (r.stdout + r.stderr).strip()
+        # Los consumidores parsean status, ramas y SHAs. Una advertencia en
+        # stderr (p.ej. confstr en el sandbox macOS) no es parte de esos datos.
+        if r.stderr:
+            print(r.stderr, file=sys.stderr, end="")
+        return 0, r.stdout
     except Exception as e:  # git ausente o repo raro: no es fatal
         return 1, str(e)
 

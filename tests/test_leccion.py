@@ -14,7 +14,8 @@ import leccion  # noqa: E402
 
 VARS = ("HARNESS_SKILLS_DIR", "HARNESS_HOST", "HERMES_SKILLS_DIR", "HERMES_HOME",
         "CLAUDECODE", "CLAUDE_CONFIG_DIR", "HOME", "USERPROFILE",
-        "ANTIGRAVITY_AGENT", "GEMINI_CLI", "GROK_AGENT", "GROK_SESSION_ID")
+        "ANTIGRAVITY_AGENT", "GEMINI_CLI", "GROK_AGENT", "GROK_SESSION_ID",
+        "CODEX_THREAD_ID", "CODEX_SESSION_ID", "CODEX_HOME")
 
 
 class Base(unittest.TestCase):
@@ -49,6 +50,31 @@ class Base(unittest.TestCase):
 
 
 class RaicesTests(Base):
+    def test_codex_desde_clone_hermes_crea_en_agents_tambien_sin_entorno(self):
+        os.chdir(self.home)
+        personal = self.home / ".agents" / "skills"
+        self.skill(personal, "tdd")
+        os.environ["CODEX_THREAD_ID"] = "sesion-prueba"
+        for sin_detector in (False, True):
+            with self.subTest(sin_detector=sin_detector), contextlib.ExitStack() as stack:
+                if sin_detector:
+                    stack.enter_context(mock.patch.object(leccion.importlib.util, "spec_from_file_location",
+                                                         side_effect=ImportError("copia parcial")))
+                salida = stack.enter_context(contextlib.redirect_stdout(io.StringIO()))
+                leccion.cmd_donde(None)
+                self.assertEqual(Path(salida.getvalue().splitlines()[0]).resolve(), personal.resolve())
+
+    def test_codex_solo_con_raiz_nativa_puede_crear_lecciones(self):
+        os.chdir(self.home)
+        os.environ["HARNESS_HOST"] = "codex"
+        personal = self.home / ".codex" / "skills"
+        self.skill(personal, "nativa")
+        self.assertEqual(leccion.skills_roots()[0], personal)
+        custom_home = self.home / "codex-personalizado"
+        with mock.patch.dict(os.environ, {"CODEX_HOME": str(custom_home)}):
+            self.skill(custom_home / "skills", "custom")
+            self.assertEqual(leccion.skills_roots()[0], custom_home / "skills")
+
     def test_gpt_codex_usa_agents_skills_personal_y_repo(self):
         personal = self.home / ".agents" / "skills"
         repo = Path(self.tmp.name) / "repo"

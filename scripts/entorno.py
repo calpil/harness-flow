@@ -59,9 +59,11 @@ def host_agente() -> str:
         if explicit not in HOSTS_VALIDOS:
             raise ValueError("HARNESS_HOST debe ser " + ", ".join(HOSTS_VALIDOS))
         return _canon_host(explicit)
-    # Antes que la ruta: Grok ejecuta el script del symlink o del clone.
+    # Antes que la ruta: el proceso puede ejecutar el symlink o el clone.
     if _en_proceso_grok():
         return "grok"
+    if any(_marca_encendida(os.environ.get(k)) for k in ("CODEX_THREAD_ID", "CODEX_SESSION_ID")):
+        return "gpt"
     # No resolve(): un symlink en .grok, .gemini, .agents o .claude puede apuntar al clone de Hermes.
     for padre in Path(__file__).absolute().parents:
         if padre.name == "skills" and padre.parent.name == ".grok":
@@ -69,8 +71,11 @@ def host_agente() -> str:
     for padre in Path(__file__).absolute().parents:
         if padre.name == "skills" and (padre.parent.name == ".gemini" or padre.parent.parent.name == ".gemini"):
             return "gemini"
+    codex_home = os.environ.get("CODEX_HOME")
+    codex_home = Path(codex_home).expanduser().absolute() if codex_home else None
     for padre in Path(__file__).absolute().parents:
-        if padre.name == "skills" and padre.parent.name == ".agents":
+        if padre.name == "skills" and (padre.parent.name in (".agents", ".codex")
+                                       or padre.parent == codex_home):
             return "gpt"
     # Kimi Code no exporta marca de proceso al shell: la identidad es la ruta.
     # Cubre la skill suelta ($KIMI_CODE_HOME/skills) y la copia managed que Kimi

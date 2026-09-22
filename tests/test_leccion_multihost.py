@@ -35,9 +35,10 @@ class MultiHostTests(unittest.TestCase):
         (self.casa / ".hermes" / "skills").mkdir(parents=True)
         (self.casa / ".agents" / "skills").mkdir(parents=True)
         (self.casa / ".gemini" / "config" / "skills").mkdir(parents=True)
-        # Una sesion de Grok deja GROK_AGENT en el entorno. Estos tests fijan
+        # Grok y Codex dejan marcas de sesion en el entorno. Estos tests fijan
         # el host por HARNESS_HOST o por la ruta; la marca no puede pisarlos.
-        self._marcas = {k: os.environ.pop(k, None) for k in ("GROK_AGENT", "GROK_SESSION_ID")}
+        self._marcas = {k: os.environ.pop(k, None) for k in
+                        ("GROK_AGENT", "GROK_SESSION_ID", "CODEX_THREAD_ID", "CODEX_SESSION_ID")}
         self.addCleanup(self._restaurar_marcas)
 
     def _restaurar_marcas(self):

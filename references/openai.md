@@ -30,16 +30,34 @@ seguir buscandolas aqui no cambia.
 
 ## Autodeteccion
 
-`entorno.py` detecta `gpt` cuando el script corre desde una ruta
-`.agents/skills/<skill>/scripts`. Tambien puedes forzarlo:
+`entorno.py` detecta `gpt` por las marcas de sesion `CODEX_THREAD_ID` o
+`CODEX_SESSION_ID`, aunque el script este en el clone de Hermes. Sin esas
+marcas reconoce `.agents/skills`, `.codex/skills` y `$CODEX_HOME/skills` en la
+ruta del script. `HARNESS_HOST` y `--host` tienen prioridad.
+
+## Comandos de terminal
+
+Cada llamada independiente de Codex abre un shell nuevo: los exports de la
+llamada anterior no sobreviven. Inicializa y ejecuta en la **misma llamada**,
+fijando `--host codex`. Sustituye `<skill>` por la ruta instalada (tambien sirve
+la ruta real del clone de Hermes) y repite el bloque para cada comando:
 
 ```bash
-python ~/.agents/skills/harness-flow/scripts/entorno.py --host gpt --shell
-python ~/.agents/skills/harness-flow/scripts/entorno.py --host codex --shell
+eval "$(python3 <skill>/scripts/entorno.py --host codex --shell)"
+"$PY" "$H/estado.py"
+```
+
+En Windows con PowerShell:
+
+```powershell
+python <skill>\scripts\entorno.py --host codex --powershell | Invoke-Expression
+& $PY "$H/estado.py"
 ```
 
 `codex` se normaliza a `gpt` para que el resto del arnes tenga un solo nombre de
-host.
+host. Ejecuta los scripts con el interprete resuelto (`"$PY"` en bash/zsh,
+`& $PY` en PowerShell); `python` puede no existir en macOS/Linux y otro
+interprete puede no tener las dependencias del hub.
 
 ## Raices de lecciones
 
@@ -50,7 +68,8 @@ primero esa raiz). En `gpt`:
 
 1. `.agents/skills` desde el directorio actual hasta la raiz del repo.
 2. `~/.agents/skills`.
-3. `/etc/codex/skills`.
+3. `$CODEX_HOME/skills` (`~/.codex/skills`), si no existe una raiz anterior.
+4. `/etc/codex/skills`.
 
 Si instalas `harness-flow` con symlink desde `~/.agents/skills` hacia el clone de
 Hermes, esa precedencia no se contamina: una skill nueva no nace en Hermes.

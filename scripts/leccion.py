@@ -58,14 +58,20 @@ def _host() -> str:
         grok = os.environ.get("GROK_AGENT")
         if grok is not None and grok.strip().lower() not in ("", "0", "false", "off", "no"):
             return "grok"
+        if any(os.environ.get(k, "").strip().lower() not in ("", "0", "false", "off", "no")
+               for k in ("CODEX_THREAD_ID", "CODEX_SESSION_ID")):
+            return "gpt"
         for padre in Path(__file__).absolute().parents:
             if padre.name == "skills" and padre.parent.name == ".grok":
                 return "grok"
         for padre in Path(__file__).absolute().parents:
             if padre.name == "skills" and (padre.parent.name == ".gemini" or padre.parent.parent.name == ".gemini"):
                 return "gemini"
+        codex_home = os.environ.get("CODEX_HOME")
+        codex_home = Path(codex_home).expanduser().absolute() if codex_home else None
         for padre in Path(__file__).absolute().parents:
-            if padre.name == "skills" and padre.parent.name == ".agents":
+            if padre.name == "skills" and (padre.parent.name in (".agents", ".codex")
+                                           or padre.parent == codex_home):
                 return "gpt"
         kimi_home = os.environ.get("KIMI_CODE_HOME")
         kimi_home = Path(kimi_home).expanduser().absolute() if kimi_home else None
@@ -132,6 +138,8 @@ def _raices_gpt() -> list[Path]:
     except OSError:
         pass
     raices.append(_casa() / ".agents" / "skills")
+    codex_home = os.environ.get("CODEX_HOME")
+    raices.append((Path(codex_home).expanduser() if codex_home else _casa() / ".codex") / "skills")
     raices.append(Path("/etc/codex/skills"))
     return raices
 

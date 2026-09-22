@@ -219,6 +219,11 @@ eval "$(python3 <skill>/scripts/entorno.py --shell)"
 python <skill>\scripts\entorno.py --powershell | Invoke-Expression
 ```
 
+En Codex, Claude Code y Grok repite la inicializacion y el comando en la misma
+llamada de terminal: las variables no sobreviven a llamadas independientes.
+En Codex agrega `--host codex` a `entorno.py`, incluso al usar el clone de
+Hermes. Ejemplo completo en [`references/openai.md`](references/openai.md).
+
 En un monorepo, desde su raiz Git:
 
 ```bash

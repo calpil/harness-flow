@@ -3,6 +3,7 @@ import contextlib
 import io
 import json
 import os
+import shlex
 from pathlib import Path
 import sys
 import subprocess
@@ -51,6 +52,52 @@ class EntornoTests(unittest.TestCase):
         script.touch()
         with mock.patch.object(entorno, "__file__", str(script)):
             self.assertEqual(entorno.host_agente(), "gpt")
+
+    def test_sesion_codex_identifica_el_clone_hermes(self):
+        script = self.home / ".hermes/skills/software-development/harness-flow/scripts/entorno.py"
+        for marca in ("CODEX_THREAD_ID", "CODEX_SESSION_ID"):
+            with self.subTest(marca=marca), mock.patch.dict(os.environ, {marca: "sesion-prueba"}), \
+                    mock.patch.object(entorno, "__file__", str(script)):
+                self.assertEqual(entorno.host_agente(), "gpt")
+
+    def test_marca_codex_apagada_no_pisa_el_host(self):
+        script = self.home / ".hermes/skills/software-development/harness-flow/scripts/entorno.py"
+        for valor in ("", "0", "false", "off", "no"):
+            with self.subTest(valor=valor), \
+                    mock.patch.dict(os.environ, {"CODEX_THREAD_ID": valor, "CODEX_SESSION_ID": valor}), \
+                    mock.patch.object(entorno, "__file__", str(script)):
+                self.assertEqual(entorno.host_agente(), "hermes")
+
+    def test_host_explicito_gana_a_sesion_codex(self):
+        os.environ.update(CODEX_THREAD_ID="sesion-prueba", HARNESS_HOST="hermes")
+        self.assertEqual(entorno.host_agente(), "hermes")
+        os.environ["HARNESS_HOST"] = "codex"
+        self.assertEqual(entorno.host_agente(), "gpt")
+
+    def test_instalacion_nativa_codex_y_home_personalizado(self):
+        with mock.patch.object(entorno, "__file__", str(self.home / ".codex/skills/harness-flow/scripts/entorno.py")):
+            self.assertEqual(entorno.host_agente(), "gpt")
+        for raiz in (self.home / ".codex", self.home / "codex-personalizado"):
+            with self.subTest(raiz=raiz), \
+                    mock.patch.dict(os.environ, {"CODEX_HOME": str(raiz)}), \
+                    mock.patch.object(entorno, "__file__", str(raiz / "skills/harness-flow/scripts/entorno.py")):
+                self.assertEqual(entorno.host_agente(), "gpt")
+        # La configuracion de Codex instalada no significa una sesion activa.
+        with mock.patch.dict(os.environ, {"CODEX_HOME": str(self.home / ".codex")}), \
+                mock.patch.object(entorno, "__file__", str(self.home / "scripts/entorno.py")):
+            self.assertEqual(entorno.host_agente(), "generic")
+
+    def test_bootstrap_codex_funciona_en_dos_shells_independientes(self):
+        script = Path(entorno.__file__).resolve()
+        os.environ["HARNESS_PYTHON"] = sys.executable
+        # El venv del interprete puede tener espacios: todo ejecutable se cita.
+        comando = (f'eval "$({shlex.quote(sys.executable)} {shlex.quote(str(script))} --host codex --shell)"\n'
+                   '"$PY" -c \'import os; print(os.environ["HARNESS_HOST"])\'')
+        for _ in range(2):
+            r = subprocess.run(["/bin/sh", "-c", comando], capture_output=True, text=True)
+            self.assertEqual(r.returncode, 0, r.stderr)
+            self.assertEqual(r.stdout.strip(), "gpt")
+        self.assertNotIn("HARNESS_HOST", os.environ)
 
     def test_symlink_claude_no_hereda_host_de_destino(self):
         target = self.home / ".hermes/skills/software-development/harness-flow/scripts"

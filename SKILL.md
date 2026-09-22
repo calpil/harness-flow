@@ -60,9 +60,19 @@ documento funcionan tal cual en los tres SO y en los hosts soportados:
 $PY "$H/estado.py"
 ```
 
-En Claude Code y en Grok cada llamada abre un shell nuevo: `$PY` y `$H` no
-sobreviven. Pega el `eval` al comando, en la misma llamada. El detalle de Grok
-esta en [`references/grok.md`](references/grok.md).
+En Codex, Claude Code y Grok las llamadas de terminal independientes no conservan
+`$PY`, `$H` ni `HARNESS_HOST`. Pega el `eval` al comando, en la misma llamada.
+En Codex fija el host incluso si `<skill>` es la ruta real del clone de Hermes:
+
+```bash
+eval "$(python3 <skill>/scripts/entorno.py --host codex --shell)"
+"$PY" "$H/estado.py"
+```
+
+Repite ambas lineas en cada llamada, sustituyendo `estado.py` por el comando que
+toque. En PowerShell repite la inicializacion con `--host codex --powershell`
+y ejecuta con `& $PY`. Detalles en [`references/openai.md`](references/openai.md)
+y [`references/grok.md`](references/grok.md).
 
 Sin flags, `entorno.py` imprime un diagnóstico (SO, host, H, PY, si `psycopg`
 está) y sale con exit≠0 si no puede resolver un intérprete usable. La falta de
@@ -78,6 +88,8 @@ resuelve, exporta `HARNESS_PYTHON` a mano. `--host claude|hermes|gpt|codex|gemin
 el host cuando la detección no aplica. `codex` se normaliza a `gpt` y `agy` a `gemini`.
 Dentro de una sesion de Grok el host es `grok` aunque el script viva en el clone
 de Hermes o entre por el symlink de `.agents/skills`: manda `GROK_AGENT`, no la ruta.
+Codex se reconoce como `gpt` por `CODEX_THREAD_ID` o `CODEX_SESSION_ID`, tambien
+desde el clone de Hermes. `HARNESS_HOST` o `--host` tienen prioridad.
 
 ## Arranque de sesión
 
@@ -181,9 +193,9 @@ Ver la referencia para el caso ya integrado, protecciones y limites de la foto.
 **Monorepo legacy (raiz Git sin registro multi-repo):**
 
 ```bash
-python "$H/gate.py" close --feature <id> --status done --to <rama> --leccion <clase>
+"$PY" "$H/gate.py" close --feature <id> --status done --to <rama> --leccion <clase>
 # si harness/atlassian.json existe y el usuario pidio publicar remoto:
-python "$H/gate.py" close --feature <id> --status done --to <rama> \
+"$PY" "$H/gate.py" close --feature <id> --status done --to <rama> \
   --leccion <clase> --publicar-atlassian
 ```
 
@@ -357,7 +369,7 @@ en [`references/claude.md`](references/claude.md).
 
 La instalacion personal va en `~/.agents/skills/harness-flow`; por repo, en `<repo>/.agents/skills/harness-flow`. Codex/GPT puede invocarla implicitamente por `agents/openai.yaml` y explicitamente como skill. Ver `references/openai.md`.
 
-`leccion.py` busca lecciones GPT/Codex en `.agents/skills` del repo hacia arriba, despues `~/.agents/skills` y por ultimo `/etc/codex/skills`. Si `harness-flow` entra por symlink desde `.agents/skills` al clone de Hermes, no mezcla skills de Hermes.
+`leccion.py donde` prioriza `.agents/skills` del repo hacia arriba, despues `~/.agents/skills`, `$CODEX_HOME/skills` (`~/.codex/skills`) y por ultimo `/etc/codex/skills` para crear. Buscar incluye las raices de otros agentes como consulta. El symlink al clone de Hermes no cambia la raiz de creacion.
 
 ## Grok
 
@@ -451,7 +463,7 @@ de `test_postmerge.py` certificaban en verde el gate que mentía.
 | --- | --- | --- | --- | --- | --- | --- |
 | Subagente revisor aislado | `delegate_task` | tool `Agent`, `subagent_type: harness-flow:revisor` | `codex exec` en sesion nueva | `invoke_subagent` (research o subagente propio) | `spawn_subagent`, `isolation: none`; prompt = briefing + cuerpo de `agents/revisor.md` | tool `Agent`, `subagent_type: "revisor"` (plugin instalado) o `kimi -p --agent-file agents/revisor.md` |
 | Crear/patchear una lección | `skill_manage` | escribir `<raíz>/<clase>/SKILL.md` | escribir `~/.agents/skills/<clase>/SKILL.md` o `<repo>/.agents/skills/<clase>/SKILL.md` | escribir `~/.gemini/config/skills/<clase>/SKILL.md` o `<repo>/.agents/skills/<clase>/SKILL.md` | escribir `~/.grok/skills/<clase>/SKILL.md` | escribir `$KIMI_CODE_HOME/skills/<clase>/SKILL.md` o `~/.agents/skills/<clase>/SKILL.md` |
-| Raíz de skills | `~/.hermes/skills` (o perfil) | `~/.claude/skills`, luego `.claude/skills` del proyecto | `.agents/skills` del repo, luego `~/.agents/skills`, luego `/etc/codex/skills` | `~/.gemini/config/skills`, luego `.gemini/skills`, luego `.agents/skills` | `~/.grok/skills` | `$KIMI_CODE_HOME/skills` (`~/.kimi-code/skills`), `~/.agents/skills`; proyecto: `.kimi-code/skills`, `.agents/skills` |
+| Raíz de skills | `~/.hermes/skills` (o perfil) | `~/.claude/skills`, luego `.claude/skills` del proyecto | `.agents/skills` del repo, luego `~/.agents/skills`, `$CODEX_HOME/skills` (`~/.codex/skills`) y `/etc/codex/skills` | `~/.gemini/config/skills`, luego `.gemini/skills`, luego `.agents/skills` | `~/.grok/skills` | `$KIMI_CODE_HOME/skills` (`~/.kimi-code/skills`), `~/.agents/skills`; proyecto: `.kimi-code/skills`, `.agents/skills` |
 | Intérprete con `psycopg` | venv de Hermes | venv neutro `~/.harness-flow/venv` | venv neutro `~/.harness-flow/venv` | venv neutro `~/.harness-flow/venv` | venv neutro `~/.harness-flow/venv` | venv neutro `~/.harness-flow/venv` |
 | Atajos del flujo | — | `/harness-flow:estado\|producto\|spec\|review\|cierre` | — | — | `/harness-flow` | — |
 
@@ -463,8 +475,8 @@ con `revision.py --feature <id>` y **dilo explícitamente**: el rigor baja.
 
 Grok y Kimi Code tienen host propio (`grok`, `kimi`): sus secciones arriba y
 [`references/grok.md`](references/grok.md) / [`references/kimi.md`](references/kimi.md).
-Codex no tiene host en `entorno.py` (se reporta como `gpt` bajo `.agents/skills`,
-o `generic`): lee `$CODEX_HOME/skills` (`~/.codex/skills`) y `.agents/skills`, y el
+Codex se reporta como `gpt` por su marca de sesion o por la ruta de instalacion
+en `.agents/skills`, `.codex/skills` o `$CODEX_HOME/skills`, y el
 revisor se lanza con `codex exec`. **No uses `codex exec` fuera de Codex.**
 
 `~/.agents/skills` es el mínimo común múltiplo compartido. Para las lecciones,
@@ -497,4 +509,3 @@ lecciones: [`references/kimi.md`](references/kimi.md).
 | [`references/grok.md`](references/grok.md) | Grok: host, revisor con `spawn_subagent`, lecciones en `~/.grok/skills` |
 | [`references/kimi.md`](references/kimi.md) | Kimi Code: host, plugin, revisor y lecciones |
 | [`references/documentacion.md`](references/documentacion.md) | rol producto (PRD inicial / SDD de arquitectura), su sello y como se sincronizan |
-
