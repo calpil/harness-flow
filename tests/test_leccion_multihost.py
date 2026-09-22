@@ -183,6 +183,41 @@ class MultiHostTests(unittest.TestCase):
         directorio.mkdir(parents=True, exist_ok=True)
         (directorio / "SKILL.md").write_text(SKILL % directorio.name, encoding="utf-8")
 
+    def test_plugin_kimi_managed_crea_en_la_raiz_kimi(self):
+        """La copia managed del plugin no cuelga de una raiz 'skills'.
+
+        Kimi copia el plugin a ~/.kimi-code/plugins/managed/harness-flow/ y corre
+        desde ahi. Sin host kimi la deteccion caia a generic, _raiz_propia() no
+        encontraba padre 'skills' y 'donde' mandaba crear la leccion en
+        ~/.hermes/skills: una raiz que Kimi Code no escanea.
+        """
+        kimi = self.casa / ".kimi-code" / "skills"
+        kimi.mkdir(parents=True)
+        managed = self.casa / ".kimi-code" / "plugins" / "managed"
+        managed.mkdir(parents=True)
+        os.symlink(ROOT, managed / "harness-flow")
+        env = dict(os.environ, HOME=str(self.casa))
+        for k in ("HARNESS_SKILLS_DIR", "HARNESS_HOST", "HERMES_SKILLS_DIR",
+                  "HERMES_HOME", "HERMES_PYTHON", "CLAUDE_CONFIG_DIR", "CLAUDECODE",
+                  "CODEX_HOME", "KIMI_CODE_HOME", "ANTIGRAVITY_AGENT", "GEMINI_CLI",
+                  "GROK_AGENT", "GROK_SESSION_ID"):
+            env.pop(k, None)
+        r = subprocess.run(
+            [sys.executable, str(managed / "harness-flow" / "scripts" / "leccion.py"), "donde"],
+            capture_output=True, text=True, env=env, cwd=str(self.casa))
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        primera = r.stdout.splitlines()[0]
+        self.assertEqual(Path(primera).resolve(), kimi.resolve(),
+                         "la raiz de creacion debe ser la que Kimi escanea: " + r.stdout)
+
+    def test_leccion_de_kimi_vale_desde_todos_los_hosts(self):
+        """Una leccion creada en ~/.kimi-code/skills cierra desde cualquier host."""
+        self.crear(".kimi-code", "solo-en-kimi")
+        for host in ("hermes", "claude", "gpt", "gemini", "grok", "kimi"):
+            with self.subTest(host=host):
+                r = self.existe("solo-en-kimi", host)
+                self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+
     def test_instalacion_kimi_por_symlink_crea_en_la_raiz_kimi(self):
         """Skill instalada en ~/.kimi-code/skills via symlink a otro clone.
 

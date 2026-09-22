@@ -22,7 +22,7 @@ from pathlib import Path
 ES_WINDOWS = os.name == "nt"
 
 
-HOSTS_VALIDOS = ("hermes", "claude", "gpt", "codex", "gemini", "agy", "grok", "generic")
+HOSTS_VALIDOS = ("hermes", "claude", "gpt", "codex", "gemini", "agy", "grok", "kimi", "generic")
 
 # GROK_AGENT lo pone el proceso de Grok. 0/false/off/no no cuentan: si no, un
 # valor apagado seguido de la ruta del clone clasificaria la sesion como grok.
@@ -72,6 +72,20 @@ def host_agente() -> str:
     for padre in Path(__file__).absolute().parents:
         if padre.name == "skills" and padre.parent.name == ".agents":
             return "gpt"
+    # Kimi Code no exporta marca de proceso al shell: la identidad es la ruta.
+    # Cubre la skill suelta ($KIMI_CODE_HOME/skills) y la copia managed que Kimi
+    # hace del plugin al instalarlo (plugins/managed/<id>/), que corre fuera de
+    # cualquier raiz 'skills'.
+    kimi_home = os.environ.get("KIMI_CODE_HOME")
+    kimi_home = Path(kimi_home).expanduser().absolute() if kimi_home else None
+    for padre in Path(__file__).absolute().parents:
+        if padre.name == "skills" and padre.parent.name == ".kimi-code":
+            return "kimi"
+        if (padre.name == "managed" and padre.parent.name == "plugins"
+                and padre.parent.parent.name == ".kimi-code"):
+            return "kimi"
+        if kimi_home is not None and padre == kimi_home:
+            return "kimi"
     if os.environ.get("CLAUDECODE") == "1" or os.environ.get("CLAUDE_CONFIG_DIR"):
         return "claude"
     for padre in Path(__file__).absolute().parents:

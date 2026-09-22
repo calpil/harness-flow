@@ -4,7 +4,7 @@
 Una leccion es una skill por CLASE de trabajo (nunca por id de feature). Asi
 viaja contigo entre proyectos y el agente la carga sola cuando aplica, en vez
 de quedarse enterrada en el docs/ de un repo. Funciona con Hermes, Claude
-Code, GPT/Codex y Grok: la raiz de skills se detecta segun el host.
+Code, GPT/Codex, Grok y Kimi Code: la raiz de skills se detecta segun el host.
 
   leccion.py list                skills disponibles (candidatas a leccion)
   leccion.py ver <clase>         imprime la skill
@@ -67,6 +67,16 @@ def _host() -> str:
         for padre in Path(__file__).absolute().parents:
             if padre.name == "skills" and padre.parent.name == ".agents":
                 return "gpt"
+        kimi_home = os.environ.get("KIMI_CODE_HOME")
+        kimi_home = Path(kimi_home).expanduser().absolute() if kimi_home else None
+        for padre in Path(__file__).absolute().parents:
+            if padre.name == "skills" and padre.parent.name == ".kimi-code":
+                return "kimi"
+            if (padre.name == "managed" and padre.parent.name == "plugins"
+                    and padre.parent.parent.name == ".kimi-code"):
+                return "kimi"
+            if kimi_home is not None and padre == kimi_home:
+                return "kimi"
         if os.environ.get("CLAUDECODE") == "1" or os.environ.get("CLAUDE_CONFIG_DIR"):
             return "claude"
         for padre in Path(__file__).absolute().parents:
@@ -135,6 +145,21 @@ def _raices_grok() -> list[Path]:
     la raiz nativa.
     """
     return [_casa() / ".grok" / "skills"]
+
+
+def _raices_kimi() -> list[Path]:
+    """Perfil personal de Kimi Code: $KIMI_CODE_HOME/skills (~/.kimi-code/skills),
+    luego ~/.agents/skills, que Kimi tambien escanea.
+
+    Una leccion es memoria del perfil, no del repo: no se crea en el
+    .kimi-code/skills de un proyecto. Y sin _raiz_propia(): la copia managed del
+    plugin no cuelga de una raiz 'skills', y crear en el clone de Hermes dejaba
+    la leccion donde Kimi no la lee.
+    """
+    base = os.environ.get("KIMI_CODE_HOME")
+    raices = [(Path(base).expanduser() if base else _casa() / ".kimi-code") / "skills"]
+    raices.append(_casa() / ".agents" / "skills")
+    return raices
 
 
 def _raices_gemini() -> list[Path]:
@@ -262,6 +287,11 @@ def skills_roots(todos_los_hosts: bool = False) -> list[Path]:
         # No se anade _raiz_propia(): el script vive en el clone de Hermes o
         # entra por symlink desde .agents, y ninguna de las dos la carga Grok.
         candidatas = _raices_grok()
+    elif host == "kimi":
+        # No se anade _raiz_propia(): la copia managed del plugin no cuelga de
+        # una raiz 'skills', y el symlink desde .kimi-code/skills YA apunta a la
+        # primera raiz kimi. Crear en el clone de Hermes la dejaba invisible.
+        candidatas = _raices_kimi()
     elif host == "hermes":
         # La raiz que contiene a esta skill va PRIMERO: si corres la copia instalada
         # en el perfil 'trabajo', mandan las skills de ese perfil, no las del default.

@@ -79,6 +79,32 @@ class EntornoTests(unittest.TestCase):
             self.assertEqual(entorno.host_agente(), "claude")
             self.assertIsNone(entorno.hermes_home())
 
+    def test_plugin_kimi_managed_detecta_host_kimi(self):
+        """Kimi copia el plugin a plugins/managed/<id>/ y corre desde esa copia."""
+        script = self.home / ".kimi-code/plugins/managed/harness-flow/scripts/entorno.py"
+        script.parent.mkdir(parents=True)
+        with mock.patch.object(entorno, "__file__", str(script)):
+            self.assertEqual(entorno.host_agente(), "kimi")
+
+    def test_skill_kimi_en_kimi_code_home_detecta_host_kimi(self):
+        script = self.home / ".kimi-code/skills/harness-flow/scripts/entorno.py"
+        script.parent.mkdir(parents=True)
+        with mock.patch.object(entorno, "__file__", str(script)):
+            self.assertEqual(entorno.host_agente(), "kimi")
+
+    def test_kimi_code_home_movido_detecta_por_entorno(self):
+        """KIMI_CODE_HOME mueve la raiz de datos: la marca .kimi-code no aplica."""
+        home_kimi = self.home / "datos-kimi"
+        script = home_kimi / "plugins/managed/harness-flow/scripts/entorno.py"
+        script.parent.mkdir(parents=True)
+        os.environ["KIMI_CODE_HOME"] = str(home_kimi)
+        with mock.patch.object(entorno, "__file__", str(script)):
+            self.assertEqual(entorno.host_agente(), "kimi")
+
+    def test_host_explicito_kimi_es_valido(self):
+        os.environ["HARNESS_HOST"] = "kimi"
+        self.assertEqual(entorno.host_agente(), "kimi")
+
     def test_python_neutro_override_gana_y_invalido_no_cae(self):
         os.environ.update(HARNESS_PYTHON=sys.executable, HERMES_PYTHON="/no/existe")
         self.assertEqual(entorno.python_harness(), Path(sys.executable))
