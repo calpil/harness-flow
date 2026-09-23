@@ -28,9 +28,11 @@ def main() -> None:
         print(f"   grafo: {p['graph'].name}, {edad:.1f}h de antiguedad{marca}")
     else:
         print(f"   grafo: ausente en {p['graph']} (corre: contexto.py refrescar)")
+    vault = "ok" if p["vault"].exists() else "ausente (vault.py build)"
     try:
         import contexto
         est = contexto.estado_contexto(p)
+        vault = contexto._estado_vault(est)
         if len(est["raices"]) > 1:
             partes = []
             for r in est["raices"]:
@@ -42,7 +44,7 @@ def main() -> None:
                   "corre contexto.py refrescar")
     except Exception as exc:
         print(f"   [!] no se pudo evaluar el contexto: {exc}")
-    print(f"   vault: {'ok' if p['vault'].exists() else 'ausente (vault.py build)'}")
+    print(f"   vault: {vault}")
     print(f"   jira:  {'configurado' if p['atlassian'].exists() else 'sin binding'}")
     try:
         import producto

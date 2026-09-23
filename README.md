@@ -22,8 +22,9 @@ del agente para lanzar el subagente revisor y escribir lecciones.
   que no responda por todos los AC. Los scripts se niegan con exit≠0.
 - **Memory Hub Postgres**: grafo multi-repo compartido entre máquinas
   (`graph_nodes` / `graph_edges`). Responde "¿quién se rompe si toco esto?".
-- **Vault Obsidian**: `docs/vault/` generado desde los documentos del proceso,
-  versionado con el repo. Los nodos del grafo son opt-in (`vault.py build
+- **Vault Obsidian**: notas en `docs/vault/` generadas desde los documentos del
+  proceso, versionadas con el repo; se abre `docs/` como vault. Es un panel para
+  ti: ningun rol lo lee. Los nodos del grafo son opt-in (`vault.py build
   --con-grafo`): una nota por nodo ahoga el vault en cada refresco.
 - **PRD inicial / SDD de arquitectura**: `producto.py borrador` redacta en
   `docs/borrador-<doc>.md` (sin proteger) y `producto.py aprobar --yes`, solo con

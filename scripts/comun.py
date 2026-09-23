@@ -147,6 +147,39 @@ def get_feature(data: dict, fid) -> dict:
             return f
     raise SystemExit(f"Feature #{fid} no existe en el backlog.")
 
+SERVICE_RE = re.compile(r"(ms-[a-z0-9-]+-service|[a-z0-9-]+-ui|fn-[a-z0-9-]+)")
+
+def micros_declarados(f: dict) -> list[str]:
+    """Nombres de servicio de la feature.
+
+    El backlog real trae de todo: listas limpias, pero tambien una sola cadena
+    con comas y comentarios entre parentesis ("admin, ms-payment-service
+    (proxy)") o el prefijo del hub ("demo/ms-foo-service"). Se extraen los
+    nombres de servicio reconocibles; lo que no matchea se queda con su ultimo
+    segmento de ruta. Si no hay ninguno, se devuelve vacio para que el brief no
+    filtre por un nombre que no existe en el grafo (filtrar por basura devuelve
+    cero y parece un grafo vacio: el sintoma que trajo todo esto).
+    """
+    crudo = f.get("microservicios") or []
+    if isinstance(crudo, str):
+        crudo = [crudo]
+    out: list[str] = []
+    for item in crudo:
+        # Los comentarios traen comas propias ("docs (SUBMODULO, mode 160000)"):
+        # se quitan ANTES de partir, o la mitad del comentario sale como nombre.
+        item = re.sub(r"\([^)]*\)", "", str(item))
+        for trozo in re.split(r"[,\n;]", item):
+            trozo = trozo.split("(")[0].strip().strip("/")
+            if not trozo:
+                continue
+            if trozo.lower() in ("ninguno", "ninguna", "n/a", "-"):
+                continue  # declara que no toca ninguno; no es un nombre
+            m = SERVICE_RE.search(trozo)
+            nombre = m.group(1) if m else trozo.split("/")[-1]
+            if nombre and nombre not in out:
+                out.append(nombre)
+    return out
+
 def slugify(name: str) -> str:
     n = unicodedata.normalize("NFKD", name or "").encode("ascii", "ignore").decode()
     n = re.sub(r"[^a-zA-Z0-9]+", "-", n).strip("-").lower()

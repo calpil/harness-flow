@@ -6,7 +6,7 @@ description: >-
   specs con criterios de aceptacion (AC), registrar evidencia citando archivo:linea, lanzar subagente
   revisor aislado y sellar su veredicto, correr verify, cerrar features hacia su rama con lecciones y
   postmerge medido, redactar y aprobar el PRD inicial o el SDD de arquitectura (rol producto),
-  sincronizar PRD/SDD, o consultar impacto cross-repo con Memory Hub y Obsidian.
+  sincronizar PRD/SDD, consultar impacto cross-repo con Memory Hub, o generar el vault Obsidian.
 ---
 
 # Harness Flow
@@ -32,7 +32,7 @@ El arnés NO se copia a cada repo. Una instalación por PROYECTO (raíz multi-re
     atlassian.json               <- sitio/proyecto/space (NUNCA credenciales)
   docs/                          <- specs, borradores PRD/SDD, evidencia; prd/ es del usuario
   .agents/skills/                <- skills de GPT/Codex si se instala por repo
-  docs/vault/                    <- vault Obsidian (versionado)
+  docs/vault/                    <- notas generadas; el vault Obsidian es docs/
   graphify-out/                  <- grafo local (gitignored)
   ms-orders-service/             <- repo git propio = "microservicio"
   front-adr/
@@ -258,9 +258,9 @@ Reglas en `harness/feature_list.json` → `rules`: `require_spec_approved`, `req
 
 ## Contexto: grafo, hub y vault (contexto.py)
 
-Grafo, Memory Hub y vault son el ahorro de tokens del flujo: frescos, el
-implementer y el revisor arrancan con un indice en vez de leer el repo a ciegas;
-viejos, mienten.
+Grafo y Memory Hub son el ahorro de tokens del flujo: frescos, el implementer y
+el revisor arrancan con el brief en vez de leer el repo a ciegas; viejos, mienten.
+El vault es para ti en Obsidian: el flujo lo regenera, ningun rol lo lee.
 
 ```bash
 $PY "$H/contexto.py" estado            # que hay y que tan viejo esta
@@ -269,8 +269,8 @@ $PY "$H/contexto.py" brief --feature <id>
 ```
 
 `worktree.py start` y `gate.py close --status done` lo refrescan solos si esta
-vencido, y dicen si NO quedo refrescado. `HARNESS_SIN_CONTEXTO=1` apaga solo ese
-refresco automatico.
+vencido (el vault, si el backlog o un doc es mas nuevo), y dicen si NO quedo
+refrescado. `HARNESS_SIN_CONTEXTO=1` apaga solo ese refresco automatico.
 
 **Varias raices**: si los microservicios viven fuera de la raiz del arnes, se
 declaran en `harness/grafos.json` y se combinan. Nunca se autodetectan. Formato,
@@ -327,8 +327,8 @@ El sync solo toca su bloque; nada manual se reescribe, en ningun host. Rol produ
 
 ## Obsidian
 
-`docs/vault/` dentro del repo, versionado, generado desde los documentos del
-proceso (specs, AC, evidencia, reviews, lecciones, servicios) con wikilinks.
+Abre **`docs/`** como vault (no `docs/vault/`): spec, evidencia y review quedan
+dentro y las notas generadas en `docs/vault/` los enlazan con wikilinks.
 
 ```bash
 $PY "$H/vault.py" build                # lo corre solo contexto.py refrescar

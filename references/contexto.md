@@ -3,9 +3,11 @@
 Detalle de `contexto.py`. El resumen y los comandos del dia a dia estan en
 `SKILL.md`; aqui esta lo que se consulta cuando algo no cuadra.
 
-El grafo, el Memory Hub y el vault son el ahorro de tokens del flujo: si estan
-frescos, un implementer o un revisor arranca con un indice en vez de leer el
-repo a ciegas. Si estan viejos, mienten — y nadie los refrescaba solo.
+El grafo y el Memory Hub son el ahorro de tokens del flujo: si estan frescos,
+un implementer o un revisor arranca con un indice (el brief) en vez de leer el
+repo a ciegas. Si estan viejos, mienten — y nadie los refrescaba solo. El vault
+no entra en esa cuenta: es el panel de Obsidian para el humano y ningun rol lo
+lee; se refresca para que no muestre estados viejos.
 
 **Una raiz de grafo no alcanza cuando el proyecto vive en varios directorios.**
 El arnes esta instalado en UNA raiz (p.ej. el front), pero los microservicios
@@ -38,9 +40,10 @@ $PY "$H/contexto.py" brief --feature <id>  # indice compacto para trabajar
 ```
 
 `refrescar` solo toca lo vencido (`max_horas`, 12 por defecto); `--forzar`
-reconstruye todo. Nunca lanza excepcion: devuelve un parte JSON y sale con
-exit≠0 si algo fallo, asi que **un refresco a medias no se reporta como
-exito**.
+reconstruye todo. Sin graphify en el PATH reporta el fallo y salta grafo y hub,
+pero regenera igual el vault: no depende del grafo. Nunca lanza excepcion:
+devuelve un parte JSON y sale con exit≠0 si algo fallo, asi que **un refresco a
+medias no se reporta como exito**.
 
 `HARNESS_SIN_CONTEXTO=1` apaga el refresco **automatico** (los ganchos de
 `start`/`close`), para CI y para los tests del propio arnes, que si no lanzarian
@@ -51,7 +54,9 @@ verde seria una mentira.
 Cuando se refresca solo:
 
 - `worktree.py start` — antes de que el implementer toque nada: refresca si
-  esta vencido e imprime el brief de la feature. `--sin-contexto` lo salta.
+  esta vencido e imprime el brief de la feature. Si solo el vault esta viejo
+  (backlog, spec, evidencia o review mas nuevos que su `Indice.md`), regenera
+  solo el vault, sin relanzar graphify ni el hub. `--sin-contexto` lo salta.
 - `gate.py close --status done` — DESPUES del cierre (el arbol cambio, el grafo
   y el vault describen el codigo anterior). Fuera de la transaccion de
   rollback: si el refresco falla, avisa; no desarma un cierre ya hecho.

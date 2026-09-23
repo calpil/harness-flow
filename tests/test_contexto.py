@@ -291,7 +291,111 @@ class ContextoTests(unittest.TestCase):
         gd = self._vault_build("--con-grafo")
         self.assertTrue(gd.is_dir())
         self.assertEqual(2, len(list(gd.glob("*.md"))))
-        self.assertIn("[[validar]]", (gd / "cobrar.md").read_text(encoding="utf-8"))
+        self.assertIn("[[vault/grafo/validar|validar]]",
+                      (gd / "cobrar.md").read_text(encoding="utf-8"))
+
+    # --- vault: enlaces que Obsidian puede seguir ---------------------------
+
+    def _backlog_como_el_real(self):
+        """Lo que trae un backlog de verdad y rompia los enlaces del vault."""
+        self._declarar()
+        (self.otra / "ms-baz-service" / ".git").mkdir(parents=True)
+        (self.root / "docs" / ".git").mkdir()  # docs como submodulo
+        data = json.loads((self.root / "harness" / "feature_list.json").read_text())
+        data["features"] += [
+            {"id": 2, "name": "Prefijo del hub", "status": "done",
+             "microservicios": ["demo/ms-foo-service"], "leccion": "ninguna"},
+            {"id": 3, "name": "Texto libre", "status": "todo",
+             "microservicios": ["ms-bar-service (solo lectura, evidencia), admin"],
+             "leccion": "gates-que-no-mienten"},
+        ]
+        (self.root / "harness" / "feature_list.json").write_text(json.dumps(data))
+        (self.root / "docs" / "impl-1.md").write_text("| AC-1 | a.go:1 |\n")
+        (self.root / "docs" / "review-1.md").write_text("Veredicto: approved\n")
+        # un .md fuera del vault con el mismo nombre que una nota generada:
+        # un wikilink por nombre pelado seria ambiguo
+        (self.root / "docs" / "copias").mkdir()
+        (self.root / "docs" / "copias" / "gates-que-no-mienten.md").write_text("x\n")
+
+    def test_el_vault_no_deja_enlaces_sin_nota(self):
+        """En realestate, 281 de 506 wikilinks no llevaban a ninguna nota.
+
+        Microservicios con prefijo del hub o texto libre, `[[ninguna]]`, micros
+        de otra raiz sin nota, y spec/evidencia/review enlazados FUERA del
+        vault, donde Obsidian no llega. La raiz del vault es docs/.
+        """
+        import re
+        self._backlog_como_el_real()
+        self._vault_build()
+        docs = self.root / "docs"
+        todas = [q for q in docs.rglob("*.md") if ".obsidian" not in q.parts]
+        rutas = {q.relative_to(docs).with_suffix("").as_posix() for q in todas}
+        nombres = [q.stem for q in todas]
+        rotos, fuera = [], []
+        for q in (docs / "vault").rglob("*.md"):
+            texto = q.read_text(encoding="utf-8")
+            for m in re.findall(r"\[\[([^\]]+)\]\]", texto):
+                destino = m.split("|")[0].split("#")[0]
+                if destino not in rutas and nombres.count(destino) != 1:
+                    rotos.append(f"{q.name}: [[{m}]]")
+            for m in re.findall(r"\]\(([^)]+\.md)\)", texto):
+                if not (q.parent / m).resolve().is_relative_to(docs.resolve()):
+                    fuera.append(f"{q.name}: {m}")
+        self.assertEqual([], rotos)
+        self.assertEqual([], fuera)
+        servicios = {q.stem for q in (docs / "vault" / "servicios").glob("*.md")}
+        self.assertIn("ms-baz-service", servicios)  # vive en la otra raiz
+        self.assertNotIn("docs", servicios)         # es del proceso
+        self.assertTrue((docs / ".obsidian" / "app.json").exists())
+        self.assertFalse((docs / "vault" / ".obsidian").exists())
+
+    def test_micros_declarados_sin_comas_de_comentario_ni_prefijo(self):
+        f = {"microservicios": ["docs (SUBMODULO, mode 160000: es OTRO repo), "
+                                "demo/ms-foo-service", "ninguno"]}
+        self.assertEqual(contexto._micros_declarados(f), ["docs", "ms-foo-service"])
+
+    def test_el_vault_borra_solo_lo_generado_que_ya_no_corresponde(self):
+        """Un servicio renombrado dejaba su nota vieja para siempre."""
+        import vault
+        sv = self.root / "docs" / "vault" / "servicios"
+        sv.mkdir(parents=True)
+        (sv / "viejo.md").write_text(vault.AVISO + "\n")
+        (sv / "a-mano.md").write_text("mia\n")
+        self._vault_build()
+        self.assertFalse((sv / "viejo.md").exists())
+        self.assertTrue((sv / "a-mano.md").exists())
+
+    def test_refrescar_sin_graphify_igual_regenera_el_vault(self):
+        """El vault no usa graphify: cortar antes lo dejaba sin regenerar nunca."""
+        with mock.patch.object(contexto.shutil, "which", return_value=None):
+            parte = contexto.refrescar(comun.paths(self.root), verboso=False)
+        self.assertIn("graphify no esta en el PATH", parte["fallos"])
+        self.assertEqual("ok", parte["vault"])
+        self.assertTrue((self.root / "docs" / "vault" / "Indice.md").exists())
+
+    def test_backlog_mas_nuevo_que_el_vault_lo_regenera_sin_tocar_el_grafo(self):
+        """Con el grafo fresco, `start` no regeneraba el vault: mostraba estados
+        viejos toda la feature."""
+        self._vault_build()
+        viejo = time.time() - 3600
+        os.utime(self.root / "docs" / "vault" / "Indice.md", (viejo, viejo))
+        p = comun.paths(self.root)
+        e = contexto.estado_contexto(p)
+        self.assertTrue(e["fresco"], e["vencidas"])
+        self.assertTrue(e["vault"]["vencido"])
+        vistos = []
+
+        def fake_run(cmd, cwd):
+            vistos.append(cmd)
+            return 0, ""
+
+        with mock.patch.object(contexto, "_run", fake_run), \
+                mock.patch.dict(os.environ, {"HARNESS_SIN_CONTEXTO": "0"}), \
+                contextlib.redirect_stdout(io.StringIO()):
+            parte = contexto.refrescar_si_vencido(p, etiqueta="arrancar #1")
+        self.assertEqual("ok", parte["vault"])
+        self.assertEqual(1, len(vistos), vistos)
+        self.assertTrue(any("vault.py" in str(x) for x in vistos[0]))
 
     def test_el_refresco_automatico_no_pasa_con_grafo(self):
         """Deliberado: una nota por nodo (tope 2000) en cada refresco ahoga el vault.

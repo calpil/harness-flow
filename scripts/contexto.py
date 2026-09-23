@@ -24,11 +24,11 @@ import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from comun import (ac_comandos, get_feature, grafos_config, graph_path,  # noqa: E402
-                   impl_path, load_backlog, now_iso, paths, raices_grafo,
-                   spec_ac_lineas, spec_acs, spec_path)
+from comun import (SERVICE_RE, ac_comandos, get_feature, grafos_config,  # noqa: E402
+                   graph_path, impl_path, load_backlog, now_iso, paths,
+                   raices_grafo, spec_ac_lineas, spec_acs, spec_path)
+from comun import micros_declarados as _micros_declarados  # noqa: E402
 
-SERVICE_RE = re.compile(r"(ms-[a-z0-9-]+-service|[a-z0-9-]+-ui|fn-[a-z0-9-]+)")
 # Relaciones que dicen "esto usa aquello". `contains`/`method` son estructura
 # interna: inflan el brief sin explicar acoplamiento.
 REL_UTILES = {"imports", "imports_from", "calls", "references", "implements",
@@ -42,6 +42,23 @@ def _edad_h(f: Path) -> float | None:
     return None if not f.exists() else (time.time() - f.stat().st_mtime) / 3600
 
 
+def _vault_vencido(p: dict) -> bool:
+    """El vault sale del backlog y de spec/evidencia/review, no del grafo.
+
+    Mirar solo la edad del grafo lo dejaba mostrando estados viejos toda la
+    feature: con el grafo fresco, `start` no lo regeneraba, y aprobar un spec
+    o sellar un review tampoco. Vencido = el Indice es anterior a su fuente
+    mas nueva.
+    """
+    indice = p["vault"] / "Indice.md"
+    if not indice.exists():
+        return True
+    fuentes = [p["backlog"], *p["docs"].glob("spec-feature-*.md"),
+               *p["docs"].glob("impl-*.md"), *p["docs"].glob("review-*.md")]
+    nueva = max((f.stat().st_mtime for f in fuentes if f.exists()), default=0)
+    return indice.stat().st_mtime < nueva
+
+
 def estado_contexto(p: dict) -> dict:
     cfg = grafos_config(p)
     raices = raices_grafo(p)
@@ -51,8 +68,11 @@ def estado_contexto(p: dict) -> dict:
         "combinado": {"path": str(comb), "edad_h": _edad_h(comb),
                       "existe": comb.exists()},
         "raices": [],
+        # El vault NO entra en 'vencidas': eso es lo que dice si el brief (grafo
+        # y hub) miente, y el brief no lee el vault.
         "vault": {"path": str(p["vault"]), "existe": p["vault"].exists(),
-                  "edad_h": _edad_h(p["vault"] / "Indice.md")},
+                  "edad_h": _edad_h(p["vault"] / "Indice.md"),
+                  "vencido": _vault_vencido(p)},
         "graphify": bool(shutil.which("graphify")),
     }
     for r in raices:
@@ -78,6 +98,12 @@ def estado_contexto(p: dict) -> dict:
     return out
 
 
+def _estado_vault(e: dict) -> str:
+    if not e["vault"]["existe"]:
+        return "ausente (vault.py build)"
+    return "desactualizado (vault.py build)" if e["vault"]["vencido"] else "ok"
+
+
 def cmd_estado(args) -> None:
     p = paths()
     e = estado_contexto(p)
@@ -96,7 +122,7 @@ def cmd_estado(args) -> None:
     if len(e["raices"]) > 1:
         edad_c = "ausente" if not c["existe"] else f"{c['edad_h']:.1f}h"
         print(f"   combinado: {edad_c}  {c['path']}")
-    print(f"   vault: {'ok' if e['vault']['existe'] else 'ausente'}")
+    print(f"   vault: {_estado_vault(e)}")
     if e["fresco"]:
         print("   [ok] contexto fresco")
     else:
@@ -169,6 +195,11 @@ def refrescar(p: dict, *, forzar=False, max_horas=None, con_vault=True,
 
     if not shutil.which("graphify"):
         parte["fallos"].append("graphify no esta en el PATH")
+        # El vault no necesita graphify (sale del backlog y los docs): cortar
+        # aqui lo dejaba sin regenerar nunca en una maquina sin graphify. El
+        # hub si se salta: derivaria del mismo grafo viejo.
+        if con_vault:
+            _construir_vault(p, parte, verboso)
         return parte
 
     for r in e["raices"]:
@@ -231,14 +262,18 @@ def refrescar(p: dict, *, forzar=False, max_horas=None, con_vault=True,
             print("   hub derivar-graphify: ok")
 
     if con_vault:
-        code, out = _run([sys.executable, str(Path(__file__).parent / "vault.py"),
-                          "build"], p["root"])
-        parte["vault"] = "ok" if code == 0 else out[-300:]
-        if code != 0:
-            parte["fallos"].append(f"vault build: {out[-300:]}")
-        elif verboso:
-            print("   vault build: ok")
+        _construir_vault(p, parte, verboso)
     return parte
+
+
+def _construir_vault(p: dict, parte: dict, verboso: bool) -> None:
+    code, out = _run([sys.executable, str(Path(__file__).parent / "vault.py"),
+                      "build"], p["root"])
+    parte["vault"] = "ok" if code == 0 else out[-300:]
+    if code != 0:
+        parte["fallos"].append(f"vault build: {out[-300:]}")
+    elif verboso:
+        print("   vault build: ok")
 
 
 def refrescar_si_vencido(p: dict, *, etiqueta: str, bloqueante=False) -> dict | None:
@@ -247,11 +282,18 @@ def refrescar_si_vencido(p: dict, *, etiqueta: str, bloqueante=False) -> dict | 
         print(f"[i]  HARNESS_SIN_CONTEXTO: sin refresco automatico ({etiqueta}).")
         return None
     e = estado_contexto(p)
-    if e["fresco"]:
+    if e["fresco"] and not e["vault"]["vencido"]:
         print(f"[i]  contexto fresco ({etiqueta}); no hay nada que refrescar.")
         return None
-    print(f"[i]  contexto vencido ({', '.join(e['vencidas'])}); refrescando antes de {etiqueta}...")
-    parte = refrescar(p, con_vault=True, con_hub=True)
+    if e["fresco"]:
+        # Solo cambio el backlog o un doc: regenerar el vault basta, sin
+        # relanzar el merge de grafos ni el hub.
+        print(f"[i]  grafo fresco, vault desactualizado; regenerandolo antes de {etiqueta}...")
+        parte = {"at": now_iso(), "fallos": [], "vault": None}
+        _construir_vault(p, parte, verboso=True)
+    else:
+        print(f"[i]  contexto vencido ({', '.join(e['vencidas'])}); refrescando antes de {etiqueta}...")
+        parte = refrescar(p, con_vault=True, con_hub=True)
     if parte["fallos"]:
         print("[!] el refresco de contexto no quedo completo:")
         for x in parte["fallos"]:
@@ -284,32 +326,6 @@ def _cargar_grafo(p: dict):
 def _servicio_de(src: str) -> str | None:
     m = SERVICE_RE.search(str(src or "").replace("\\", "/"))
     return m.group(1) if m else None
-
-
-def _micros_declarados(f: dict) -> list[str]:
-    """Nombres de servicio de la feature.
-
-    El backlog real trae de todo: listas limpias, pero tambien una sola cadena
-    con comas y comentarios entre parentesis ("admin, ms-payment-service
-    (proxy)"). Se extraen los nombres de servicio reconocibles y, si no hay
-    ninguno, se devuelve vacio para que el brief no filtre por un nombre que no
-    existe en el grafo (filtrar por basura devuelve cero y parece un grafo
-    vacio: el sintoma que trajo todo esto).
-    """
-    crudo = f.get("microservicios") or []
-    if isinstance(crudo, str):
-        crudo = [crudo]
-    out: list[str] = []
-    for item in crudo:
-        for trozo in re.split(r"[,\n;]", str(item)):
-            trozo = trozo.split("(")[0].strip().strip("/")
-            if not trozo:
-                continue
-            m = SERVICE_RE.search(trozo)
-            nombre = m.group(1) if m else trozo.split("/")[-1]
-            if nombre and nombre not in out:
-                out.append(nombre)
-    return out
 
 
 def superficie(graph: dict, micros: list[str], tope=12) -> dict:
