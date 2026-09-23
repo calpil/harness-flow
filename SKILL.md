@@ -1,12 +1,10 @@
 ---
 name: harness-flow
 description: >-
-  Proceso spec-driven con gates ejecutables para repos que tienen harness/feature_list.json.
-  Usar cuando el usuario pida gestionar features del backlog, arrancar sesion, redactar o aprobar
-  specs con criterios de aceptacion (AC), registrar evidencia citando archivo:linea, lanzar subagente
-  revisor aislado y sellar su veredicto, correr verify, cerrar features hacia su rama con lecciones y
-  postmerge medido, redactar y aprobar el PRD inicial o el SDD de arquitectura (rol producto),
-  sincronizar PRD/SDD, consultar impacto cross-repo con Memory Hub, o generar el vault Obsidian.
+  Gestiona features en repos con harness/feature_list.json: spec y AC aprobados,
+  implementacion con evidencia, review, verify y cierre mediante gates Python.
+  Tambien genera el vault Obsidian en docs/, PRD/SDD, Jira/Confluence y
+  contexto de grafo y Memory Hub.
 ---
 
 # Harness Flow
@@ -139,14 +137,15 @@ El agente NUNCA escribe `docs/prd/**`: redacta en `docs/borrador-prd.md` / `docs
 2. Consulta impacto cross-repo: `$PY "$H/hub.py" impacto --microservicio <proyecto>/<servicio>`.
 3. Revisa lecciones aplicables: `$PY "$H/leccion.py" list` **antes** de diseñar.
 4. Escribe `docs/spec-feature-<id>-<slug>.md` con `Estado: draft` usando `templates/spec.md`. Los AC-n en Given/When/Then son obligatorios.
-5. **Ritual de aprobación**: MUESTRA el spec al usuario en el chat, PREGUNTA si lo aprueba, y solo con su SÍ explícito corre:
+5. Si los comandos de AC usan rutas de worktree, crea el worktree con `$PY "$H/worktree.py" start --feature <id>` antes de sellar el spec. Esto prepara las rutas; no autoriza implementar todavía.
+6. **Ritual de aprobación**: MUESTRA el spec al usuario en el chat, PREGUNTA si lo aprueba, y solo con su SÍ explícito corre:
    `$PY "$H/gate.py" approve-spec --feature <id> --yes`
    Nunca apruebes por tu cuenta. El script se niega sin `--yes`.
 
 ### 2. Implementer — evidencia por AC
 
 1. Verifica el gate: `$PY "$H/gate.py" check-spec --feature <id>` (exit≠0 si no está approved o está stale).
-2. Trabaja DENTRO del worktree de la feature (`$PY "$H/worktree.py" start --feature <id>`).
+2. Trabaja DENTRO del worktree de la feature; si aun no existe, crealo con `$PY "$H/worktree.py" start --feature <id>`.
 3. Escribe evidencia en `docs/impl-<id>.md`: una fila por AC-n citando `archivo:linea`.
 
 ### 3. Reviewer — subagente aislado, veredicto sellado
@@ -384,7 +383,10 @@ en [`references/claude.md`](references/claude.md).
 
 ## GPT/Codex
 
-La instalacion personal va en `~/.agents/skills/harness-flow`; por repo, en `<repo>/.agents/skills/harness-flow`. Codex/GPT puede invocarla implicitamente por `agents/openai.yaml` y explicitamente como skill. Ver `references/openai.md`.
+La instalacion personal va en `~/.agents/skills/harness-flow`; por repo, en `<repo>/.agents/skills/harness-flow`. Codex puede invocarla implicitamente cuando el pedido coincide con el `description` de esta skill (`agents/openai.yaml` lo permite), o explicitamente con `$harness-flow`. Ver `references/openai.md`.
+
+Una llamada directa a un modelo GPT por API requiere adjuntar o registrar la
+skill en el entorno de esa llamada; la instalacion local de Codex no la propaga.
 
 `leccion.py donde` prioriza `.agents/skills` del repo hacia arriba, despues `~/.agents/skills`, `$CODEX_HOME/skills` (`~/.codex/skills`) y por ultimo `/etc/codex/skills` para crear. Buscar incluye las raices de otros agentes como consulta. El symlink al clone de Hermes no cambia la raiz de creacion.
 

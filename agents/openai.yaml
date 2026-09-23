@@ -1,7 +1,7 @@
 interface:
   display_name: "Harness Flow"
-  short_description: "Spec-driven gates, PRD/SDD, Jira and Confluence sync."
-  default_prompt: "Use $harness-flow to run the spec-driven workflow for this repository."
+  short_description: "Features, gates y vault Obsidian; PRD/SDD, Jira/Confluence."
+  default_prompt: "Usa $harness-flow para gestionar el flujo de features de este proyecto."
 
 policy:
   allow_implicit_invocation: true

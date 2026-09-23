@@ -86,6 +86,14 @@ consulta ninguna otra raiz.
 
 ## Invocacion automatica
 
-`agents/openai.yaml` deja `allow_implicit_invocation: true` y una descripcion
-corta para que ChatGPT/Codex pueda activar la skill sin mencionarla explicitamente
-cuando el pedido sea de flujo spec-driven, gates, PRD/SDD o Jira/Confluence.
+`agents/openai.yaml` deja `allow_implicit_invocation: true`. La invocacion
+implicita se decide principalmente por el `description` del frontmatter de
+`SKILL.md`, que nombra features, gates y Obsidian al principio. El
+`short_description` de `openai.yaml` describe la skill en la interfaz; no
+garantiza que se invoque en todo pedido. Para asegurarla, usa `$harness-flow`.
+
+Esto cubre Codex y los hosts que descubren skills locales. Un modelo GPT
+llamado directamente por API no escanea `~/.agents/skills` por si solo: la
+aplicacion debe adjuntar la skill al entorno de shell de Responses API o
+registrar el directorio de capacidades en un sandbox de Agents API, y darle
+acceso a los scripts y al proyecto. El symlink local no configura esa API.

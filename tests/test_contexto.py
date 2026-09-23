@@ -294,6 +294,52 @@ class ContextoTests(unittest.TestCase):
         self.assertIn("[[vault/grafo/validar|validar]]",
                       (gd / "cobrar.md").read_text(encoding="utf-8"))
 
+    def test_nodos_del_grafo_con_igual_nombre_no_se_pisan(self):
+        import subprocess
+        grafo = self.root / "graphify-out" / "graph.json"
+        grafo.parent.mkdir()
+        grafo.write_text(json.dumps(_grafo(
+            [{"id": "a", "label": "validar", "type": "function"},
+             {"id": "b", "label": "validar", "type": "function"}],
+            [{"source": "a", "target": "b", "relation": "calls"}])), encoding="utf-8")
+        r = subprocess.run([sys.executable, str(SCRIPTS / "vault.py"), "build",
+                            "--con-grafo"], cwd=str(self.root), capture_output=True, text=True)
+        self.assertEqual(0, r.returncode, r.stderr)
+        gd = self.root / "docs" / "vault" / "grafo"
+        notas = list(gd.glob("*.md"))
+        self.assertEqual(2, len(notas))
+        for nota in notas:
+            texto = nota.read_text(encoding="utf-8")
+            otra = next(q for q in notas if q != nota)
+            self.assertIn(f"[[vault/grafo/{otra.stem}|{otra.stem}]]", texto)
+
+    def test_nota_manual_en_ruta_generada_no_se_sobrescribe(self):
+        import subprocess
+        destino = self.root / "docs" / "vault" / "features" / "Feature-1.md"
+        destino.parent.mkdir(parents=True)
+        destino.write_text("# Nota propia\n", encoding="utf-8")
+        r = subprocess.run([sys.executable, str(SCRIPTS / "vault.py"), "build"],
+                           cwd=str(self.root), capture_output=True, text=True)
+        self.assertNotEqual(0, r.returncode)
+        self.assertEqual("# Nota propia\n", destino.read_text(encoding="utf-8"))
+        self.assertIn("nota manual", r.stderr + r.stdout)
+
+    def test_config_inicial_no_habilita_dataview_sin_instalarlo(self):
+        self._vault_build()
+        plugins = self.root / "docs" / ".obsidian" / "community-plugins.json"
+        self.assertEqual([], json.loads(plugins.read_text(encoding="utf-8")))
+
+    def test_indice_separa_estados_desconocidos_de_features_abiertas(self):
+        backlog = self.root / "harness" / "feature_list.json"
+        data = json.loads(backlog.read_text(encoding="utf-8"))
+        data["features"].append({"id": 2, "name": "Estado nuevo", "status": "migrating"})
+        backlog.write_text(json.dumps(data), encoding="utf-8")
+        self._vault_build()
+        indice = (self.root / "docs" / "vault" / "Indice.md").read_text(encoding="utf-8")
+        self.assertIn("2 (1 abiertas, 1 con estado desconocido)", indice)
+        self.assertIn("## Estados desconocidos", indice)
+        self.assertIn("[[vault/features/Feature-2|Feature-2]]", indice)
+
     # --- vault: enlaces que Obsidian puede seguir ---------------------------
 
     def _backlog_como_el_real(self):

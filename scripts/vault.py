@@ -13,10 +13,12 @@ corresponde. Los archivos que escribas a mano (sin el aviso) no se tocan.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import re
 import sys
+from collections import Counter
 from pathlib import Path  # noqa: F401  (lo usa la carga de lecciones)
 
 sys.path.insert(0, str(Path(__file__).parent))
@@ -25,6 +27,8 @@ from comun import (cubre_acs, impl_path, load_backlog, micros_declarados,  # noq
                    slugify, spec_acs, spec_estado, spec_path)
 
 AVISO = "<!-- generado por harness-flow vault.py — no editar a mano -->"
+ABIERTOS = ("todo", "pending", "in_progress", "blocked", "review")
+CERRADOS = ("done", "superseded")
 
 
 def esc(s: str) -> str:
@@ -79,7 +83,7 @@ def repos_de_las_raices(p: dict) -> dict[str, list[str]]:
 # vault se vea igual en todas tus maquinas sin configurarlo a mano. Una vez
 # sembrado es tuyo: Obsidian lo reescribe al vuelo y vault.py no lo vuelve a
 # tocar. Para volver al default: borra docs/.obsidian y regenera.
-SEMILLA_OBSIDIAN: dict[str, dict] = {
+SEMILLA_OBSIDIAN: dict[str, dict | list] = {
     # Markdown estricto: wikilinks relativos al vault y sin "ayudas" que
     # reescriban los .md generados. El vault es docs/: las notas propias van a
     # vault/notas, junto a las generadas.
@@ -163,10 +167,8 @@ SEMILLA_OBSIDIAN: dict[str, dict] = {
         "linkDistance": 260,
         "scale": 0.8,
     },
-    # Dataview es un plugin de comunidad: esto solo lo deja HABILITADO para
-    # cuando lo instales desde Obsidian. No lo descarga (seria bajar binarios
-    # de terceros a tu repo sin que lo pidas).
-    "community-plugins.json": ["dataview"],
+    # Los plugins de comunidad se instalan y habilitan desde Obsidian.
+    "community-plugins.json": [],
 }
 
 
@@ -233,6 +235,12 @@ def main() -> None:
     escritas: set[Path] = set()
 
     def escribir(destino: Path, lineas: list[str]) -> None:
+        if not destino.resolve().is_relative_to(v.resolve()) or destino.is_symlink():
+            raise SystemExit(f"[!!] ruta generada fuera del vault o enlace simbolico: {destino}")
+        if destino.exists() and AVISO not in destino.read_text(
+                encoding="utf-8", errors="replace").splitlines():
+            raise SystemExit(f"[!!] nota manual en ruta generada: {destino}. "
+                             "Muevela a docs/vault/notas/ antes de regenerar.")
         destino.write_text("\n".join(lineas) + "\n", encoding="utf-8")
         escritas.add(destino.resolve())
 
@@ -274,6 +282,7 @@ def main() -> None:
             f"Estado: **{f.get('status')}** · spec **{estado}**"
             + (f" · review **{sello}**" if sello else ""), "",
             "## Criterios de aceptacion", "",
+            "_Marcado = evidencia con cita archivo:linea; no equivale a verify ni review._", "",
         ]
         if acs:
             for ac in acs:
@@ -352,20 +361,34 @@ def main() -> None:
     if con_grafo:
         g = json.loads(p["graph"].read_text(encoding="utf-8"))
         gd = v / "grafo"; gd.mkdir(exist_ok=True)
-        nodes = g.get("nodes", [])
-        por_id = {n.get("id"): n for n in nodes}
+        nodes = g.get("nodes", [])[:2000]
+        bases = [slugify(esc(n.get("label") or n.get("id")))[:60] for n in nodes]
+        repetidos = Counter(bases)
+        nombres: dict[str, str] = {}
+        ocupados: set[str] = set()
+        for n, base in zip(nodes, bases):
+            nid = str(n.get("id"))
+            if nid in nombres:
+                raise SystemExit(f"[!!] nodos del grafo con identidad duplicada: {nid}")
+            nombre = base
+            if repetidos[base] > 1 or nombre in ocupados:
+                sufijo = hashlib.sha256(nid.encode("utf-8")).hexdigest()[:10]
+                nombre = f"{base[:49]}-{sufijo}"
+            if nombre in ocupados:
+                raise SystemExit(f"[!!] nombres de nodos del grafo colisionan: {nombre}")
+            ocupados.add(nombre)
+            nombres[nid] = nombre
         vecinos: dict[str, list] = {}
         for e in g.get("edges", []) or g.get("links", []):
-            s, t = e.get("source"), e.get("target")
+            s, t = str(e.get("source")), str(e.get("target"))
             rel = e.get("relation") or e.get("type") or "rel"
             vecinos.setdefault(s, []).append((rel, t))
             vecinos.setdefault(t, []).append((f"<- {rel}", s))
-        for n in nodes[:2000]:
-            nid = n.get("id"); lbl = esc(n.get("label") or nid)
-            nombre = slugify(lbl)[:60] or "nodo"
-            links = [f"- {rel} " + enlace("vault/grafo/" + (
-                         slugify(esc(por_id.get(o, {}).get("label") or o))[:60] or "nodo"))
-                     for rel, o in vecinos.get(nid, [])[:40]]
+        for n in nodes:
+            nid = str(n.get("id")); lbl = esc(n.get("label") or nid)
+            nombre = nombres[nid]
+            links = [f"- {rel} " + enlace("vault/grafo/" + nombres[o])
+                     for rel, o in vecinos.get(nid, [])[:40] if o in nombres]
             escribir(gd / f"{nombre}.md", [
                 "---", "tipo: nodo", f"comunidad: {n.get('community_name') or n.get('community','')}",
                 "tags: [grafo]", "---", AVISO, "",
@@ -375,16 +398,25 @@ def main() -> None:
             ])
 
     # --- indice ---
-    abiertas = [f for f in data["features"] if f.get("status") not in ("done", "superseded")]
+    abiertas = [f for f in data["features"] if f.get("status") in ABIERTOS]
+    desconocidas = [f for f in data["features"]
+                   if f.get("status") not in ABIERTOS + CERRADOS]
+    conteo = f"{len(data['features'])} ({len(abiertas)} abiertas"
+    if desconocidas:
+        conteo += f", {len(desconocidas)} con estado desconocido"
+    conteo += ")"
     escribir(v / "Indice.md", [
         "---", "tipo: indice", "tags: [harness]", "---", AVISO, "",
         f"# {esc(proyecto)}", "", f"Actualizado: {now_iso()}", "",
-        f"- Features: {len(data['features'])} ({len(abiertas)} abiertas)",
+        f"- Features: {conteo}",
         f"- Microservicios: {len(servicios)}",
         f"- Lecciones aplicadas: {len(clases)}",
-        "", "## En curso", "",
+        "", "## Abiertas", "",
         *([f"- {feature(f['id'])} — {esc(f.get('name',''))} ({f.get('status')})"
            for f in abiertas] or ["_nada abierto_"]),
+        *(["", "## Estados desconocidos", "",
+           *[f"- {feature(f['id'])} — {esc(f.get('name',''))} ({f.get('status')})"
+             for f in desconocidas]] if desconocidas else []),
         "", "## Microservicios", "",
         *[f"- {enlace('vault/servicios/' + clave)}" for clave in sorted(servicios)],
     ])
@@ -395,8 +427,9 @@ def main() -> None:
     borradas = 0
     for d in ["features", "lecciones", "servicios"] + (["grafo"] if con_grafo else []):
         for viejo in (v / d).glob("*.md"):
-            if viejo.resolve() not in escritas and \
-                    AVISO in viejo.read_text(encoding="utf-8", errors="replace"):
+            if (not viejo.is_symlink() and viejo.resolve() not in escritas
+                    and AVISO in viejo.read_text(
+                        encoding="utf-8", errors="replace").splitlines()):
                 viejo.unlink()
                 borradas += 1
 
@@ -406,7 +439,7 @@ def main() -> None:
         print(f"[ok] config de Obsidian sembrada ({cfg_nuevos} archivos en docs/.obsidian/)")
         if cfg_primera:
             print("[i]  tema oscuro, grafo coloreado por carpeta y wikilinks cortos.")
-            print("[i]  Dataview queda habilitado: instalalo en Obsidian ->")
+            print("[i]  Dataview es opcional: instalalo y habilitalo en Obsidian ->")
             print("     Settings > Community plugins > Browse > Dataview.")
     if (v / ".obsidian").is_dir():
         print(f"[i]  {v / '.obsidian'} es de cuando el vault era docs/vault/.\n"

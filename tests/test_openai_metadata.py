@@ -13,6 +13,7 @@ class OpenAIMetadataTests(unittest.TestCase):
         self.assertIn("Harness Flow", texto)
         self.assertIn("PRD/SDD", texto)
         self.assertIn("Jira", texto)
+        self.assertIn("Obsidian", texto)
 
     def test_referencia_openai_documenta_agents_skills(self):
         texto = (ROOT / "references" / "openai.md").read_text(encoding="utf-8")
