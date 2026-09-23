@@ -162,7 +162,7 @@ def cmd_briefing(a) -> None:
                   "contexto.py refrescar antes de delegar.\n")
         contexto.cmd_brief(argparse.Namespace(
             feature=str(f["id"]), max_lineas=a.max_lineas_brief,
-            max_archivos=10, max_lecciones=10))
+            max_archivos=10, max_lecciones=10, max_relacionados=0))
         print()
     except Exception as exc:
         print(f"[!] sin brief de contexto ({exc}); el revisor arranca solo con spec + diff.\n")

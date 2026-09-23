@@ -22,8 +22,11 @@ pregunta cual, o corre `/harness-flow:estado` para listarlas.
 eval "$(python3 "${CLAUDE_PLUGIN_ROOT}/scripts/entorno.py" --shell)" && "$PY" "$H/contexto.py" brief --feature $1
 ```
 
-Ese brief trae AC, reglas, lecciones, impacto del hub y superficie de contacto
-del grafo. Si dice que el contexto esta vencido, refresca antes de disenar:
+Ese brief trae AC, reglas, lecciones, impacto del hub, superficie de contacto
+del grafo y **documentos relacionados**: rutas de `docs/` (decisiones, enmiendas,
+reviews de features previas del mismo servicio, notas del usuario). Abre solo las
+que toquen tu diseno; no barras `docs/` por tu cuenta. Si dice que el contexto
+esta vencido, refresca antes de disenar:
 
 ```bash
 eval "$(python3 "${CLAUDE_PLUGIN_ROOT}/scripts/entorno.py" --shell)" && "$PY" "$H/contexto.py" refrescar

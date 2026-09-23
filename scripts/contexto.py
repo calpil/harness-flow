@@ -3,7 +3,7 @@
 
   contexto.py estado [--json]
   contexto.py refrescar [--forzar] [--max-horas N] [--sin-vault] [--sin-hub]
-  contexto.py brief --feature <id> [--max-lineas N]
+  contexto.py brief --feature <id> [--max-lineas N] [--max-relacionados N]
 
 Por que existe: la raiz del arnes puede ser UN repo (p.ej. el front) mientras
 los microservicios viven en otra raiz del disco. Con un solo graphify-out el
@@ -26,7 +26,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 from comun import (SERVICE_RE, ac_comandos, get_feature, grafos_config,  # noqa: E402
                    graph_path, impl_path, load_backlog, now_iso, paths,
-                   raices_grafo, spec_ac_lineas, spec_acs, spec_path)
+                   raices_grafo, review_path, spec_ac_lineas, spec_acs,
+                   spec_path)
 from comun import micros_declarados as _micros_declarados  # noqa: E402
 
 # Relaciones que dicen "esto usa aquello". `contains`/`method` son estructura
@@ -447,6 +448,109 @@ def _lecciones(data: dict | None = None) -> list[str]:
     return filas
 
 
+# Documentos que registran una decision ya tomada: cambian lo que se puede
+# disenar, y el spec es el momento de enterarse.
+PREFIJOS_DECISION = ("decision", "enmienda", "acta", "adr", "errata")
+
+
+def _docs_humanos(p: dict) -> list[Path]:
+    """Los .md de docs/ que escribio alguien: sin .git/.obsidian ni el vault
+    generado (sale del mismo backlog que el brief), pero con vault/notas/."""
+    docs = p["docs"]
+    out: list[Path] = []
+    for raiz, dirs, archivos in os.walk(docs):
+        rel = Path(raiz).relative_to(docs).parts
+        dirs[:] = [d for d in dirs if not d.startswith(".")
+                   and (rel != ("vault",) or d == "notas")]
+        if rel == ("vault",):
+            continue
+        out += [Path(raiz) / a for a in archivos if a.endswith(".md")]
+    return out
+
+
+def _menciona(texto: str, nombres: list[str]) -> bool:
+    # Con borde: 'admin' no debe enganchar 'administrador' ni 'front-admin'.
+    return any(re.search(rf"(?<![\w-]){re.escape(n)}(?![\w-])", texto)
+               for n in nombres)
+
+
+def _relacionados(p: dict, data: dict, f: dict, micros: list[str],
+                  tope: int) -> list[str]:
+    """Rutas de docs/ que conviene abrir ANTES de disenar. Solo rutas.
+
+    Buscar por nombre de servicio a secas no sirve: en un proyecto real
+    `ms-tenant-service` aparece en 539 archivos (~2,7M tokens). Aqui se
+    recorren NOMBRES de archivo y solo se lee el texto de los pocos que son
+    decisiones o notas propias; el resto del ranking sale del backlog.
+    """
+    if tope <= 0:
+        return []
+    fid = str(f["id"])
+    tok = re.compile(rf"(?:^|[-_]){re.escape(fid)}(?:[-_]|$)")
+    propios = {spec_path(p, f).resolve(), impl_path(p, f).resolve()}  # ya en el pie
+    docs = sorted(_docs_humanos(p), key=lambda q: -q.stat().st_mtime)
+
+    def rel(q: Path) -> str:
+        return q.relative_to(p["root"]).as_posix()
+
+    def leer(q: Path) -> str:
+        try:
+            return q.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            return ""
+
+    notas, de_esta, decisiones = [], [], []
+    vistos: set[str] = set()
+    for q in docs:
+        partes = q.relative_to(p["docs"]).parts
+        if partes[:2] == ("vault", "notas"):
+            t = leer(q)
+            if re.search(rf"Feature-{re.escape(fid)}(?!\d)", t) or _menciona(t, micros):
+                notas.append(("tuya", rel(q)))
+            continue
+        # la primera carpeta o archivo cuyo nombre lleva el id: una carpeta
+        # entera de artefactos de la feature es UNA entrada, no veinte.
+        i = next((k for k, x in enumerate(partes)
+                  if tok.search(Path(x).stem if k == len(partes) - 1 else x)), None)
+        if i is not None and q.resolve() not in propios:
+            ruta = (p["docs"].joinpath(*partes[:i + 1]))
+            clave = rel(ruta) + ("/" if i < len(partes) - 1 else "")
+            if clave not in vistos:
+                vistos.add(clave)
+                de_esta.append(("feature", clave))
+            continue
+        if q.stem.lower().startswith(PREFIJOS_DECISION):
+            t = leer(q)
+            if re.search(rf"#{re.escape(fid)}\b", t) or _menciona(t, micros):
+                decisiones.append(("decision", rel(q)))
+
+    previas = []
+    comunes = set(micros)
+    otras = [x for x in data["features"] if str(x.get("id")) != fid
+             and x.get("status") == "done" and comunes & set(_micros_declarados(x))]
+    for x in sorted(otras, key=lambda x: str(x.get("closed_at") or ""), reverse=True):
+        doc = next((d for d in (review_path(p, x), spec_path(p, x)) if d.exists()), None)
+        if doc:
+            svc = ", ".join(sorted(comunes & set(_micros_declarados(x))))
+            previas.append(("previa", f"{rel(doc)}  (#{x['id']} "
+                                      f"{str(x.get('name', ''))[:50]}; {svc})"))
+
+    # Cupo por tipo en orden de prioridad: lo tuyo, lo de esta feature, las
+    # decisiones y al final las features vecinas (las hay por decenas).
+    filas, sobran = [], 0
+    for grupo, cupo in ((notas, 2), (de_esta, 3), (decisiones, 3), (previas, 3)):
+        toma = grupo[:max(0, min(cupo, tope - len(filas)))]
+        filas += toma
+        sobran += len(grupo) - len(toma)
+    if not filas:
+        return []
+    L = ["", "documentos relacionados (solo rutas; abre los que toquen el diseno):"]
+    L += [f"  {tipo:<8}  {ruta}" for tipo, ruta in filas]
+    if sobran:
+        L.append(f"  (+{sobran} mas sin listar)")
+    return L
+
+
 def cmd_brief(args) -> None:
     p = paths()
     data = load_backlog(p)
@@ -521,6 +625,9 @@ def cmd_brief(args) -> None:
             L.append(f"  ({len(faltan)} declaradas sin skill instalada: "
                      f"{', '.join(faltan[:4])}{' ...' if len(faltan) > 4 else ''})")
 
+    # 0 lo apaga: el revisor juzga spec contra codigo, no la historia.
+    L += _relacionados(p, data, f, micros, getattr(args, "max_relacionados", 8))
+
     ip = impl_path(p, f)
     pie = ["",
            f"spec: {sp if sp.exists() else '(AUSENTE)'}",
@@ -552,6 +659,8 @@ def main() -> None:
     s.add_argument("--max-lineas", type=int, default=90, dest="max_lineas")
     s.add_argument("--max-archivos", type=int, default=12, dest="max_archivos")
     s.add_argument("--max-lecciones", type=int, default=12, dest="max_lecciones")
+    s.add_argument("--max-relacionados", type=int, default=8, dest="max_relacionados",
+                   help="rutas de docs/ relacionadas (0 = sin la seccion)")
     s.set_defaults(fn=cmd_brief)
     a = ap.parse_args(); a.fn(a)
 

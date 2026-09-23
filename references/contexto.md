@@ -71,6 +71,24 @@ su comando, las reglas activas, las rutas protegidas, las lecciones instaladas y
 el impacto cross-repo del hub. `revision.py --briefing` lo incrusta al principio
 del paquete del revisor, con `--max-lineas-brief` para acotarlo.
 
+**Documentos relacionados.** Al final, hasta 8 rutas de `docs/` (el vault de
+Obsidian), sin contenido, para que el leader sepa que abrir antes de disenar:
+
+| Tipo | Que es | Como se encuentra |
+|---|---|---|
+| `tuya` | nota tuya en `docs/vault/notas/` | enlaza `[[Feature-<id>]]` o nombra un servicio de la feature |
+| `feature` | archivo o carpeta con el id en el nombre | `decisiones-137.md`, `review-144-pre-integral.md`, `artefactos-159/` |
+| `decision` | `decision*`, `enmienda*`, `acta*`, `adr*`, `errata*` | su texto nombra `#<id>` o un servicio de la feature |
+| `previa` | review (o spec) de una feature cerrada del mismo servicio | backlog, la mas reciente primero |
+
+Buscar en `docs/` por nombre de servicio a secas no sirve: en un proyecto real
+`ms-tenant-service` aparece en 539 archivos (~2,7M tokens). Por eso se recorren
+nombres de archivo y solo se lee el texto de decisiones y notas; las notas
+generadas del vault no entran (salen del mismo backlog que el brief). Cupo por
+tipo en ese orden de prioridad; lo que no entra se cuenta en `(+N mas sin
+listar)`. `--max-relacionados 0` quita la seccion, y el briefing del revisor la
+quita siempre: el revisor juzga spec contra codigo, no la historia.
+
 El brief es un INDICE, no evidencia: ningun AC se da por cumplido porque el
 brief lo mencione. Si el contexto esta vencido, tanto el brief como el briefing
 del revisor lo dicen en la primera linea en vez de fingir estar al dia.
