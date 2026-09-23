@@ -349,6 +349,33 @@ class ContextoTests(unittest.TestCase):
         self.assertTrue((docs / ".obsidian" / "app.json").exists())
         self.assertFalse((docs / "vault" / ".obsidian").exists())
 
+    def test_la_nota_de_leccion_cita_la_skill_real(self):
+        """Decia 'Skill de Hermes' aunque el archivo viviera en otro host.
+
+        En Grok la leccion esta en ~/.grok/skills. La nota tiene que citar ese
+        SKILL.md, no un host fijo.
+        """
+        import subprocess
+        skills = Path(self.tmp.name) / "skills"
+        clase = "gates-que-no-mienten"
+        (skills / clase).mkdir(parents=True)
+        (skills / clase / "SKILL.md").write_text(
+            "---\nname: gates-que-no-mienten\ndescription: x\n---\n",
+            encoding="utf-8")
+        self._backlog_como_el_real()
+        env = dict(os.environ, HARNESS_SKILLS_DIR=str(skills), HARNESS_HOST="grok")
+        r = subprocess.run([sys.executable, str(SCRIPTS / "vault.py"), "build"],
+                           cwd=str(self.root), capture_output=True, text=True, env=env)
+        self.assertEqual(0, r.returncode, r.stderr[-400:] + r.stdout[-400:])
+        nota = (self.root / "docs" / "vault" / "lecciones" / f"{clase}.md"
+                ).read_text(encoding="utf-8")
+        resuelto = str((skills / clase / "SKILL.md").resolve())
+        casa = str(Path.home())
+        citado = "~" + resuelto[len(casa):] if resuelto.startswith(casa + os.sep) else resuelto
+        self.assertIn(f"Archivo: `{citado}`", nota)
+        self.assertNotIn("Skill de Hermes", nota)
+        self.assertNotIn("skills de Hermes", nota)
+
     def test_micros_declarados_sin_comas_de_comentario_ni_prefijo(self):
         f = {"microservicios": ["docs (SUBMODULO, mode 160000: es OTRO repo), "
                                 "demo/ms-foo-service", "ninguno"]}

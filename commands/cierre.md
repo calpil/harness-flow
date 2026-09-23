@@ -60,9 +60,11 @@ eval "$(python3 "${CLAUDE_PLUGIN_ROOT}/scripts/entorno.py" --shell)" && "$PY" "$
 ```
 
 Sin `--integrated`, `close` **ejecuta el merge de verdad** (`git merge --no-ff`).
-Aborta sin tocar el backlog si el arbol esta sucio o el merge conflictua: `start`,
-`approve-spec` y `revision` dejan cambios en `harness/` y en `docs/vault/`.
-Muestralos con `git status` y pregunta antes de commitearlos; no los descartes.
+Aborta sin tocar el backlog si el arbol esta sucio o el merge conflictua.
+`start` puede dejar `harness/` y `docs/vault/` sucios. `approve-spec` y
+`revision` no regeneran el vault: tocan el spec o el review en `docs/` y el
+backlog en `harness/`. Muestralos con `git status` y pregunta antes de
+commitearlos; no los descartes.
 Despues del `done`, el close sincroniza PRD/SDD y regenera el vault: vuelven a
 quedar cambios en `docs/` y hay que reportarlos, no darlos por publicados. Agrega
 `--publicar-atlassian` SOLO si existe `harness/atlassian.json` y el usuario pidio

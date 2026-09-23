@@ -98,3 +98,14 @@ Buscar, el gate de `close --leccion`, mira ademas las raices de los otros
 agentes. Una leccion escrita en Hermes o en Claude sigue cerrando desde Grok.
 Al reves igual: una leccion creada aqui en `~/.grok/skills` la encuentra el
 gate desde otro host.
+
+## Obsidian
+
+No hay un vault distinto para Grok. `vault.py`, el refresco de `worktree.py
+start` y el de `gate.py close --status done` son los mismos scripts. Grok no
+carga `commands/estado.md` (ahi esta el mismo paso, para Claude): al arrancar
+la sesion sigue la seccion "Arranque de sesion" y "Obsidian" de `SKILL.md`.
+
+La nota de una leccion cita el `SKILL.md` que `leccion.py` encontro. Si se
+creo en este host, esa ruta es `~/.grok/skills/<clase>/SKILL.md`. Que genera
+cada nota: [`obsidian.md`](obsidian.md).

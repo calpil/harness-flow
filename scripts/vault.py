@@ -296,15 +296,21 @@ def main() -> None:
             cuerpo += ["", f"Rama: `{f['branch']}`"]
         escribir(v / "features" / f"Feature-{fid}.md", cuerpo)
 
-    # --- lecciones (son SKILLS de Hermes, no archivos del repo) ---
+    # --- lecciones (son skills del agente, no archivos del repo) ---
     from leccion import buscar as buscar_leccion
     clases = sorted({c for c in map(leccion_de, data["features"]) if c})
     for clase in clases:
         usada = [f"- {feature(x['id'])}" for x in data["features"]
                  if leccion_de(x) == clase]
         sm = buscar_leccion(clase)
-        origen = (f"Skill de Hermes: `{clase}`" if sm
-                  else f"**FALTA**: la skill `{clase}` no esta instalada aqui")
+        if sm:
+            casa = str(Path.home())
+            ruta = str(sm)
+            if ruta == casa or ruta.startswith(casa + os.sep):
+                ruta = "~" + ruta[len(casa):]
+            origen = [f"Skill: `{clase}`", f"Archivo: `{ruta}`"]
+        else:
+            origen = [f"**FALTA**: la skill `{clase}` no esta instalada aqui"]
         # slugify: el valor viene del backlog sin sanitizar y Path resuelve '..',
         # asi que una leccion '../../../README' pisaba archivos del repo.
         destino = (v / "lecciones" / f"{slugify(clase)}.md").resolve()
@@ -313,9 +319,10 @@ def main() -> None:
         escribir(destino, [
             "---", "tipo: leccion", "tags: [harness, leccion]", "---", AVISO, "",
             f"# {esc(clase)}", "",
-            origen, "",
-            "_Vive en tus skills de Hermes y viaja contigo entre proyectos;",
-            "aqui solo queda la traza de donde se aplico._", "",
+            *origen, "",
+            "_Vive en las skills del agente (Hermes, Claude, GPT, Grok, Kimi)",
+            "y viaja contigo entre proyectos; aqui solo queda la traza de donde se aplico._",
+            "",
             "## Usada en", "",
             *(usada or ["_todavia no se declaro en ningun cierre_"]),
         ])

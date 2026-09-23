@@ -104,7 +104,7 @@ consulta (como hace `vault.py`), no conectar Obsidian a la base.
 ## Plugins útiles
 
 - **Dataview**: consulta el frontmatter (`tipo: feature`, `estado: done`). Ej:
-  `TABLE estado FROM "features" WHERE estado != "done"`.
+  `TABLE estado FROM "vault/features" WHERE estado != "done"`.
 - **Graph Analysis**: mide centralidad sobre los wikilinks.
 
 No son necesarios: el vault funciona sin plugins.

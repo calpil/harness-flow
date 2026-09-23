@@ -101,6 +101,14 @@ $PY "$H/estado.py"
 
 Muestra features abiertas, gates pendientes y edad del grafo. Si hay una feature `in_progress`, retómala; no arranques otra.
 
+Si dice `vault: ausente` o `vault: desactualizado` y el grafo esta fresco, regenera solo el panel de Obsidian. No relances graphify ni el hub:
+
+```bash
+$PY "$H/vault.py" build
+```
+
+Si el contexto esta vencido, `$PY "$H/contexto.py" refrescar` ya regenera ese panel. El detalle esta en "Obsidian". Grok no tiene el comando `/harness-flow:estado`: este arranque es el que sigue.
+
 Al listar pendientes, contrasta el resumen con un conteo programatico de
 `feature_list.json` por `status`. `estado.py` cuenta `todo`, `pending`,
 `in_progress`, `blocked` y `review` como abiertas; solo `done` y `superseded`
@@ -268,9 +276,13 @@ $PY "$H/contexto.py" refrescar         # grafo -> hub -> vault, con parte de fal
 $PY "$H/contexto.py" brief --feature <id>
 ```
 
-`worktree.py start` y `gate.py close --status done` lo refrescan solos si esta
-vencido (el vault, si el backlog o un doc es mas nuevo), y dicen si NO quedo
-refrescado. `HARNESS_SIN_CONTEXTO=1` apaga solo ese refresco automatico.
+`worktree.py start` lo refresca si esta vencido (el vault, si el backlog o un
+doc es mas nuevo que `docs/vault/Indice.md`; si solo el vault esta viejo, no
+relanza graphify ni el hub). `gate.py close --status done` lo refresca siempre,
+despues del cierre. Dicen si NO quedo refrescado. `HARNESS_SIN_CONTEXTO=1` apaga
+solo ese refresco automatico. Aprobar un spec, escribir evidencia o sellar un
+review no lo regeneran: el panel queda viejo hasta el arranque de sesion, el
+proximo `start`, un `vault.py build` o el `close`.
 
 **Varias raices**: si los microservicios viven fuera de la raiz del arnes, se
 declaran en `harness/grafos.json` y se combinan. Nunca se autodetectan. Formato,
@@ -331,9 +343,14 @@ Abre **`docs/`** como vault (no `docs/vault/`): spec, evidencia y review quedan
 dentro y las notas generadas en `docs/vault/` los enlazan con wikilinks.
 
 ```bash
-$PY "$H/vault.py" build                # lo corre solo contexto.py refrescar
+$PY "$H/vault.py" build                # tambien lo corre contexto.py refrescar, sin --con-grafo
 $PY "$H/vault.py" build --con-grafo    # ademas, una nota por nodo del grafo
 ```
+
+Corre `build` pelado despues de escribir el spec, la evidencia o el review si no
+vas a hacer `start` o `close` enseguida: si no, Obsidian sigue mostrando el AC
+sin marcar y el review sin sello. Ningun rol lee esas notas para implementar; el
+indice del agente es `contexto.py brief`.
 
 Los nodos del grafo son **opt-in**: el refresco automatico corre `build` pelado,
 asi que si `docs/vault/grafo/` no existe no es un fallo, es que nadie paso la
@@ -506,6 +523,6 @@ lecciones: [`references/kimi.md`](references/kimi.md).
 | [`references/atlassian.md`](references/atlassian.md) | mapeo a Jira/Confluence y sus comandos |
 | [`references/claude.md`](references/claude.md) | Claude Code: plugin, comandos, Windows, raices de lecciones |
 | [`references/openai.md`](references/openai.md) | GPT/Codex: instalacion, deteccion y raices |
-| [`references/grok.md`](references/grok.md) | Grok: host, revisor con `spawn_subagent`, lecciones en `~/.grok/skills` |
+| [`references/grok.md`](references/grok.md) | Grok: host, revisor con `spawn_subagent`, lecciones en `~/.grok/skills`, vault |
 | [`references/kimi.md`](references/kimi.md) | Kimi Code: host, plugin, revisor y lecciones |
 | [`references/documentacion.md`](references/documentacion.md) | rol producto (PRD inicial / SDD de arquitectura), su sello y como se sincronizan |
