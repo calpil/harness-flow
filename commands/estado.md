@@ -47,6 +47,14 @@ Del output de `estado.py`, al usuario le importan tres cosas y en este orden:
    eval "$(python3 "${CLAUDE_PLUGIN_ROOT}/scripts/entorno.py" --shell)" && "$PY" "$H/contexto.py" refrescar
    ```
 
+   Si lo unico viejo es el vault (`vault: desactualizado` con el contexto
+   fresco), no relances graphify ni el hub; basta regenerarlo. El vault es el
+   panel de Obsidian del usuario; ningun rol lo lee.
+
+   ```bash
+   eval "$(python3 "${CLAUDE_PLUGIN_ROOT}/scripts/entorno.py" --shell)" && "$PY" "$H/vault.py" build
+   ```
+
 ## Contraste obligatorio
 
 No reportes el resumen de `estado.py` como si fuera el conteo. Contrastalo contra
