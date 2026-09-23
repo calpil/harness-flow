@@ -27,13 +27,25 @@ class EntornoTests(unittest.TestCase):
         patch.start()
         self.addCleanup(patch.stop)
 
+    def _script_heredado_hermes(self) -> Path:
+        """__file__ neutro: clone de Hermes. La suite corre desde cualquier
+        instalacion (clone, plugin managed de Kimi, .claude/skills) y sin mock
+        la ruta real del checkout decidiria el host antes que la marca a probar.
+        """
+        script = self.home / ".hermes/skills/software-development/harness-flow/scripts/entorno.py"
+        script.parent.mkdir(parents=True)
+        script.touch()
+        return script
+
     def test_claude_en_ejecucion_gana_a_hermes_heredado(self):
         os.environ.update(CLAUDECODE="1", HERMES_HOME=str(self.home / ".hermes"))
-        self.assertEqual(entorno.host_agente(), "claude")
+        with mock.patch.object(entorno, "__file__", str(self._script_heredado_hermes())):
+            self.assertEqual(entorno.host_agente(), "claude")
 
     def test_claude_config_dir_tambien_identifica_el_host(self):
         os.environ["CLAUDE_CONFIG_DIR"] = str(self.home / ".claude")
-        self.assertEqual(entorno.host_agente(), "claude")
+        with mock.patch.object(entorno, "__file__", str(self._script_heredado_hermes())):
+            self.assertEqual(entorno.host_agente(), "claude")
 
     def test_host_explicito_gana_y_no_normaliza_invalidos(self):
         os.environ.update(HARNESS_HOST="hermes", CLAUDECODE="1")
@@ -354,7 +366,8 @@ class EntornoTests(unittest.TestCase):
 
     def test_gemini_antigravity_detecta_host_gemini(self):
         os.environ["ANTIGRAVITY_AGENT"] = "1"
-        self.assertEqual(entorno.host_agente(), "gemini")
+        with mock.patch.object(entorno, "__file__", str(self._script_heredado_hermes())):
+            self.assertEqual(entorno.host_agente(), "gemini")
 
     def test_gemini_skills_dir_detecta_host_gemini(self):
         script = self.home / ".gemini/config/skills/harness-flow/scripts/entorno.py"
