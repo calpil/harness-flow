@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git clone --depth 1 https://github.com/calpil/harness-flow.git:*)",
+      "Bash(python3 ~/.claude/skills/harness-flow/scripts/:*)"
+    ]
+  }
+}
