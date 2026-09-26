@@ -319,6 +319,13 @@ Claude Code, GPT/Codex, Grok y Kimi Code, escribiendo `<raiz>/<clase>/SKILL.md`
 con frontmatter `name` + `description` en la primera ruta que imprime
 `leccion.py donde`. PATCHEA la lección que estuvo en juego antes de crear otra.
 
+Desde Claude Code, con Hermes instalado, la lección no se queda solo en
+`~/.claude/skills`: `leccion.py espejar <clase> [--categoria <cat>]` la mueve a
+`~/.hermes/skills/<cat>/<clase>` (por defecto `software-development`) y deja un
+symlink en su lugar. Una sola copia, que ambos hosts cargan y parchean. El
+`close --leccion` lo hace solo; si Hermes ya tiene una versión con ese nombre,
+avisa y no toca nada.
+
 El gate de cierre verifica que la skill exista de verdad: `--leccion <clase>` con una skill inexistente bloquea el `close`.
 
 NO captures: fallas de entorno, negativas sobre herramientas, errores transitorios, narrativas de tarea única, ni fracasos disfrazados de práctica.

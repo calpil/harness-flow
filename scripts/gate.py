@@ -736,6 +736,16 @@ def cmd_close(args) -> None:
         print(f"[ok] progreso archivado en {f['progress_archive']}")
     if docs_sincronizados:
         print("[ok] documentacion PRD/SDD sincronizada")
+    if args.leccion:
+        # La leccion escrita desde Claude Code se mueve a Hermes con un enlace de
+        # vuelta: ambos hosts la cargan. Fuera de la transaccion: nunca bloquea.
+        try:
+            from leccion import espejo_al_cerrar
+            aviso = espejo_al_cerrar(args.leccion)
+        except Exception as exc:
+            aviso = f"[!] no se pudo espejar la leccion en Hermes: {exc}"
+        if aviso:
+            print(aviso)
     print("[i]  la integracion es LOCAL: publicar es una decision aparte.")
     if args.status == "done" and not getattr(args, "sin_contexto", False):
         # El cierre cambio el arbol: el grafo, el hub y el vault que quedaron

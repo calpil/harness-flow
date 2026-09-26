@@ -11,6 +11,7 @@ Code, GPT/Codex, Grok y Kimi Code: la raiz de skills se detecta segun el host.
   leccion.py existe <clase>      exit 0 si existe (lo usa el gate de cierre)
   leccion.py donde               raices de skills, en orden de precedencia
   leccion.py plantilla <clase>   esqueleto de SKILL.md
+  leccion.py espejar <clase>     mueve la leccion de Claude a Hermes y deja un enlace
 
 El AGENTE escribe y patchea las lecciones con la herramienta de su host
 (skill_manage en Hermes; escribiendo el SKILL.md en Claude Code, GPT y Grok),
@@ -21,11 +22,13 @@ from __future__ import annotations
 import argparse
 import importlib.util
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
 
 TOPE_LINEAS = 250
+CATEGORIA_ESPEJO = "software-development"
 
 
 def _casa() -> Path:
@@ -95,11 +98,14 @@ def _host() -> str:
         return "generic"
 
 
+def _raiz_claude_personal() -> Path:
+    cfg = os.environ.get("CLAUDE_CONFIG_DIR")
+    return (Path(cfg) if cfg else _casa() / ".claude") / "skills"
+
+
 def _raices_claude() -> list[Path]:
     """Personal primero: en Claude Code la skill personal gana a la del proyecto."""
-    cfg = os.environ.get("CLAUDE_CONFIG_DIR")
-    base = Path(cfg) if cfg else _casa() / ".claude"
-    raices = [base / "skills"]
+    raices = [_raiz_claude_personal()]
     # proyectos: del mas cercano al mas lejano subiendo desde el cwd. El cwd puede
     # haber sido borrado (worktree eliminado): eso no debe reventar la deteccion.
     try:
@@ -361,14 +367,97 @@ def buscar(clase: str) -> Path | None:
     if not nombre_valido(clase):
         return None
     for raiz in skills_roots(todos_los_hosts=True):
-        directo = raiz / clase / "SKILL.md"
-        if directo.is_file():
-            return directo
-        for patron in ("*/" + clase + "/SKILL.md", "*/*/" + clase + "/SKILL.md"):
-            for hit in sorted(raiz.glob(patron)):
-                if hit.is_file():
-                    return hit
+        hit = _buscar_en(raiz, clase)
+        if hit is not None:
+            return hit
     return None
+
+
+def _buscar_en(raiz: Path, clase: str) -> Path | None:
+    directo = raiz / clase / "SKILL.md"
+    if directo.is_file():
+        return directo
+    for patron in ("*/" + clase + "/SKILL.md", "*/*/" + clase + "/SKILL.md"):
+        for hit in sorted(raiz.glob(patron)):
+            if hit.is_file():
+                return hit
+    return None
+
+
+def raiz_hermes() -> Path | None:
+    """La raiz de skills de Hermes que existe en disco; None si Hermes no esta."""
+    for c in _raices_hermes():
+        if c.is_dir():
+            return c.absolute()
+    return None
+
+
+class NoEspejable(Exception):
+    """La leccion no se puede espejar; el mensaje dice por que y que hacer."""
+
+
+def espejar(clase: str, categoria: str = CATEGORIA_ESPEJO) -> str:
+    """Mueve ~/.claude/skills/<clase> a <hermes>/<categoria>/<clase> y deja un symlink.
+
+    Una sola copia fisica, en Hermes, que Claude Code lee por el enlace: un
+    patch desde cualquiera de los dos hosts lo ven ambos. Copiar en vez de
+    mover dejaba dos versiones que divergen en el primer patch.
+    """
+    if not nombre_valido(clase) or not nombre_valido(categoria):
+        raise NoEspejable("nombre invalido: '%s' / categoria '%s'" % (clase, categoria))
+    hermes = raiz_hermes()
+    if hermes is None:
+        raise NoEspejable("no hay raiz de skills de Hermes en este equipo")
+    origen = _raiz_claude_personal() / clase
+    if not origen.exists():
+        raise NoEspejable("no existe %s" % origen)
+    real = origen.resolve()
+    if hermes.resolve() in real.parents:
+        return "[ok] %s ya vive en Hermes: %s" % (clase, real)
+    if origen.is_symlink():
+        raise NoEspejable("%s es un enlace a %s, fuera de Hermes; no se toca" % (origen, real))
+    if not (origen / "SKILL.md").is_file():
+        raise NoEspejable("%s no tiene SKILL.md" % origen)
+    previa = _buscar_en(hermes, clase)
+    if previa is not None:
+        raise NoEspejable("Hermes ya tiene '%s' en %s: fusiona las dos versiones a mano,\n"
+                          "     borra %s y enlazalo a la de Hermes" % (clase, previa.parent, origen))
+    destino = hermes / categoria / clase
+    if destino.exists() or destino.is_symlink():
+        # shutil.move metería la leccion DENTRO de un directorio existente
+        raise NoEspejable("%s ya existe (sin SKILL.md); revisalo antes de espejar" % destino)
+    destino.parent.mkdir(parents=True, exist_ok=True)
+    shutil.move(str(origen), str(destino))
+    try:
+        os.symlink(destino, origen, target_is_directory=True)
+    except OSError as exc:
+        try:
+            shutil.move(str(destino), str(origen))
+        except OSError:
+            raise NoEspejable("no pude enlazar (%s) ni devolverla: la leccion quedo en %s"
+                              % (exc, destino))
+        raise NoEspejable("no pude crear el enlace (%s); la leccion sigue en %s" % (exc, origen))
+    return "[ok] %s espejada: %s -> %s" % (clase, origen, destino)
+
+
+def espejo_al_cerrar(clase: str) -> str | None:
+    """Lo que corre gate.py close: espeja si la leccion es un directorio propio de
+    Claude y Hermes esta instalado. None cuando no hay nada que hacer; nunca lanza.
+
+    HARNESS_SKILLS_DIR (raiz unica forzada) lo apaga: quien la define manda, y
+    los tests la usan para no tocar el HOME real.
+    """
+    if not clase or clase == "ninguna" or os.environ.get("HARNESS_SKILLS_DIR"):
+        return None
+    if not nombre_valido(clase) or raiz_hermes() is None:
+        return None
+    origen = _raiz_claude_personal() / clase
+    if origen.is_symlink() or not (origen / "SKILL.md").is_file():
+        return None
+    try:
+        return espejar(clase)
+    except (NoEspejable, OSError) as exc:
+        return "[!] leccion '%s' no se espejo en Hermes: %s" % (clase, exc)
 
 
 def descripcion(skill_md: Path) -> str:
@@ -467,12 +556,22 @@ def cmd_donde(args) -> None:
     else:
         print("[!] ninguna raiz propia del host existe todavia; creala tu.",
               file=sys.stderr)
+    # Creando en ~/.claude/skills, Hermes no es solo consulta: ahi termina la
+    # leccion (leccion.py espejar, o el close) y Claude la lee por el enlace.
+    hermes = raiz_hermes()
+    espejo = (hermes.resolve() if hermes and propias
+              and propias[0].resolve() == _raiz_claude_personal().resolve() else None)
     for raiz in todas:
         if propias and raiz == propias[0]:
             continue
         if ausente is not None and raiz == ausente:
             continue
-        marca = "" if raiz in propias else "   # solo consulta (otro agente)"
+        if raiz in propias:
+            marca = ""
+        elif espejo is not None and raiz.resolve() == espejo:
+            marca = "   # espejo de las lecciones de Claude (leccion.py espejar)"
+        else:
+            marca = "   # solo consulta (otro agente)"
         print(f"{raiz}{marca}")
 
 
@@ -500,10 +599,18 @@ description: "Use when <disparador en una linea>. <que hace>."
 def cmd_plantilla(args) -> None:
     print(PLANTILLA.format(clase=args.clase))
     print("[i]  Hermes: skill_manage(action='create', name='%s', content=...)\n"
-          "     Claude Code: escribelo en <raiz>/%s/SKILL.md (leccion.py donde)\n"
+          "     Claude Code: escribelo en <raiz>/%s/SKILL.md (leccion.py donde) y luego\n"
+          "       leccion.py espejar %s (el close lo hace solo si Hermes esta instalado)\n"
           "     GPT/Codex: escribelo en <raiz>/%s/SKILL.md, tipicamente ~/.agents/skills/%s/SKILL.md\n"
           "     Grok: escribelo en ~/.grok/skills/%s/SKILL.md (leccion.py donde)"
-          % (args.clase, args.clase, args.clase, args.clase, args.clase), file=sys.stderr)
+          % ((args.clase,) * 6), file=sys.stderr)
+
+
+def cmd_espejar(args) -> None:
+    try:
+        print(espejar(args.clase, args.categoria))
+    except NoEspejable as exc:
+        sys.exit("[!!] %s" % exc)
 
 
 def main() -> None:
@@ -514,6 +621,8 @@ def main() -> None:
     s = sub.add_parser("existe"); s.add_argument("clase"); s.set_defaults(fn=cmd_existe)
     sub.add_parser("donde").set_defaults(fn=cmd_donde)
     s = sub.add_parser("plantilla"); s.add_argument("clase"); s.set_defaults(fn=cmd_plantilla)
+    s = sub.add_parser("espejar"); s.add_argument("clase")
+    s.add_argument("--categoria", default=CATEGORIA_ESPEJO); s.set_defaults(fn=cmd_espejar)
     a = ap.parse_args()
     a.fn(a)
 

@@ -201,10 +201,30 @@ proyecto. Crear o parchear una leccion en este host es escribir
 
 Si `harness-flow` entro por symlink desde `~/.claude/skills` al clone de Hermes,
 las lecciones que escribas caen en `~/.claude/skills/<clase>/`, fuera del clone:
-no se mezclan con las skills de Hermes ni ensucian el repo.
+no ensucian el repo.
 
 Eso es donde se **crean**. Al **buscar** (el gate de `close --leccion`),
 `leccion.py` mira ademas las raices de los otros agentes -- Hermes, GPT/Codex,
 `~/.codex/skills`, `~/.grok/skills`, `~/.kimi-code/skills` -- porque una leccion
 es memoria procedural del usuario y no del CLI donde se tipeo. `leccion.py donde`
 imprime primero la raiz de creacion y marca las demas como solo consulta.
+
+### Espejo en Hermes
+
+Buscar en Hermes no basta para que Hermes *cargue* la leccion: su agente solo
+lee `~/.hermes/skills`. Con Hermes instalado, `leccion.py espejar <clase>` mueve
+`~/.claude/skills/<clase>` a `~/.hermes/skills/<cat>/<clase>` (`--categoria`,
+por defecto `software-development`) y deja en su lugar un symlink absoluto. La
+copia fisica vive en Hermes y Claude Code la lee por el enlace: un patch desde
+cualquiera de los dos llega al otro. `leccion.py donde` marca esa raiz como
+espejo en vez de solo consulta.
+
+`gate.py close --leccion <clase>` espeja solo al terminar el cierre, sin
+bloquearlo nunca. No toca nada cuando:
+
+- Hermes no esta instalado, o `HARNESS_SKILLS_DIR` fuerza una raiz unica;
+- la leccion ya es un enlace (a Hermes: ya esta; a otro agente: no es suya);
+- Hermes ya tiene una skill con ese nombre: avisa `[!]` y hay que fusionar a mano.
+
+Si el symlink no se puede crear (Windows sin Modo Desarrollador), la leccion
+vuelve a `~/.claude/skills` y el aviso lo dice.
