@@ -44,3 +44,6 @@ Qué se puede romper. Cruzalo con `hub.py impacto`.
 - Un AC sin comando es legitimo: lo verifica el reviewer a mano y queda en su acta.
 - Cambiar el spec despues de aprobarlo INVALIDA el sello (firma sha256 del cuerpo).
   Hay que volver a mostrarlo y re-aprobarlo. Esto es deliberado.
+- Si ya hay evidencia, review o verify, no se re-aprueba: se enmienda con
+  `gate.py enmienda` y una propuesta (`templates/enmienda.md`). La seccion
+  `## Enmiendas posteriores a la aprobacion` la escribe ese comando.

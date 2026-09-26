@@ -7,8 +7,9 @@ import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from comun import (cubre_acs, impl_path, load_backlog, paths, review_path,  # noqa: E402
-                   sello_revision, sig_fresh, spec_acs, spec_estado, spec_path)
+from comun import (cubre_acs, enmiendas_posteriores, impl_path, load_backlog,  # noqa: E402
+                   paths, review_path, sello_revision, sig_fresh, spec_acs,
+                   spec_estado, spec_path)
 
 ABIERTOS = ("todo", "pending", "in_progress", "blocked", "review")
 CERRADOS = ("done", "superseded")
@@ -120,7 +121,9 @@ def _fila(p, f) -> None:
     rp = review_path(p, f)
     if rp.exists():
         s = sello_revision(rp.read_text(encoding="utf-8"))
-        marcas.append(f"review {s or 'sin sello'}")
+        tarde = enmiendas_posteriores(f, f.get("last_review_enmiendas")) if s else []
+        marcas.append(f"review {s or 'sin sello'}"
+                      + (f" (anterior a {', '.join(tarde)})" if tarde else ""))
     else:
         marcas.append("sin review")
 

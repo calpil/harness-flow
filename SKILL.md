@@ -142,6 +142,10 @@ El agente NUNCA escribe `docs/prd/**`: redacta en `docs/borrador-prd.md` / `docs
    `$PY "$H/gate.py" approve-spec --feature <id> --yes`
    Nunca apruebes por tu cuenta. El script se niega sin `--yes`.
 
+### Enmienda — cambiar un spec que ya tiene trabajo encima
+
+Con evidencia, review o verify encima, `approve-spec` se niega a re-sellar un spec cambiado: es una **enmienda**. Escribe `docs/propuesta-<id>-enmienda-<slug>.md` desde [`templates/enmienda.md`](templates/enmienda.md), aplica los cambios al spec, MUESTRA ambos y, solo con el SÍ explícito: `$PY "$H/gate.py" enmienda --feature <id> --propuesta docs/<propuesta>.md --yes`. Se niega si cambió un AC que la propuesta no nombra; numera `E-n`, la anota en el spec, sella spec y propuesta, y deja sin valor para `close` el review y el verify anteriores.
+
 ### 2. Implementer — evidencia por AC
 
 1. Verifica el gate: `$PY "$H/gate.py" check-spec --feature <id>` (exit≠0 si no está approved o está stale).
@@ -230,7 +234,8 @@ Verifica el resultado (`git log --oneline -1` en la rama destino) antes de dar p
 | --- | --- |
 | `gate.py check` | Todo el proceso; es el gate maestro |
 | `gate.py check-spec --feature <id>` | Spec existe, `Estado: approved`, firma fresca |
-| `gate.py approve-spec --feature <id> --yes` | Solo con SÍ del usuario; sella quién/cuándo |
+| `gate.py approve-spec --feature <id> --yes` | Solo con SÍ del usuario; sella quién/cuándo. Se niega a re-sellar un spec cambiado con trabajo encima |
+| `gate.py enmienda --feature <id> --propuesta <md> --yes` | Solo con SÍ del usuario; la propuesta nombra cada AC que cambió; deja sin valor el review y el verify anteriores |
 | `producto.py aprobar --doc prd\|sdd --yes` | Solo con SÍ del usuario; borrador completo y sin bloque generado; copia al destino y sella |
 | `gate.py revision --feature <id> --veredicto <v>` | Review responde por CADA AC-n con `archivo:linea` |
 | `gate.py close --feature <id> --status done --to <rama>` | Todas las reglas activas |
@@ -452,8 +457,11 @@ esa bandera, `close` solo avisa y no toca sistemas remotos.
 - El sello `Revisado:` sólo vale con la firma completa que estampa
   `gate.py revision` (veredicto · fecha ISO · autor · `estampado por gate.py
   revision`). Un `Revisado: approved - ok` escrito a mano ya no pasa.
-- `close` rechaza un `last_verify` medido contra una firma de spec distinta de
-  la vigente: si el spec cambió después de medir, hay que re-correr `verify`.
+- `close` rechaza un `last_verify` que midió otro número de AC, y un verify o un
+  review sellados antes de la última enmienda: si el spec cambió después de
+  medir o de revisar, hay que re-correr `verify` y lanzar un review nuevo. Como
+  `approve-spec` ya no re-sella un spec con trabajo encima, la única vía para
+  cambiarlo es `gate.py enmienda`, que es la que invalida lo anterior.
 - `psycopg` debe estar en el intérprete que resuelve `entorno.py` (`$PY`), no en el
   del proyecto ni en el python del sistema. Si `hub.py` tira `ModuleNotFoundError:
   psycopg`, casi siempre es que estás usando `python3` en vez de `$PY`. Diagnostica

@@ -21,6 +21,10 @@ gates y todas tienen repro verificada.
   decilo en la misma línea del verde.
 - **Una medición vale para la firma con la que se tomó.** Si el spec cambia
   después del `verify`, el verde viejo habla de otro documento: re-medir.
+  Contar AC no es comparar firmas: reescribir un AC ("no cobra dos veces" ->
+  "cobra dos veces") y re-aprobar con `approve-spec` dejaba cerrar con el review
+  y el verify del texto anterior, porque `close` solo miraba cuántos AC había.
+  Por eso un spec con trabajo encima ya no se re-aprueba: se enmienda.
 - **Un sello contra falsificación debe exigir la firma entera.** Un
   `Revisado: approved - ok` tipeado a mano pasaba como sellado por el gate.
 - **Una mención no es una declaración.** Al parsear documentos por secciones, una

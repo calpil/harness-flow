@@ -296,7 +296,7 @@ scripts/
   atlassian.py           Jira / Confluence
   estado.py              panorama al entrar al proyecto
 tests/                   regresiones del port neutro
-templates/               spec, evidencia, review, prd, sdd
+templates/               spec, enmienda, evidencia, review, prd, sdd
 references/              Claude Code, OpenAI, Grok, Obsidian, Atlassian, multirepo
 ```
 

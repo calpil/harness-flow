@@ -84,3 +84,23 @@ Nunca corras eso por tu cuenta ni "para agilizar". El script se niega sin
 
 Cambiar el spec despues de aprobarlo invalida el sello (firma sha256 del cuerpo).
 Eso es deliberado: hay que volver a mostrarlo y re-aprobarlo.
+
+## 4. Enmienda: el spec ya tiene trabajo encima
+
+Si ya existe `docs/impl-$1.md`, `docs/review-$1.md` o un verify, `approve-spec`
+se niega a re-sellar el spec cambiado: eso es una enmienda.
+
+1. Escribe `docs/propuesta-$1-enmienda-<slug>.md` desde
+   `${CLAUDE_PLUGIN_ROOT}/templates/enmienda.md` (por que, cambios al spec, lo
+   que NO cambia) y aplica los cambios al spec. La seccion
+   `## Enmiendas posteriores a la aprobacion` la escribe el gate, no tu.
+2. MUESTRA la propuesta y el spec cambiado, PREGUNTA, y solo con un SI explicito:
+
+```bash
+eval "$(python3 "${CLAUDE_PLUGIN_ROOT}/scripts/entorno.py" --shell)" && "$PY" "$H/gate.py" enmienda --feature $1 --propuesta docs/propuesta-$1-enmienda-<slug>.md --yes
+```
+
+Se niega si el spec cambio un AC que la propuesta no nombra: el usuario aprobo
+la propuesta, no el diff. Despues, el review y el verify anteriores ya no valen
+para cerrar: lanza un review nuevo (`/harness-flow:review $1`) y vuelve a correr
+verify.

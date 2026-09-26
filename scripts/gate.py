@@ -8,6 +8,7 @@ sea un exit 0.
   gate.py check
   gate.py check-spec   --feature <id>
   gate.py approve-spec --feature <id> --yes
+  gate.py enmienda     --feature <id> --propuesta docs/<propuesta>.md --yes
   gate.py revision     --feature <id> --veredicto approved|changes_requested|blocked
   gate.py verify       --feature <id>
   gate.py close        --feature <id> --status done|blocked --to <rama> [--leccion <clase>]
@@ -17,15 +18,18 @@ from __future__ import annotations
 import argparse
 import fnmatch
 import getpass
+import re
 import subprocess
 import sys
+import unicodedata
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 from comun import (  # noqa: E402
-    Reporte, acs_faltantes, acs_no_reconocidos, bitacora, cubre_acs, get_feature, git, impl_path, load_backlog,
+    ENMIENDAS_RE, Reporte, acs_faltantes, acs_no_reconocidos, bitacora, comparar_huellas, cubre_acs,
+    enmiendas_posteriores, get_feature, git, impl_path, load_backlog, n_enmiendas,
     now_iso, paths, review_path, ac_comandos, save_backlog, sello_revision,
-    sig_fresh, sign, spec_acs, spec_estado, spec_path,
+    sig_fresh, sign, spec_acs, spec_estado, spec_huella, spec_path,
 )
 
 ABIERTOS = ("in_progress", "blocked", "review")
@@ -108,13 +112,27 @@ def _check_feature(p, f, rules, r) -> None:
             if faltan:
                 r.fallo(f"#{fid} el review no responde por: {', '.join(faltan)}",
                         "una fila por AC-n citando archivo:linea")
+            tarde = enmiendas_posteriores(f, f.get("last_review_enmiendas"))
             if sello is None:
                 r.aviso(f"#{fid} review sin sello (un 'Veredicto:' a mano no cuenta)",
                         f"gate.py revision --feature {fid} --veredicto approved")
+            elif tarde:
+                r.aviso(f"#{fid} el review ({sello}) se sello antes de la enmienda "
+                        f"{', '.join(tarde)}",
+                        "close no lo acepta: lanza un review nuevo sobre el spec enmendado")
             elif sello != "approved":
                 r.aviso(f"#{fid} review sellado como '{sello}'")
             else:
                 r.ok(f"#{fid} review approved y sellado")
+
+    for e in f.get("enmiendas") or []:
+        if not isinstance(e, dict):
+            continue
+        pp = p["root"] / str(e.get("propuesta") or "")
+        if not e.get("propuesta") or not pp.is_file() or not sig_fresh(pp, e.get("propuesta_sig")):
+            r.aviso(f"#{fid} la propuesta de la {e.get('id')} falta o cambio despues de "
+                    f"sellarse ({e.get('propuesta')})",
+                    "es el registro de lo que aprobo el usuario: restaurala")
 
 
 def _porcelain_path(line: str) -> str:
@@ -265,7 +283,41 @@ def cmd_approve_spec(args) -> None:
     sp = spec_path(p, f)
     if not sp.exists():
         sys.exit(f"[!!] no existe {sp}")
+    trabajo = _trabajo_hecho(p, f)
+    if f.get("last_spec_sig") and not sig_fresh(sp, f["last_spec_sig"]) and trabajo:
+        # Re-aprobar aqui borraba el rastro: el backlog solo guardaba la firma
+        # nueva, y el review y el verify del spec anterior seguian valiendo
+        # para close mientras el numero de AC no cambiara.
+        sys.exit(f"[!!] el spec de #{f['id']} ya estaba aprobado y hay trabajo hecho sobre el "
+                 f"({', '.join(trabajo)}):\n"
+                 "     cambiarlo ahora es una ENMIENDA, no una re-aprobacion. Escribe la\n"
+                 "     propuesta (templates/enmienda.md), muestrasela al usuario junto al\n"
+                 "     spec cambiado y, solo con su SI:\n"
+                 f"     gate.py enmienda --feature {f['id']} --propuesta docs/<propuesta>.md --yes")
     text = sp.read_text(encoding="utf-8")
+    acs = _acs_sellables(text)
+
+    quien = _firmante(args.por)
+    cuando = now_iso()
+    text = _sellar_spec(text, f"Aprobado: {quien} · {cuando} · sellado por gate.py approve-spec --yes")
+    sp.write_text(text, encoding="utf-8")
+
+    _registrar_sello(f, sp, text, quien, cuando)
+    save_backlog(p, data)
+    bitacora(p, f"spec #{f['id']} approved por {quien} ({len(acs)} AC)")
+    print(f"[ok] spec #{f['id']} aprobado y sellado. AC: {', '.join(acs)}")
+
+
+def _trabajo_hecho(p, f) -> list[str]:
+    """Lo que ya se construyo sobre el spec aprobado."""
+    hechos = [x.name for x in (impl_path(p, f), review_path(p, f)) if x.exists()]
+    if f.get("last_verify"):
+        hechos.append("verify")
+    return hechos
+
+
+def _acs_sellables(text: str) -> list[str]:
+    """Los AC del spec, o exit si sellarlo dejaria criterios sin verificar."""
     acs = spec_acs(text)
     if not acs:
         sys.exit("[!!] el spec no declara ningun AC-n: no se puede aprobar.")
@@ -282,29 +334,232 @@ def cmd_approve_spec(args) -> None:
     huecos = [x for x in acs_faltantes(acs) if x not in ignorados]
     if huecos:
         print(f"[!] OJO: la numeracion salta, falta(n) {', '.join(huecos)}.")
+    return acs
 
-    quien = _firmante(args.por)
-    cuando = now_iso()
+
+def _sellar_spec(text: str, sello: str) -> str:
+    # Reemplazo con lambda: un '\' en --por no se lee como escape de re.sub.
     if "Estado:" in text:
-        import re as _re
-        text = _re.sub(r"^Estado:.*$", "Estado: approved", text, count=1, flags=_re.M)
+        text = re.sub(r"^Estado:.*$", "Estado: approved", text, count=1, flags=re.M)
     else:
-        text = text.replace("\n", f"\n\nEstado: approved\n", 1)
-    sello = f"Aprobado: {quien} · {cuando} · sellado por gate.py approve-spec --yes"
+        text = text.replace("\n", "\n\nEstado: approved\n", 1)
     if "Aprobado:" in text:
-        import re as _re
-        text = _re.sub(r"^Aprobado:.*$", sello, text, count=1, flags=_re.M)
-    else:
-        import re as _re
-        text = _re.sub(r"^(Estado: approved)$", r"\1\n" + sello, text, count=1, flags=_re.M)
-    sp.write_text(text, encoding="utf-8")
+        return re.sub(r"^Aprobado:.*$", lambda _: sello, text, count=1, flags=re.M)
+    return re.sub(r"^(Estado: approved)$", lambda m: m.group(1) + "\n" + sello,
+                  text, count=1, flags=re.M)
 
+
+def _registrar_sello(f: dict, sp: Path, text: str, quien: str, cuando: str) -> None:
     f["last_spec_sig"] = sign(sp)   # se firma DESPUES de escribir el sello
     f["aprobado_por"] = quien
     f["aprobado_at"] = cuando
+    # La huella por AC es la linea base de la proxima enmienda: sin ella no hay
+    # forma de saber que AC toco.
+    f["spec_huella"] = spec_huella(text)
+
+
+# --- enmienda --------------------------------------------------------------
+#
+# Cambiar un spec que ya tiene evidencia, review o verify encima. Antes se
+# hacia a mano con approve-spec: el backlog quedaba solo con la firma nueva,
+# probar que AC habia cambiado exigia reconstruir el spec anterior, y el review
+# y el verify viejos seguian valiendo para close.
+
+COMENTARIO_RE = re.compile(r"<!--.*?-->", re.S)
+# (nombre en el mensaje, prefijo del encabezado ya normalizado)
+SECCIONES_PROPUESTA = (("Por que", "por que"), ("Cambios al spec", "cambio"),
+                       ("Lo que NO cambia", "lo que no cambia"))
+
+
+def _normal(texto: str) -> str:
+    sin_tildes = unicodedata.normalize("NFKD", texto).encode("ascii", "ignore").decode()
+    return sin_tildes.strip().lower()
+
+
+def _propuesta(p: dict, f: dict, valor: str) -> tuple[Path, str]:
+    """La propuesta aprobada: un archivo real dentro de docs/. Devuelve (ruta, rel)."""
+    crudo = Path(valor).expanduser()
+    if not crudo.is_absolute():
+        crudo = crudo if (Path.cwd() / crudo).exists() else p["root"] / crudo
+    if crudo.is_symlink():
+        sys.exit(f"[!!] la propuesta es un enlace: {valor}. Sella el archivo real.")
+    real, docs = crudo.resolve(), p["docs"].resolve()
+    if docs not in real.parents:
+        sys.exit(f"[!!] la propuesta tiene que vivir en docs/ del proyecto: {valor}")
+    if not real.is_file():
+        sys.exit(f"[!!] no existe la propuesta {valor}")
+    propios = {x.resolve() for x in (spec_path(p, f), impl_path(p, f), review_path(p, f))}
+    if real in propios:
+        sys.exit(f"[!!] {real.name} es un documento de la feature, no una propuesta.")
+    return real, (Path("docs") / real.relative_to(docs)).as_posix()
+
+
+def _problemas_propuesta(texto: str) -> list[str]:
+    """Que le falta a la propuesta para sellarse. Mide estructura, no calidad."""
+    problemas = []
+    if not texto.lstrip().startswith("# "):
+        problemas.append("falta el titulo '# ...' en la primera linea")
+    secs: dict[str, str] = {}
+    actual = None
+    for linea in COMENTARIO_RE.sub("", texto).splitlines():
+        m = re.match(r"^##[^\S\n]+(.+?)[^\S\n]*$", linea)
+        if m:
+            actual = _normal(m.group(1))
+            secs.setdefault(actual, "")
+        elif actual is not None:
+            secs[actual] += linea + "\n"
+    for nombre, prefijo in SECCIONES_PROPUESTA:
+        cuerpos = [c for k, c in secs.items() if k.startswith(prefijo)]
+        if not cuerpos:
+            problemas.append(f"falta la seccion '## {nombre}'")
+        elif not any(c.strip() for c in cuerpos):
+            problemas.append(f"la seccion '## {nombre}' esta vacia (solo guia)")
+    return problemas
+
+
+def _nombra(texto: str, ac: str) -> bool:
+    return bool(re.search(rf"\b{re.escape(ac)}(?!\d)", texto))
+
+
+def _titulo_propuesta(texto: str) -> str:
+    titulo = texto.lstrip().splitlines()[0][2:].strip()
+    # 'Propuesta E-3 (#13): los smokes...' -> 'los smokes...': el numero lo pone el gate.
+    corto = re.sub(r"^(?:Propuesta|Enmienda)\b[^:]*:[^\S\n]*", "", titulo, flags=re.I)
+    return corto or titulo
+
+
+def _siguiente_enmienda(text: str, f: dict) -> int:
+    """El proximo E-n libre, contando tambien las enmiendas escritas a mano."""
+    usados = [int(n) for n in re.findall(r"^#{2,4}[^\S\n]+E-(\d+)\b", text, re.M)]
+    for e in f.get("enmiendas") or []:
+        m = re.fullmatch(r"E-(\d+)", str(e.get("id", ""))) if isinstance(e, dict) else None
+        if m:
+            usados.append(int(m.group(1)))
+    return max(usados, default=0) + 1
+
+
+def _describir_alcance(alcance: dict | None) -> str:
+    if alcance is None:
+        return "no medidos (el sello anterior no guardo huella por AC)"
+    partes = ([f"{a} cambiado" for a in alcance["cambiados"]]
+              + [f"{a} nuevo" for a in alcance["nuevos"]]
+              + [f"{a} retirado" for a in alcance["retirados"]])
+    texto = ", ".join(partes) or "ninguno"
+    return texto + ("; cambio texto fuera de los AC" if alcance["resto"] else "")
+
+
+def _anotar_enmienda(text: str, eid: str, titulo: str, firma: str,
+                     propuesta: str, detalle: str) -> str:
+    """Agrega la entrada al final de 'Enmiendas posteriores a la aprobacion'."""
+    entrada = (f"### {eid}: {titulo}\n\n"
+               f"Enmienda: {eid} · {firma} · sellada por gate.py enmienda --yes\n"
+               f"Propuesta: `{propuesta}`\n"
+               f"AC tocados: {detalle}\n")
+    m = ENMIENDAS_RE.search(text)
+    if m is None:
+        return (text.rstrip("\n") + "\n\n## Enmiendas posteriores a la aprobacion\n\n"
+                + entrada)
+    fin = re.compile(r"^#{1,2}[^\S\n#]", re.M).search(text, m.end())
+    if fin is None:
+        return text.rstrip("\n") + "\n\n" + entrada
+    return text[:fin.start()].rstrip("\n") + "\n\n" + entrada + "\n" + text[fin.start():]
+
+
+def _sellar_propuesta(texto: str, sello: str) -> str:
+    if re.search(r"^Estado:", texto, re.M):
+        texto = re.sub(r"^Estado:.*$", "Estado: aprobada", texto, count=1, flags=re.M)
+    else:
+        texto = texto.replace("\n", "\n\nEstado: aprobada\n", 1)
+    if re.search(r"^Aprobada:", texto, re.M):
+        return re.sub(r"^Aprobada:.*$", lambda _: sello, texto, count=1, flags=re.M)
+    return re.sub(r"^(Estado: aprobada)$", lambda m: m.group(1) + "\n" + sello,
+                  texto, count=1, flags=re.M)
+
+
+def cmd_enmienda(args) -> None:
+    if not args.yes:
+        sys.exit("[!!] enmienda requiere --yes.\n"
+                 "     Ningun agente enmienda por su cuenta: MUESTRALE al usuario la\n"
+                 "     propuesta y el spec cambiado, PREGUNTALE si los aprueba, y solo\n"
+                 "     con su SI corre este comando con --yes.")
+    p = paths()
+    data = load_backlog(p)
+    f = get_feature(data, args.feature)
+    fid = f["id"]
+    sp = spec_path(p, f)
+    if not sp.exists():
+        sys.exit(f"[!!] no existe {sp}")
+    anterior = f.get("last_spec_sig")
+    if not anterior:
+        sys.exit(f"[!!] el spec de #{fid} nunca se aprobo: no hay nada que enmendar.\n"
+                 f"     Apruebalo con gate.py approve-spec --feature {fid} --yes (tras el SI del usuario).")
+    if sig_fresh(sp, anterior):
+        sys.exit("[!!] el spec no cambio desde su ultimo sello: aplica en el los cambios de\n"
+                 "     la propuesta y vuelve a correr la enmienda.")
+    prop, rel = _propuesta(p, f, args.propuesta)
+    for otra in data["features"]:
+        for e in otra.get("enmiendas") or []:
+            if isinstance(e, dict) and e.get("propuesta") == rel:
+                sys.exit(f"[!!] {rel} ya sello la {e.get('id')} de la #{otra.get('id')}: "
+                         "cada enmienda lleva su propia propuesta.")
+    ptext = prop.read_text(encoding="utf-8")
+    problemas = _problemas_propuesta(ptext)
+    if problemas:
+        sys.exit("[!!] la propuesta no esta lista para sellarse:\n"
+                 + "\n".join(f"     - {x}" for x in problemas)
+                 + "\n     Plantilla: templates/enmienda.md")
+
+    text = sp.read_text(encoding="utf-8")
+    acs = _acs_sellables(text)
+    base = f.get("spec_huella")
+    alcance = None
+    if isinstance(base, dict) and isinstance(base.get("acs"), dict):
+        alcance = comparar_huellas(base, spec_huella(text))
+        tocados = alcance["cambiados"] + alcance["nuevos"] + alcance["retirados"]
+        if not tocados and not alcance["resto"]:
+            sys.exit("[!!] fuera de Estado/Aprobado y de la seccion de enmiendas, el spec es\n"
+                     "     el mismo que se sello: no hay cambio que enmendar.")
+        limpio = COMENTARIO_RE.sub("", ptext)
+        sin_nombrar = [a for a in tocados if not _nombra(limpio, a)]
+        if sin_nombrar:
+            # El usuario aprueba la propuesta, no el diff: un AC que cambio sin
+            # que la propuesta lo nombre se sellaria sin que nadie lo aprobara.
+            sys.exit(f"[!!] el spec cambio {', '.join(sin_nombrar)} y la propuesta no lo nombra.\n"
+                     "     O ese cambio se colo sin aprobacion (reviertelo en el spec), o\n"
+                     "     falta en la propuesta (agregalo y vuelve a mostrarsela al usuario).")
+    else:
+        print("[!] el sello anterior no guardo huella por AC: no puedo acotar que AC toca\n"
+              "    esta enmienda. Queda registrada como 'no medidos'; revisa el diff a mano.")
+
+    quien = _firmante(args.por)
+    cuando = now_iso()
+    eid = f"E-{_siguiente_enmienda(text, f)}"
+    detalle = _describir_alcance(alcance)
+    text = _anotar_enmienda(text, eid, _titulo_propuesta(ptext), f"{quien} · {cuando}",
+                            rel, detalle)
+    text = _sellar_spec(text, f"Aprobado: {quien} · {cuando} · sellado por gate.py enmienda --yes ({eid})")
+    prop.write_text(_sellar_propuesta(
+        ptext, f"Aprobada: {quien} · {cuando} · {eid} de la #{fid} · sellada por gate.py enmienda --yes"),
+        encoding="utf-8")
+    sp.write_text(text, encoding="utf-8")
+
+    f.setdefault("enmiendas", []).append({
+        "id": eid, "at": cuando, "por": quien, "propuesta": rel,
+        "propuesta_sig": sign(prop), "acs": alcance,
+        "spec_sig_anterior": {k: anterior.get(k) for k in ("size", "hash")},
+    })
+    _registrar_sello(f, sp, text, quien, cuando)
     save_backlog(p, data)
-    bitacora(p, f"spec #{f['id']} approved por {quien} ({len(acs)} AC)")
-    print(f"[ok] spec #{f['id']} aprobado y sellado. AC: {', '.join(acs)}")
+    bitacora(p, f"spec #{fid} enmienda {eid} aprobada por {quien} ({rel}; AC tocados: {detalle})")
+    print(f"[ok] enmienda {eid} de #{fid} sellada. AC tocados: {detalle}")
+    print(f"     spec re-sellado ({len(acs)} AC) y propuesta sellada: {rel}")
+    rp = review_path(p, f)
+    if rp.exists():
+        print(f"[!] {rp.name} se sello sobre el spec anterior: close ya no lo acepta.\n"
+              "    Lanza un review nuevo sobre el spec enmendado.")
+    if f.get("last_verify"):
+        print(f"[!] el verify anterior no midio el spec enmendado: vuelve a correr "
+              f"gate.py verify --feature {fid}.")
 
 
 # --- revision --------------------------------------------------------------
@@ -340,6 +595,14 @@ def cmd_revision(args) -> None:
         sys.exit(f"[!!] el spec de #{f['id']} no declara ningun AC-n: no hay nada "
                  "que revisar.\n     Arregla el spec (revisa la forma de cada "
                  "linea AC-n) antes de sellar.")
+    tarde = enmiendas_posteriores(f, f.get("last_review_enmiendas"))
+    if tarde and sig_fresh(rp, f.get("last_review_sig")):
+        # Re-sellar el mismo archivo le pondria fecha nueva a un veredicto
+        # sobre el spec anterior.
+        sys.exit(f"[!!] {rp.name} no cambio desde que se sello, y despues llego la enmienda "
+                 f"{', '.join(tarde)}.\n"
+                 "     Ese veredicto habla del spec anterior: lanza un review nuevo sobre\n"
+                 "     el spec enmendado.")
     contexto = _multi_context(p, f, data["rules"]) if "multi_repo" in f else None
     rtext = rp.read_text(encoding="utf-8")
     _, faltan = cubre_acs(rtext, acs)
@@ -358,6 +621,7 @@ def cmd_revision(args) -> None:
     rp.write_text(rtext, encoding="utf-8")
 
     f["last_review_sig"] = sign(rp)
+    f["last_review_enmiendas"] = n_enmiendas(f)
     if contexto:
         f["last_review_context"] = contexto
     f["veredicto"] = args.veredicto
@@ -435,7 +699,8 @@ def cmd_verify(args) -> None:
     vp.write_text("\n".join(out), encoding="utf-8")
     f["last_verify"] = {"at": now_iso(), "fallos": fallos, "total": len(cmds),
                         "acs_declarados": len(acs),
-                        "sin_comando": sin_comando}
+                        "sin_comando": sin_comando,
+                        "enmiendas": n_enmiendas(f)}
     if contexto:
         from multirepo import Invalid, context
         try:
@@ -586,6 +851,10 @@ def cmd_close(args) -> None:
                     fallos.append(f"review sin sello approved (actual: {sello or 'ninguno'})")
                 if not sig_fresh(rp, f.get("last_review_sig")):
                     fallos.append("el review cambio despues de sellarse")
+                tarde = enmiendas_posteriores(f, f.get("last_review_enmiendas"))
+                if tarde:
+                    fallos.append(f"el review se sello antes de la enmienda {', '.join(tarde)}: "
+                                  "re-revisa sobre el spec enmendado")
                 _, faltan = cubre_acs(rtext, acs)
                 if faltan:
                     fallos.append(f"el review no responde por: {', '.join(faltan)}")
@@ -606,6 +875,10 @@ def cmd_close(args) -> None:
                     fallos.append(
                         f"verify obsoleto: midio un spec de {declarados} AC y "
                         f"el actual tiene {len(acs)}; vuelve a correr verify")
+                tarde = enmiendas_posteriores(f, lv.get("enmiendas"))
+                if tarde:
+                    fallos.append(f"verify anterior a la enmienda {', '.join(tarde)}: "
+                                  "vuelve a correr verify")
                 sin_cmd = lv.get("sin_comando") or []
                 if sin_cmd:
                     avisos_cierre.append(
@@ -787,6 +1060,12 @@ def main() -> None:
     s = sub.add_parser("approve-spec"); s.add_argument("--feature", required=True)
     s.add_argument("--yes", action="store_true"); s.add_argument("--por")
     s.set_defaults(fn=cmd_approve_spec)
+
+    s = sub.add_parser("enmienda"); s.add_argument("--feature", required=True)
+    s.add_argument("--propuesta", required=True,
+                   help="docs/<propuesta>.md que el usuario aprobo (templates/enmienda.md)")
+    s.add_argument("--yes", action="store_true"); s.add_argument("--por")
+    s.set_defaults(fn=cmd_enmienda)
 
     s = sub.add_parser("revision"); s.add_argument("--feature", required=True)
     s.add_argument("--veredicto", required=True,

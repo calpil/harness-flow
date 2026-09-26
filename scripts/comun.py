@@ -378,6 +378,81 @@ def ac_comandos(text: str) -> dict[str, str]:
             actual = None
     return out
 
+# --- huella del spec por partes ---------------------------------------------
+#
+# last_spec_sig dice SI el spec cambio, no DONDE. Sellar una enmienda exige
+# saber que AC toco, y sin la version aprobada eso se reconstruia a mano: en
+# ADR #13 (AC-29) hubo que restituir el AC viejo en memoria hasta cuadrar la
+# firma del backlog. La huella guarda un hash por AC -- su linea, el comando y
+# las notas que cuelgan debajo -- y uno para el resto, sin los sellos ni la
+# seccion de enmiendas, que escribe el propio gate.
+
+ENMIENDAS_RE = re.compile(
+    r"^##[^\S\n]+Enmiendas posteriores a la aprobaci[oó]n[^\S\n]*$", re.M)
+
+
+def _h16(texto: str) -> str:
+    return hashlib.sha256(texto.encode("utf-8")).hexdigest()[:16]
+
+
+def spec_huella(text: str) -> dict:
+    """{'acs': {AC-n: hash}, 'resto': hash}.
+
+    El bloque de un AC va de la linea que lo declara hasta la que declara otro
+    AC o abre un encabezado fuera de un bloque de codigo.
+    """
+    inicios = {text.count("\n", 0, m.start(1)): m.group(1)
+               for m in AC_RE.finditer(text)}
+    bloques: dict[str, list[str]] = {}
+    resto: list[str] = []
+    actual = None
+    en_codigo = en_enmiendas = False
+    for i, linea in enumerate(text.splitlines()):
+        if linea.lstrip().startswith("```"):
+            en_codigo = not en_codigo
+        if i in inicios:
+            actual = inicios[i]
+            bloques.setdefault(actual, [])
+        elif not en_codigo and re.match(r"^[^\S\n]*#{1,6}[^\S\n]", linea):
+            actual = None
+            if re.match(r"^#{1,2}[^\S\n#]", linea):
+                en_enmiendas = bool(ENMIENDAS_RE.match(linea))
+        if actual is not None:
+            bloques[actual].append(linea.rstrip())
+        elif not en_enmiendas and not re.match(r"^(?:Estado|Aprobado):", linea):
+            resto.append(linea.rstrip())
+    return {"acs": {ac: _h16("\n".join(b).strip()) for ac, b in bloques.items()},
+            "resto": _h16("\n".join(resto).strip())}
+
+
+def comparar_huellas(antes: dict, ahora: dict) -> dict:
+    """Que AC cambio, entro o salio entre dos huellas, y si cambio el resto."""
+    a, b = antes.get("acs") or {}, ahora.get("acs") or {}
+
+    def orden(xs):
+        return sorted(xs, key=lambda x: int(x.split("-", 1)[1]))
+    return {"cambiados": orden(x for x in a if x in b and a[x] != b[x]),
+            "nuevos": orden(x for x in b if x not in a),
+            "retirados": orden(x for x in a if x not in b),
+            "resto": antes.get("resto") != ahora.get("resto")}
+
+
+def enmiendas_posteriores(f: dict, vistas) -> list[str]:
+    """Ids de las enmiendas selladas despues de un veredicto que vio `vistas`.
+
+    review y verify guardan cuantas enmiendas tenia la feature al sellarse; las
+    que llegaron despues hablan de un spec que ese veredicto no leyo. Un sello
+    anterior a este campo cuenta como 0: vio el spec sin ninguna.
+    """
+    todas = [e for e in (f.get("enmiendas") or []) if isinstance(e, dict)]
+    n = vistas if type(vistas) is int and vistas >= 0 else 0
+    return [str(e.get("id", "?")) for e in todas[n:]]
+
+
+def n_enmiendas(f: dict) -> int:
+    return len(enmiendas_posteriores(f, 0))
+
+
 def _sin_adorno(linea: str) -> str:
     """Quita el adorno markdown del principio de la linea. Uno solo, compartido."""
     limpia = linea.strip()
