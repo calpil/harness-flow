@@ -19,9 +19,10 @@ def require(ok, message):
         raise Invalid(message)
 
 
-def git(repo, *args, binary=False):
+def git(repo, *args, binary=False, ok=(0,)):
     # No permitir GIT_DIR/WORK_TREE/INDEX_FILE ni replaces heredados: se mide la
     # ruta declarada, no el repo que el proceso padre pudiera redirigir.
+    # ok admite otros exits legitimos (grep sin coincidencias sale 1).
     env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
     env.update(GIT_CONFIG_NOSYSTEM="1", GIT_CONFIG_GLOBAL=os.devnull,
                GIT_OPTIONAL_LOCKS="0", GIT_NO_REPLACE_OBJECTS="1")
@@ -30,7 +31,7 @@ def git(repo, *args, binary=False):
                            env=env, capture_output=True, text=not binary, timeout=60)
     except (OSError, subprocess.TimeoutExpired) as exc:
         raise Invalid(f"no pude medir Git en {repo}: {exc}") from exc
-    require(r.returncode == 0, f"Git no verificable en {repo}: {args[0]}")
+    require(r.returncode in ok, f"Git no verificable en {repo}: {args[0]}")
     return r.stdout if binary else r.stdout.rstrip("\n")
 
 

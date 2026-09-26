@@ -104,10 +104,146 @@ $PY "$H/gate.py" close --feature 7 --status done --to develop \
 ```
 
 `verify` sigue ejecutando los comandos DEL SPEC desde la raiz, sin reescribirlos.
+Un AC con `go test ./...` a secas falla ahi (`directory prefix . does not contain
+main module`): el comando tiene que entrar al repo, p. ej.
+`[ -d <svc> ] && cd <svc>; go test ./...`, que tambien sirve dentro del worktree.
 El registro vincula ejecucion/reporte al mapa de commits, spec, evidencia y reglas;
 NO demuestra que un runner generico ejecuto tests no vacios: cada AC debe usar un
 comando falsable y comprobar resultados terminales, ademas de las suites destino.
 Cero comandos/registro ausente no permiten cerrar con `require_verify_green`.
+
+## Tests retirados por la feature
+
+Una feature que retira codigo (un broker, un cliente, un paquete) borra tambien
+los tests que solo lo certificaban, y la medicion postmerge los ve como tests
+desaparecidos: bloquea, con razon, porque esa es la firma de un skip o un build
+tag. La baja legitima se declara aparte y el gate la verifica. No se edita la
+base ni se toma de palabra:
+
+El MISMO archivo cubre destinos Go y frontend; cada entrada usa el formato de su
+destino y mezclarlos en un microservicio (o cruzarlos entre destinos) se rechaza
+ANTES de correr una sola suite:
+
+```json
+{"version": 1, "feature": "7",
+ "retirados": {
+   "orders": ["fixture.invalid/orders/events::TestDLQPublisher"],
+   "front": [["angular:api-client", "projects/api-client/src/lib/cafeterias-api.spec.ts",
+              "CafeteriasApi `me` es POST porque VINCULA, no solo consulta"],
+             ["node:test", "scripts/catalogo-snapshot.test.mjs", "el snapshot trae precios"]]}}
+```
+
+```bash
+$PY "$H/gate.py" close --feature 7 --status done --to develop --integrated \
+  --postmerge /ruta/bases-postmerge.json --retirados /ruta/retirados.json --leccion <clase>
+$PY "$H/postmerge_medido.py" check --repo /proyecto/orders --base /ruta/base-orders.json \
+  --cmd 'go test -tags integration -count=1 -json ./...' \
+  --retirados /ruta/retirados.json --microservicio orders
+$PY "$H/postmerge_frontend.py" check --repo /proyecto/front --base /evidencia/base-front.json \
+  --retirados /ruta/retirados.json --microservicio front
+```
+
+En Go se declaran tests de PRIMER nivel (`paquete::TestX`); sus subtests caen con
+ellos. Cada baja bloquea el cierre salvo que:
+
+- la base la midio y el destino ya no la mide;
+- su `func TestX(` existe en `base_sha` y NO existe en `source_sha` ni en el
+  destino, en el directorio del paquete (`git grep`, ciego a build tags): la
+  borro la propia feature. Esconderla tras `//go:build` o un skip no es baja;
+- el `review-<id>.md` sellado la nombra. Pasale al revisor la lista junto con el
+  briefing: tiene que confirmar que cada test solo certificaba codigo borrado.
+
+En FRONTEND se declara el id EXACTO que mide el runner, tal cual aparece en
+`results` de la base: `["angular:<proyecto>"|"node:test", "<ruta del spec>",
+"<nombre completo>"]`. El nombre completo de Angular/Vitest incluye los describe;
+el de node:test es plano. Cada baja bloquea el cierre salvo que:
+
+- la base la midio (id presente en `results`) y el destino ya no la mide;
+- el spec DECLARA ese test en `base_sha` y en `source_sha` y en el destino ya no
+  queda ni declarado ni ESCRITO -- o el archivo ya no existe ahi. «Declara» es
+  una llamada `it`/`test` (con sus formas `x`/`f` y cualquier modificador:
+  `.skip`, `.only`, `.todo`, `.each`, ...) cuyo titulo literal -- entre comillas
+  simples, dobles o backticks -- es el titulo hoja. «Escrito» es el mismo titulo
+  entre comillas en CUALQUIER parte del archivo, buscado como subcadena. Dejar el
+  test con `.skip`/`.todo`/`xit`, renombrar solo el describe, o dejarlo escrito
+  tras un wrapper no-op, un alias de `it` o `test.extend`, NO son bajas y
+  bloquean;
+- el review sellado DECLARA la baja (ver abajo).
+
+El titulo hoja NO se adivina partiendo el nombre completo: sale de la MEDICION de
+la base. En Angular es el `title` que reporto Vitest, ya cotejado contra el evento
+del reporter; en node:test, el nombre plano. Por eso dos hojas homonimas, o una
+que es sufijo de otra (`POST` y `es POST`), no colapsan.
+
+Limites conocidos del reconocimiento en la fuente: titulos armados en runtime
+(`it(nombre, ...)`), concatenados (`'a' + 'b'`) o interpolados (`` `x ${y}` ``)
+no se reconocen ni como declaracion ni como escritos. Un titulo con comillas
+escapadas (`it('no\'s')`, titulo real `no's`) SI se reconoce como declaracion
+(el parser lo desescapa), pero la busqueda de «escrito» compara el texto sin
+desescapar: si en la fuente queda escapado detras de un wrapper que no registra
+el test, la baja pasa (es el mismo hueco general descrito abajo). Un comentario
+que conserva la llamada si cuenta. Un `it('')` (titulo vacio) hace que el runner
+se niegue a medir el repo: Vitest arma su nombre completo sin el espacio final y
+el cotejo nombre completo == ancestros + titulo no se cumple (falla cerrado, no
+da verde). La busqueda de «escrito» NO empareja comillas por el archivo:
+es subcadena, justo para que un apostrofo suelto anterior (un comentario, una
+regex) no la desincronice. El reconocimiento es a proposito generoso:
+reconocer de menos en la fuente se leeria como baja legitima. La red de seguridad
+es la medicion -- si el test sigue corriendo, su id sigue medido en el destino y
+la baja se rechaza --, pero NO cubre un test que ya no corre y cuyo titulo
+tampoco quedo escrito de forma reconocible. Ese hueco es el mismo que en Go
+(renombrar `func TestX` a `func testX` tambien pasa `git grep`): lo cierra el
+review leyendo el diff, no el gate.
+
+La cita del review es una DECLARACION, no una mencion. Se exige, en UNA MISMA
+linea que no sea la del sello `Revisado:`, la ruta del spec junto al titulo entre
+delimitadores (`'hoja'`, `"hoja"`, `` `hoja` `` o `«hoja»`), o el nombre completo
+delimitado, o el id medido entero `proyecto::archivo::nombre`. Buscar hoja y ruta
+sueltas por todo el texto dejaba que una hoja corta quedara «citada» por aparecer
+dentro de otra palabra (`ok` dentro de «token»), o por el propio sello. Una hoja
+vacia no se puede citar: se rechaza. La ruta tiene que estar completa: `<spec>.orig`
+o `<spec>x` nombran otro archivo y no cuentan (un prefijo de repo delante si vale).
+El sello entero queda fuera, aunque ocupe varias lineas; ademas `gate.py revision`
+rechaza saltos de linea y caracteres de control en `--por`, que es por donde se
+podia inyectar una cita dentro del sello.
+
+Esa cita prueba UNA cosa: que el revisor escribio la ruta y el titulo juntos en su
+informe. No prueba que haya aprobado esa baja en particular. El formato no
+distingue una mencion en contra («en `<spec>` el test 'x' ahora espera 'y'»), una
+linea de `grep` pegada como evidencia, ni una hoja corta citada dentro de otro
+titulo de la misma linea. Quien sella responde por el contenido; el gate solo
+impide que la baja pase sin que nadie la haya escrito. Con varias bajas del mismo
+spec conviene citar el id entero.
+
+Sobrebloqueos conocidos (bloquean de mas, nunca de menos):
+
+- `it.each`/`test.for`: el nombre medido esta formateado, asi que no es un literal
+  del spec y la baja no se puede declarar;
+- si dos describe del mismo archivo declaran el mismo titulo y la feature borra
+  solo uno, el otro sigue declarado y bloquea;
+- si el titulo sobrevive como literal por otro motivo (una asercion, una
+  constante), bloquea aunque el test ya no exista.
+
+Mover un test a otro archivo del mismo proyecto, o renombrar el spec, SI es una
+baja: el id incluye la ruta, asi que el id viejo desaparece y aparece uno nuevo.
+El gate no puede deducir que es el mismo test; el revisor tiene que confirmarlo.
+
+Lo que falte sin declarar sigue bloqueando como antes, ahora con su nombre en el
+mensaje (tambien en frontend). Un paquete Go entero solo puede desaparecer si
+tenia tests medidos y todos se retiran. La medicion persiste por repo
+`retirados`, la ruta y el sha256 del archivo, en Go y en frontend. Pruebas:
+`tests/test_retirados.py` (Git y Go reales) y `tests/test_retirados_frontend.py`
+(Git, Angular y Node reales).
+
+Un verde del `check` manual NO equivale al del cierre, en Go ni en frontend:
+
+- no exige el review, asi que no verifica ninguna cita;
+- compara contra el HEAD del repo, no contra `source_sha` y el tip del destino;
+- solo ata el archivo a una feature si le pasas `--feature <id>`, y nunca lo ata
+  al mapa de microservicios: `--microservicio` elige la clave, no la valida
+  contra el backlog.
+
+Sirve para diagnosticar una integracion a mano. El unico gate es `close`.
 
 ## Bloqueos y limites
 
@@ -244,6 +380,10 @@ proyecto, ni cambia el protocolo Go. El runner frontend no instala dependencias.
 - El limite de confianza local es el mismo que Go: no es una atestacion contra
   falsificacion coordinada del runner y todos los JSON. Tampoco es una sandbox
   para codigo hostil. Revisar codigo, bases y procedencia antes del cierre.
+- La base graba el sha256 del propio runner (`toolchain.runner_sha256`). Cambiar
+  `postmerge_frontend.py` o sus reporters deja STALE toda base anterior: hay que
+  volver a medirla con HEAD en `base_sha`, antes de integrar. No se migra ni se
+  reescribe una base vieja para que pase.
 
 `HARNESS_TEST_FRONTEND_MODULES` debe apuntar a node_modules YA instalado con
 estas versiones para `python -m unittest discover -s tests`; no hay skips ni

@@ -16,6 +16,7 @@ import sys
 import tempfile
 import uuid
 
+import retiros
 from multirepo import Invalid, require, read_manifest, git, _clean
 
 PROTOCOL = 'angular22-vitest4-node22-v1'
@@ -117,7 +118,8 @@ def unique_results(tests):
     return tests
 
 
-def parse_node(repo, run):
+def parse_node(repo, run, hojas=None):
+    """hojas: mapa opcional id -> titulo hoja (en node:test, el nombre plano)."""
     events = [load_json(line) for line in run['stdout'].splitlines()]
     tests, starts, finals, summaries, completes = [], set(), set(), {}, {}
     for e in events:
@@ -139,6 +141,8 @@ def parse_node(repo, run):
                             'node:test fallo de archivo/proceso, no de test')
                 finals.add(key)
                 tests.append({'id': ['node:test', file, name], 'state': 'pass' if kind == 'test:pass' else 'fail'})
+                if hojas is not None:
+                    hojas['node:test', file, name] = name
         elif kind == 'test:diagnostic':
             # ADR no usa diagnosticos de test; Node comunica only/runOnly aqui.
             # No decidir por palabras del mensaje (pueden cambiar o ser falsas).
@@ -182,7 +186,8 @@ def parse_node(repo, run):
     return tests
 
 
-def parse_angular(repo, project, run):
+def parse_angular(repo, project, run, hojas=None):
+    """hojas: mapa opcional id -> `title`, el titulo hoja que reporto Vitest."""
     data = load_json(run['json'])
     events = [load_json(line) for line in run['events'].splitlines()]
     require(len(events) == 2 and events[0]['event'] == 'start' and events[1]['event'] == 'end',
@@ -214,10 +219,17 @@ def parse_angular(repo, project, run):
             require(live['started'] is True, 'Angular test no ejecutado (only/coleccion)')
             require(state in ('passed', 'failed') and state == live['result']['state']
                     and test['title'] == live['name'], 'Angular test skip/no terminal/incoherente')
+            # El titulo hoja se usa para verificar bajas: no basta con que exista,
+            # tiene que cuadrar con el nombre completo que identifica al test.
+            require(test['fullName'] == ' '.join([*test['ancestorTitles'], test['title']]),
+                    'Angular titulo hoja incoherente con el nombre completo')
             require(bool(test['failureMessages']) == (state == 'failed'), 'Angular fallo test incoherente')
             states.append(state)
             tests.append({'id': ['angular:' + project, file, test['fullName']],
                           'state': 'pass' if state == 'passed' else 'fail'})
+            if hojas is not None:
+                # title ya quedo cotejado contra el nombre del evento del reporter.
+                hojas['angular:' + project, file, test['fullName']] = test['title']
         status = 'failed' if 'failed' in states else 'passed'
         require(module['status'] == final['state'] == status, 'Angular final de archivo incoherente')
     unique_results(tests)
@@ -339,20 +351,39 @@ def read_base(path, repo, branch, tip, expected_base=None):
     return data
 
 
-def compare(base, measured):
+def leaf_titles(base):
+    """Titulo hoja de CADA id medido, releido del raw ya validado de la base.
+
+    No deduce nada del nombre completo: en Angular es el `title` que reporto
+    Vitest (cotejado contra el nombre del evento del reporter en parse_angular)
+    y en node:test es el nombre plano que exige el contrato ADR.
+    """
+    repo, hojas = Path(base['repo']), {}
+    parse_node(repo, base['execution']['node:test'], hojas)
+    for project in base['scope']['projects']:
+        parse_angular(repo, project, base['execution']['angular:' + project], hojas)
+    return hojas
+
+
+def compare(base, measured, retirados=()):
+    """Las unicas ausencias aceptables son las bajas ya VERIFICADAS (retiros.py)."""
     before = {tuple(r['id']): r['state'] for r in base['results']}
     after = {tuple(r['id']): r['state'] for r in measured['results']}
-    require(before.keys() <= after.keys(), 'tests desaparecidos u omitidos')
+    missing = sorted(before.keys() - after.keys() - {tuple(x) for x in retirados})
+    require(not missing, 'tests desaparecidos u omitidos: '
+            + ', '.join('::'.join(x) for x in missing))
     reds = {k for k, state in after.items() if state == 'fail'}
     debt = {k for k, state in before.items() if state == 'fail'}
     return {'new': sorted(reds - debt), 'debt': sorted(reds & debt),
             'cured': sorted(k for k in debt if after.get(k) == 'pass')}
 
 
-def check_destination(row, path):
+def check_destination(row, path, retirados=(), revisado=None):
     """Invocado por close, nunca un recibo PASS ni un comando configurable."""
     path = Path(path)
     trace = {'exit': 2, 'execution': {}, 'integration': row}
+    if retirados:
+        trace['retirados'] = sorted('::'.join(x) for x in retirados)
     evidence = path.with_name(path.name + '.' + uuid.uuid4().hex + '.close.evidence.json')
     require(not evidence.resolve().is_relative_to(Path(row['repo']).resolve()),
             'evidencia de cierre debe vivir fuera del repo medido')
@@ -360,9 +391,18 @@ def check_destination(row, path):
         try:
             before = digest(path)
             base = read_base(path, row['repo'], row['target_branch'], row['target_sha'], row['base_sha'])
+            # Antes de medir: una baja que no se sostiene bloquea por su motivo.
+            hojas = retiros.verificar_frontend(row['repo'], row['base_sha'],
+                                               (row['source_sha'], row['target_sha']),
+                                               base, leaf_titles(base), retirados, revisado)
             measured = measure(row['repo'], trace)
             require(measured['sha'] == row['target_sha'], 'postmerge: target stale')
-            delta = compare(base, measured)
+            medidas = retiros.midiendo_frontend({tuple(r['id']) for r in measured['results']}, retirados)
+            require(not medidas, 'retirados: se sigue midiendo en el destino: ' + ', '.join(medidas))
+            for item, hoja in sorted(hojas.items()):
+                print('[i] retirado por la feature (borrado en su delta, citado en el review): '
+                      + '::'.join(item) + f" (titulo hoja: '{hoja}')", flush=True)
+            delta = compare(base, measured, retirados)
             require(digest(path) == before, 'postmerge: base cambio durante medicion')
             trace.update(exit=1 if delta['new'] else 0, delta=delta, measurement=measured)
             require(not delta['new'], 'postmerge: rojos nuevos: ' + ', '.join('::'.join(x) for x in delta['new']))
@@ -384,6 +424,10 @@ def main():
         p.add_argument('--repo', required=True)
         p.add_argument(flag, required=True)
         p.add_argument('--evidence', help='JSON durable fuera del repo; nunca se sobrescribe')
+        if action == 'check':
+            p.add_argument('--retirados', help='bajas declaradas (mismo archivo que close --retirados)')
+            p.add_argument('--microservicio', help='clave de este repo dentro de --retirados')
+            p.add_argument('--feature', help='ata --retirados a esa feature, como hace close')
     args = ap.parse_args()
     trace = {'exit': 2, 'execution': {}}
     evidence = None
@@ -395,10 +439,26 @@ def main():
         require(not evidence_path.resolve().is_relative_to(repo), 'evidencia debe vivir fuera del repo medido')
         evidence = evidence_path.open('x', encoding='utf-8')
         trace.update(action=args.action, evidence=str(evidence_path.absolute()))
-        base = None
+        base, declarados = None, set()
         if args.action == 'check':
             base_hash = digest(args.base)
-            base = read_base(args.base, repo, git(repo, 'branch', '--show-current'), git(repo, 'rev-parse', 'HEAD'))
+            head = git(repo, 'rev-parse', 'HEAD')
+            base = read_base(args.base, repo, git(repo, 'branch', '--show-current'), head)
+            if args.retirados:
+                require(args.microservicio,
+                        '--retirados exige --microservicio: la clave de este repo en el archivo')
+                todos = retiros.leer(args.retirados, None, args.feature)
+                require(args.microservicio in todos,
+                        f'--retirados no declara bajas para {args.microservicio}')
+                declarados = todos[args.microservicio]
+                require(retiros.tipo(declarados) == retiros.FRONT,
+                        'retirados: este es un destino frontend: no acepta ids Go '
+                        "'<paquete>::<Test>', sino el id medido [proyecto, archivo, nombre]")
+                trace['retirados'] = sorted('::'.join(x) for x in declarados)
+                # Sin review ni source_sha: el check manual NO reemplaza al cierre
+                # (references/multirepo.md lo dice en la misma seccion).
+                retiros.verificar_frontend(repo, base['sha'], (head,), base,
+                                           leaf_titles(base), declarados)
         measured = measure(repo, trace)
         if args.action == 'base':
             with Path(args.guardar).open('x', encoding='utf-8') as stream:
@@ -407,7 +467,11 @@ def main():
             trace.update(exit=0, measurement=measured)
             return 0
         require(digest(args.base) == base_hash, 'base cambio durante medicion')
-        delta = compare(base, measured)
+        medidas = retiros.midiendo_frontend({tuple(r['id']) for r in measured['results']}, declarados)
+        require(not medidas, 'retirados: se sigue midiendo en el destino: ' + ', '.join(medidas))
+        for item in sorted(declarados):
+            print('[i] retirado por la feature (borrado desde la base): ' + '::'.join(item))
+        delta = compare(base, measured, declarados)
         for key, label in (('new', 'rojo nuevo'), ('debt', 'deuda preexistente'), ('cured', 'se curo')):
             for identity in delta[key]:
                 print(f'[{key}] {label}: ' + '::'.join(identity))

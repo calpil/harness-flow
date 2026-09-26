@@ -283,7 +283,7 @@ def cmd_approve_spec(args) -> None:
     if huecos:
         print(f"[!] OJO: la numeracion salta, falta(n) {', '.join(huecos)}.")
 
-    quien = args.por or getpass.getuser()
+    quien = _firmante(args.por)
     cuando = now_iso()
     if "Estado:" in text:
         import re as _re
@@ -309,6 +309,21 @@ def cmd_approve_spec(args) -> None:
 
 # --- revision --------------------------------------------------------------
 
+def _firmante(valor: str | None) -> str:
+    """Quien firma va DENTRO del sello que estampa el gate.
+
+    Un salto de linea ahi inyecta en el documento texto que nadie escribio, y
+    cualquier lector del sellado (la cita de --retirados, entre otros) lo leeria
+    como del revisor. No cambia el formato del sello: solo saca la inyeccion.
+    """
+    if valor is None:
+        return getpass.getuser()
+    if not valor.strip() or any(c < " " or c == "\x7f" for c in valor):
+        sys.exit("[!!] --por no admite saltos de linea ni caracteres de control:\n"
+                 "     ese texto va DENTRO del sello que estampa el gate.")
+    return valor.strip()
+
+
 def cmd_revision(args) -> None:
     p = paths()
     data = load_backlog(p)
@@ -332,7 +347,7 @@ def cmd_revision(args) -> None:
         sys.exit(f"[!!] el review no responde por: {', '.join(faltan)}\n"
                  "     Cada AC-n necesita una fila que lo nombre y cite archivo:linea.")
 
-    quien = args.por or getpass.getuser()
+    quien = _firmante(args.por)
     sello = (f"Revisado: {args.veredicto} · {now_iso()} · {quien} · "
              "estampado por gate.py revision")
     import re as _re
@@ -524,6 +539,8 @@ def cmd_close(args) -> None:
         sys.exit("[!!] --integrated solo aplica a --status done")
     if args.integrated and not args.postmerge:
         sys.exit("[!!] postmerge obligatorio: declara bases por repo con --postmerge <mapa.json>")
+    if args.retirados and not args.integrated:
+        sys.exit("[!!] --retirados solo aplica a close --integrated: lo verifica la medicion postmerge")
 
     if args.status == "done" and not args.to:
         sys.exit("[!!] close --status done requiere --to <rama>.\n"
@@ -655,7 +672,7 @@ def cmd_close(args) -> None:
         try:
             manifest = check_registered(p, f, rules, integrated=True, target=args.to)
             from medicion_destino import measure
-            f["mediciones_destino"] = measure(p, f, data["rules"], manifest, args.postmerge)
+            f["mediciones_destino"] = measure(p, f, data["rules"], manifest, args.postmerge, args.retirados)
             # Las suites pueden tener efectos laterales: revalidar todos los tips.
             check_registered(p, f, rules, integrated=True, target=args.to)
         except Invalid as exc:
@@ -775,6 +792,7 @@ def main() -> None:
     s.add_argument("--integrated", action="store_true",
                    help="verifica integracion manual multi-repo registrada, sin merge")
     s.add_argument("--postmerge", help="mapa de bases preintegracion; close ejecuta suites reales en TODOS los destinos")
+    s.add_argument("--retirados", help="tests de la base que la feature BORRO (verificados en su delta y citados en el review)")
     s.add_argument("--leccion-motivo", dest="leccion_motivo"); s.add_argument("--nota")
     s.add_argument("--sin-contexto", action="store_true", dest="sin_contexto",
                    help="no refrescar grafo/hub/vault despues del cierre")

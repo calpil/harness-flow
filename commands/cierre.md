@@ -59,6 +59,19 @@ Pregunta primero si la raiz es multi-repo sin `.git` (registro estricto, cierre
 eval "$(python3 "${CLAUDE_PLUGIN_ROOT}/scripts/entorno.py" --shell)" && "$PY" "$H/gate.py" close --feature $1 --status done --to $2 --leccion <clase>
 ```
 
+Si la feature BORRO tests a proposito (retiro de una integracion, un spec movido),
+el cierre `--integrated` los ve desaparecidos y bloquea. No edites la base:
+declaralos con `--retirados <json>` (el mismo archivo sirve en
+`postmerge_medido.py check` y en `postmerge_frontend.py check`, con
+`--microservicio <svc>`). Un destino Go se declara `<paquete>::<TestX>`; uno
+frontend, el id medido `[proyecto, archivo, nombre completo]`, y cruzarlos se
+rechaza. El gate exige que la base los midiera, que la declaracion la haya
+borrado la feature -- un `//go:build`, un `.skip`/`.todo`, renombrar solo el
+describe o dejar el titulo escrito tras un wrapper NO son bajas -- y que el
+review sellado los DECLARE: en frontend, la ruta del spec y el titulo entre
+comillas en una misma linea que no sea la del sello. Contrato en
+`references/multirepo.md`.
+
 Sin `--integrated`, `close` **ejecuta el merge de verdad** (`git merge --no-ff`).
 Aborta sin tocar el backlog si el arbol esta sucio o el merge conflictua.
 `start` puede dejar `harness/` y `docs/vault/` sucios. `approve-spec` y

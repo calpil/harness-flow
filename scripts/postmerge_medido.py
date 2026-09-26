@@ -268,6 +268,19 @@ def leer_base(ruta: str, repo: str, rama: str, sha: str, cmd: str) -> dict:
     return base
 
 
+def sin_baja(base: dict, medidos_ahora, paquetes_ahora, declarados) -> list[str]:
+    """Tests/paquetes de la base que ya no se miden y que ninguna baja declarada
+    (retiros.py, verificada aparte) cubre: siguen bloqueando como siempre."""
+    antes = {(r["Package"], r["Test"]) for r in base["resultados"] if r["Action"] != "skip"}
+    faltan = [f"{p}::{t}" for p, t in sorted(antes - set(medidos_ahora))
+              if (p, t.split("/", 1)[0]) not in declarados]
+    # Con tests medidos, un paquete ausente ya aparece por sus tests; sin ellos,
+    # no hay baja que lo cubra.
+    faltan += [f"{pkg} (paquete)" for pkg in sorted(set(base["paquetes"]) - set(paquetes_ahora))
+               if not any(p == pkg for p, _ in antes)]
+    return faltan
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -286,6 +299,9 @@ def main() -> int:
 
     c = sub.add_parser("check", parents=[com], help="compara DESPUES del merge")
     c.add_argument("--base", required=True)
+    c.add_argument("--retirados", help="bajas declaradas (mismo archivo que close --retirados)")
+    c.add_argument("--microservicio", help="clave de este repo dentro de --retirados")
+    c.add_argument("--feature", help="ata --retirados a esa feature, como hace close")
 
     a = ap.parse_args()
     repo = str(pathlib.Path(a.repo).expanduser().resolve())
@@ -294,6 +310,25 @@ def main() -> int:
     print(f"[i]  {repo} en {rama} ({sha})")
 
     base = leer_base(a.base, repo, rama, sha, a.cmd) if hasattr(a, "base") else None
+    # El archivo de bajas se lee y se valida ANTES de correr la suite: un esquema
+    # roto o ids de otro tipo de destino no justifican medir nada.
+    declarados = set()
+    if getattr(a, "retirados", None):
+        if not a.microservicio:
+            no_medicion("--retirados exige --microservicio: la clave de este repo en el archivo.")
+        # Solo aqui: sin bajas, este runner se copia y corre sin el resto de la skill.
+        import retiros
+        from multirepo import Invalid
+        try:
+            todos = retiros.leer(a.retirados, None, a.feature)
+            if a.microservicio not in todos:
+                no_medicion(f"--retirados no declara bajas para {a.microservicio}.")
+            declarados = todos[a.microservicio]
+            if retiros.tipo(declarados) != retiros.GO:
+                no_medicion("--retirados: este es un destino Go; no acepta ids medidos de "
+                            "frontend, sino '<paquete>::<TestDePrimerNivel>'.")
+        except Invalid as error:
+            no_medicion(str(error))
     resultados, paquetes, procesos = correr(repo, a.cmd)
     if (git(repo, "rev-parse", "--abbrev-ref", "HEAD"), git(repo, "rev-parse", "HEAD")) != (rama, sha):
         no_medicion("la rama o el commit cambiaron durante la suite.")
@@ -317,12 +352,17 @@ def main() -> int:
         return 0
 
     assert base is not None
-    medidos_antes = {(r["Package"], r["Test"]) for r in base["resultados"] if r["Action"] != "skip"}
     medidos_ahora = {t for t, estado in resultados.items() if estado != "skip"}
-    faltantes = medidos_antes - medidos_ahora
-    if set(base["paquetes"]) - paquetes.keys() or faltantes:
-        detalle = ", ".join(f"{p}::{t}" for p, t in sorted(faltantes))
-        no_medicion(f"alcance incompleto: faltan paquetes/tests antes medidos o ahora omitidos. {detalle}")
+    if declarados:
+        try:
+            retiros.verificar(repo, base["sha"], (sha,), base, medidos_ahora, declarados)
+        except Invalid as error:
+            no_medicion(str(error))
+    faltantes = sin_baja(base, medidos_ahora, paquetes.keys(), declarados)
+    if faltantes:
+        no_medicion(f"alcance incompleto: faltan paquetes/tests antes medidos o ahora omitidos. {', '.join(faltantes)}")
+    for p, t in sorted(declarados):
+        print(f"[i]  retirado por la feature (borrado desde la base): {p}::{t}")
     previos = {tuple(t) for t in base["rojos"]}
     nuevos = rojos - previos
     curados = previos - rojos
