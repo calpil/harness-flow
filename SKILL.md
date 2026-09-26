@@ -72,22 +72,9 @@ toque. En PowerShell repite la inicializacion con `--host codex --powershell`
 y ejecuta con `& $PY`. Detalles en [`references/openai.md`](references/openai.md)
 y [`references/grok.md`](references/grok.md).
 
-Sin flags, `entorno.py` imprime un diagnóstico (SO, host, H, PY, si `psycopg`
-está) y sale con exit≠0 si no puede resolver un intérprete usable. La falta de
-`psycopg` solo es error con `--hub`: quien usa nada más los gates locales no
-necesita el Memory Hub. `entorno.py --instalar-deps` instala
-`psycopg[binary]` en el intérprete correcto (en Claude Code crea un venv propio
-en `~/.harness-flow/venv` en vez de tocar el python del sistema).
-
-Detecta en este orden: `HARNESS_PYTHON` → venv neutro (`HARNESS_VENV` o
-`~/.harness-flow/venv`) → en host Hermes, `HERMES_PYTHON`/`HERMES_HOME`, el
-launcher `hermes` del PATH y las rutas por SO → el propio intérprete. Si nada
-resuelve, exporta `HARNESS_PYTHON` a mano. `--host claude|hermes|gpt|codex|gemini|agy|grok|kimi|generic` fuerza
-el host cuando la detección no aplica. `codex` se normaliza a `gpt` y `agy` a `gemini`.
-Dentro de una sesion de Grok el host es `grok` aunque el script viva en el clone
-de Hermes o entre por el symlink de `.agents/skills`: manda `GROK_AGENT`, no la ruta.
-Codex se reconoce como `gpt` por `CODEX_THREAD_ID` o `CODEX_SESSION_ID`, tambien
-desde el clone de Hermes. `HARNESS_HOST` o `--host` tienen prioridad.
+Sin flags, `entorno.py` imprime un diagnóstico y sale con exit≠0 si no resuelve
+un intérprete usable; `--instalar-deps` pone `psycopg` donde corresponde. Orden
+de detección, `--host` y `HARNESS_PYTHON`: [`references/entorno.md`](references/entorno.md).
 
 ## Arranque de sesión
 
@@ -168,7 +155,8 @@ El review NO lo haces tú mismo. Un revisor que recuerda haber escrito el códig
 3. Cuando vuelva, LEE tú `docs/review-<id>.md`. El veredicto del subagente es un autoinforme: verifica que cada fila cite `archivo:linea` real antes de sellar.
 4. Sella:
    `$PY "$H/gate.py" revision --feature <id> --veredicto approved|changes_requested|blocked`
-   El script estampa `Revisado: ...`. Un `Veredicto:` tipeado a mano NO cuenta.
+   El script estampa `Revisado: ...` con la firma entera (veredicto · fecha ISO · autor ·
+   `estampado por gate.py revision`). Un `Veredicto:` o un `Revisado:` tipeado a mano NO cuenta.
 
 Si el subagente no está disponible, `$PY "$H/revision.py" --feature <id>` da el paquete y revisas tú — dicéndolo explícitamente, porque el rigor baja.
 
@@ -188,18 +176,13 @@ $PY "$H/gate.py" close --feature <id> --status done --to <rama> \
 ```
 
 `--integrated` NO hace merges: revalida repos/worktrees reales, limpieza,
-ancestria y tips exactos. ANTES de done ejecuta suites completas sobre cada
-destino: Go mediante `postmerge_medido.py` (JSON + exits reales -exec), o el
-contrato Angular22/Vitest4+Node22 de ADR mediante `postmerge_frontend.py`, con
-bases preintegracion genuinas y el mapa `--postmerge`. No acepta recibos PASS
-manuales ni comandos genericos: protocolos ajenos/base ausente quedan bloqueados.
-Para el contrato frontend, configuracion cerrada y evidencia durable, lee
-`references/multirepo.md` (mismos CLI en Hermes y Claude, sin instalar dependencias).
-Persiste `integraciones` POR REPO (fuente y destino),
-no un `merge_commit` inventado. El recibo no da permisos de implementacion/docs
-ni sustituye spec, review, verify, leccion, rutas protegidas o aislamiento.
-Cambiar mapa/SHAs/spec/evidencia invalida los contextos de review y verify.
-Ver la referencia para el caso ya integrado, protecciones y limites de la foto.
+ancestria y tips exactos, y ANTES de done corre las suites completas de cada
+destino (Go con `postmerge_medido.py`, el contrato Angular22/Vitest4 de ADR con
+`postmerge_frontend.py`) contra bases preintegracion genuinas del mapa
+`--postmerge`. No acepta recibos PASS manuales, y el recibo no sustituye spec,
+review, verify, leccion, rutas protegidas ni aislamiento. Persiste
+`integraciones` POR REPO; cambiar mapa/SHAs/spec/evidencia invalida review y
+verify. Contrato frontend, caso ya integrado y limites: la referencia.
 
 **Monorepo legacy (raiz Git sin registro multi-repo):**
 
@@ -220,11 +203,9 @@ Cuando el cierre queda en `done`, el gate tambien:
 - sincroniza `docs/prd/PRD-master.md` y `docs/sdd.md` desde las features cerradas.
 
 Ante fallo de sync/cierre local (tambien `--publicar-atlassian`), se restaura el
-preestado byte-identico de backlog, PRD/SDD, progreso e historia; no se regeneran
-documentos distintos como sustituto de rollback. Un merge Git ya hecho se
-conserva y se informa. Atlassian puede haber publicado parcialmente: reconciliar
-remoto antes de reintentar, sin prometer rollback remoto. Ver limites de caidas
-y concurrencia en `references/multirepo.md`.
+preestado byte-identico de backlog, PRD/SDD, progreso e historia. Un merge Git ya
+hecho se conserva y se informa; Atlassian puede quedar parcial: reconciliar antes
+de reintentar. Limites de caidas y concurrencia en `references/multirepo.md`.
 
 Verifica el resultado (`git log --oneline -1` en la rama destino) antes de dar por integrada una feature: el mensaje de un script no es evidencia de que el merge ocurrió.
 
@@ -253,12 +234,9 @@ $PY "$H/gate.py" close --feature <id> --status done --to develop --leccion <clas
 $PY "$H/postmerge_medido.py" check --repo <ruta> --base /tmp/base-<svc>.json      # DESPUES
 ```
 
-`postmerge.py` (el gate viejo de regex) **no sirve como gate**: deduce el veredicto
-de `--- FAIL:` sobre la salida `-v` y nunca lee el exit code de `go test`, asi que
-da VERDE con un paquete que no compila, con un `panic` en `init()`, y con tests
-borrados; ademas identifica los tests por nombre sin paquete, con lo que un rojo
-nuevo en un paquete se confunde con deuda tolerada de otro. Usa siempre la version
-medida, que cubre los cuatro casos y valida la base contra repo/rama/comando/SHA.
+`postmerge.py` (el gate viejo de regex) **no sirve como gate**: da VERDE con un
+paquete que no compila, un `panic` en `init()` o tests borrados. Usa siempre la
+version medida (por que, en `references/lecciones-del-arnes.md`).
 
 Si aparecen rojos nuevos: ficha el choque, no bajes la asercion que lo detecto.
 Al verificar el exit a mano no uses un pipe (`| tail`): te devuelve el status
@@ -370,28 +348,16 @@ que genera cada nota y plugins: [`references/obsidian.md`](references/obsidian.m
 
 ## Claude Code
 
-La instalacion personal va en `~/.claude/skills/harness-flow`; por repo, en
-`<repo>/.claude/skills/harness-flow`. Sirve un symlink al clone de Hermes: Claude
-Code lee `SKILL.md` a traves del enlace y `entorno.py` sigue detectando host
-`claude` porque no resuelve el symlink.
+Instalacion en `~/.claude/skills/harness-flow` (por repo, `<repo>/.claude/skills/harness-flow`);
+sirve un symlink al clone de Hermes, y `entorno.py` sigue detectando host `claude`
+porque no resuelve el symlink. Como plugin skills-dir (`.claude-plugin/plugin.json`)
+aporta el subagente `harness-flow:revisor` y los comandos `/harness-flow:estado`,
+`:producto`, `:spec`, `:review`, `:cierre`.
 
-El directorio trae `.claude-plugin/plugin.json`, asi que ademas carga como plugin
-skills-dir y aporta piezas nativas que los otros hosts ignoran:
-
-- subagente `harness-flow:revisor` (`agents/revisor.md`) para el paso 3 del flujo;
-- comandos `/harness-flow:estado`, `:spec`, `:review`, `:cierre`.
-
-**`$PY` y `$H` no sobreviven entre llamadas Bash**: cada llamada abre un shell
-nuevo. Pega el `eval` al comando en la misma llamada, siempre.
-
-**En Windows, instala Git for Windows.** Sin el, Claude Code no usa Bash y cae a
-PowerShell: `eval "$(...)"` no existe ahi y el interprete se llama `python`, no
-`python3`. Usa entonces `entorno.py --powershell | Invoke-Expression` y `& $PY`.
-Para compartir un solo clone con Hermes no sirve `ln -s`: es `mklink /J`
-(junction, sin permisos de administrador).
-
-Detalles, rutas de Windows, verificacion de la instalacion y raices de lecciones
-en [`references/claude.md`](references/claude.md).
+**`$PY` y `$H` no sobreviven entre llamadas Bash**: pega el `eval` al comando en la
+misma llamada, siempre. **En Windows, instala Git for Windows**: sin el, la tool
+Bash es PowerShell (`entorno.py --powershell | Invoke-Expression`, `& $PY`, y
+`mklink /J` para compartir el clone). Detalle en [`references/claude.md`](references/claude.md).
 
 ## GPT/Codex
 
@@ -420,19 +386,15 @@ esa bandera, `close` solo avisa y no toca sistemas remotos.
 ## Reglas duras
 
 - Todo hallazgo relevante se escribe en `harness/progress/`. Una respuesta en el chat no reemplaza evidencia persistida.
-- `gate.py verify` corre en el WORKTREE de la feature cuando existe (antes corría
-  desde la raíz y medía la rama de integración: verde falso si el comando no
-  engancha nada, rojo falso si develop tiene otro código). Si el worktree
-  declarado no existe, `verify` **bloquea** en vez de caer a la raíz. Sin
-  worktree, avisa que está midiendo la raíz. Un rojo sobre el árbol equivocado
-  no es un veredicto sobre el código, y un verde tampoco.
+- `gate.py verify` corre en el WORKTREE de la feature cuando existe. Si el
+  worktree declarado no existe, **bloquea** en vez de caer a la raíz; sin
+  worktree, avisa que mide la raíz. Un rojo o un verde sobre el árbol
+  equivocado no es un veredicto sobre el código.
 - **La feature sale de `rules.rama_base` (por defecto `develop`), no del HEAD del
-  repo.** `worktree.py start` resuelve la base explícitamente y crea la rama
-  desde ese SHA; si la rama ya existía y no desciende de la base, aborta. La
-  base queda registrada en `base_branch`/`base_sha` y es contra ella que
-  `revision.py` calcula el diff (`merge-base base HEAD`, no `HEAD~1`: una
-  feature son N commits, y `HEAD~1` le muestra al revisor sólo el último).
-  `--base <rama>` para un caso puntual.
+  repo.** `worktree.py start` crea la rama desde ese SHA (aborta si una rama que
+  ya existía no desciende de la base) y la registra en `base_branch`/`base_sha`;
+  `revision.py` diffea contra `merge-base base HEAD`, no `HEAD~1`. `--base <rama>`
+  para un caso puntual.
 - Cuando varias features tocan el mismo artefacto, ciérralas en orden de dependencia: un AC que compara contra un respaldo pre-cambio queda obsoleto en cuanto otra feature aplica el suyo.
 - **Los AC de una feature miden SU worktree, así que por construcción no ven los choques ENTRE features.** Varias ramas pueden estar verdes cada una y romperse al convivir en la rama de integración: dos migraciones que toman el mismo número, una que inserta una fila donde otra fija un conteo exacto, un CHECK que choca con un vocabulario ampliado. Después de cada `close ... --to <rama>`, corre la suite de integración COMPLETA sobre la rama destino y compara los rojos contra los que ya había antes del merge. Un `15/15 en verde` de `verify` es un veredicto sobre la rama de la feature, NO sobre la integración: no lo reportes como si lo fuera.
 - **Migraciones numeradas + features en paralelo = colisión garantizada.** Cada rama toma "el siguiente número libre" que ve, y ve un árbol distinto. Antes de sellar el spec de una feature con migración, reserva el número contra la rama de integración, no contra el worktree. Al renumerar: `git mv` para conservar historia, regenerar los manifiestos con el comando del repo (suelen decir "GENERADO, no editar a mano") y verificar que el blob quede idéntico entre todos los repos que lo replican.
@@ -445,28 +407,19 @@ esa bandera, `close` solo avisa y no toca sistemas remotos.
   `- AC-1: ... \`verificar: pytest -q\`` o una línea `Comando: \`pytest -q\`` debajo del AC.
 - La evidencia cubre un AC si la cita `archivo:linea` está en la **sección** del AC
   (encabezado `## AC-1` con la cita debajo), no necesariamente en la misma línea.
-  Prosa sin cita nunca cuenta como cobertura. Una **mención** del AC en medio de
-  una frase (`...que también cubre lo pedido en AC-1`) no abre sección: sólo
-  cuentan las líneas que lo **declaran** (`## AC-1`, `- AC-1:`, `| AC-1 |`). Antes
-  una mención heredaba la cita del AC vecino y daba por cubierto un AC sin
-  evidencia, además de truncar la sección del AC que sí la tenía.
-- `verify` sólo mide los AC que declaran comando. Si el spec tiene 12 AC y 3
-  traen `verificar:`, un `3/3 en verde` **no** dice nada de los otros 9: el
-  script ahora los lista como `NO se midieron` y `close` los repite como aviso.
-  Ese hueco lo cubre la revisión, no el verify.
-- El sello `Revisado:` sólo vale con la firma completa que estampa
-  `gate.py revision` (veredicto · fecha ISO · autor · `estampado por gate.py
-  revision`). Un `Revisado: approved - ok` escrito a mano ya no pasa.
+  Prosa sin cita nunca cuenta. Una **mención** del AC en medio de una frase no abre
+  sección: sólo las líneas que lo **declaran** (`## AC-1`, `- AC-1:`, `| AC-1 |`).
+- `verify` sólo mide los AC que declaran comando: con 12 AC y 3 comandos, un
+  `3/3 en verde` **no** dice nada de los otros 9. Los lista como `NO se midieron`,
+  `close` los repite como aviso, y ese hueco lo cubre la revisión.
 - `close` rechaza un `last_verify` que midió otro número de AC, y un verify o un
   review sellados antes de la última enmienda: si el spec cambió después de
   medir o de revisar, hay que re-correr `verify` y lanzar un review nuevo. Como
   `approve-spec` ya no re-sella un spec con trabajo encima, la única vía para
   cambiarlo es `gate.py enmienda`, que es la que invalida lo anterior.
-- `psycopg` debe estar en el intérprete que resuelve `entorno.py` (`$PY`), no en el
-  del proyecto ni en el python del sistema. Si `hub.py` tira `ModuleNotFoundError:
-  psycopg`, casi siempre es que estás usando `python3` en vez de `$PY`. Diagnostica
-  y arregla con el mismo script, sin rutas a mano: `python3 "$H/entorno.py"` y luego
-  `python3 "$H/entorno.py" --instalar-deps`.
+- `psycopg` va en el intérprete que resuelve `entorno.py` (`$PY`): un
+  `ModuleNotFoundError: psycopg` en `hub.py` casi siempre es `python3` en vez de
+  `$PY`. Arreglo en [`references/entorno.md`](references/entorno.md).
 
 ## Lecciones del arnés sobre sí mismo
 
@@ -513,25 +466,18 @@ Codex se reporta como `gpt` por su marca de sesion o por la ruta de instalacion
 en `.agents/skills`, `.codex/skills` o `$CODEX_HOME/skills`, y el
 revisor se lanza con `codex exec`. **No uses `codex exec` fuera de Codex.**
 
-`~/.agents/skills` es el mínimo común múltiplo compartido. Para las lecciones,
-`leccion.py` **busca** en todas esas raíces (incluidas `.gemini`, `.codex`,
-`.grok` y `.kimi-code`) y **crea** en la del host detectado — en `generic`, en
-la raíz donde está instalada la propia skill; `leccion.py donde` marca cuál es cuál.
+`~/.agents/skills` es el mínimo común múltiplo compartido: `leccion.py` **busca**
+lecciones en todas las raíces y **crea** en la del host detectado (`donde` marca cuál).
 
-### Kimi Code
-
-Host propio (`kimi`), detectado por la ruta `.kimi-code` (skill suelta o copia
-managed del plugin) o por `KIMI_CODE_HOME`. Kimi 2.x no exporta marca de
-proceso al shell: por el symlink de `~/.agents/skills` el host es `gpt`
-(equivalente: las lecciones nacen ahi y Kimi las lee); por la ruta real del
-clone de Hermes es `hermes` — no invoques los scripts desde ahi, o fija
-`HARNESS_HOST=kimi`. Instalacion, revisor (`subagent_type: "revisor"`) y
-lecciones: [`references/kimi.md`](references/kimi.md).
+Kimi Code se detecta por la ruta `.kimi-code` o `KIMI_CODE_HOME`; por el symlink de
+`~/.agents/skills` sale `gpt`, y desde el clone de Hermes `hermes`: ahi fija
+`HARNESS_HOST=kimi`. Instalacion, revisor y lecciones: [`references/kimi.md`](references/kimi.md).
 
 ## Referencias (cargalas cuando hagan falta, no antes)
 
 | Archivo | Cuando leerlo |
 | --- | --- |
+| [`references/entorno.md`](references/entorno.md) | `entorno.py` no resuelve el interprete o el host, falta `psycopg` |
 | [`references/multirepo.md`](references/multirepo.md) | raiz multi-repo sin `.git`: registro, `--integrated`, postmerge medido |
 | [`references/contexto.md`](references/contexto.md) | varias raices de grafo, el parte de `refrescar`, algo del contexto no cuadra |
 | [`references/lecciones-del-arnes.md`](references/lecciones-del-arnes.md) | **antes de tocar o escribir un gate** |
