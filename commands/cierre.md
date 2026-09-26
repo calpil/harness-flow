@@ -104,3 +104,36 @@ git -C <ruta> log --oneline -1 $2
 El mensaje de un script no es evidencia de que el merge ocurrio. Y un `15/15 en
 verde` de `verify` es un veredicto sobre la rama de la feature, NO sobre la
 integracion: no lo reportes como si lo fuera.
+
+## 6. Cierre historico (sin base preintegracion medible)
+
+Si la feature ya esta integrada y su base preintegracion NO se puede medir con
+el contrato vigente (contrato de tests que cambio desde entonces, o tests que
+otras features renombraron/movieron/borraron y que el cierre normal veria como
+"desaparecidos" sin poder declararlos bajas de ESTA feature), pregunta al
+usuario si autoriza un cierre historico: muestrale por que no hay base
+medible y esperale el SI antes de pasar `--yes`. Diseno completo:
+`docs/diseno-arnes-cierre-historico.md` (raiz del proyecto); contrato y
+garantias en `references/multirepo.md`, seccion "Cierre historico".
+
+```bash
+eval "$(python3 "${CLAUDE_PLUGIN_ROOT}/scripts/entorno.py" --shell)" && "$PY" "$H/gate.py" close --feature $1 --status done --to $2 \
+  --integrated --historico --yes --motivo "<por que no hay base medible>" --leccion <clase> [--retirados <json>]
+```
+
+`--yes` y `--motivo` son la autorizacion explicita -- igual que `approve-spec`,
+SOLO se pasan despues del SI del usuario en el chat, nunca por cuenta propia
+del agente -- y quedan escritos en el backlog (`cierre_historico`). Es una
+barrera de PROCESO, no una restriccion tecnica de antiguedad: el gate no
+verifica que la feature sea vieja ni que se haya intentado medir una base
+antes de aceptar `--historico`. NO uses este camino en una feature nueva con
+base medible solo porque es mas corto: el camino normal (`--postmerge`) sigue
+siendo el que corresponde ahi. `--historico` y `--postmerge` son mutuamente
+excluyentes: no se puede pedir las dos cosas.
+Sigue exigiendo spec aprobado/fresco, review sellado y verify verde del
+contexto vigente, leccion y registro multi-repo validos: NO es un atajo, solo
+cambia COMO se mide el destino (exige medicion COMPLETA en cero, sin comparar
+contra una base). Si el repo agrego tests que otra feature borro despues,
+declaralos en `--retirados` con la MISMA sintaxis que el cierre normal -- el
+gate distingue solo por el modo si exige "medido en la base" (normal) o
+"declarado en la fuente" (historico).

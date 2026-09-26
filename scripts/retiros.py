@@ -303,6 +303,96 @@ def midiendo_frontend(medidos_ahora, declarados) -> list[str]:
     return [marca(x) for x in sorted({tuple(i) for i in declarados} & set(medidos_ahora))]
 
 
+def verificar_historico(repo, base_sha, source_sha, target_sha, declarados) -> None:
+    """Baja de CIERRE HISTORICO (sin base medida): la unica prueba de que la
+    propia feature agrego el test es su declaracion en source_sha Y su
+    AUSENCIA en base_sha (la misma identidad de tests_agregados_go); la unica
+    prueba de la baja es su ausencia (no definicion) en target_sha. Sin el
+    chequeo contra base_sha, cualquier test preexistente que otra feature
+    borre despues se podria declarar como baja de ESTA feature aunque nunca la
+    haya agregado (hallazgo P2 ronda 2) -- ver diseno en
+    docs/diseno-arnes-cierre-historico.md, garantia 4."""
+    if not declarados:
+        return
+    modulo = _modulo(repo, source_sha)
+    for pkg, test in sorted(declarados):
+        item = f"{pkg}::{test}"
+        require(pkg == modulo or pkg.startswith(modulo + "/"), f"retirados: {item} fuera del modulo {modulo}")
+        directorio = pkg[len(modulo) + 1:]
+        require(not re.search(r"[*?\[\]\\]", directorio), f"retirados: directorio no literal en {item}")
+        require(_definido(repo, source_sha, directorio, test),
+                f"retirados: {item} no esta definido en la fuente {source_sha[:12]}")
+        require(not _definido(repo, base_sha, directorio, test),
+                f"retirados: {item} ya existia en la base {base_sha[:12]}; el cierre historico solo "
+                "declara bajas de tests que la propia feature agrego")
+        require(not _definido(repo, target_sha, directorio, test),
+                f"retirados: {item} sigue definido en el destino {target_sha[:12]}; el cierre "
+                "historico no lo puede declarar baja (un build tag o un skip no son una baja)")
+
+
+def _sufijos(nombre: str) -> list[str]:
+    """Sufijos de un nombre completo que empiezan en un limite de PALABRA, del
+    mas largo (el nombre entero) al mas corto (la ultima palabra). Angular une
+    ancestros de describe y titulo con el mismo espacio: no hay separador fijo
+    que distinga uno de otro."""
+    palabras = nombre.split(" ")
+    return [" ".join(palabras[i:]) for i in range(len(palabras))]
+
+
+def sufijos_declarados(texto: str, nombre_completo: str) -> set[str]:
+    """Sufijos del nombre completo que el archivo DECLARA como titulo de test.
+
+    Sin medicion (cierre historico: source_sha no se puede correr con el
+    runner vigente) el unico dato disponible es el texto fuente. Debe resultar
+    EXACTAMENTE un sufijo declarado para que el titulo hoja sea univoco."""
+    declaradas = declaraciones(texto)
+    return {s for s in _sufijos(nombre_completo) if s and s in declaradas}
+
+
+def verificar_frontend_historico(repo, base_sha, source_sha, target_sha, declarados, revisado=None) -> dict:
+    """Baja de CIERRE HISTORICO frontend: sin base medida, el titulo hoja se
+    resuelve por sufijos del nombre completo declarado en source_sha (ver
+    sufijos_declarados) y debe ser unico. Ademas debe estar AUSENTE de las
+    declaraciones de base_sha (la misma identidad de tests_agregados_front):
+    sin ese chequeo, un titulo preexistente que otra feature borre despues se
+    podria declarar como baja de ESTA feature aunque nunca lo haya agregado
+    (hallazgo P2 ronda 2, repro simetrico del hueco Go). Ausente en destino
+    significa que su archivo no existe ahi o ya no lo declara ni lo deja
+    escrito (retiros.escrito).
+    """
+    if not declarados:
+        return {}
+    resueltas = {}
+    for item in sorted(tuple(x) for x in declarados):
+        etiqueta = marca(item)
+        require(es_frontend(item), f"retirados: {etiqueta} no es un id medido de frontend")
+        archivo, nombre = item[1], item[2]
+        texto_fuente = _blob(repo, source_sha, archivo)
+        require(texto_fuente is not None,
+                f"retirados: {etiqueta}: {archivo} no existe en la fuente {source_sha[:12]}")
+        candidatos = sufijos_declarados(texto_fuente, nombre)
+        require(candidatos,
+                f"retirados: {etiqueta}: {archivo} no declara un titulo hoja de '{nombre}' "
+                f"en la fuente {source_sha[:12]}")
+        require(len(candidatos) == 1,
+                f"retirados: {etiqueta}: titulo hoja ambiguo entre {sorted(candidatos)!r} "
+                f"en la fuente {source_sha[:12]}")
+        hoja = next(iter(candidatos))
+        texto_base = _blob(repo, base_sha, archivo)
+        require(texto_base is None or hoja not in declaraciones(texto_base),
+                f"retirados: {etiqueta}: '{hoja}' ya estaba declarado en la base {base_sha[:12]}; "
+                "el cierre historico solo declara bajas de tests que la propia feature agrego")
+        texto_destino = _blob(repo, target_sha, archivo)
+        require(texto_destino is None or not escrito(texto_destino, hoja),
+                f"retirados: {etiqueta} sigue definido en el destino {target_sha[:12]} con el "
+                f"titulo '{hoja}'; el cierre historico no lo puede declarar baja")
+        resueltas[item] = hoja
+    if revisado is not None:
+        faltan = sin_cita_frontend(revisado, resueltas)
+        require(not faltan, "retirados: el review no cita la baja de " + ", ".join(faltan))
+    return resueltas
+
+
 def sin_cita(texto, declarados) -> list[str]:
     """Bajas Go que el review sellado no nombra: el revisor no las vio."""
     return [f"{p}::{t}" for p, t in sorted(declarados)

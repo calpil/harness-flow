@@ -564,6 +564,20 @@ def cmd_enmienda(args) -> None:
 
 # --- revision --------------------------------------------------------------
 
+# U+0085 (NEXT LINE), U+2028 (LINE SEPARATOR) y U+2029 (PARAGRAPH SEPARATOR) no
+# son "c < ' '" (su valor de codigo es mayor a 0x20): un chequeo solo de control
+# ASCII los deja pasar aunque casi todo visor que no sea una terminal cruda los
+# rendericen como salto de linea. Mismo hueco en _firmante y en --motivo de
+# --historico; un solo helper evita que se corrija uno y no el otro.
+_SEPARADORES_UNICODE = "\u0085\u2028\u2029"
+
+
+def _sin_saltos(valor: str) -> bool:
+    """True si `valor` no tiene saltos de linea/control ASCII NI separadores
+    Unicode de linea/parrafo (ver _SEPARADORES_UNICODE)."""
+    return not any(c < " " or c == "\x7f" or c in _SEPARADORES_UNICODE for c in valor)
+
+
 def _firmante(valor: str | None) -> str:
     """Quien firma va DENTRO del sello que estampa el gate.
 
@@ -573,8 +587,9 @@ def _firmante(valor: str | None) -> str:
     """
     if valor is None:
         return getpass.getuser()
-    if not valor.strip() or any(c < " " or c == "\x7f" for c in valor):
-        sys.exit("[!!] --por no admite saltos de linea ni caracteres de control:\n"
+    if not valor.strip() or not _sin_saltos(valor):
+        sys.exit("[!!] --por no admite saltos de linea ni caracteres de control "
+                 "(incluidos U+0085/U+2028/U+2029):\n"
                  "     ese texto va DENTRO del sello que estampa el gate.")
     return valor.strip()
 
@@ -802,8 +817,34 @@ def cmd_close(args) -> None:
             sys.exit("[!!] multi-repo requiere close --status done --integrated --to <rama>")
     if args.integrated and args.status != "done":
         sys.exit("[!!] --integrated solo aplica a --status done")
-    if args.integrated and not args.postmerge:
-        sys.exit("[!!] postmerge obligatorio: declara bases por repo con --postmerge <mapa.json>")
+    if args.historico and args.postmerge:
+        sys.exit("[!!] --historico y --postmerge son mutuamente excluyentes: todo el mapa se "
+                 "cierra en un solo modo (docs/diseno-arnes-cierre-historico.md)")
+    if args.historico and not (args.integrated and args.status == "done"):
+        sys.exit("[!!] --historico solo aplica a close --status done --integrated")
+    if args.integrated and args.status == "done" and not args.postmerge and not args.historico:
+        sys.exit("[!!] postmerge obligatorio: declara bases por repo con --postmerge <mapa.json>, "
+                 "o usa --historico si la base preintegracion no se puede medir con el contrato vigente")
+    motivo_historico = None
+    if args.historico:
+        if not args.yes:
+            sys.exit("[!!] --historico requiere --yes.\n"
+                     "     Es un cierre SIN base medible: MUESTRALE al usuario por que (contrato\n"
+                     "     roto, tests renombrados por otra feature, etc.) y PREGUNTALE si lo\n"
+                     "     autoriza. Solo con su SI corre este comando con --yes y --motivo.\n"
+                     "     Aviso: --yes/--motivo son una barrera de PROCESO (igual que --yes de\n"
+                     "     approve-spec), no una restriccion TECNICA de antiguedad ni de intento\n"
+                     "     previo de medir una base: nada en este gate impide invocar --historico\n"
+                     "     sobre una feature nueva con base perfectamente medible. Quien autoriza\n"
+                     "     responde por esa decision; el camino normal (--postmerge) sigue siendo\n"
+                     "     el UNICO recomendado para features nuevas por compromiso de proceso,\n"
+                     "     no porque este gate lo bloquee automaticamente.")
+        motivo_historico = args.motivo
+        if not motivo_historico or not motivo_historico.strip() or not _sin_saltos(motivo_historico):
+            sys.exit("[!!] --historico requiere --motivo '<texto>' no vacio, sin saltos de linea\n"
+                     "     ni caracteres de control (incluidos U+0085/U+2028/U+2029): queda\n"
+                     "     escrito dentro del backlog.")
+        motivo_historico = motivo_historico.strip()
     if args.retirados and not args.integrated:
         sys.exit("[!!] --retirados solo aplica a close --integrated: lo verifica la medicion postmerge")
 
@@ -944,14 +985,21 @@ def cmd_close(args) -> None:
         from multirepo import Invalid, check_registered
         try:
             manifest = check_registered(p, f, rules, integrated=True, target=args.to)
-            from medicion_destino import measure
-            f["mediciones_destino"] = measure(p, f, data["rules"], manifest, args.postmerge, args.retirados)
+            if args.historico:
+                from medicion_destino import measure_historico
+                f["mediciones_destino"] = measure_historico(p, f, data["rules"], manifest, args.retirados)
+            else:
+                from medicion_destino import measure
+                f["mediciones_destino"] = measure(p, f, data["rules"], manifest, args.postmerge, args.retirados)
             # Las suites pueden tener efectos laterales: revalidar todos los tips.
             check_registered(p, f, rules, integrated=True, target=args.to)
         except Invalid as exc:
             sys.exit(f"[!!] multi-repo: {exc}")
         f["integraciones"] = manifest["repos"]
         f.pop("merge_commit", None)
+        if args.historico:
+            f["cierre_historico"] = {"motivo": motivo_historico, "autorizado_por": getpass.getuser(),
+                                     "at": now_iso()}
     elif args.status == "done" and args.to:
         merged = git_merge(p, f, args.to)
 
@@ -1081,6 +1129,12 @@ def main() -> None:
     s.add_argument("--integrated", action="store_true",
                    help="verifica integracion manual multi-repo registrada, sin merge")
     s.add_argument("--postmerge", help="mapa de bases preintegracion; close ejecuta suites reales en TODOS los destinos")
+    s.add_argument("--historico", action="store_true",
+                   help="cierre YA integrado cuya base preintegracion no se puede medir con el contrato "
+                        "vigente; mide el destino sin base (exige --yes y --motivo)")
+    s.add_argument("--yes", action="store_true",
+                   help="autorizacion explicita del usuario para --historico (nunca la pasa el agente solo)")
+    s.add_argument("--motivo", help="por que no hay base medible; se persiste en cierre_historico")
     s.add_argument("--retirados", help="tests de la base que la feature BORRO (verificados en su delta y citados en el review)")
     s.add_argument("--leccion-motivo", dest="leccion_motivo"); s.add_argument("--nota")
     s.add_argument("--sin-contexto", action="store_true", dest="sin_contexto",

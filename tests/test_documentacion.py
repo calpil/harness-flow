@@ -97,6 +97,28 @@ class DocumentacionTests(unittest.TestCase):
         self.assertNotIn("Pendiente", prd)
         self.assertNotIn("Pendiente", sdd)
 
+    def test_sync_muestra_cierre_historico_en_sdd(self):
+        """Una feature cerrada con `close --historico` persiste `cierre_historico`
+        (motivo/autorizado_por/at) en el backlog; el SDD debe mostrarlo para que
+        el modo de cierre se distinga de una integracion manual normal sin abrir
+        el JSON del backlog (hallazgo P3 ronda 2)."""
+        backlog = self.root / "harness" / "feature_list.json"
+        data = json.loads(backlog.read_text(encoding="utf-8"))
+        data["features"][0]["cierre_historico"] = {
+            "motivo": "Base preintegracion no medible con el contrato vigente",
+            "autorizado_por": "acalderon",
+            "at": "2026-09-26T10:00:00-03:00",
+        }
+        backlog.write_text(json.dumps(data), encoding="utf-8")
+
+        documentacion.sync()
+
+        sdd = (self.root / "docs" / "sdd.md").read_text(encoding="utf-8")
+        self.assertIn("Cierre historico", sdd)
+        self.assertIn("Base preintegracion no medible con el contrato vigente", sdd)
+        self.assertIn("acalderon", sdd)
+        self.assertIn("2026-09-26T10:00:00-03:00", sdd)
+
     def test_sync_es_idempotente_si_no_cambian_features(self):
         documentacion.sync()
         prd_path = self.root / "docs" / "prd" / "PRD-master.md"

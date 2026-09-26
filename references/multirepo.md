@@ -315,6 +315,100 @@ Sirve para diagnosticar una integracion a mano. El unico gate es `close`.
   puede haber efectos remotos parciales: reconciliar antes de reintentar, sin
   prometer rollback de Jira/Confluence ni repetir publicaciones a ciegas.
 
+## Cierre historico (sin base preintegracion medible)
+
+`close --integrated --historico --yes --motivo "<texto>" ...` cierra una feature
+YA integrada cuya base preintegracion no se puede medir con el contrato vigente
+(por ejemplo: el `package.json`/`scripts.test` de esa epoca no cumple el runner
+Angular22/Vitest4 actual, o el tiempo transcurrido hizo que otras features
+renombraran/movieran/borraran tests que el gate contaria como desaparecidos sin
+poder declararlos bajas de ESTA feature). Diseno completo en
+`docs/diseno-arnes-cierre-historico.md` (proyecto ADR, decidido por Alan el
+2026-09-26). NO es un atajo general para saltarse la comparacion contra bases:
+el camino normal (`--postmerge`) sigue siendo el UNICO para features nuevas.
+`--historico` y `--postmerge` son mutuamente excluyentes (todo el mapa se
+cierra en un solo modo); `--historico` solo aplica junto con `--integrated
+--status done`.
+
+`--historico` exige `--yes` -- igual que `approve-spec`, el agente SOLO lo pasa
+tras el SI del usuario en el chat -- y `--motivo "<texto>"` no vacio, sin
+saltos de linea ni caracteres de control (misma regla que la firma de
+`revision`). Se persiste en el backlog: `cierre_historico: {motivo,
+autorizado_por, at}`.
+
+Que garantiza:
+
+- El MISMO runner del cierre normal en CADA repo del mapa (Go: comando fijo con
+  evidencia `-exec`; frontend: contrato Angular22/Vitest4+Node22), pero SIN
+  comparar contra una base: exige exit real 0, CERO tests en rojo (no hay deuda
+  tolerada porque no hay base que la pruebe), cero skip y medicion completa.
+  Cualquier rojo o skip bloquea.
+- Que los tests que la PROPIA feature agrego -- declarados en `source_sha` y
+  ausentes en `base_sha`, identidad `(paquete, TestX)` de primer nivel en Go
+  (mismo `git grep` ciego a build tags que usa `retiros._definido`) y
+  `(ruta del spec, titulo hoja)` en frontend (mismo parser de declaraciones,
+  `retiros.declaraciones`) -- sigan midiendose en el destino.
+- Si una feature POSTERIOR los renombro, movio o borro, se declaran en
+  `--retirados` con semantica HISTORICA (distinta de la normal, que exige una
+  base medida): declarados en `source_sha`, AUSENTES en `base_sha` (la misma
+  identidad que usa `tests_agregados_go`/`tests_agregados_front` para decidir
+  que agrego la propia feature: sin este chequeo, un test que YA existia antes
+  de la feature se podia declarar como baja historica de ella aunque nunca lo
+  hubiera agregado -- hallazgo P2 ronda 2, corregido) y ausentes del destino
+  (ni medidos ni escritos), citados en el review sellado con el mismo formato
+  de cita que las bajas normales (ver seccion "Tests retirados por la feature"
+  arriba). En Go se verifica con `func TestX(` de la fuente, de la base y del
+  destino (`retiros.verificar_historico`); en frontend, sin medicion de
+  `source_sha` disponible (el runner no puede correr codigo de hace semanas
+  con el contrato vigente), el titulo hoja se resuelve probando SUFIJOS del
+  nombre completo declarado contra lo que el spec DECLARA en `source_sha`
+  (`retiros.sufijos_declarados`/`retiros.verificar_frontend_historico`): debe
+  resultar EXACTAMENTE un sufijo declarado, o bloquea por ambiguo, y ese mismo
+  titulo hoja no puede estar ya declarado en `base_sha`.
+- Si el delta `base_sha..source_sha` de un repo toca codigo que no son tests y
+  la feature no agrego NINGUN test ahi, bloquea nombrando el repo (la garantia
+  de tests vivos quedaria vacia: no hay nada que comprobar).
+- Siguen aplicando TODAS las demas reglas del cierre integrado: spec aprobado y
+  fresco, review sellado en el contexto multi-repo vigente, verify verde del
+  contexto vigente, leccion existente, registro multi-repo valido (fuente
+  ancestro del destino, arboles limpios, rutas protegidas). `mediciones_destino`
+  persiste, por repo, `modo: "historico"`, el runner, los hashes, los
+  resultados, los tests de la feature encontrados (`tests_agregados`) y las
+  bajas historicas -- misma forma que el cierre normal, para que PRD/SDD y el
+  vault no se rompan.
+
+Que NO garantiza:
+
+- No mide ni reconstruye la base preintegracion: no hay comparacion de deuda ni
+  deteccion de "rojos nuevos" contra un antes real, porque ese antes no se
+  puede correr con el contrato vigente. Un rojo o skip en el destino bloquea
+  sin distinguir si ya estaba roto antes de la feature (no hay con que
+  distinguirlo).
+- La resolucion de titulo hoja por sufijos en frontend es mas debil que la
+  medicion real (el cierre normal usa el `title` que reporto Vitest, cotejado
+  contra el evento del reporter): si el nombre completo tiene mas de un sufijo
+  que calza con un titulo declarado, bloquea por ambiguo en vez de adivinar.
+  Los mismos huecos de reconocimiento de `retiros.declaraciones`/`escrito`
+  (titulos armados en runtime, concatenados o interpolados) aplican igual.
+- No reemplaza el registro/aislamiento multi-repo ni el resto de gates: sigue
+  siendo responsabilidad del leader declarar el mapa completo y del reviewer
+  confirmar que el delta satisface los AC y que cada baja historica citada es
+  legitima.
+- La exclusividad de `--postmerge` para features NUEVAS es un compromiso de
+  PROCESO (correccion ronda 1, revision independiente 2026-09-26), igual que
+  `--yes` de `approve-spec`, NO una restriccion tecnica: el gate no verifica
+  antiguedad de `source_sha` ni un intento previo (fallido) de medir la base.
+  Nada impide tecnicamente invocar `--historico` sobre una feature nueva con
+  base perfectamente medible; quien autoriza con `--yes --motivo` responde por
+  esa decision. El mensaje de `gate.py close` cuando falta `--yes` lo deja
+  explicito, y `tests/test_cierre_historico.py::test_mensaje_historico_advierte_que_es_barrera_de_proceso`
+  lo fija como regresion.
+
+Pruebas: `tests/test_cierre_historico.py` (Git, Go y Angular22/Vitest4+node:test
+reales; requiere `HARNESS_TEST_FRONTEND_MODULES` como el resto del contrato
+frontend de esta seccion).
+
+
 ## Lecciones del contrato
 
 Comparar bytes manuales, no texto normalizado; auditar commits, no solo arboles;

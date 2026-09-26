@@ -121,6 +121,11 @@ def _bloque_sdd(p: dict, data: dict) -> str:
             lines.append(f"- Integracion manual `{repo['microservicio']}`: "
                          f"fuente `{repo['source_sha']}` -> `{repo['target_branch']}` "
                          f"tip validado `{repo['target_sha']}` (sin merge creado por close)")
+        if f.get("cierre_historico"):
+            ch = f["cierre_historico"]
+            lines.append(f"- Cierre historico (sin base preintegracion medible): motivo "
+                         f"«{ch.get('motivo', '')}», autorizado por {ch.get('autorizado_por', 'no declarado')} "
+                         f"el {ch.get('at', 'sin fecha')}")
         if f.get("progress_archive"):
             lines.append(f"- Progreso archivado: `{f['progress_archive']}`")
         if f.get("jira_key"):
