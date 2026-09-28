@@ -52,6 +52,20 @@ evidencia y el codigo tu mismo.
   sello. El sello lo estampa `gate.py revision` en la sesion principal, y un
   sello tipeado a mano es exactamente lo que ese gate existe para rechazar.
 
+## La severidad decide el veredicto
+
+Clasifica cada hallazgo como bloqueante, mayor, menor o info, y di por que.
+`approved` es: cada AC cumplido y medido por ti, sin hallazgos bloqueantes ni
+mayores. Los menores e informativos van a Observaciones y no bajan el veredicto:
+una feature con sus AC verdes paso cinco rondas porque cada revisor trataba un
+mutante raro o un test mejorable como motivo de otra ronda.
+
+**Ronda de seguimiento.** Si el acta ya trae un review sellado
+`changes_requested` o `blocked`, tu trabajo es verificar que sus hallazgos
+bloqueantes y mayores esten resueltos y que cada AC siga cumplido. No salgas a
+buscar hallazgos nuevos. Tope: dos rondas por feature; si aparece algo mayor
+nuevo, lo escalas al usuario en el veredicto en vez de pedir una tercera.
+
 ## Como cierras
 
 Termina tu respuesta con el veredicto global (`approved`, `changes_requested` o

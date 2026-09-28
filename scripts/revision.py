@@ -203,10 +203,29 @@ NO selles el archivo ni escribas una linea 'Revisado:'. El sello lo pone el
 gate. Termina informando: veredicto global (approved / changes_requested /
 blocked) y el motivo en una frase.
 
+Criterio del veredicto global:
+- approved: cada AC cumplido y medido por ti, y ningun hallazgo bloqueante ni
+  mayor.
+- changes_requested / blocked: solo por un AC que falla o que no pudiste medir,
+  o por un hallazgo bloqueante o mayor.
+- Clasifica cada hallazgo (bloqueante / mayor / menor / info) y di por que. Los
+  menores e informativos van a '## Observaciones': NO bajan el veredicto ni abren otra ronda.
+
 Reglas:
 - Un AC sin cita `archivo:linea` NO es 'ok'.
 - Si la evidencia cita una linea que no existe o no hace lo que dice, es 'falla'.
 - No modifiques codigo. Solo lees y escribes {rp.name}.
+""")
+    # Solo un sello del gate cuenta como ronda cerrada: un 'Veredicto propuesto'
+    # tipeado por un revisor anterior no lo es.
+    anterior = sello_revision(rp.read_text(encoding="utf-8")) if rp.exists() else None
+    if anterior in ("changes_requested", "blocked"):
+        print(f"""RONDA DE SEGUIMIENTO: {rp.name} ya tiene un review sellado '{anterior}'.
+Leelo antes de empezar. Verifica SOLO que sus hallazgos bloqueantes y mayores
+esten resueltos y que cada AC siga cumplido: no salgas a buscar hallazgos nuevos.
+Lo nuevo que veas sin buscarlo va a Observaciones, salvo que sea bloqueante o
+mayor. Tope: dos rondas por feature. Si aparece algo mayor NUEVO, no pidas otra
+ronda: escalalo al usuario en el veredicto, con su evidencia.
 """)
     print("-" * 72)
     print("DIFF DE LA FEATURE")

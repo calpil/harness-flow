@@ -157,6 +157,12 @@ El review NO lo haces tú mismo. Un revisor que recuerda haber escrito el códig
    `$PY "$H/gate.py" revision --feature <id> --veredicto approved|changes_requested|blocked`
    El script estampa `Revisado: ...` con la firma entera (veredicto · fecha ISO · autor ·
    `estampado por gate.py revision`). Un `Veredicto:` o un `Revisado:` tipeado a mano NO cuenta.
+5. **Criterio y tope de rondas** (regla del usuario): `approved` = cada AC cumplido y medido, sin
+   hallazgos bloqueantes ni mayores; menores e info van a Observaciones y NO abren ronda. La ronda
+   siguiente solo verifica lo bloqueante/mayor de la anterior y los AC, sin buscar hallazgos nuevos
+   (el briefing lo dice solo si ya hay un sello `changes_requested`/`blocked`). Tope: 2 rondas por
+   feature; algo mayor nuevo en la segunda se escala al usuario, no abre una tercera. No le pidas
+   al revisor "buscar mutantes nuevos": eso convierte cada ronda en una auditoria sin fin.
 
 Si el subagente no está disponible, `$PY "$H/revision.py" --feature <id>` da el paquete y revisas tú — dicéndolo explícitamente, porque el rigor baja.
 
