@@ -143,15 +143,94 @@ $PY "$H/postmerge_frontend.py" check --repo /proyecto/front --base /evidencia/ba
   --retirados /ruta/retirados.json --microservicio front
 ```
 
-En Go se declaran tests de PRIMER nivel (`paquete::TestX`); sus subtests caen con
-ellos. Cada baja bloquea el cierre salvo que:
+En Go se declara un test de PRIMER nivel (`paquete::TestX`), que se lleva sus
+subtests, o un SUBTEST cuyo padre sigue vivo (ver "Subtests Go" abajo). Cada baja
+de primer nivel bloquea el cierre salvo que:
 
-- la base la midio y el destino ya no la mide;
+- la base la midio y el destino ya no la mide ni la REGISTRA en ningun estado:
+  un `TestX` que sigue corriendo para terminar en `t.Skip` no es baja. `go test`
+  registra por AST, asi que esto lo frena aunque el `func` este escrito sin
+  gofmt (`func TestX (t`, o indentado) y el `git grep` de abajo no lo vea. El
+  `check` manual lo verifica; en el `close` ya lo frena el rechazo global de skip;
 - su `func TestX(` existe en `base_sha` y NO existe en `source_sha` ni en el
   destino, en el directorio del paquete (`git grep`, ciego a build tags): la
-  borro la propia feature. Esconderla tras `//go:build` o un skip no es baja;
+  borro la propia feature. Esconderla tras `//go:build` o un skip no es baja.
+  Un `*_test.go` symlink en ese directorio bloquea: su blob es la ruta, no el
+  codigo que Go compila, y `git grep` no lo puede leer;
 - el `review-<id>.md` sellado la nombra. Pasale al revisor la lista junto con el
   briefing: tiene que confirmar que cada test solo certificaba codigo borrado.
+
+### Subtests Go
+
+Cuando la feature renombra o borra un subtest y su padre sigue vivo, se declara
+`<paquete>::<TestX>/<seg>[/<seg>...]` con el nombre EXACTO que reporto
+`go test -json` en la base: espacios ya reescritos a `_` y lo no imprimible
+escapado como `testing.rewrite`. Cada segmento es no vacio, sin espacios ni
+caracteres de control. Ejemplo (cierre de la #10 de ADR):
+`"ms-order-service/facturacion::TestLosDos409DeIdempotenciaNoSonElMismoError/409_in_progress_es_transitorio"`.
+Mezclarlo con ids frontend en un microservicio se sigue rechazando. Cada baja de
+subtest bloquea el cierre salvo que:
+
+- el id completo se midio en la base (no `skip`) y el destino ya no lo REGISTRA
+  en ningun estado: un subtest que sigue corriendo para terminar en `t.Skip` no es
+  una baja, aunque su nombre ya no sea un literal (armado en runtime, o una
+  constante de un `.go` comun). Su padre `TestX` SI se sigue midiendo en el
+  destino; si desaparecio, declara `paquete::TestX`: esa es la baja de primer
+  nivel de siempre;
+- cada segmento esta ESCRITO en `base_sha` y la hoja (el ultimo) ya NO esta
+  escrita en `source_sha` ni en el destino, en los `*_test.go` del directorio del
+  paquete (sin subdirectorios, ciego a build tags, igual que `func TestX(`).
+  «Escrito» es un literal de cadena Go -- `"..."` desescapado o `` `...` `` crudo
+  -- en CUALQUIER parte del archivo, no solo como argumento de `t.Run`: los
+  subtests de tabla guardan el nombre en un struct. Su texto se reescribe como
+  `testing` antes de comparar, y un literal con `/` (`t.Run("a/b")`) cubre varios
+  segmentos seguidos. Es generoso a proposito: tambien cuenta lo que quede entre
+  comillas en un comentario. Un `t.Run` tras `if false`, un skip, un build tag,
+  un comentario o una constante con el nombre viejo NO son bajas y bloquean. Un
+  `*_test.go` symlink en el directorio bloquea (no se puede leer su codigo);
+- el review sellado nombra `TestX/<segs>` o el id entero como PALABRA COMPLETA en
+  una linea que no sea la del sello: separado por espacios o bordes de linea, con
+  a lo sumo puntuacion pegada (backticks, comillas, `«»`, parentesis, corchetes,
+  `*`, `|`, `,;:.!?`). `TestX/a/b`, `TestX/a_b`, `TestX/a#01` o `TestX/a.go` NO
+  citan `TestX/a`. Las bajas de primer nivel conservan su regla. Limite: como la
+  puntuacion pegada no cuenta, «`TestX/caso.`» cita a la vez `TestX/caso` y un
+  subtest distinto llamado `TestX/caso.`; con ids que terminan en puntuacion,
+  cita el id entero y revisa que no haya un hermano asi.
+
+Una baja cubre su propio id y lo que cuelga de el: `TestX/a` cubre `TestX/a/b`,
+como `TestX` cubre todos sus subtests. Por eso una baja de subtest tambien se
+rechaza si el destino todavia registra SIN medir (skip) algun descendiente suyo:
+`t.Run("a/b")` registra `TestX/a/b` sin registrar `TestX/a`, y ese descendiente
+omitido no puede quedar cubierto por la baja del prefijo. Un descendiente que
+corre y se mide no bloquea: es un renombre. `mediciones_destino.retirados` guarda
+el id completo. El `check` manual de `postmerge_medido.py` aplica la misma
+verificacion (sin la cita, como con el primer nivel), incluido el rechazo del
+subtest o de un descendiente que el destino registra con skip: en el `close` ese
+caso ya bloquea antes, porque cualquier skip del destino deja la medicion
+incompleta.
+
+Sobrebloqueos explicitos (bloquean de mas, nunca de menos):
+
+- un segmento que termina en `#NN` es la desambiguacion que agrega go test a
+  nombres repetidos, no un literal: se rechaza. Hace falta nombres unicos o la
+  baja del padre;
+- un nombre armado en runtime (`fmt.Sprintf`, concatenacion, una variable) no
+  deja literal: la baja se rechaza porque «no esta escrito en la base». Lo mismo
+  si el armado es un segmento intermedio;
+- si el literal viejo sobrevive por otro motivo en el directorio (el mensaje de
+  una asercion, otro test con el mismo texto), bloquea aunque el subtest ya no
+  exista;
+- un nombre definido fuera de los `*_test.go` del directorio (un `.go` comun,
+  otro paquete) no cuenta como escrito en la base.
+
+Limites: si el nombre viejo queda escrito en un `.go` que no es de test, el gate
+no lo ve. Tampoco ve un subtest que deja de correr sin dejar su nombre escrito de
+forma reconocible. La medicion cubre el caso en que el subtest sigue corriendo,
+tambien si termina en skip; el resto lo cierra el review leyendo el diff, igual
+que renombrar `func TestX` a `func testX` en el primer nivel. Las tablas de
+caracteres imprimibles de Python y de Go pueden diferir en codigos Unicode muy
+nuevos. Pruebas (Git y Go reales):
+`tests/test_retirados_subtests.py`.
 
 En FRONTEND se declara el id EXACTO que mide el runner, tal cual aparece en
 `results` de la base: `["angular:<proyecto>"|"node:test", "<ruta del spec>",
@@ -232,8 +311,8 @@ Lo que falte sin declarar sigue bloqueando como antes, ahora con su nombre en el
 mensaje (tambien en frontend). Un paquete Go entero solo puede desaparecer si
 tenia tests medidos y todos se retiran. La medicion persiste por repo
 `retirados`, la ruta y el sha256 del archivo, en Go y en frontend. Pruebas:
-`tests/test_retirados.py` (Git y Go reales) y `tests/test_retirados_frontend.py`
-(Git, Angular y Node reales).
+`tests/test_retirados.py` y `tests/test_retirados_subtests.py` (Git y Go reales)
+y `tests/test_retirados_frontend.py` (Git, Angular y Node reales).
 
 Un verde del `check` manual NO equivale al del cierre, en Go ni en frontend:
 
@@ -358,7 +437,15 @@ Que garantiza:
   (ni medidos ni escritos), citados en el review sellado con el mismo formato
   de cita que las bajas normales (ver seccion "Tests retirados por la feature"
   arriba). En Go se verifica con `func TestX(` de la fuente, de la base y del
-  destino (`retiros.verificar_historico`); en frontend, sin medicion de
+  destino (`retiros.verificar_historico`). Un subtest (`paquete::TestX/<segs>`)
+  se verifica igual, sobre los literales de la seccion "Subtests Go": padre
+  definido y segmentos escritos en `source_sha`, hoja NO escrita en `base_sha`
+  ni en el destino, y el padre medido en el destino. La garantia de tests vivos
+  es de primer nivel, asi que una baja historica de subtest no cubre nada mas:
+  solo se verifica y se persiste. Un `*_test.go` symlink en cualquier parte del
+  repo, en `base_sha` o `source_sha`, bloquea el cierre historico Go: `git grep`
+  no lee detras de el y los tests que la feature agrego ahi escaparian a esta
+  garantia. En frontend, sin medicion de
   `source_sha` disponible (el runner no puede correr codigo de hace semanas
   con el contrato vigente), el titulo hoja se resuelve probando SUFIJOS del
   nombre completo declarado contra lo que el spec DECLARA en `source_sha`

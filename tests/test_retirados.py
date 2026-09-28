@@ -158,11 +158,14 @@ class RetiradosTests(unittest.TestCase):
         self.rechazado("no cita", "--retirados", str(self.retirados))
 
     def test_declaraciones_invalidas_no_autorizan_nada(self):
-        self.integrar(review="Bajas: TestRetiredA, TestLegacy, TestBaseContract, TestNoExiste.\n")
+        self.integrar(review="Bajas: TestRetiredA, TestLegacy, TestBaseContract, TestNoExiste.\n"
+                             "Subtest: TestRetiredA/sub.\n")
         casos = [
             ("se sigue midiendo", dict(bajas=BAJAS + [f"{MOD}::TestBaseContract"])),
             ("no se midio en la base", dict(bajas=BAJAS + [f"{MOD}::TestNoExiste"])),
-            ("se declara", dict(bajas=[f"{MOD}::TestRetiredA/sub", BAJAS[1]])),
+            # La forma de subtest es valida (tests/test_retirados_subtests.py), pero
+            # su padre se borro entero: eso es la baja de primer nivel de siempre.
+            ("su test padre TestRetiredA ya no se mide", dict(bajas=[f"{MOD}::TestRetiredA/sub", BAJAS[1]])),
             ("se declara", dict(bajas=["TestRetiredA", BAJAS[1]])),
             ("otra feature", dict(bajas=BAJAS, feature="8")),
             ("ajeno", dict(bajas=BAJAS, micro="beta")),

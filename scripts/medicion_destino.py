@@ -61,7 +61,8 @@ def measure(p, f, rules, manifest, config_path, retiros_path=None):
                     f"retirados: {row['microservicio']} es un destino "
                     + ("frontend: no acepta ids Go '<paquete>::<Test>', sino el id medido "
                        '[proyecto, archivo, nombre]' if front else
-                       "Go: no acepta ids medidos de frontend, sino '<paquete>::<TestDePrimerNivel>'"))
+                       "Go: no acepta ids medidos de frontend, sino '<paquete>::<TestDePrimerNivel>' "
+                       "o '<paquete>::<TestX>/<subtest>'"))
         # La cita de una baja de frontend exige su titulo hoja, que sale del spec
         # en base_sha: se verifica con el resto de su destino, no aqui.
         go = {x for bajas in retirados.values() for x in bajas if not retiros.es_frontend(x)}
@@ -110,13 +111,13 @@ def measure(p, f, rules, manifest, config_path, retiros_path=None):
                     continue
                 require(retiros.tipo(declared) in (None, retiros.GO),
                         f'retirados: {name} es un destino Go: no acepta ids medidos de '
-                        "frontend, sino '<paquete>::<TestDePrimerNivel>'")
+                        "frontend, sino '<paquete>::<TestDePrimerNivel>' o '<paquete>::<TestX>/<subtest>'")
                 base = runner.leer_base(str(path), repo, row['target_branch'], row['target_sha'], COMMAND)
                 tests, packages, processes = runner.correr(repo, COMMAND)
                 require('skip' not in tests.values(), 'postmerge: destino contiene tests skip; medicion incompleta')
                 measured = {key for key, state in tests.items() if state != 'skip'}
                 retiros.verificar(repo, row['base_sha'], (row['source_sha'], row['target_sha']),
-                                  base, measured, declared)
+                                  base, measured, declared, tests)
                 missing = runner.sin_baja(base, measured, packages.keys(), declared)
                 require(not missing, 'postmerge: tests/paquetes desaparecidos u omitidos (skip): '
                         + ', '.join(missing))
@@ -166,9 +167,22 @@ def measure(p, f, rules, manifest, config_path, retiros_path=None):
 # NINGUN test bloquea (garantia 5).
 
 
+def _sin_tests_symlink(repo, sha) -> None:
+    """git grep no lee detras de un *_test.go symlink: los tests que la feature
+    agrego ahi no se podrian enumerar. Falla cerrado, como retiros._tests_go."""
+    for entrada in filter(None, git(repo, 'ls-tree', '-r', '-z', sha).split('\0')):
+        meta, _, ruta = entrada.partition('\t')
+        require(not (ruta.endswith('_test.go') and meta.split(' ')[0] == '120000'),
+                f'historico: {ruta} es un symlink en {sha[:12]}: git grep no lee el codigo que Go '
+                'compila detras de el y no se pueden enumerar los tests de la feature (symlink no '
+                'verificable); reemplazalo por el archivo real')
+
+
 def _enumerar_tests_go(repo, sha) -> set[tuple[str, str]]:
     """(paquete, TestX) de PRIMER NIVEL declarados en sha, ciego a build tags
-    (mismo criterio que retiros._definido: git grep sobre *_test.go)."""
+    (mismo criterio que retiros._definido: git grep sobre *_test.go). Un
+    *_test.go symlink en cualquier parte del repo bloquea."""
+    _sin_tests_symlink(repo, sha)
     modulo = retiros._modulo(repo, sha)
     salida = git(repo, 'grep', '-n', '-E', '-e', r'^func (Test|Example|Fuzz)[A-Za-z0-9_]*\(',
                 sha, '--', ':(glob)**/*_test.go', ok=(0, 1))
@@ -243,6 +257,9 @@ def _historico_go(row, declared) -> dict:
     medidos = set(tests.keys())
     sigue = sorted(f'{p}::{t}' for p, t in declared if (p, t) in medidos)
     require(not sigue, 'historico: retirados que se siguen midiendo en el destino: ' + ', '.join(sigue))
+    huerfanos = retiros.padres_sin_medir(medidos, declared)
+    require(not huerfanos, 'historico: subtests retirados cuyo test padre ya no se mide en el destino '
+            '(esa es la baja de primer nivel): ' + ', '.join(huerfanos))
     faltan = sorted(f'{p}::{t}' for p, t in (agregados - medidos) if (p, t) not in declared)
     require(not faltan, 'historico: tests de la feature ausentes sin declarar: ' + ', '.join(faltan))
     if not agregados:
@@ -309,7 +326,8 @@ def measure_historico(p, f, rules, manifest, retiros_path=None):
                     f"retirados: {row['microservicio']} es un destino "
                     + ("frontend: no acepta ids Go '<paquete>::<Test>', sino el id medido "
                        '[proyecto, archivo, nombre]' if front else
-                       "Go: no acepta ids medidos de frontend, sino '<paquete>::<TestDePrimerNivel>'"))
+                       "Go: no acepta ids medidos de frontend, sino '<paquete>::<TestDePrimerNivel>' "
+                       "o '<paquete>::<TestX>/<subtest>'"))
         go = {x for bajas in retirados.values() for x in bajas if not retiros.es_frontend(x)}
         sin_cita = retiros.sin_cita(revisado, go)
         require(not sin_cita, 'retirados: el review no cita la baja de ' + ', '.join(sin_cita))
@@ -340,7 +358,7 @@ def measure_historico(p, f, rules, manifest, retiros_path=None):
                 else:
                     require(retiros.tipo(declared) in (None, retiros.GO),
                             f'retirados: {name} es un destino Go: no acepta ids medidos de '
-                            "frontend, sino '<paquete>::<TestDePrimerNivel>'")
+                            "frontend, sino '<paquete>::<TestDePrimerNivel>' o '<paquete>::<TestX>/<subtest>'")
                     result = _historico_go(row, declared)
                 if declared:
                     result.update(retirados_archivo=str(Path(retiros_path).resolve()), retirados_sha256=retiros_hash)

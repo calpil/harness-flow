@@ -270,10 +270,14 @@ def leer_base(ruta: str, repo: str, rama: str, sha: str, cmd: str) -> dict:
 
 def sin_baja(base: dict, medidos_ahora, paquetes_ahora, declarados) -> list[str]:
     """Tests/paquetes de la base que ya no se miden y que ninguna baja declarada
-    (retiros.py, verificada aparte) cubre: siguen bloqueando como siempre."""
+    (retiros.py, verificada aparte) cubre: siguen bloqueando como siempre.
+
+    Una baja cubre su propio id y todo lo que cuelga de el: `TestX` cubre sus
+    subtests y `TestX/a` cubre `TestX/a/b`."""
     antes = {(r["Package"], r["Test"]) for r in base["resultados"] if r["Action"] != "skip"}
     faltan = [f"{p}::{t}" for p, t in sorted(antes - set(medidos_ahora))
-              if (p, t.split("/", 1)[0]) not in declarados]
+              if not any(len(d) == 2 and d[0] == p and (t == d[1] or t.startswith(d[1] + "/"))
+                         for d in declarados)]
     # Con tests medidos, un paquete ausente ya aparece por sus tests; sin ellos,
     # no hay baja que lo cubra.
     faltan += [f"{pkg} (paquete)" for pkg in sorted(set(base["paquetes"]) - set(paquetes_ahora))
@@ -326,7 +330,8 @@ def main() -> int:
             declarados = todos[a.microservicio]
             if retiros.tipo(declarados) != retiros.GO:
                 no_medicion("--retirados: este es un destino Go; no acepta ids medidos de "
-                            "frontend, sino '<paquete>::<TestDePrimerNivel>'.")
+                            "frontend, sino '<paquete>::<TestDePrimerNivel>' o "
+                            "'<paquete>::<TestX>/<subtest>'.")
         except Invalid as error:
             no_medicion(str(error))
     resultados, paquetes, procesos = correr(repo, a.cmd)
@@ -355,7 +360,7 @@ def main() -> int:
     medidos_ahora = {t for t, estado in resultados.items() if estado != "skip"}
     if declarados:
         try:
-            retiros.verificar(repo, base["sha"], (sha,), base, medidos_ahora, declarados)
+            retiros.verificar(repo, base["sha"], (sha,), base, medidos_ahora, declarados, resultados)
         except Invalid as error:
             no_medicion(str(error))
     faltantes = sin_baja(base, medidos_ahora, paquetes.keys(), declarados)

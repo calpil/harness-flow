@@ -63,9 +63,10 @@ Si la feature BORRO tests a proposito (retiro de una integracion, un spec movido
 el cierre `--integrated` los ve desaparecidos y bloquea. No edites la base:
 declaralos con `--retirados <json>` (el mismo archivo sirve en
 `postmerge_medido.py check` y en `postmerge_frontend.py check`, con
-`--microservicio <svc>`). Un destino Go se declara `<paquete>::<TestX>`; uno
-frontend, el id medido `[proyecto, archivo, nombre completo]`, y cruzarlos se
-rechaza. El gate exige que la base los midiera, que la declaracion la haya
+`--microservicio <svc>`). Un destino Go se declara `<paquete>::<TestX>`, o
+`<paquete>::<TestX>/<subtest>` si el padre sigue vivo; uno frontend, el id
+medido `[proyecto, archivo, nombre completo]`, y cruzarlos se rechaza. El gate
+exige que la base los midiera, que la declaracion la haya
 borrado la feature -- un `//go:build`, un `.skip`/`.todo`, renombrar solo el
 describe o dejar el titulo escrito tras un wrapper NO son bajas -- y que el
 review sellado los DECLARE: en frontend, la ruta del spec y el titulo entre
