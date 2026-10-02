@@ -204,6 +204,39 @@ def _cbm_cli(tool: str, args: dict, cwd: Path) -> tuple[int, str]:
                  json.dumps(args)], cwd)
 
 
+RAMAS_CBM = ("develop", "main", "master", "release", "release/*", "release-*")
+
+
+def _git_out(raiz: Path, *args: str) -> str | None:
+    code, out = _run(["git", "-C", str(raiz), *args], raiz)
+    return out.strip() if code == 0 else None
+
+
+def _rama_indexable(raiz: Path, permitidas) -> tuple[bool, str]:
+    """cbm indexa solo ramas estables en la raiz real, nunca un worktree.
+
+    Un worktree de feature es trabajo en curso: indexarlo mete en el grafo
+    codigo que aun no se integro y, peor, lo deja bajo otro proyecto que nadie
+    limpia. Se decide por git, no por el nombre de la carpeta.
+    """
+    from fnmatch import fnmatch
+    gitdir = _git_out(raiz, "rev-parse", "--absolute-git-dir")
+    comun = _git_out(raiz, "rev-parse", "--git-common-dir")
+    if gitdir is None or comun is None:
+        return False, "no es un repo git: no se puede probar la rama"
+    comun_abs = Path(comun) if Path(comun).is_absolute() else raiz / comun
+    if Path(gitdir).resolve() != comun_abs.resolve():
+        # En la raiz real ambos coinciden; en un worktree el gitdir cuelga de
+        # <repo>/.git/worktrees/<n> y el common-dir apunta al .git principal.
+        return False, "es un worktree (trabajo en desarrollo)"
+    rama = _git_out(raiz, "branch", "--show-current")
+    if not rama:
+        return False, "HEAD desacoplado: no hay rama"
+    if not any(fnmatch(rama, pat) for pat in permitidas):
+        return False, f"rama '{rama}' no es develop/release/main/master"
+    return True, rama
+
+
 def cbm_indexar(p: dict, parte: dict, verboso: bool) -> None:
     """Indexa (o reindexa) cada raiz declarada en codebase-memory-mcp.
 
@@ -213,7 +246,8 @@ def cbm_indexar(p: dict, parte: dict, verboso: bool) -> None:
     "tras implementar una feature". Nunca lanza ni bloquea: los fallos van al
     parte, igual que el resto del refresco.
     """
-    parte["cbm"] = {"indexadas": [], "nuevas": [], "omitido": None}
+    parte["cbm"] = {"indexadas": [], "nuevas": [], "omitido": None,
+                    "ramas_omitidas": {}}
     if _cbm_desactivado():
         parte["cbm"]["omitido"] = "HARNESS_SIN_CBM"
         return
@@ -224,8 +258,15 @@ def cbm_indexar(p: dict, parte: dict, verboso: bool) -> None:
         return
     code, out = _cbm_cli("list_projects", {}, p["root"])
     conocidas = out if code == 0 else ""
+    permitidas = tuple(grafos_config(p).get("ramas_indexables") or RAMAS_CBM)
     for r in raices_grafo(p):
         raiz = Path(r["path"])
+        ok, motivo = _rama_indexable(raiz, permitidas)
+        if not ok:
+            parte["cbm"]["ramas_omitidas"][r["nombre"]] = motivo
+            if verboso:
+                print(f"   cbm index {r['nombre']}: omitido ({motivo})")
+            continue
         nueva = str(raiz) not in conocidas
         code, out = _cbm_cli("index_repository", {"repo_path": str(raiz)}, raiz)
         # El exit code solo no alcanza: se exige el status que reporta la tool.

@@ -266,7 +266,7 @@ $PY "$H/contexto.py" brief --feature <id>
 $PY "$H/contexto.py" cbm               # (re)indexa en codebase-memory-mcp
 ```
 
-`refrescar` y `close --status done` reindexan cada raiz en cbm (1a vez entera, luego incremental; `HARNESS_SIN_CBM=1` lo apaga). `worktree.py start` lo refresca si esta vencido (el vault, si el backlog o un
+`refrescar` y `close --status done` reindexan cada raiz en cbm (1a vez entera, luego incremental; solo ramas develop/release/main/master, nunca worktrees; `HARNESS_SIN_CBM=1` lo apaga). `worktree.py start` lo refresca si esta vencido (el vault, si el backlog o un
 doc es mas nuevo que `docs/vault/Indice.md`; si solo el vault esta viejo, no
 relanza graphify ni el hub). `gate.py close --status done` lo refresca siempre,
 despues del cierre. Dicen si NO quedo refrescado. `HARNESS_SIN_CONTEXTO=1` apaga

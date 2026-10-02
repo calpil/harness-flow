@@ -618,6 +618,7 @@ class CbmIndexarTests(unittest.TestCase):
         parte = self._parte()
         with mock.patch.dict(os.environ, {"HARNESS_SIN_CBM": ""}), \
                 mock.patch.object(contexto.shutil, "which", return_value="/x"), \
+                mock.patch.object(contexto, "_rama_indexable", return_value=(True, "develop")), \
                 mock.patch.object(contexto, "_cbm_cli", side_effect=fake):
             contexto.cbm_indexar(self.p, parte, verboso=False)
         self.assertEqual(parte["cbm"]["nuevas"], ["front"])
@@ -626,6 +627,7 @@ class CbmIndexarTests(unittest.TestCase):
         parte = self._parte()
         with mock.patch.dict(os.environ, {"HARNESS_SIN_CBM": ""}), \
                 mock.patch.object(contexto.shutil, "which", return_value="/x"), \
+                mock.patch.object(contexto, "_rama_indexable", return_value=(True, "develop")), \
                 mock.patch.object(contexto, "_cbm_cli", side_effect=lambda t, a, c: (
                     0, f"/{self.root}" if t == "list_projects" else ok)):
             contexto.cbm_indexar(self.p, parte, verboso=False)
@@ -636,10 +638,60 @@ class CbmIndexarTests(unittest.TestCase):
         parte = self._parte()
         with mock.patch.dict(os.environ, {"HARNESS_SIN_CBM": ""}), \
                 mock.patch.object(contexto.shutil, "which", return_value="/x"), \
+                mock.patch.object(contexto, "_rama_indexable", return_value=(True, "develop")), \
                 mock.patch.object(contexto, "_cbm_cli",
                                   return_value=(0, '{"status":"error"}')):
             contexto.cbm_indexar(self.p, parte, verboso=False)
         self.assertTrue(parte["fallos"])
+        self.assertEqual(parte["cbm"]["indexadas"], [])
+
+    def _repo(self, rama):
+        import subprocess
+        r = Path(self.tmp.name) / f"repo-{rama.replace('/', '_')}"
+        r.mkdir()
+        g = lambda *a: subprocess.run(["git", "-C", str(r), *a], check=True,
+                                      capture_output=True)
+        g("init", "-q", "-b", rama)
+        (r / "a.py").write_text("x=1\n")
+        g("add", ".")
+        g("-c", "user.email=a@b", "-c", "user.name=t", "commit", "-qm", "i")
+        return r, g
+
+    def test_solo_ramas_estables_se_indexan(self):
+        for rama, esperado in (("develop", True), ("main", True), ("master", True),
+                               ("release/1.2", True), ("feature/x", False)):
+            r, _ = self._repo(rama)
+            ok, motivo = contexto._rama_indexable(r, contexto.RAMAS_CBM)
+            self.assertEqual(ok, esperado, f"{rama}: {motivo}")
+
+    def test_un_worktree_nunca_se_indexa_aunque_sea_develop(self):
+        r, g = self._repo("main")
+        wt = Path(self.tmp.name) / "wt-develop"
+        g("worktree", "add", "-q", "-b", "develop", str(wt))
+        ok, motivo = contexto._rama_indexable(wt, contexto.RAMAS_CBM)
+        self.assertFalse(ok)
+        self.assertIn("worktree", motivo)
+        self.assertTrue(contexto._rama_indexable(r, contexto.RAMAS_CBM)[0])
+
+    def test_head_desacoplado_y_no_git_se_omiten(self):
+        r, g = self._repo("main")
+        g("checkout", "-q", "--detach")
+        self.assertFalse(contexto._rama_indexable(r, contexto.RAMAS_CBM)[0])
+        vacio = Path(self.tmp.name) / "sin-git"
+        vacio.mkdir()
+        self.assertFalse(contexto._rama_indexable(vacio, contexto.RAMAS_CBM)[0])
+
+    def test_rama_no_permitida_no_llama_a_index_repository(self):
+        parte = self._parte()
+        with mock.patch.dict(os.environ, {"HARNESS_SIN_CBM": ""}), \
+                mock.patch.object(contexto.shutil, "which", return_value="/x"), \
+                mock.patch.object(contexto, "_rama_indexable",
+                                  return_value=(False, "es un worktree")), \
+                mock.patch.object(contexto, "_cbm_cli",
+                                  return_value=(0, "projects: 0")) as m:
+            contexto.cbm_indexar(self.p, parte, verboso=False)
+        self.assertEqual([c.args[0] for c in m.call_args_list], ["list_projects"])
+        self.assertEqual(parte["cbm"]["ramas_omitidas"], {"front": "es un worktree"})
         self.assertEqual(parte["cbm"]["indexadas"], [])
 
     def test_variable_lo_apaga(self):

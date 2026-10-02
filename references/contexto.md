@@ -125,3 +125,14 @@ arnes). La primera vez sobre una raiz indexa el proyecto entero; despues es
 incremental, que cubre la feature recien integrada. Exige `"status":"indexed"`,
 no solo exit 0. Nunca bloquea el cierre; si falla, queda en el parte.
 `HARNESS_SIN_CBM=1` lo apaga (CI y tests del arnes).
+
+**Solo ramas estables, nunca worktrees.** Se indexa una raiz solo si esta parada
+en `develop`, `main`, `master` o `release`/`release/*`/`release-*`. Un worktree de
+feature se omite siempre, aunque su rama se llame `develop`: es trabajo en curso,
+y indexarlo meteria codigo sin integrar bajo un proyecto que nadie limpia. Se
+decide con git (`--git-common-dir` vs `--absolute-git-dir`), no por el nombre de
+la carpeta. HEAD desacoplado o una carpeta sin git tambien se omiten. Lo omitido
+queda en `cbm.ramas_omitidas` del parte con su motivo. Para cambiar la lista:
+`"ramas_indexables": ["develop", "main"]` en `harness/grafos.json` (acepta globs).
+Consecuencia: lo que cierra una feature se ve en cbm cuando el cierre integra y
+la raiz queda en la rama estable; hasta entonces el indice no tiene su trabajo.
