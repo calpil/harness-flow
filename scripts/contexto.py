@@ -43,6 +43,23 @@ def _edad_h(f: Path) -> float | None:
     return None if not f.exists() else (time.time() - f.stat().st_mtime) / 3600
 
 
+# `graphify update` sin cambios sale 0 y NO reescribe graph.json: medir la raiz
+# solo por el mtime del grafo la dejaba "vencida" para siempre aunque estuviera
+# al dia. `refrescar` deja este sello al lado cuando el update sale bien, y la
+# edad de la raiz es la del MAS NUEVO de los dos (un sello viejo no rejuvenece).
+SELLO_VERIFICADO = ".harness_verificado"
+
+
+def _edad_raiz_h(g: Path) -> float | None:
+    if not g.exists():
+        return None
+    sello = g.parent / SELLO_VERIFICADO
+    mtime = g.stat().st_mtime
+    if sello.exists():
+        mtime = max(mtime, sello.stat().st_mtime)
+    return (time.time() - mtime) / 3600
+
+
 def _vault_vencido(p: dict) -> bool:
     """El vault sale del backlog y de spec/evidencia/review, no del grafo.
 
@@ -80,7 +97,7 @@ def estado_contexto(p: dict) -> dict:
         g = r["path"] / "graphify-out" / "graph.json"
         out["raices"].append({
             "nombre": r["nombre"], "path": str(r["path"]),
-            "graph": str(g), "existe": g.exists(), "edad_h": _edad_h(g),
+            "graph": str(g), "existe": g.exists(), "edad_h": _edad_raiz_h(g),
             "declarada": r.get("declarada", True),
         })
     vencidas = [r["nombre"] for r in out["raices"]
@@ -274,6 +291,9 @@ def refrescar(p: dict, *, forzar=False, max_horas=None, con_vault=True,
                 f"graphify {sub} {r['nombre']}: salio 0 pero {motivo}")
         else:
             parte["actualizadas"].append(r["nombre"])
+            # Verificado al dia aunque graphify no haya reescrito nada.
+            (Path(r["graph"]).parent / SELLO_VERIFICADO).write_text(
+                now_iso() + "\n", encoding="utf-8")
         if verboso:
             print(f"   graphify {sub} {r['nombre']}: {'ok' if ok else 'FALLO'}")
 

@@ -156,6 +156,71 @@ class ContextoTests(unittest.TestCase):
             self.assertTrue(Path(g).is_absolute(), g)
         self.assertEqual(parte["fallos"], [])
 
+    # --- update sin cambios ------------------------------------------------
+    # `graphify update` sin cambios sale 0 y NO reescribe graph.json. Medir la
+    # frescura solo por su mtime dejaba la raiz "vencida" para siempre aunque
+    # el contenido estuviera al dia (micros de realestate, 2026-10-02: ningun
+    # .go cambiado y el arnes seguia pidiendo refrescar).
+
+    def _grafos_viejos(self, horas=20):
+        grafo = json.dumps({"nodes": [{"id": "a"}], "edges": []})
+        (self.root / "graphify-out").mkdir(parents=True, exist_ok=True)
+        viejo = time.time() - horas * 3600
+        for g in (self.root / "graphify-out" / "graph.json",
+                  self.otra / "graphify-out" / "graph.json"):
+            g.write_text(grafo, encoding="utf-8")
+            os.utime(g, (viejo, viejo))
+
+    def _fake_run(self, codigo_update=0):
+        def fake(cmd, cwd):
+            if "merge-graphs" in cmd:
+                destino = Path(cmd[cmd.index("--out") + 1])
+                destino.write_text(json.dumps({"nodes": [{"id": "a"}], "edges": []}),
+                                   encoding="utf-8")
+                return 0, "ok"
+            if "update" in cmd:  # no toca graph.json, como graphify sin cambios
+                return codigo_update, "sin cambios" if codigo_update == 0 else "boom"
+            return 0, "ok"
+        return fake
+
+    def _refrescar(self, codigo_update=0):
+        with mock.patch.object(contexto.shutil, "which", return_value="/bin/graphify"), \
+                mock.patch.object(contexto, "_run",
+                                  side_effect=self._fake_run(codigo_update)):
+            parte = contexto.refrescar(comun.paths(self.root), con_hub=False,
+                                       con_vault=False, verboso=False)
+            return parte, contexto.estado_contexto(comun.paths(self.root))
+
+    def test_update_sin_cambios_deja_la_raiz_fresca(self):
+        self._declarar()
+        self._grafos_viejos()
+        parte, e = self._refrescar()
+        self.assertEqual(sorted(parte["actualizadas"]), ["front", "micros"])
+        self.assertTrue(e["fresco"], e["vencidas"])
+        micros = next(r for r in e["raices"] if r["nombre"] == "micros")
+        self.assertLess(micros["edad_h"], 1)
+
+    def test_update_que_falla_no_cuenta_como_verificado(self):
+        self._declarar()
+        self._grafos_viejos()
+        parte, e = self._refrescar(codigo_update=1)
+        self.assertTrue(parte["fallos"])
+        self.assertIn("micros", e["vencidas"])
+        micros = next(r for r in e["raices"] if r["nombre"] == "micros")
+        self.assertGreater(micros["edad_h"], 12)
+
+    def test_un_sello_viejo_no_rejuvenece_la_raiz(self):
+        # la edad es la del MAS NUEVO entre el grafo y su ultima verificacion:
+        # un sello de hace 20 h no puede volver fresca una raiz de hace 20 h.
+        self._declarar()
+        self._grafos_viejos()
+        sello = self.otra / "graphify-out" / ".harness_verificado"
+        sello.write_text("2026-01-01T00:00:00Z\n", encoding="utf-8")
+        viejo = time.time() - 20 * 3600
+        os.utime(sello, (viejo, viejo))
+        e = contexto.estado_contexto(comun.paths(self.root))
+        self.assertIn("micros", e["vencidas"])
+
     # --- brief -------------------------------------------------------------
 
     def test_superficie_ordena_por_acoplamiento_y_excluye_estructura(self):
