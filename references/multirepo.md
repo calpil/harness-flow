@@ -572,6 +572,23 @@ instalaciones de rescate. Ejecutar con PATH que fije Node/Go/Git/Python, en dos
 interpretes y rutas simuladas `.hermes/skills/...` y `.claude/skills/...`.
 `HARNESS_TEST_FRONTEND_LOGS` conserva raw de fixtures fuera de sus temporales.
 
+Toolchain de pruebas, una sola vez y fuera del repo (el runner exige Node 22,
+Angular 22, Vitest 4; con Node 24 o TypeScript 7 rechaza con "toolchain fuera
+de contrato"):
+
+```bash
+T=~/.harness-flow/frontend-toolchain && mkdir -p $T && cd $T
+echo '{"name":"harness-frontend-toolchain","private":true}' > package.json
+npm install --save-exact @angular/{cli,build,core,common,compiler,compiler-cli,platform-browser}@22 \
+  rxjs tslib typescript@6.0 vitest@4 jsdom node@22
+PATH=$T/node_modules/node/bin:$PATH HARNESS_TEST_FRONTEND_MODULES=$T/node_modules \
+  python3 -m unittest discover -s tests
+```
+
+`typescript@6.0` porque `@angular/compiler-cli@22` pide `>=6.0 <6.1`; `node@22`
+va por npm para no tocar el Node del sistema. Cada archivo de frontend toma
+minutos: corre la suite en segundo plano.
+
 Leccion reusable: contrastar inicio/final por archivo y caso con el inventario
 independiente; no contar solo un resumen JSON. Forzar allowOnly ANTES de
 coleccion Vitest, porque despues normaliza only a run. Probar la decision REAL
