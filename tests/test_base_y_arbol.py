@@ -26,7 +26,7 @@ def sh(*args, cwd, check=True):
 
 
 def harness(script, *args, cwd):
-    env = dict(os.environ, HARNESS_SIN_CONTEXTO="1")
+    env = dict(os.environ, HARNESS_SIN_CONTEXTO="1", HARNESS_SIN_CBM="1")
     return subprocess.run([sys.executable, str(SCRIPTS / script), *args],
                           cwd=str(cwd), capture_output=True, text=True, env=env)
 

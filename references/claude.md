@@ -228,3 +228,9 @@ bloquearlo nunca. No toca nada cuando:
 
 Si el symlink no se puede crear (Windows sin Modo Desarrollador), la leccion
 vuelve a `~/.claude/skills` y el aviso lo dice.
+
+## codebase-memory-mcp
+
+`codebase-memory-mcp` (consulta estructural + reindexado tras cerrar) se instala
+una vez con su `install.sh` y se auto-registra en este host si lo detecta. Detalle,
+comandos y `HARNESS_SIN_CBM` en `references/contexto.md`.

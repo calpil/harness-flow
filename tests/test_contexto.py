@@ -31,6 +31,10 @@ def _grafo(nodes, links, directed=True):
 
 class ContextoTests(unittest.TestCase):
     def setUp(self):
+        # cbm tiene sus propios tests (CbmIndexarTests): aqui no debe indexar.
+        p = mock.patch.dict(os.environ, {"HARNESS_SIN_CBM": "1"})
+        p.start()
+        self.addCleanup(p.stop)
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
         self.root = Path(self.tmp.name) / "front"
@@ -515,3 +519,68 @@ class ContextoTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class CbmIndexarTests(unittest.TestCase):
+    """codebase-memory-mcp complementa a graphify: indexa cada raiz declarada."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name) / "front"
+        (self.root / "harness" / "progress").mkdir(parents=True)
+        self.p = comun.paths(self.root)
+
+    def _parte(self):
+        return {"fallos": []}
+
+    def test_sin_binario_se_omite_y_lo_dice(self):
+        parte = self._parte()
+        with mock.patch.dict(os.environ, {"HARNESS_SIN_CBM": ""}), \
+                mock.patch.object(contexto.shutil, "which", return_value=None):
+            contexto.cbm_indexar(self.p, parte, verboso=False)
+        self.assertIn("PATH", parte["cbm"]["omitido"])
+        self.assertEqual(parte["cbm"]["indexadas"], [])
+
+    def test_primera_vez_es_nueva_y_despues_incremental(self):
+        ok = '{"status":"indexed"}'
+        llamadas = []
+
+        def fake(tool, args, cwd):
+            llamadas.append(tool)
+            return (0, "projects: 0" if tool == "list_projects" else ok)
+
+        parte = self._parte()
+        with mock.patch.dict(os.environ, {"HARNESS_SIN_CBM": ""}), \
+                mock.patch.object(contexto.shutil, "which", return_value="/x"), \
+                mock.patch.object(contexto, "_cbm_cli", side_effect=fake):
+            contexto.cbm_indexar(self.p, parte, verboso=False)
+        self.assertEqual(parte["cbm"]["nuevas"], ["front"])
+        self.assertEqual(llamadas, ["list_projects", "index_repository"])
+
+        parte = self._parte()
+        with mock.patch.dict(os.environ, {"HARNESS_SIN_CBM": ""}), \
+                mock.patch.object(contexto.shutil, "which", return_value="/x"), \
+                mock.patch.object(contexto, "_cbm_cli", side_effect=lambda t, a, c: (
+                    0, f"/{self.root}" if t == "list_projects" else ok)):
+            contexto.cbm_indexar(self.p, parte, verboso=False)
+        self.assertEqual(parte["cbm"]["indexadas"], ["front"])
+        self.assertEqual(parte["cbm"]["nuevas"], [])
+
+    def test_exit_cero_sin_status_indexed_es_fallo(self):
+        parte = self._parte()
+        with mock.patch.dict(os.environ, {"HARNESS_SIN_CBM": ""}), \
+                mock.patch.object(contexto.shutil, "which", return_value="/x"), \
+                mock.patch.object(contexto, "_cbm_cli",
+                                  return_value=(0, '{"status":"error"}')):
+            contexto.cbm_indexar(self.p, parte, verboso=False)
+        self.assertTrue(parte["fallos"])
+        self.assertEqual(parte["cbm"]["indexadas"], [])
+
+    def test_variable_lo_apaga(self):
+        parte = self._parte()
+        with mock.patch.dict(os.environ, {"HARNESS_SIN_CBM": "1"}), \
+                mock.patch.object(contexto, "_cbm_cli") as m:
+            contexto.cbm_indexar(self.p, parte, verboso=False)
+        m.assert_not_called()
+        self.assertEqual(parte["cbm"]["omitido"], "HARNESS_SIN_CBM")

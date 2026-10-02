@@ -93,3 +93,35 @@ El brief es un INDICE, no evidencia: ningun AC se da por cumplido porque el
 brief lo mencione. Si el contexto esta vencido, tanto el brief como el briefing
 del revisor lo dicen en la primera linea en vez de fingir estar al dia.
 
+
+
+## codebase-memory-mcp (consulta estructural, complementa a graphify)
+
+[DeusData/codebase-memory-mcp](https://github.com/DeusData/codebase-memory-mcp):
+servidor MCP local que indexa el codigo en un grafo persistente (funciones,
+llamadas, rutas HTTP). Graphify sigue siendo la fuente del brief, el hub y el
+vault; cbm se suma para **consultar** y se **reindexa** tras implementar.
+
+**Instalacion** (una vez por maquina; configura solo los clientes detectados:
+Claude Code, Codex, Hermes, Grok, Kimi, etc.):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/DeusData/codebase-memory-mcp/main/install.sh | bash
+```
+
+Reinicia el agente despues. Hermes lo registra en `mcp_servers` de
+`~/.hermes/config.yaml`. Sin binario en el PATH el arnes lo omite y lo dice.
+
+**Consultar** (antes de leer archivos a ciegas): `list_projects` /
+`index_status`, `search_graph(name_pattern=...)`, `trace_path(function_name=...,
+direction=inbound|outbound|both)`, `get_code_snippet`, `detect_changes`. Un
+agente sin MCP (subagente aislado) puede usar la CLI:
+`codebase-memory-mcp cli --quiet search_graph '{"project":"<p>","name_pattern":".*Foo.*"}'`.
+El resultado es un indice, no evidencia: un AC no se da por cumplido por un nodo.
+
+**Reindexar**: `contexto.py cbm` (o `refrescar`, o el `close --status done`)
+llama `index_repository` por cada raiz de `harness/grafos.json` (o la raiz del
+arnes). La primera vez sobre una raiz indexa el proyecto entero; despues es
+incremental, que cubre la feature recien integrada. Exige `"status":"indexed"`,
+no solo exit 0. Nunca bloquea el cierre; si falla, queda en el parte.
+`HARNESS_SIN_CBM=1` lo apaga (CI y tests del arnes).

@@ -22,6 +22,10 @@ pregunta cual, o corre `/harness-flow:estado` para listarlas.
 eval "$(python3 "${CLAUDE_PLUGIN_ROOT}/scripts/entorno.py" --shell)" && "$PY" "$H/contexto.py" brief --feature $1
 ```
 
+Para consultas puntuales de estructura (quien llama a X, impacto de un cambio) usa
+el MCP `codebase-memory-mcp` (`search_graph`, `trace_path`, `detect_changes`) antes de
+leer archivos a ciegas.
+
 Ese brief trae AC, reglas, lecciones, impacto del hub, superficie de contacto
 del grafo y **documentos relacionados**: rutas de `docs/` (decisiones, enmiendas,
 reviews de features previas del mismo servicio, notas del usuario). Abre solo las

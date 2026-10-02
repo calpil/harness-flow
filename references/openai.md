@@ -97,3 +97,9 @@ llamado directamente por API no escanea `~/.agents/skills` por si solo: la
 aplicacion debe adjuntar la skill al entorno de shell de Responses API o
 registrar el directorio de capacidades en un sandbox de Agents API, y darle
 acceso a los scripts y al proyecto. El symlink local no configura esa API.
+
+## codebase-memory-mcp
+
+`codebase-memory-mcp` (consulta estructural + reindexado tras cerrar) se instala
+una vez con su `install.sh` y se auto-registra en este host si lo detecta. Detalle,
+comandos y `HARNESS_SIN_CBM` en `references/contexto.md`.

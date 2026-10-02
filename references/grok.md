@@ -109,3 +109,9 @@ la sesion sigue la seccion "Arranque de sesion" y "Obsidian" de `SKILL.md`.
 La nota de una leccion cita el `SKILL.md` que `leccion.py` encontro. Si se
 creo en este host, esa ruta es `~/.grok/skills/<clase>/SKILL.md`. Que genera
 cada nota: [`obsidian.md`](obsidian.md).
+
+## codebase-memory-mcp
+
+`codebase-memory-mcp` (consulta estructural + reindexado tras cerrar) se instala
+una vez con su `install.sh` y se auto-registra en este host si lo detecta. Detalle,
+comandos y `HARNESS_SIN_CBM` en `references/contexto.md`.

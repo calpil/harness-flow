@@ -85,3 +85,9 @@ Escribe `<raiz>/<clase>/SKILL.md` con frontmatter `name` y `description`. No
 hay `skill_manage`. Buscar, el gate de `close --leccion`, mira ademas las
 raices de los otros agentes: una leccion escrita en Hermes o en Claude sigue
 cerrando desde Kimi, y al reves.
+
+## codebase-memory-mcp
+
+`codebase-memory-mcp` (consulta estructural + reindexado tras cerrar) se instala
+una vez con su `install.sh` y se auto-registra en este host si lo detecta. Detalle,
+comandos y `HARNESS_SIN_CBM` en `references/contexto.md`.

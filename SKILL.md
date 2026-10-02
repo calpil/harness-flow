@@ -119,8 +119,8 @@ El agente NUNCA escribe `docs/prd/**`: redacta en `docs/borrador-prd.md` / `docs
 1. Lee el backlog y `progress/current-<id>.md`. Consulta el grafo antes de leer archivos a ciegas:
    `$PY "$H/contexto.py" brief --feature <id>` (indice compacto: AC, reglas, lecciones,
    impacto del hub y superficie de contacto del grafo). Si el contexto esta vencido lo dice;
-   refresca con `$PY "$H/contexto.py" refrescar`. Para una pregunta puntual que el brief no
-   cubre, `graphify query "<pregunta>" --graph <combinado>`.
+   refresca con `$PY "$H/contexto.py" refrescar`. Para algo puntual: `codebase-memory-mcp`
+   (`search_graph`, `trace_path`) o `graphify query "<pregunta>" --graph <combinado>`.
 2. Consulta impacto cross-repo: `$PY "$H/hub.py" impacto --microservicio <proyecto>/<servicio>`.
 3. Revisa lecciones aplicables: `$PY "$H/leccion.py" list` **antes** de diseñar.
 4. Escribe `docs/spec-feature-<id>-<slug>.md` con `Estado: draft` usando `templates/spec.md`. Los AC-n en Given/When/Then son obligatorios.
@@ -262,9 +262,10 @@ El vault es para ti en Obsidian: el flujo lo regenera, ningun rol lo lee.
 $PY "$H/contexto.py" estado            # que hay y que tan viejo esta
 $PY "$H/contexto.py" refrescar         # grafo -> hub -> vault, con parte de fallos
 $PY "$H/contexto.py" brief --feature <id>
+$PY "$H/contexto.py" cbm               # (re)indexa en codebase-memory-mcp
 ```
 
-`worktree.py start` lo refresca si esta vencido (el vault, si el backlog o un
+`refrescar` y `close --status done` reindexan cada raiz en cbm (1a vez entera, luego incremental; `HARNESS_SIN_CBM=1` lo apaga). `worktree.py start` lo refresca si esta vencido (el vault, si el backlog o un
 doc es mas nuevo que `docs/vault/Indice.md`; si solo el vault esta viejo, no
 relanza graphify ni el hub). `gate.py close --status done` lo refresca siempre,
 despues del cierre. Dicen si NO quedo refrescado. `HARNESS_SIN_CONTEXTO=1` apaga

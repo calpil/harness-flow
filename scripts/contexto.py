@@ -177,6 +177,53 @@ def _grafo_utilizable(g: Path) -> tuple[bool, str]:
     return True, ""
 
 
+def _cbm_desactivado() -> bool:
+    """HARNESS_SIN_CBM=1 apaga solo el indexado de codebase-memory-mcp."""
+    return os.environ.get("HARNESS_SIN_CBM", "").strip() not in ("", "0", "false")
+
+
+def _cbm_cli(tool: str, args: dict, cwd: Path) -> tuple[int, str]:
+    return _run(["codebase-memory-mcp", "cli", "--quiet", tool,
+                 json.dumps(args)], cwd)
+
+
+def cbm_indexar(p: dict, parte: dict, verboso: bool) -> None:
+    """Indexa (o reindexa) cada raiz declarada en codebase-memory-mcp.
+
+    Complementa a graphify, no lo reemplaza. `index_repository` es incremental:
+    la primera vez sobre una raiz indexa el proyecto entero y despues solo lo
+    que cambio, asi que el mismo llamado sirve para "primera vez" y para
+    "tras implementar una feature". Nunca lanza ni bloquea: los fallos van al
+    parte, igual que el resto del refresco.
+    """
+    parte["cbm"] = {"indexadas": [], "nuevas": [], "omitido": None}
+    if _cbm_desactivado():
+        parte["cbm"]["omitido"] = "HARNESS_SIN_CBM"
+        return
+    if not shutil.which("codebase-memory-mcp"):
+        parte["cbm"]["omitido"] = "codebase-memory-mcp no esta en el PATH"
+        if verboso:
+            print("   cbm: omitido (codebase-memory-mcp no esta en el PATH)")
+        return
+    code, out = _cbm_cli("list_projects", {}, p["root"])
+    conocidas = out if code == 0 else ""
+    for r in raices_grafo(p):
+        raiz = Path(r["path"])
+        nueva = str(raiz) not in conocidas
+        code, out = _cbm_cli("index_repository", {"repo_path": str(raiz)}, raiz)
+        # El exit code solo no alcanza: se exige el status que reporta la tool.
+        if code != 0 or '"status":"indexed"' not in out.replace(" ", ""):
+            parte["fallos"].append(f"cbm index {r['nombre']}: {out[-300:]}")
+        else:
+            parte["cbm"]["indexadas"].append(r["nombre"])
+            if nueva:
+                parte["cbm"]["nuevas"].append(r["nombre"])
+        if verboso:
+            tipo = "completo (primera vez)" if nueva else "incremental"
+            print(f"   cbm index {r['nombre']}: "
+                  f"{tipo if r['nombre'] in parte['cbm']['indexadas'] else 'FALLO'}")
+
+
 def refrescar(p: dict, *, forzar=False, max_horas=None, con_vault=True,
               con_hub=True, verboso=True) -> dict:
     """Actualiza grafos vencidos, combina, deriva al hub y regenera el vault.
@@ -193,6 +240,9 @@ def refrescar(p: dict, *, forzar=False, max_horas=None, con_vault=True,
     tope = max_horas if max_horas is not None else e["max_horas"]
     parte = {"at": now_iso(), "actualizadas": [], "omitidas": [],
              "fallos": [], "combinado": None, "hub": None, "vault": None}
+
+    # Independiente de graphify: se indexa aunque graphify falte.
+    cbm_indexar(p, parte, verboso)
 
     if not shutil.which("graphify"):
         parte["fallos"].append("graphify no esta en el PATH")
@@ -310,6 +360,14 @@ def cmd_refrescar(args) -> None:
                       con_vault=not args.sin_vault, con_hub=not args.sin_hub)
     print(json.dumps(parte, ensure_ascii=False, indent=2))
     sys.exit(1 if parte["fallos"] else 0)
+
+
+def cmd_cbm(args) -> None:
+    parte = {"fallos": []}
+    cbm_indexar(paths(), parte, verboso=True)
+    print(json.dumps(parte, ensure_ascii=False, indent=2))
+    # Omitido (sin binario / apagado) no es exito silencioso: sale con 1.
+    sys.exit(1 if parte["fallos"] or parte["cbm"]["omitido"] else 0)
 
 
 # --- briefing compacto ------------------------------------------------------
@@ -655,6 +713,8 @@ def main() -> None:
     s.add_argument("--sin-vault", action="store_true", dest="sin_vault")
     s.add_argument("--sin-hub", action="store_true", dest="sin_hub")
     s.set_defaults(fn=cmd_refrescar)
+    s = sub.add_parser("cbm", help="indexa/reindexa las raices en codebase-memory-mcp")
+    s.set_defaults(fn=cmd_cbm)
     s = sub.add_parser("brief"); s.add_argument("--feature", required=True)
     s.add_argument("--max-lineas", type=int, default=90, dest="max_lineas")
     s.add_argument("--max-archivos", type=int, default=12, dest="max_archivos")
