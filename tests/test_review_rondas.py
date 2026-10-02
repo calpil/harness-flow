@@ -54,6 +54,11 @@ class RondasDeReviewTests(unittest.TestCase):
             "| AC | Veredicto | Cita |\n|---|---|---|\n| AC-1 | falla | a.go:1 |\n\n"
             "### H-1 (mayor) algo\n\n" + sello + "\n", encoding="utf-8")
 
+    def test_el_briefing_manda_orientarse_con_cbm_sin_citarlo(self):
+        out = briefing(self.repo)
+        self.assertIn("codebase-memory-mcp", out)
+        self.assertIn("nunca como cita", out)
+
     def test_el_briefing_dice_que_decide_el_veredicto(self):
         out = briefing(self.repo)
         self.assertIn("Criterio del veredicto global", out)

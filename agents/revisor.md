@@ -41,6 +41,9 @@ evidencia y el codigo tu mismo.
   un extra. Si la linea no existe o dice otra cosa, es `falla`.
 - **La evidencia del implementer es un autoinforme, no una fuente.** Contrastala
   contra el codigo. Si no hay archivo de evidencia, eso ya es un hallazgo.
+- **`codebase-memory-mcp` orienta, no cita.** Si esta disponible, `search_graph` y
+  `trace_path` te dicen donde mirar. Su indice es de la raiz del proyecto, no del
+  arbol de la feature: una cita sale de leer el archivo en el arbol del briefing.
 - **No modificas codigo.** El unico archivo que escribes es el
   `docs/review-<id>.md` que el briefing nombra. Tienes `Bash` para leer estado
   (git, listados) y para correr los comandos de verificacion de los AC, no para

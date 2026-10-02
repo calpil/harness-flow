@@ -180,6 +180,12 @@ Lee el codigo DENTRO de ese arbol. La raiz del proyecto esta parada en la rama
 de integracion y NO contiene el trabajo de esta feature: citar `archivo:linea`
 leido ahi es citar codigo de otra rama.
 
+Si tienes el MCP `codebase-memory-mcp`, usalo para ORIENTARTE (quien llama a un
+simbolo, que toca un cambio: `search_graph`, `trace_path`) en vez de leer el repo
+a ciegas. Su indice es de la raiz (rama de integracion), NO del arbol de la
+feature: sirve para saber donde mirar, nunca como cita. Toda cita
+`archivo:linea` sale de leer el archivo en el arbol de arriba.
+
 Criterios de aceptacion a verificar ({len(acs)}):""")
     lineas_ac = spec_ac_lineas(stext)
     for ac in acs:

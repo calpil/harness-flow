@@ -137,7 +137,8 @@ Con evidencia, review o verify encima, `approve-spec` se niega a re-sellar un sp
 
 1. Verifica el gate: `$PY "$H/gate.py" check-spec --feature <id>` (exit≠0 si no está approved o está stale).
 2. Trabaja DENTRO del worktree de la feature; si aun no existe, crealo con `$PY "$H/worktree.py" start --feature <id>`.
-3. Escribe evidencia en `docs/impl-<id>.md`: una fila por AC-n citando `archivo:linea`.
+3. Antes de editar, orientate con `codebase-memory-mcp` (`search_graph`, `trace_path`, `detect_changes`) en vez de leer a ciegas. Indexa la raiz, no tu worktree: confirma leyendo el archivo.
+4. Escribe evidencia en `docs/impl-<id>.md`: una fila por AC-n citando `archivo:linea`.
 
 ### 3. Reviewer — subagente aislado, veredicto sellado
 
