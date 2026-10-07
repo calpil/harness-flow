@@ -57,6 +57,40 @@ class SpecAcsTests(unittest.TestCase):
         self.assertEqual(ac_comandos(texto), {"AC-1": "go test ./cola/"})
 
 
+class ComandoNoSeHeredaTests(unittest.TestCase):
+    """El comando de un AC es el que declara EL, no lo ultimo que se le parezca.
+
+    Caso real (ADR #44, 2026-10-07): el AC-4 declaraba su `verificar:` en la
+    misma linea, pero el parser no soltaba el AC y el titulo de la enmienda E-1
+    que el propio gate escribe al final del spec ("... con `verify:dist`")
+    reemplazo el comando: verify corrio `dist` y dio exit 127.
+    """
+
+    def test_lo_que_viene_despues_no_pisa_el_comando_de_la_linea(self):
+        texto = (
+            "- AC-4: dado x. `verificar: node --test a.test.mjs`\n"
+            "\n"
+            "## Enmiendas posteriores a la aprobacion\n"
+            "\n"
+            "### E-1: el AC-2 deja de confundir al parser con `verify:dist`\n"
+        )
+        self.assertEqual(ac_comandos(texto), {"AC-4": "node --test a.test.mjs"})
+
+    def test_un_encabezado_cierra_el_ac_sin_comando(self):
+        # Un AC sin comando no adopta el de otra seccion del documento.
+        texto = (
+            "- AC-1: dado x, lo mira el revisor.\n"
+            "\n"
+            "## Riesgos\n"
+            "- `verificar: rm -rf algo` no es de nadie\n"
+        )
+        self.assertEqual(ac_comandos(texto), {})
+
+    def test_el_comando_en_la_linea_siguiente_sigue_valiendo(self):
+        texto = "- AC-1: dado x.\n  Comando: `go test ./a/`\n- AC-2: dado y. `verificar: go test ./b/`\n"
+        self.assertEqual(ac_comandos(texto), {"AC-1": "go test ./a/", "AC-2": "go test ./b/"})
+
+
 class ParentesisAnidadoTests(unittest.TestCase):
     """Un AC que el parser no ve es un AC que NADIE verifica, en verde.
 

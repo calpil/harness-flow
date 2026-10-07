@@ -344,6 +344,9 @@ def acs_faltantes(acs: list[str]) -> list[str]:
     return [f"AC-{n}" for n in range(1, numeros[-1]) if n not in numeros]
 
 
+ENCABEZADO_RE = re.compile(r"^\s{0,3}#{1,6}\s")
+
+
 def ac_comandos(text: str) -> dict[str, str]:
     """AC-n -> comando declarado bajo el, si lo hay."""
     out: dict[str, str] = {}
@@ -367,10 +370,17 @@ def ac_comandos(text: str) -> dict[str, str]:
         m = AC_RE.match(ln)
         if m:
             actual = m.group(1)
-            # el comando puede venir en la MISMA linea del AC
+            # el comando puede venir en la MISMA linea del AC; si vino, el AC
+            # queda cerrado: nada posterior (otra seccion, el titulo de una
+            # enmienda que nombra un comando) puede pisarlo.
             ci = extraer(ln)
             if ci:
                 out[actual] = ci
+                actual = None
+            continue
+        if ENCABEZADO_RE.match(ln):
+            # Un encabezado cierra el AC: lo que sigue no es suyo.
+            actual = None
             continue
         c = extraer(ln)
         if c and actual:
