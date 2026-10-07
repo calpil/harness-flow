@@ -11,13 +11,22 @@ leerla sin fork porque el frontmatter `name` + `description` ya es compatible.
 Personal, disponible para cualquier repo:
 
 ```bash
+mkdir -p ~/.agents/skills
 git clone https://github.com/calpil/harness-flow.git ~/.agents/skills/harness-flow
 ```
 
 Por repo, versionado junto al proyecto (`<repo>/.agents/skills/harness-flow`):
 
 ```bash
+mkdir -p .agents/skills
 git clone https://github.com/calpil/harness-flow.git .agents/skills/harness-flow
+```
+
+Codex tambien admite la ruta nativa del proyecto `<repo>/.codex/skills/harness-flow`:
+
+```bash
+mkdir -p .codex/skills
+git clone https://github.com/calpil/harness-flow.git .codex/skills/harness-flow
 ```
 
 Codex moderno instala las skills en `$CODEX_HOME/skills` (por defecto
@@ -66,7 +75,7 @@ Hay que separar dos cosas: donde NACE una leccion y donde se la BUSCA.
 **Crear** sigue la precedencia del host detectado (`leccion.py donde` imprime
 primero esa raiz). En `gpt`:
 
-1. `.agents/skills` desde el directorio actual hasta la raiz del repo.
+1. `.agents/skills` y `.codex/skills` desde el directorio actual hasta la raiz del repo.
 2. `~/.agents/skills`.
 3. `$CODEX_HOME/skills` (`~/.codex/skills`), si no existe una raiz anterior.
 4. `/etc/codex/skills`.

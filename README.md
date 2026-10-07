@@ -110,6 +110,10 @@ git clone https://github.com/calpil/harness-flow.git \
   ~/.agents/skills/harness-flow
 ```
 
+Para una skill propia del proyecto, Codex tambien admite
+`<repo>/.codex/skills/harness-flow`; `leccion.py donde` incluye ambas raíces
+locales al crear lecciones.
+
 ### Windows
 
 No son "las mismas rutas bajo `%USERPROFILE%`": Hermes busca primero en

@@ -29,7 +29,7 @@ El arnés NO se copia a cada repo. Una instalación por PROYECTO (raíz multi-re
     progress/history.md          <- bitácora append-only
     atlassian.json               <- sitio/proyecto/space (NUNCA credenciales)
   docs/                          <- specs, borradores PRD/SDD, evidencia; prd/ es del usuario
-  .agents/skills/                <- skills de GPT/Codex si se instala por repo
+  .agents/skills/                <- skills compartidas; Codex tambien admite .codex/skills
   docs/vault/                    <- notas generadas; el vault Obsidian es docs/
   graphify-out/                  <- grafo local (gitignored)
   ms-orders-service/             <- repo git propio = "microservicio"
@@ -169,29 +169,30 @@ Si el subagente no está disponible, `$PY "$H/revision.py" --feature <id>` da el
 
 ### 4. Cierre
 
-**Raiz multi-repo sin `.git`, con worktrees ya existentes:** usar el registro
-estricto y el cierre de integracion MANUAL verificada; no inventar una rama o
-`.git` en la raiz. Declarar TODOS los microservicios y SHAs en el manifiesto de
-[`references/multirepo.md`](references/multirepo.md), sin autodetectar solo exitos:
+Hay dos modos de cierre. En una raiz multi-repo sin `.git`, con worktrees ya
+existentes, registra TODOS los microservicios y SHAs y valida una integracion
+manual ya realizada; no inventes una rama o `.git` en la raiz. Contrato y
+manifiesto: [`references/multirepo.md`](references/multirepo.md).
 
 ```bash
 $PY "$H/worktree.py" register --feature <id> --manifest <registro.json>
-# Integracion externa autorizada + registro actualizado al tip destino;
-# verify y revision INDEPENDIENTE ligados al mapa completo, despues:
+# Tras la integracion externa autorizada, actualiza el registro y mide:
+$PY "$H/gate.py" verify --feature <id>
+$PY "$H/revision.py" --feature <id> --briefing
+# Delega el review independiente, lee el acta y séllala:
+$PY "$H/gate.py" revision --feature <id> --veredicto approved
 $PY "$H/gate.py" close --feature <id> --status done --to <rama> \
   --integrated --postmerge /ruta/bases-postmerge.json --leccion <clase-existente>
 ```
 
-`--integrated` NO hace merges: revalida repos/worktrees reales, limpieza,
-ancestria y tips exactos, y ANTES de done corre las suites completas de cada
-destino (Go con `postmerge_medido.py`, el contrato Angular22/Vitest4 de ADR con
-`postmerge_frontend.py`) contra bases preintegracion genuinas del mapa
-`--postmerge`. No acepta recibos PASS manuales, y el recibo no sustituye spec,
-review, verify, leccion, rutas protegidas ni aislamiento. Persiste
-`integraciones` POR REPO; cambiar mapa/SHAs/spec/evidencia invalida review y
-verify. Contrato frontend, caso ya integrado y limites: la referencia.
+`--integrated` no hace merges: comprueba repos, worktrees, limpieza, ancestria y
+tips, y corre las suites completas de destino contra bases preintegracion
+medidas. No acepta recibos PASS manuales ni sustituye spec, review, verify,
+leccion, rutas protegidas o aislamiento. Cambiar el mapa o sus SHAs invalida
+review y verify. El detalle por protocolo esta en la referencia.
 
-**Monorepo legacy (raiz Git sin registro multi-repo):**
+En un monorepo Git sin registro multi-repo, `close` integra la rama de feature
+con `git merge --no-ff` en la rama destino indicada por el usuario:
 
 ```bash
 "$PY" "$H/gate.py" close --feature <id> --status done --to <rama> --leccion <clase>
@@ -200,21 +201,11 @@ verify. Contrato frontend, caso ya integrado y limites: la referencia.
   --leccion <clase> --publicar-atlassian
 ```
 
-El gate exige, segun `rules`: spec approved y fresco, review approved, check limpio, leccion declarada. Se niega sin `--to`: PREGUNTALE al usuario a que rama integra.
-
-`close` sin `--integrated` **ejecuta el merge de verdad** (`git merge --no-ff` de la rama de la feature en `--to`) y guarda el sha en `merge_commit`. Aborta sin tocar el backlog si el arbol esta sucio, la rama no existe o el merge conflictua: es preferible una feature que no cierra a un `done` sobre una rama que nunca entro. Integra LOCAL; publicar es aparte salvo que pases `--publicar-atlassian`, que luego corre `atlassian.py push` para sincronizar Jira y Confluence.
-
-Cuando el cierre queda en `done`, el gate tambien:
-- mueve `harness/progress/current-<id>.md` a `harness/progress/archive/current-<id>.md` si existe;
-- guarda `progress_archive` en `feature_list.json`;
-- sincroniza `docs/prd/PRD-master.md` y `docs/sdd.md` desde las features cerradas.
-
-Ante fallo de sync/cierre local (tambien `--publicar-atlassian`), se restaura el
-preestado byte-identico de backlog, PRD/SDD, progreso e historia. Un merge Git ya
-hecho se conserva y se informa; Atlassian puede quedar parcial: reconciliar antes
-de reintentar. Limites de caidas y concurrencia en `references/multirepo.md`.
-
-Verifica el resultado (`git log --oneline -1` en la rama destino) antes de dar por integrada una feature: el mensaje de un script no es evidencia de que el merge ocurrió.
+El gate exige las reglas activas, aborta ante árbol sucio, rama ausente o
+conflicto y deja el backlog intacto si falla. `done` archiva el progreso y
+sincroniza PRD/SDD. Verifica el commit en la rama destino; el mensaje del script
+no es evidencia de integración. Para publicar en Atlassian se requiere
+`--publicar-atlassian` y el binding del proyecto.
 
 ## Gates (todos con exit≠0)
 
@@ -253,143 +244,53 @@ Reglas en `harness/feature_list.json` → `rules`: `require_spec_approved`, `req
 
 **Rutas protegidas**: `docs/prd/**`, `docs/constitution.md`, `.env`. Son del USUARIO. Ningún agente las reescribe a mano — `documentacion.py sync` solo actualiza el bloque generado `harness-flow:features`, y `gate.py check` reporta violaciones fuera de ese contrato. La otra via, la unica que cambia el cuerpo manual del PRD, es el sello de `producto.py aprobar --yes` (`documentos.prd`): el usuario aprobo ESE cuerpo en el chat y vale hasta que lo commitea.
 
-## Contexto: grafo, hub y vault (contexto.py)
+## Contexto y memoria del proyecto
 
-Grafo y Memory Hub son el ahorro de tokens del flujo: frescos, el implementer y
-el revisor arrancan con el brief en vez de leer el repo a ciegas; viejos, mienten.
-El vault es para ti en Obsidian: el flujo lo regenera, ningun rol lo lee.
+Antes de diseñar, consulta el brief y las lecciones aplicables. El grafo debe
+estar fresco; si no, refresca y revisa el parte antes de confiar en él. Las
+raíces de microservicios se declaran en `harness/grafos.json`, nunca se adivinan.
 
 ```bash
-$PY "$H/contexto.py" estado            # que hay y que tan viejo esta
-$PY "$H/contexto.py" refrescar         # grafo -> hub -> vault, con parte de fallos
+$PY "$H/contexto.py" estado
 $PY "$H/contexto.py" brief --feature <id>
-$PY "$H/contexto.py" cbm               # (re)indexa en codebase-memory-mcp
-```
-
-`refrescar` y `close --status done` reindexan cada raiz en cbm (1a vez entera, luego incremental; solo ramas develop/release/main/master, nunca worktrees; `HARNESS_SIN_CBM=1` lo apaga). `worktree.py start` lo refresca si esta vencido (el vault, si el backlog o un
-doc es mas nuevo que `docs/vault/Indice.md`; si solo el vault esta viejo, no
-relanza graphify ni el hub). `gate.py close --status done` lo refresca siempre,
-despues del cierre. Dicen si NO quedo refrescado. `HARNESS_SIN_CONTEXTO=1` apaga
-solo ese refresco automatico. Aprobar un spec, escribir evidencia o sellar un
-review no lo regeneran: el panel queda viejo hasta el arranque de sesion, el
-proximo `start`, un `vault.py build` o el `close`.
-
-**Varias raices**: si los microservicios viven fuera de la raiz del arnes, se
-declaran en `harness/grafos.json` y se combinan. Nunca se autodetectan. Formato,
-combinado, que hace cada paso del refresco y como se lee el parte:
-[`references/contexto.md`](references/contexto.md).
-
-## Memory Hub Postgres
-
-Grafo multi-repo compartido entre maquinas (`graph_nodes` / `graph_edges`).
-Responde "quien se rompe si toco esto" cruzando repos que no estan en el disco.
-
-```bash
+$PY "$H/contexto.py" refrescar
 $PY "$H/hub.py" impacto --microservicio <proyecto>/<servicio>
+$PY "$H/leccion.py" list
 ```
 
-Opcional: sin `psycopg` ni `~/.harness-hub/.env` los gates locales funcionan
-igual. Credenciales, esquema, `derivar-graphify` y el resto de subcomandos:
-[`references/hub.md`](references/hub.md).
+El Memory Hub y `codebase-memory-mcp` son opcionales para los gates locales.
+Detalles de refresco, cobertura y fallos: [`references/contexto.md`](references/contexto.md)
+y [`references/hub.md`](references/hub.md).
 
-## Lecciones (memoria procedural)
+Las lecciones son skills reutilizables por clase de trabajo. Lee las aplicables
+y patchea una existente antes de crear otra. El cierre exige que la lección
+indicada exista. Hermes las crea con `skill_manage`; los demás hosts usan su raíz
+nativa. Rutas y precedencia: [`references/hosts.md`](references/hosts.md).
 
-Una lección es una **skill del agente** por CLASE de trabajo, nunca por id de feature. Vive en tu perfil (`~/.hermes/.../skills/`, `~/.claude/skills/`, `~/.agents/skills/`, `~/.grok/skills/` o `~/.kimi-code/skills/`), no en el repo: viaja contigo entre proyectos y el agente la carga sola cuando aplica.
+## PRD/SDD y Obsidian
 
-```bash
-$PY "$H/leccion.py" list            # ANTES de diseñar
-$PY "$H/leccion.py" ver <clase>
-$PY "$H/leccion.py" plantilla <clase>   # esqueleto para skill_manage
-```
+`documentacion.py sync` mantiene el bloque generado de `docs/prd/PRD-master.md`
+y `docs/sdd.md`; nunca reescribas su contenido manual. El cierre `done` ejecuta
+el sync. Para el flujo de aprobación del PRD/SDD, consulta
+[`references/documentacion.md`](references/documentacion.md).
 
-`donde` lista las raíces en orden de precedencia (en Claude Code, la personal
-gana a la del proyecto). `HARNESS_SKILLS_DIR` fuerza una raíz única.
+Abre `docs/` como vault de Obsidian. Las notas se generan en `docs/vault/` y
+ningún rol las usa como evidencia o contexto de implementación. Ejecuta
+`$PY "$H/vault.py" build` tras escribir spec, evidencia o review si no vas a
+hacer `start` o `close` enseguida. Detalles: [`references/obsidian.md`](references/obsidian.md).
 
-Escribir y patchear: en Hermes con **`skill_manage`** (valida el frontmatter); en
-Claude Code, GPT/Codex, Grok y Kimi Code, escribiendo `<raiz>/<clase>/SKILL.md`
-con frontmatter `name` + `description` en la primera ruta que imprime
-`leccion.py donde`. PATCHEA la lección que estuvo en juego antes de crear otra.
+## Integraciones por host y herramientas externas
 
-Desde Claude Code, con Hermes instalado, la lección no se queda solo en
-`~/.claude/skills`: `leccion.py espejar <clase> [--categoria <cat>]` la mueve a
-`~/.hermes/skills/<cat>/<clase>` (por defecto `software-development`) y deja un
-symlink en su lugar. Una sola copia, que ambos hosts cargan y parchean. El
-`close --leccion` lo hace solo; si Hermes ya tiene una versión con ese nombre,
-avisa y no toca nada.
+La skill es portable, pero la instalación, el shell y el revisor dependen del
+host. Usa la referencia correspondiente antes de ejecutar comandos específicos:
+[`references/openai.md`](references/openai.md),
+[`references/claude.md`](references/claude.md),
+[`references/grok.md`](references/grok.md) y
+[`references/kimi.md`](references/kimi.md).
 
-El gate de cierre verifica que la skill exista de verdad: `--leccion <clase>` con una skill inexistente bloquea el `close`.
-
-NO captures: fallas de entorno, negativas sobre herramientas, errores transitorios, narrativas de tarea única, ni fracasos disfrazados de práctica.
-
-## Documentacion PRD/SDD
-
-Dos capas en los mismos archivos: el **cuerpo manual** (rol producto, aprobado por el usuario) y el **bloque generado** entre `<!-- harness-flow:features:start -->` y `<!-- harness-flow:features:end -->`, que `documentacion.py sync` mantiene desde las features `done` (lo corre `gate.py close --status done`):
-
-```bash
-$PY "$H/documentacion.py" sync
-```
-
-- `docs/prd/PRD-master.md`: vista de producto; el bloque lista las features cerradas con sus AC.
-- `docs/sdd.md`: vista tecnica; microservicios, merge, evidencia, review, progreso archivado y enlaces remotos si existen.
-
-El sync solo toca su bloque; nada manual se reescribe, en ningun host. Rol producto, plantillas, sello y limites: [`references/documentacion.md`](references/documentacion.md).
-
-## Obsidian
-
-Abre **`docs/`** como vault (no `docs/vault/`): spec, evidencia y review quedan
-dentro y las notas generadas en `docs/vault/` los enlazan con wikilinks.
-
-```bash
-$PY "$H/vault.py" build                # tambien lo corre contexto.py refrescar, sin --con-grafo
-$PY "$H/vault.py" build --con-grafo    # ademas, una nota por nodo del grafo
-```
-
-Corre `build` pelado despues de escribir el spec, la evidencia o el review si no
-vas a hacer `start` o `close` enseguida: si no, Obsidian sigue mostrando el AC
-sin marcar y el review sin sello. Ningun rol lee esas notas para implementar; el
-indice del agente es `contexto.py brief`.
-
-Los nodos del grafo son **opt-in**: el refresco automatico corre `build` pelado,
-asi que si `docs/vault/grafo/` no existe no es un fallo, es que nadie paso la
-bandera (una nota por nodo ahoga el vault en cada refresco). Config sembrada,
-que genera cada nota y plugins: [`references/obsidian.md`](references/obsidian.md).
-
-## Claude Code
-
-Instalacion en `~/.claude/skills/harness-flow` (por repo, `<repo>/.claude/skills/harness-flow`);
-sirve un symlink al clone de Hermes, y `entorno.py` sigue detectando host `claude`
-porque no resuelve el symlink. Como plugin skills-dir (`.claude-plugin/plugin.json`)
-aporta el subagente `harness-flow:revisor` y los comandos `/harness-flow:estado`,
-`:producto`, `:spec`, `:review`, `:cierre`.
-
-**`$PY` y `$H` no sobreviven entre llamadas Bash**: pega el `eval` al comando en la
-misma llamada, siempre. **En Windows, instala Git for Windows**: sin el, la tool
-Bash es PowerShell (`entorno.py --powershell | Invoke-Expression`, `& $PY`, y
-`mklink /J` para compartir el clone). Detalle en [`references/claude.md`](references/claude.md).
-
-## GPT/Codex
-
-La instalacion personal va en `~/.agents/skills/harness-flow`; por repo, en `<repo>/.agents/skills/harness-flow`. Codex puede invocarla implicitamente cuando el pedido coincide con el `description` de esta skill (`agents/openai.yaml` lo permite), o explicitamente con `$harness-flow`. Ver `references/openai.md`.
-
-Una llamada directa a un modelo GPT por API requiere adjuntar o registrar la
-skill en el entorno de esa llamada; la instalacion local de Codex no la propaga.
-
-`leccion.py donde` prioriza `.agents/skills` del repo hacia arriba, despues `~/.agents/skills`, `$CODEX_HOME/skills` (`~/.codex/skills`) y por ultimo `/etc/codex/skills` para crear. Buscar incluye las raices de otros agentes como consulta. El symlink al clone de Hermes no cambia la raiz de creacion.
-
-## Grok
-
-Grok carga este `SKILL.md` desde `~/.agents/skills/harness-flow` (symlink al clone de Hermes) o desde `~/.grok/skills/harness-flow`. No escanea `~/.hermes/skills`. No registra `agents/revisor.md` ni `commands/`: el unico atajo es `/harness-flow`.
-
-El host es `grok` cuando `GROK_AGENT` esta puesto, o cuando el script vive bajo `.grok/skills`. Esa marca gana a la ruta del clone y a la del symlink. Cada comando de shell lleva el `eval` pegado. Revisor y lecciones: el paso 3 y [`references/grok.md`](references/grok.md).
-
-## Jira / Confluence
-
-Solo si existe `harness/atlassian.json`. Sin ese archivo el flujo se comporta igual, sin tocar nada. Si el usuario quiere integrar y no hay binding, PREGUNTALE a que proyecto Jira y space pertenece el repo: no lo adivines. Mapeo y comandos en `references/atlassian.md`.
-
-`atlassian.py push --feature <id>` crea/actualiza la historia Jira, subtasks por
-AC y una pagina Confluence con PRD/SDD si existen, spec, evidencia y review. `gate.py close ...
---publicar-atlassian` dispara ese push automaticamente despues del cierre; sin
-esa bandera, `close` solo avisa y no toca sistemas remotos.
+Jira/Confluence solo se usa si existe `harness/atlassian.json` y el usuario
+solicita publicar. No inventes el binding ni publiques por defecto; consulta
+[`references/atlassian.md`](references/atlassian.md).
 
 ## Reglas duras
 
@@ -403,11 +304,7 @@ esa bandera, `close` solo avisa y no toca sistemas remotos.
   ya existía no desciende de la base) y la registra en `base_branch`/`base_sha`;
   `revision.py` diffea contra `merge-base base HEAD`, no `HEAD~1`. `--base <rama>`
   para un caso puntual.
-- Cuando varias features tocan el mismo artefacto, ciérralas en orden de dependencia: un AC que compara contra un respaldo pre-cambio queda obsoleto en cuanto otra feature aplica el suyo.
-- **Los AC de una feature miden SU worktree, así que por construcción no ven los choques ENTRE features.** Varias ramas pueden estar verdes cada una y romperse al convivir en la rama de integración: dos migraciones que toman el mismo número, una que inserta una fila donde otra fija un conteo exacto, un CHECK que choca con un vocabulario ampliado. Después de cada `close ... --to <rama>`, corre la suite de integración COMPLETA sobre la rama destino y compara los rojos contra los que ya había antes del merge. Un `15/15 en verde` de `verify` es un veredicto sobre la rama de la feature, NO sobre la integración: no lo reportes como si lo fuera.
-- **Migraciones numeradas + features en paralelo = colisión garantizada.** Cada rama toma "el siguiente número libre" que ve, y ve un árbol distinto. Antes de sellar el spec de una feature con migración, reserva el número contra la rama de integración, no contra el worktree. Al renumerar: `git mv` para conservar historia, regenerar los manifiestos con el comando del repo (suelen decir "GENERADO, no editar a mano") y verificar que el blob quede idéntico entre todos los repos que lo replican.
-- **Los comandos de los AC nunca citan la carpeta compartida de un repo cuando hay features en paralelo.** Con varias features vivas, `/ruta/ms-foo` está parado en la rama de quien hizo checkout último, así que el AC mide un árbol ajeno: da verde falso si el `-run` no engancha nada, o rojo falso si la rama vecina tiene otro código. Escribe los comandos contra el worktree de la feature (`<repos>-wt/<id>/ms-foo`) y créalo antes de sellar el spec. Ya produjo ambos errores en el mismo proyecto el mismo día.
-- Antes de creer un rojo de `verify`, comprueba en qué rama está cada repo que el AC toca (`git -C <ruta> branch --show-current`). Un rojo sobre el árbol equivocado no es un veredicto sobre el código, y un verde tampoco.
+- Con features paralelas, usa worktrees independientes para los AC, reserva las migraciones contra la rama de integración y corre la suite completa de destino después de cada cierre. `verify` mide los AC del worktree, no la integración. Reglas y casos límite: [`references/multirepo.md`](references/multirepo.md).
 - El cuerpo manual del PRD y la constitution son del USUARIO. No los reescribas; `documentacion.py sync` solo puede tocar su bloque generado `harness-flow:features`.
 - Aislamiento: una feature sin worktree bloquea a las demás sin worktree.
 - No afirmes lo que no puedes comprobar. Si un gate no corrió, dilo.
@@ -429,57 +326,22 @@ esa bandera, `close` solo avisa y no toca sistemas remotos.
   `ModuleNotFoundError: psycopg` en `hub.py` casi siempre es `python3` en vez de
   `$PY`. Arreglo en [`references/entorno.md`](references/entorno.md).
 
-## Lecciones del arnés sobre sí mismo
+## Auditoría del arnés
 
-Doce lecciones salidas de auditar sus propios gates, todas con repro verificada:
-por que un regex sobre texto no es un gate, por que un test sin su paquete
-colapsa identidades, por que un conteo parcial no se reporta como total, por que
-un sello tiene que exigir la firma entera. **Leelas antes de tocar un gate o de
-escribir uno nuevo**: cada una nacio de un falso verde que ya paso aqui.
-[`references/lecciones-del-arnes.md`](references/lecciones-del-arnes.md).
-
-## Cómo auditar este arnés
-
-Los tests de regresión sólo valen si fallan contra el código previo: escribilos,
-`git stash push` los scripts arreglados, correlos y confirmá que se ponen rojos.
-Un test nuevo que pasa en ambos lados no está probando el arreglo.
-
-La suite es **unittest**, no pytest, y hay que correrla desde `tests/`:
-`cd tests && python3 -m unittest <módulo>`. Un `unittest discover` desde la raíz
-cuelga y falla por path de import. Las suites multi-repo y de runner medido
-tardan varios minutos: correlas en segundo plano.
-
-Al auditar, sospechá de los tests existentes tanto como del código: cinco tests
-de `test_postmerge.py` certificaban en verde el gate que mentía.
+Antes de cambiar gates, lee [`references/lecciones-del-arnes.md`](references/lecciones-del-arnes.md).
+Esa referencia también describe cómo ejecutar la suite y evaluar las regresiones.
 
 ## Equivalencias por host
 
 | Necesitas | Hermes | Claude Code | GPT/Codex | AGY / Gemini | Grok | Kimi Code |
 | --- | --- | --- | --- | --- | --- | --- |
-| Subagente revisor aislado | `delegate_task` | tool `Agent`, `subagent_type: harness-flow:revisor` | `codex exec` en sesion nueva | `invoke_subagent` (research o subagente propio) | `spawn_subagent`, `isolation: none`; prompt = briefing + cuerpo de `agents/revisor.md` | tool `Agent`, `subagent_type: "revisor"` (plugin instalado) o `kimi -p --agent-file agents/revisor.md` |
-| Crear/patchear una lección | `skill_manage` | escribir `<raíz>/<clase>/SKILL.md` | escribir `~/.agents/skills/<clase>/SKILL.md` o `<repo>/.agents/skills/<clase>/SKILL.md` | escribir `~/.gemini/config/skills/<clase>/SKILL.md` o `<repo>/.agents/skills/<clase>/SKILL.md` | escribir `~/.grok/skills/<clase>/SKILL.md` | escribir `$KIMI_CODE_HOME/skills/<clase>/SKILL.md` o `~/.agents/skills/<clase>/SKILL.md` |
-| Raíz de skills | `~/.hermes/skills` (o perfil) | `~/.claude/skills`, luego `.claude/skills` del proyecto | `.agents/skills` del repo, luego `~/.agents/skills`, `$CODEX_HOME/skills` (`~/.codex/skills`) y `/etc/codex/skills` | `~/.gemini/config/skills`, luego `.gemini/skills`, luego `.agents/skills` | `~/.grok/skills` | `$KIMI_CODE_HOME/skills` (`~/.kimi-code/skills`), `~/.agents/skills`; proyecto: `.kimi-code/skills`, `.agents/skills` |
-| Intérprete con `psycopg` | venv de Hermes | venv neutro `~/.harness-flow/venv` | venv neutro `~/.harness-flow/venv` | venv neutro `~/.harness-flow/venv` | venv neutro `~/.harness-flow/venv` | venv neutro `~/.harness-flow/venv` |
-| Atajos del flujo | — | `/harness-flow:estado\|producto\|spec\|review\|cierre` | — | — | `/harness-flow` | — |
+| Revisor | `delegate_task` | `Agent` | `codex exec` o subagente | `invoke_subagent` | `spawn_subagent` | `Agent` o `kimi -p` |
+| Crear lección | `skill_manage` | `leccion.py donde` | `leccion.py donde` | `leccion.py donde` | `leccion.py donde` | `leccion.py donde` |
+| Guía del host | — | [`claude.md`](references/claude.md) | [`openai.md`](references/openai.md) | `entorno.py` | [`grok.md`](references/grok.md) | [`kimi.md`](references/kimi.md) |
 
-Todo lo demás (gates, worktrees, specs, hub, vault, documentacion, atlassian) es Python puro y
-se comporta idéntico en los hosts soportados. Si no puedes lanzar un subagente aislado, revisa tú mismo
-con `revision.py --feature <id>` y **dilo explícitamente**: el rigor baja.
-
-### Otros CLIs que leen SKILL.md
-
-Grok y Kimi Code tienen host propio (`grok`, `kimi`): sus secciones arriba y
-[`references/grok.md`](references/grok.md) / [`references/kimi.md`](references/kimi.md).
-Codex se reporta como `gpt` por su marca de sesion o por la ruta de instalacion
-en `.agents/skills`, `.codex/skills` o `$CODEX_HOME/skills`, y el
-revisor se lanza con `codex exec`. **No uses `codex exec` fuera de Codex.**
-
-`~/.agents/skills` es el mínimo común múltiplo compartido: `leccion.py` **busca**
-lecciones en todas las raíces y **crea** en la del host detectado (`donde` marca cuál).
-
-Kimi Code se detecta por la ruta `.kimi-code` o `KIMI_CODE_HOME`; por el symlink de
-`~/.agents/skills` sale `gpt`, y desde el clone de Hermes `hermes`: ahi fija
-`HARNESS_HOST=kimi`. Instalacion, revisor y lecciones: [`references/kimi.md`](references/kimi.md).
+Los gates, worktrees, specs, memoria y documentación usan los mismos scripts
+Python. Si no hay revisor aislado, puedes revisar localmente con
+`revision.py --feature <id>`, pero declara que el aislamiento no se logró.
 
 ## Referencias (cargalas cuando hagan falta, no antes)
 
@@ -489,6 +351,7 @@ Kimi Code se detecta por la ruta `.kimi-code` o `KIMI_CODE_HOME`; por el symlink
 | [`references/multirepo.md`](references/multirepo.md) | raiz multi-repo sin `.git`: registro, `--integrated`, postmerge medido |
 | [`references/contexto.md`](references/contexto.md) | varias raices de grafo, el parte de `refrescar`, algo del contexto no cuadra |
 | [`references/lecciones-del-arnes.md`](references/lecciones-del-arnes.md) | **antes de tocar o escribir un gate** |
+| [`references/hosts.md`](references/hosts.md) | raíces de skills y creación de lecciones por host |
 | [`references/hub.md`](references/hub.md) | esquema del hub, `derivar-graphify`, credenciales |
 | [`references/obsidian.md`](references/obsidian.md) | que genera el vault, config sembrada, `--con-grafo` |
 | [`references/atlassian.md`](references/atlassian.md) | mapeo a Jira/Confluence y sus comandos |

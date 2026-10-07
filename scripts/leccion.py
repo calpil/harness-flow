@@ -129,7 +129,7 @@ def _repo_root(cwd: Path) -> Path | None:
 
 
 def _raices_gpt() -> list[Path]:
-    """Codex/ChatGPT: repo .agents/skills cerca primero, luego user/admin."""
+    """Codex/ChatGPT: repo .agents/.codex/skills cerca primero, luego user/admin."""
     raices: list[Path] = []
     try:
         cwd = Path.cwd()
@@ -140,7 +140,13 @@ def _raices_gpt() -> list[Path]:
         else:
             padres = [cwd]
         for padre in padres:
+            # .agents es compartida entre agentes; .codex es la raiz nativa
+            # de Codex para skills de proyecto.
             raices.append(padre / ".agents" / "skills")
+            # ~/.codex es personal: CODEX_HOME decide esa raiz incluso si
+            # el comando se ejecuta desde el directorio del usuario.
+            if padre.resolve() != _casa().resolve():
+                raices.append(padre / ".codex" / "skills")
     except OSError:
         pass
     raices.append(_casa() / ".agents" / "skills")
@@ -291,8 +297,9 @@ def skills_roots(todos_los_hosts: bool = False) -> list[Path]:
         # las skills de Hermes en un host que no es el suyo.
         candidatas = _raices_claude()
     elif host == "gpt":
-        # Codex/ChatGPT usa .agents/skills. No se anade _raiz_propia(): un symlink
-        # desde ~/.agents al clone de Hermes no debe colar las skills de Hermes.
+        # Codex/ChatGPT usa .agents/.codex de proyecto y sus raices personales.
+        # No se anade _raiz_propia(): un symlink desde ~/.agents al clone de
+        # Hermes no debe colar las skills de Hermes.
         candidatas = _raices_gpt()
     elif host == "gemini":
         # Gemini / AGY usa .gemini/skills, .agents/skills y ~/.gemini/config/skills.

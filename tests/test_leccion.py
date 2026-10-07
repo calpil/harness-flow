@@ -69,11 +69,31 @@ class RaicesTests(Base):
         os.environ["HARNESS_HOST"] = "codex"
         personal = self.home / ".codex" / "skills"
         self.skill(personal, "nativa")
-        self.assertEqual(leccion.skills_roots()[0], personal)
+        self.assertEqual(leccion.skills_roots()[0].resolve(), personal.resolve())
         custom_home = self.home / "codex-personalizado"
         with mock.patch.dict(os.environ, {"CODEX_HOME": str(custom_home)}):
             self.skill(custom_home / "skills", "custom")
-            self.assertEqual(leccion.skills_roots()[0], custom_home / "skills")
+            self.assertEqual(leccion.skills_roots()[0].resolve(), (custom_home / "skills").resolve())
+
+    def test_codex_prioriza_leccion_nativa_del_repo_desde_subdirectorio(self):
+        import subprocess
+
+        repo = Path(self.tmp.name) / "repo"
+        repo_skills = repo / ".codex" / "skills"
+        personal = self.home / ".agents" / "skills"
+        self.skill(repo_skills, "compartida", "leccion-del-repo")
+        self.skill(personal, "compartida", "leccion-personal")
+        subprocess.run(["git", "init"], cwd=repo, check=True, capture_output=True)
+        subdirectorio = repo / "src"
+        subdirectorio.mkdir()
+        os.chdir(subdirectorio)
+        os.environ["HARNESS_HOST"] = "codex"
+
+        salida = io.StringIO()
+        with contextlib.redirect_stdout(salida):
+            leccion.cmd_donde(None)
+        self.assertEqual(Path(salida.getvalue().splitlines()[0]), repo_skills.resolve())
+        self.assertIn("leccion-del-repo", leccion.buscar("compartida").read_text())
 
     def test_gpt_codex_usa_agents_skills_personal_y_repo(self):
         personal = self.home / ".agents" / "skills"

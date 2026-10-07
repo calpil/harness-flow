@@ -39,3 +39,19 @@ gates y todas tienen repro verificada.
   ramas.** `code == 0` faltaba sólo en la creación de issue: persistía
   `jira_key: null` y el reintento duplicaba la issue en Jira.
 
+## Como auditar el arnes
+
+Una regresion debe fallar contra el codigo previo y pasar con la correccion.
+Compara ambas versiones en un checkout temporal; un test que pasa en las dos
+no demuestra el arreglo. Revisa tambien las pruebas existentes: pueden
+certificar un comportamiento incorrecto.
+
+La suite usa `unittest`. Ejecuta los modulos desde `tests/`, por ejemplo:
+
+```bash
+cd tests
+python3 -m unittest test_leccion test_leccion_multihost test_entorno
+```
+
+Las suites multi-repo y de runners medidos pueden tardar varios minutos.
+Ejecutalas en segundo plano y comprueba su resultado completo.

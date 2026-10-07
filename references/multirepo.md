@@ -29,6 +29,24 @@ Code y GPT/Codex. No instala dependencias del hub.
    ignorados por Git pueden permanecer: no es permiso para esconder trabajo con
    `assume-unchanged`/`skip-worktree` (ambos bloquean). No hay flag de bypass.
 
+## Features paralelas y comandos de AC
+
+Estas reglas aplican tambien a features de un monorepo:
+
+- Cierra features que comparten artefactos en orden de dependencia. Un AC que
+  compara con un respaldo previo puede quedar obsoleto tras otro cierre.
+- Cada AC debe ejecutar contra el worktree de su feature. Crea ese worktree
+  antes de sellar el spec y comprueba la rama de cada repo con
+  `git -C <ruta> branch --show-current`; la carpeta compartida puede estar en
+  la rama de otra feature.
+- `verify` mide el worktree. Despues de cada cierre, ejecuta la suite completa
+  sobre la rama destino y compara los fallos con una base medida antes del
+  merge para detectar choques entre features.
+- Reserva los numeros de migracion contra la rama de integracion antes de
+  aprobar el spec. Al renumerar usa `git mv`, regenera los manifiestos con el
+  comando del repo y comprueba que el contenido coincida en los repos que lo
+  replican.
+
 ## Manifiesto
 
 Esquema de ejemplo, NO evidencia de un proyecto. Sustituir los tres marcadores
