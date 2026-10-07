@@ -93,8 +93,10 @@ Fuentes: [esfuerzo de razonamiento](https://developers.openai.com/api/docs/guide
 
 ## Claude 5.5
 
-Con modelos Claude, cada rol corre en la familia 5.5 con esfuerzo `xhigh`.
-Fable queda fuera. Los IDs van completos (`claude-opus-5-5`), nunca como alias:
+Con modelos Claude, cada rol corre en la familia 5.5. Producto, Leader, Cierre
+y Estado van fijos en `xhigh`; el implementer y el revisor reciben el nivel que
+elige la sesion coordinadora para cada tarea (ver "Seleccion automatica" mas
+abajo). Fable queda fuera. Los IDs van completos (`claude-opus-5-5`), nunca como alias:
 `opus` cambia de version cuando sale la siguiente, `best` y `default` pueden
 resolver a Fable, y fuera de la API de Anthropic `haiku` es Haiku 4.5, que no
 acepta esfuerzo.
@@ -111,12 +113,68 @@ acepta esfuerzo.
 Los tres aceptan `low` a `max`. Opus 5.5 y Haiku 5.5 arrancan en `medium` si
 nadie fija el nivel: el `xhigh` va explicito en cada frontmatter.
 
+### Seleccion automatica: implementer y revisor
+
+La sesion coordinadora elige el effort antes de cada invocacion, sin pedir
+confirmacion, dentro de esta banda. Una eleccion explicita del usuario tiene
+prioridad.
+
+| Rol | Nivel | Cuando |
+| --- | --- | --- |
+| Implementer | `high` | Por defecto: spec claro, patrones conocidos, sin los riesgos de abajo |
+| Implementer | `xhigh` | Hay un riesgo concreto que el codigo tiene que resolver |
+| Revisor | `xhigh` | Primera ronda: review completo de todos los AC |
+| Revisor | `high` | Ronda de seguimiento: el briefing ya trae un sello `changes_requested` o `blocked`, y solo se verifica lo bloqueante o mayor y los AC |
+
+Riesgos que suben al implementer a `xhigh`:
+
+- contratos coordinados entre varios repos, con compatibilidad o secuencia de
+  despliegue;
+- migracion de datos con riesgo de perdida, irreversibilidad, backfill o
+  rollback;
+- concurrencia: consistencia, transacciones, locks, idempotencia, carreras o
+  reintentos;
+- una leccion aplicable del brief que documenta una falla previa en esa misma
+  clase de trabajo.
+
+Que el spec mencione varios repos, una migracion o concurrencia no basta:
+identifica la decision y su riesgo. El numero de AC, la longitud del spec o un
+error transitorio del entorno no justifican subir. `low`, `medium` y `max`
+quedan fuera de la seleccion automatica: solo con una eleccion explicita del
+usuario. El revisor nunca baja de `high`: es el gate.
+
+Antes de lanzar, informa en una frase: `Implementer: claude-sonnet-5-5 / high —
+un repo, AC con comando` o `Revisor: claude-opus-5-5 / high — ronda de
+seguimiento`.
+
+**Como se aplica.** Un texto en el prompt no cambia el esfuerzo; el nivel va en
+la invocacion:
+
+- **Claude Code:** tool `Agent` con `effort: "<nivel>"`, sin `model`.
+- **Hermes:** `claude -p --agent harness-flow:<rol> --effort <nivel>`.
+
+En los dos casos el nivel de la invocacion le gana al `effort` del frontmatter.
+El frontmatter queda en `xhigh`, el tope de la banda, como red: una invocacion
+que olvida pasar el nivel gasta de mas, pero no revisa ni implementa por debajo
+de lo debido.
+
+Producto, Leader y Cierre no entran en la seleccion: corren en la sesion
+principal, cuyo esfuerzo el modelo no puede cambiar, y gastan pocos tokens para
+lo mucho que deciden.
+
+Comprobado el 2026-10-07 con Claude Code 2.1.293, leyendo el `effort` que
+registra la transcripcion: el revisor (frontmatter `xhigh`) lanzado con la tool
+`Agent` y `effort: "low"` corrio en `low` sobre `claude-opus-5-5`, y
+`claude -p --agent harness-flow:revisor --effort low` y `--effort max`
+corrieron en `low` y `max`.
+
 ## Claude Code
 
 - **Subagentes** (`agents/*.md`): `model` y `effort` valen para toda la vida
-  del subagente. Precedencia: el `model` que se pasa a la tool `Agent` le gana
-  al frontmatter, asi que los comandos no lo pasan. No definas
-  `CLAUDE_CODE_SUBAGENT_MODEL_FORCE=1`: invierte esa precedencia.
+  del subagente. Precedencia: el `model` y el `effort` que se pasan a la tool
+  `Agent` le ganan al frontmatter. Los comandos pasan `effort` (seleccion
+  automatica) y nunca `model`. No definas `CLAUDE_CODE_SUBAGENT_MODEL_FORCE=1`:
+  invierte esa precedencia para el modelo.
 - **Comandos** (`commands/*.md`): su `model` vale **solo para ese turno**; el
   siguiente vuelve al modelo de la sesion. Por eso el implementer es un
   subagente y no un comando: implementar dura muchos turnos. El `effort` de un
@@ -147,8 +205,8 @@ global. Por eso los roles se reparten asi:
 | Rol | Como corre en Hermes | Credencial |
 | --- | --- | --- |
 | Producto, Leader, Cierre, Estado | Sesion de Hermes en `claude-opus-5-5` | API key de Console |
-| Implementer | `claude -p --agent harness-flow:implementer` | Login propio de Claude Code |
-| Revisor | `claude -p --agent harness-flow:revisor` | Login propio de Claude Code |
+| Implementer | `claude -p --agent harness-flow:implementer --effort <nivel>` | Login propio de Claude Code |
+| Revisor | `claude -p --agent harness-flow:revisor --effort <nivel>` | Login propio de Claude Code |
 
 ### Sesion
 
@@ -193,18 +251,19 @@ paralelos.
 Corre los dos desde la RAIZ del proyecto y da acceso al worktree con
 `--add-dir`. En `-p` no hay quien apruebe permisos: lo que no permitas se
 deniega. `--allowedTools "Bash"` deja correr cualquier comando; acotalo si
-prefieres.
+prefieres. El `--effort` sale de la seleccion automatica de arriba; anuncialo antes
+de lanzar.
 
 ```bash
 # Implementer: el brief entra por stdin.
 "$PY" "$H/contexto.py" brief --feature <id> | claude -p \
-  --agent harness-flow:implementer --add-dir <worktree> \
+  --agent harness-flow:implementer --effort <high|xhigh> --add-dir <worktree> \
   --permission-mode acceptEdits --allowedTools "Bash" \
   "Implementa la feature #<id>. Spec: docs/spec-feature-<id>-<slug>.md. Worktree: <worktree>."
 
 # Revisor: el briefing entero entra por stdin.
 "$PY" "$H/revision.py" --feature <id> --briefing | claude -p \
-  --agent harness-flow:revisor --add-dir <worktree> \
+  --agent harness-flow:revisor --effort <xhigh|high> --add-dir <worktree> \
   --permission-mode acceptEdits --allowedTools "Bash" \
   "Revisa la feature #<id> y escribe docs/review-<id>.md."
 ```
@@ -215,5 +274,5 @@ de Hermes hace lo mismo que en Claude Code: contrasta `docs/impl-<id>.md` contra
 el worktree, lee `docs/review-<id>.md` y sella con `gate.py revision`.
 
 Sin Claude Code instalado, el revisor vuelve a `delegate_task` y hereda el
-modelo de la sesion. No fijes `delegation.model` para esto: es global, y los
+modelo y el effort de la sesion: ahi no hay seleccion por tarea. No fijes `delegation.model` para esto: es global, y los
 subagentes de tus sesiones con otro modelo tambien pasarian a cobrarse por API.

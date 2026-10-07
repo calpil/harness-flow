@@ -96,8 +96,9 @@ clone hay que reinstalarlo.
 Ademas de la skill, Claude Code carga la capa nativa que trae el repo
 (`.claude-plugin/plugin.json`): los subagentes `harness-flow:revisor` (Opus 5.5) e
 `harness-flow:implementer` (Sonnet 5.5), y los comandos `/harness-flow:estado`,
-`:producto`, `:spec`, `:implementar`, `:review` y `:cierre`, cada uno con su modelo
-y esfuerzo `xhigh` ([`references/modelos.md`](references/modelos.md)). Comprueba con
+`:producto`, `:spec`, `:implementar`, `:review` y `:cierre`, cada uno con su modelo;
+el implementer y el revisor reciben el esfuerzo que la skill elige por tarea
+([`references/modelos.md`](references/modelos.md)). Comprueba con
 `claude plugin list` que aparezca `harness-flow@skills-dir` como `loaded`. Los
 otros hosts ignoran esos archivos. Ver [`references/claude.md`](references/claude.md).
 

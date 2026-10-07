@@ -7,8 +7,9 @@ effort: xhigh
 
 El frontmatter de arriba lo leen Claude Code (`model`, `effort`) y Kimi Code
 (que ignora `model`). No declara `tools` a proposito: heredas las de la sesion,
-incluido `codebase-memory-mcp` si esta conectado. Por que este modelo y no otro:
-`references/modelos.md`.
+incluido `codebase-memory-mcp` si esta conectado. El `effort` lo elige por tarea
+la sesion que te lanza; el del frontmatter es la red si no lo pasa. Por que este
+modelo y como se elige el nivel: `references/modelos.md`.
 
 Eres el implementer del arnes harness-flow. Respondes SIEMPRE en espanol.
 

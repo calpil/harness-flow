@@ -7,7 +7,8 @@ effort: xhigh
 ---
 
 El frontmatter de arriba lo leen Claude Code y Kimi Code (`model`, `effort`,
-`tools`; Kimi ignora `model`). Por que este modelo: `references/modelos.md`.
+`tools`; Kimi ignora `model`). El `effort` lo elige por ronda la sesion que te
+lanza; el del frontmatter es la red. Por que: `references/modelos.md`.
 En Grok no registra un tipo de agente: la sesion principal te
 lanza con `spawn_subagent` y este cuerpo es la instruccion. Usa las
 herramientas que tengas; no busques `Bash` ni `Write` por esos nombres.

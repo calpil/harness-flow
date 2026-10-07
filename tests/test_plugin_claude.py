@@ -104,6 +104,23 @@ class ComponentesTests(unittest.TestCase):
         fm = frontmatter(RAIZ / "agents" / "revisor.md")
         self.assertIn(f"{datos['name']}:{fm['name']}", texto)
 
+    def test_los_comandos_que_delegan_pasan_effort_y_no_model(self):
+        """El effort por tarea vive en la invocacion; un `model` pisaria el del frontmatter."""
+        for nombre in ("implementar.md", "review.md"):
+            texto = (RAIZ / "commands" / nombre).read_text(encoding="utf-8")
+            with self.subTest(comando=nombre):
+                self.assertIn("y `effort` con", texto)
+                self.assertIn("nunca `model`", texto)
+
+    def test_los_subagentes_corren_en_el_tope_si_nadie_pasa_effort(self):
+        """Sin effort en la invocacion manda el frontmatter: Opus 5.5 caeria a medium."""
+        for nombre in ("implementer.md", "revisor.md"):
+            fm = frontmatter(RAIZ / "agents" / nombre)
+            with self.subTest(agente=nombre):
+                self.assertEqual("xhigh", fm.get("effort"))
+                self.assertTrue(fm.get("model", "").startswith("claude-"),
+                                "ID completo: un alias cambia de version solo")
+
     def test_ningun_comando_hardcodea_la_ruta_de_la_skill(self):
         """La ruta cambia por host, SO y perfil: va por ${CLAUDE_PLUGIN_ROOT}."""
         for md in sorted((RAIZ / "commands").glob("*.md")):

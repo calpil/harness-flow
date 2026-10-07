@@ -73,8 +73,10 @@ de "cuando existan dos versiones de un gate, la doc tiene que mandar a la buena"
 aplica igual a los prompts.
 
 Cada subagente y cada comando fija su `model` y su `effort` en el frontmatter
-(familia Claude 5.5, `xhigh`). La tabla por rol, la precedencia y lo que
-quedo comprobado estan en [`modelos.md`](modelos.md).
+(familia Claude 5.5, `xhigh`). Al lanzar el implementer o el revisor, la sesion
+pasa ademas el `effort` que eligio para esa tarea, y ese le gana al del
+frontmatter. La tabla por rol, la banda de seleccion y lo que quedo comprobado
+estan en [`modelos.md`](modelos.md).
 
 ## `$PY` y `$H` no sobreviven entre llamadas Bash
 

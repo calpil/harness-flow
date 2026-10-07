@@ -112,7 +112,11 @@ tarea antes de iniciar cada rol**, `medium` como base y `high` cuando hay riesgo
 concretos de arquitectura, migracion, concurrencia o requisitos contradictorios.
 Indica el nivel y su motivo en una frase y aplicalo en la invocacion del rol.
 Criterios, resto de roles y configuracion por host: [`references/modelos.md`](references/modelos.md).
-Con Claude 5.5 se usa la politica fija de esa misma referencia.
+Con Claude 5.5, Producto, Leader y Cierre van fijos en `xhigh`; **el implementer y el
+revisor reciben el effort que la skill elige por tarea**: implementer `high` y
+`xhigh` ante un riesgo concreto; revisor `xhigh` en la primera ronda y `high` en la
+de seguimiento. Se anuncia igual y se pasa en la invocacion (`effort` de la tool
+`Agent`, o `claude -p --effort`).
 
 ### 0. Producto — PRD inicial y SDD de arquitectura, antes del backlog
 
@@ -367,7 +371,7 @@ Python. Si no hay revisor aislado, puedes revisar localmente con
 | [`references/obsidian.md`](references/obsidian.md) | que genera el vault, config sembrada, `--con-grafo` |
 | [`references/atlassian.md`](references/atlassian.md) | mapeo a Jira/Confluence y sus comandos |
 | [`references/claude.md`](references/claude.md) | Claude Code: plugin, comandos, Windows, raices de lecciones |
-| [`references/modelos.md`](references/modelos.md) | modelo por proveedor y rol; seleccion automatica de effort para Producto/Leader en Codex y Hermes; politica Claude 5.5 |
+| [`references/modelos.md`](references/modelos.md) | modelo por proveedor y rol; seleccion automatica de effort para Producto/Leader en Codex y Hermes, y para implementer/revisor con Claude 5.5 |
 | [`references/openai.md`](references/openai.md) | GPT/Codex: instalacion, deteccion y raices |
 | [`references/grok.md`](references/grok.md) | Grok: host, revisor con `spawn_subagent`, lecciones en `~/.grok/skills`, vault |
 | [`references/kimi.md`](references/kimi.md) | Kimi Code: host, plugin, revisor y lecciones |

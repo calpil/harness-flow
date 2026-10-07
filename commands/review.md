@@ -32,8 +32,15 @@ reglas de veredicto y diff. No la resumas ni la parafrasees.
 
 ## 2. Lanza el revisor aislado
 
-Usa la tool `Agent` con `subagent_type: "harness-flow:revisor"`, pegando la
-salida ENTERA del paso 1 en el prompt, y arriba una linea de goal:
+Elige el effort sin pedir confirmacion, salvo que el usuario haya pedido otro
+nivel: `xhigh` en la primera ronda; `high` si el briefing ya trae un sello
+`changes_requested` o `blocked` (ronda de seguimiento: solo se verifica lo
+bloqueante o mayor y los AC). Nunca menos de `high`: el revisor es el gate.
+Anuncialo en una frase: `Revisor: claude-opus-5-5 / xhigh — primera ronda`.
+
+Usa la tool `Agent` con `subagent_type: "harness-flow:revisor"` y `effort` con
+ese nivel, pegando la salida ENTERA del paso 1 en el prompt, y arriba una linea
+de goal:
 
 > Revisa la feature #$1 y escribe `docs/review-$1.md`.
 
@@ -44,8 +51,9 @@ Reglas de esta delegacion:
   anula el punto del paso.
 - No le cuentes al revisor lo que implementaste ni le adelantes que esperas que
   apruebe. Lee el codigo solo.
-- **No pases `model` a la tool `Agent`**: pisaria el `model` y el `effort` del
-  frontmatter del revisor (Opus 5.5, xhigh; ver `references/modelos.md`).
+- **Pasa `effort`, nunca `model`.** El `effort` de la invocacion le gana al del
+  frontmatter, que queda en `xhigh` como red; un `model` pisaria el Opus 5.5
+  del frontmatter. Criterios en `references/modelos.md` ("Seleccion automatica").
 - Si no puedes lanzar un subagente, revisa tu mismo con el paquete de solo
   lectura y **dilo explicitamente en el chat**: el rigor baja y el usuario
   tiene que saberlo.

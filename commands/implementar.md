@@ -8,7 +8,7 @@ effort: xhigh
 # harness-flow: implementar (rol implementer)
 
 Implementa la feature `$1`. **El codigo no lo escribes tu**: lo escribe el
-subagente `harness-flow:implementer` (Sonnet 5.5, xhigh, ver
+subagente `harness-flow:implementer` (Sonnet 5.5, effort por tarea, ver
 `${CLAUDE_PLUGIN_ROOT}/references/modelos.md`). Tu orquestas, contrastas su
 evidencia y llevas al usuario lo que el spec no resuelve.
 
@@ -49,16 +49,33 @@ eval "$(python3 "${CLAUDE_PLUGIN_ROOT}/scripts/entorno.py" --shell)" && "$PY" "$
 Si dice que el contexto esta vencido, refresca con `contexto.py refrescar`
 antes de delegar: el implementer disena con lo que le pases.
 
-## 4. Delega
+## 4. Elige el effort
 
-Tool `Agent` con `subagent_type: "harness-flow:implementer"`. En el prompt, una
-linea de goal, la ruta del spec, la del worktree y la salida ENTERA del paso 3:
+Con el spec y el brief a la vista, elige el nivel del implementer. No hace falta
+que el usuario lo confirme, salvo que haya pedido otro nivel: su eleccion manda.
+
+- `high`, por defecto: spec claro, patrones conocidos.
+- `xhigh`, si el codigo tiene que resolver un riesgo concreto: contratos entre
+  varios repos, migracion con perdida o irreversibilidad posible, concurrencia,
+  o una leccion del brief que documenta una falla previa en esta clase de
+  trabajo. Mencionarlo no basta: nombra la decision y su riesgo.
+
+Anuncialo en una frase antes de lanzar: `Implementer: claude-sonnet-5-5 / high —
+un repo, AC con comando`. Criterios completos en
+`${CLAUDE_PLUGIN_ROOT}/references/modelos.md` ("Seleccion automatica").
+
+## 5. Delega
+
+Tool `Agent` con `subagent_type: "harness-flow:implementer"` y `effort` con el
+nivel del paso 4. En el prompt, una linea de goal, la ruta del spec, la del
+worktree y la salida ENTERA del paso 3:
 
 > Implementa la feature #$1. Spec: `docs/spec-feature-$1-<slug>.md`.
 > Worktree: `<ruta>`. Brief: <salida de contexto.py brief>
 
-- **No pases `model` a la tool `Agent`**: pisaria el `model` y el `effort` del
-  frontmatter del subagente.
+- **Pasa `effort`, nunca `model`.** El `effort` de la invocacion le gana al del
+  frontmatter, que queda en `xhigh` como red si lo olvidas. Un `model` pisaria
+  el Sonnet 5.5 del frontmatter.
 - No uses un fork: arrastraria todo tu historial de diseno al implementer y le
   quitaria el foco en el spec aprobado.
 - El subagente no puede preguntarle al usuario. Si vuelve con una pregunta
@@ -66,7 +83,7 @@ linea de goal, la ruta del spec, la del worktree y la salida ENTERA del paso 3:
   enmienda (`/harness-flow:spec $1`, seccion 4), no una instruccion nueva al
   implementer.
 
-## 5. Contrasta la evidencia
+## 6. Contrasta la evidencia
 
 Cuando vuelva, abre `docs/impl-$1.md` en la raiz. Es un autoinforme:
 
@@ -80,9 +97,9 @@ Cuando vuelva, abre `docs/impl-$1.md` en la raiz. Es un autoinforme:
   ```
 
 Si algo no aguanta, devuelvelo al implementer (otra llamada al subagente con el
-hallazgo concreto) antes de pasar al review.
+hallazgo concreto y el mismo `effort`) antes de pasar al review.
 
-## 6. Siguiente paso
+## 7. Siguiente paso
 
 `/harness-flow:review $1`. El revisor es otro subagente, aislado y en Opus 5.5:
 no le cuentes lo que hizo el implementer.
