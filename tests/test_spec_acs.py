@@ -76,6 +76,15 @@ class ComandoNoSeHeredaTests(unittest.TestCase):
         )
         self.assertEqual(ac_comandos(texto), {"AC-4": "node --test a.test.mjs"})
 
+    def test_el_primer_comando_del_ac_gana(self):
+        # Sin encabezado de por medio: una linea posterior que nombra otro
+        # comando tampoco reemplaza al declarado en la linea del AC.
+        texto = (
+            "- AC-1: dado x. `verificar: go test ./a/`\n"
+            "  nota: el gate viejo se llamaba `verify: dist`\n"
+        )
+        self.assertEqual(ac_comandos(texto), {"AC-1": "go test ./a/"})
+
     def test_un_encabezado_cierra_el_ac_sin_comando(self):
         # Un AC sin comando no adopta el de otra seccion del documento.
         texto = (
