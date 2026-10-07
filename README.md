@@ -256,7 +256,8 @@ ya realizada por ancestria, limpieza y tips exactos por repo. Guarda fuentes/tip
 en `integraciones` y SDD, sin un merge global ficticio. El registro no autoriza
 roles ni ediciones protegidas y no elimina bloqueos de otras features. Los mismos
 comandos funcionan por symlink desde `.claude/skills`. El cierre exige el mapa de
-bases reales `--postmerge` y ejecuta Go JSON/-exec o Angular22/Vitest4+Node22 de ADR
+bases reales `--postmerge` y ejecuta Go JSON/-exec o Angular22/Vitest4+node:test de ADR
+(con el Node que declara el repo)
 en TODOS los tips destino antes de done; no admite recibos manuales ni exit0 sin
 pruebas. Protocolos ajenos permanecen bloqueados (no hay comandos genericos).
 El `postmerge.py` heredado se conserva; `postmerge_medido.py` y el nuevo CLI

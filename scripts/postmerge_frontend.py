@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 """Base/check frontend ADR: Angular 22/Vitest 4 y node:test. Sin shell ni --cmd.
 
+node:test mide los N archivos explicitos de `test:dist`, cada uno con su
+identidad (ruta, titulo), con el Node que declara el repo (.nvmrc y/o
+engines.node), que tiene que ser el que corre.
 0: medicion completa sin regresiones; 1: rojos nuevos; 2: no pude medir.
 No es build/SSG ni la suite legal cross-repo. No instala dependencias.
 """
@@ -19,9 +22,20 @@ import uuid
 import retiros
 from multirepo import Invalid, require, read_manifest, git, _clean
 
-PROTOCOL = 'angular22-vitest4-node22-v1'
-NODE_FILES = ['scripts/verificar-dist.test.mjs', 'scripts/catalogo-snapshot.test.mjs']
+PROTOCOL = 'angular22-vitest4-node-declarado-v2'
 HELPERS = ('postmerge_frontend.py', 'frontend_node_reporter.mjs', 'frontend_vitest_reporter.mjs')
+NODE_TEST = 'node --test '
+# Cada archivo de test:dist es una ruta relativa EXPLICITA: segmentos que empiezan
+# con alfanumerico o `_` (ni `..`, ni `.`, ni ocultos, ni un flag `-x`), sin
+# metacaracteres de glob, comillas, espacios ni operadores de shell. node --test
+# expande globs por su cuenta: un patron haria ambigua la identidad del archivo.
+NODE_FILE = re.compile(r'(?:[A-Za-z0-9_][A-Za-z0-9_.-]*/)*[A-Za-z0-9_][A-Za-z0-9_.-]*\.test\.mjs')
+# El protocolo de eventos node:test que parsea parse_node se verifico desde Node 22.
+NODE_MINIMO = 22
+_N = r'(0|[1-9][0-9]*)'
+NVMRC = re.compile(rf'v?{_N}(?:\.{_N}(?:\.{_N})?)?')
+ENGINES = re.compile(rf'(\^|~|>=)?v?{_N}\.{_N}\.{_N}')
+NODE_VERSION = re.compile(rf'v{_N}\.{_N}\.{_N}')
 
 
 def digest(path):
@@ -38,6 +52,74 @@ def environment():
     return env
 
 
+def node_files(scripts):
+    """Los archivos de `test:dist`: `node --test` seguido de N rutas explicitas.
+
+    Sin flags, globs ni comandos: lo que se ejecuta es exactamente esa lista, en
+    ese orden, y cada test queda identificado por (ruta, titulo).
+    """
+    command = scripts.get('test:dist')
+    require(isinstance(command, str) and command.startswith(NODE_TEST),
+            'contrato node:test no soportado: test:dist debe ser `node --test <archivos>`')
+    files = command[len(NODE_TEST):].split(' ')
+    require(all(NODE_FILE.fullmatch(f) for f in files),
+            'contrato node:test no soportado: test:dist solo admite rutas relativas explicitas '
+            '*.test.mjs, sin flags, globs, comillas ni comandos')
+    require(len(files) == len(set(files)), 'contrato node:test no soportado: test:dist repite un archivo')
+    return files
+
+
+def node_files_en(repo, sha):
+    """Los archivos que declara `test:dist` en ese commit, con el mismo contrato."""
+    package = load_json(git(repo, 'show', sha + ':package.json', binary=True).decode('utf-8'))
+    require(isinstance(package, dict) and isinstance(package.get('scripts'), dict),
+            'contrato node:test: package.json sin scripts en ' + sha[:12])
+    return node_files(package['scripts'])
+
+
+def node_declarado(repo, package):
+    """Lo que el repo declara de Node (.nvmrc y/o engines.node), en formas cerradas.
+
+    Un alias (`lts/*`, `node`) o un rango compuesto no se resuelven sin red ni
+    sin reimplementar semver entero: se rechazan en vez de adivinar.
+    """
+    require(isinstance(package, dict), 'contrato Node: package.json invalido')
+    declared = {}
+    nvmrc = repo / '.nvmrc'
+    if nvmrc.exists() or nvmrc.is_symlink():
+        require(nvmrc.is_file() and not nvmrc.is_symlink(), 'contrato Node: .nvmrc no es un archivo regular')
+        text = nvmrc.read_text(encoding='utf-8').strip()
+        require(NVMRC.fullmatch(text), 'contrato Node: .nvmrc debe fijar una version numerica '
+                '(X, X.Y o X.Y.Z); un alias como lts/* o node no se resuelve')
+        declared['nvmrc'] = text
+    engines = package.get('engines', {})
+    require(isinstance(engines, dict), 'contrato Node: engines invalido')
+    if 'node' in engines:
+        spec = engines['node']
+        require(isinstance(spec, str) and ENGINES.fullmatch(spec),
+                'contrato Node: engines.node fuera de las formas soportadas (X.Y.Z, ^X.Y.Z, ~X.Y.Z, >=X.Y.Z)')
+        declared['engines'] = spec
+    require(declared, 'contrato Node: el repo no declara su version de Node (.nvmrc ni engines.node)')
+    return declared
+
+
+def cumple(version, kind, spec):
+    """version: (mayor, menor, parche) del Node que corre; spec: lo declarado."""
+    if kind == 'nvmrc':
+        # `24` o `24.21` fijan un prefijo; `24.21.0`, la version exacta.
+        parts = tuple(int(x) for x in spec.removeprefix('v').split('.'))
+        return version[:len(parts)] == parts
+    op, *parts = ENGINES.fullmatch(spec).groups()
+    want = tuple(int(x) for x in parts)
+    if op is None:
+        return version == want
+    if op == '>=':
+        return version >= want
+    # ~ fija mayor.menor; ^ fija hasta el primer componente distinto de cero (npm).
+    fixed = 2 if op == '~' else 1 if want[0] else 2 if want[1] else 3
+    return version[:fixed] == want[:fixed] and version >= want
+
+
 def scope(repo):
     package = read_manifest(repo / 'package.json')
     angular = read_manifest(repo / 'angular.json')
@@ -45,10 +127,11 @@ def scope(repo):
     scripts = package['scripts']
     require(isinstance(projects, dict) and projects and all(re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_-]*', x)
                                                           for x in projects), 'contrato de proyectos invalido')
-    require(scripts['test:dist'] == 'node --test ' + ' '.join(NODE_FILES), 'contrato node:test no soportado')
+    require(isinstance(scripts, dict), 'contrato npm requiere scripts')
+    files = node_files(scripts)
     require(not any(x in scripts for x in ('pretest', 'posttest', 'pretest:dist', 'posttest:dist')),
             'contrato no incluye hooks npm de test')
-    require(isinstance(scripts, dict) and isinstance(scripts.get('test'), str),
+    require(isinstance(scripts.get('test'), str),
             'contrato npm test requiere comando string')
     commands = scripts['test'].split(' && ')
     order = [c.removeprefix('ng test ') for c in commands[1:]]
@@ -67,23 +150,36 @@ def scope(repo):
         inventory['angular:' + name] = sorted(p.relative_to(repo).as_posix() for p in (repo / root).rglob('*')
                                                if p.is_file() and (p.name.endswith('.spec.ts') or p.name.endswith('.test.ts')))
         require(inventory['angular:' + name], 'contrato Angular: proyecto sin tests')
-    for path in NODE_FILES:
-        require((repo / path).is_file() and not (repo / path).is_symlink(), 'contrato node:test archivo ausente/symlink')
-    inventory['node:test'] = sorted(NODE_FILES)
-    return {'projects': order, 'node_files': NODE_FILES, 'command': scripts['test'], 'files': inventory}
+    for path in files:
+        # Ni el archivo ni un directorio de su ruta pueden ser symlink: la
+        # identidad es la ruta dentro del repo, no a donde apunte.
+        target = repo / path
+        require(target.is_file() and not target.is_symlink() and target.resolve() == repo.resolve() / path,
+                'contrato node:test archivo ausente/symlink: ' + path)
+    inventory['node:test'] = sorted(files)
+    return {'projects': order, 'node_files': files, 'command': scripts['test'], 'files': inventory}
 
 
 def toolchain(repo, env):
     node = shutil.which('node', path=env.get('PATH'))
     if node is None:
         raise Invalid('Node ausente')
+    declared = node_declarado(repo, read_manifest(repo / 'package.json'))
     versions = {name: read_manifest(repo / 'node_modules' / name / 'package.json')['version']
                 for name in ('@angular/cli', '@angular/build', 'vitest')}
     versions['node'] = subprocess.check_output([node, '--version'], env=env, text=True).strip()
-    for name, prefix in (('node', 'v22.'), ('@angular/cli', '22.'), ('@angular/build', '22.'), ('vitest', '4.')):
-        require(versions[name].startswith(prefix), 'toolchain fuera de contrato Angular22/Vitest4/Node22')
-    return {'node': str(Path(node).resolve()), 'versions': versions, 'node_sha256': digest(node),
-            'lock_sha256': digest(repo / 'package-lock.json'),
+    running = NODE_VERSION.fullmatch(versions['node'])
+    require(running, 'toolchain fuera de contrato: Node sin version estable vX.Y.Z')
+    running = tuple(int(x) for x in running.groups())
+    require(running[0] >= NODE_MINIMO, f'toolchain fuera de contrato: el protocolo node:test exige '
+            f'Node {NODE_MINIMO} o superior ({versions["node"]})')
+    for kind, spec in declared.items():
+        require(cumple(running, kind, spec), f'toolchain fuera de contrato: Node {versions["node"]} '
+                f'no es el que declara el repo ({kind} {spec})')
+    for name, prefix in (('@angular/cli', '22.'), ('@angular/build', '22.'), ('vitest', '4.')):
+        require(versions[name].startswith(prefix), 'toolchain fuera de contrato Angular22/Vitest4')
+    return {'node': str(Path(node).resolve()), 'versions': versions, 'node_declarado': declared,
+            'node_sha256': digest(node), 'lock_sha256': digest(repo / 'package-lock.json'),
             'runner_sha256': {name: digest(Path(__file__).with_name(name)) for name in HELPERS}}
 
 
@@ -118,15 +214,17 @@ def unique_results(tests):
     return tests
 
 
-def parse_node(repo, run, hojas=None):
-    """hojas: mapa opcional id -> titulo hoja (en node:test, el nombre plano)."""
+def parse_node(repo, run, node_files, hojas=None):
+    """node_files: los de test:dist, cada uno con su resumen y su final.
+
+    hojas: mapa opcional id -> titulo hoja (en node:test, el nombre plano)."""
     events = [load_json(line) for line in run['stdout'].splitlines()]
     tests, starts, finals, summaries, completes = [], set(), set(), {}, {}
     for e in events:
         kind, data = e['type'], e['data']
         if kind in ('test:start', 'test:pass', 'test:fail'):
             file, name = relative(repo, data['file']), data['name']
-            require(file in NODE_FILES and isinstance(name, str) and name, 'node:test identidad ajena')
+            require(file in node_files and isinstance(name, str) and name, 'node:test identidad ajena')
             require(data['nesting'] == 0, 'node:test anidado fuera del contrato ADR plano')
             key = (file, name)
             if kind == 'test:start':
@@ -159,7 +257,7 @@ def parse_node(repo, run, hojas=None):
                 completes[file] = data['details']
     unique_results(tests)
     require(starts == finals, 'node:test truncado: faltan finales')
-    require(set(summaries) == {*NODE_FILES, '*'} and set(completes) == set(NODE_FILES),
+    require(set(summaries) == {*node_files, '*'} and set(completes) == set(node_files),
             'node:test falta resumen/final de archivo (vacio/truncado)')
     require(events[-1]['type'] == 'test:summary' and 'file' not in events[-1]['data'],
             'node:test falta final global')
@@ -256,9 +354,10 @@ def measure(repo, trace=None):
         trace.update(repo=str(repo), rama=branch, sha=sha, toolchain=tools, scope=contract, execution=execution)
     with tempfile.TemporaryDirectory(prefix='frontend-measure-') as tmp:
         node = tools['node']
-        argv = [node, '--test', '--test-reporter=' + str(Path(__file__).with_name('frontend_node_reporter.mjs').resolve()), *NODE_FILES]
+        argv = [node, '--test', '--test-reporter=' + str(Path(__file__).with_name('frontend_node_reporter.mjs').resolve()),
+                *contract['node_files']]
         execution['node:test'] = run_process(argv, repo, env)
-        results += parse_node(repo, execution['node:test'])
+        results += parse_node(repo, execution['node:test'], contract['node_files'])
         for project in contract['projects']:
             output, events = Path(tmp) / (project + '.json'), Path(tmp) / (project + '.jsonl')
             argv = [node, str(repo / 'node_modules/@angular/cli/bin/ng.js'), 'test', project,
@@ -282,7 +381,7 @@ def measure(repo, trace=None):
     return measured
 
 
-def validate_execution(repo, name, run, tools):
+def validate_execution(repo, name, run, tools, node_files):
     angular = name.startswith('angular:')
     fields = {'argv', 'exit', 'stdout', 'stderr'} | ({'json', 'events'} if angular else set())
     require(isinstance(run, dict) and set(run) == fields, 'base ejecucion esquema invalido')
@@ -301,7 +400,8 @@ def validate_execution(repo, name, run, tools):
                     '--no-watch', '--reporters=json',
                     '--reporters=' + str(Path(__file__).with_name('frontend_vitest_reporter.mjs').resolve()), argv[-1]]
     else:
-        expected = [node, '--test', '--test-reporter=' + str(Path(__file__).with_name('frontend_node_reporter.mjs').resolve()), *NODE_FILES]
+        expected = [node, '--test', '--test-reporter=' + str(Path(__file__).with_name('frontend_node_reporter.mjs').resolve()),
+                    *node_files]
     require(argv == expected, 'base ejecucion no corresponde al comando cerrado')
 
 
@@ -312,8 +412,12 @@ def validate_measurement(data):
     require(data['protocol'] == PROTOCOL and data['environment'] == {'CI': '1', 'TZ': 'UTC'},
             'base protocolo/entorno incompatible')
     contract = data['scope']
-    require(set(contract) == {'projects', 'node_files', 'command', 'files'}
-            and contract['node_files'] == NODE_FILES, 'base contrato incompleto')
+    require(isinstance(contract, dict) and set(contract) == {'projects', 'node_files', 'command', 'files'},
+            'base contrato incompleto')
+    node = contract['node_files']
+    # La lista de la base cumple el mismo contrato que test:dist (y solo esa se acepta en el raw).
+    require(isinstance(node, list) and all(isinstance(x, str) for x in node)
+            and node_files({'test:dist': NODE_TEST + ' '.join(node)}) == node, 'base contrato incompleto')
     projects = contract['projects']
     require(isinstance(projects, list) and projects and len(projects) == len(set(projects))
             and all(re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_-]*', p) for p in projects), 'base proyectos invalidos')
@@ -323,8 +427,8 @@ def validate_measurement(data):
             'base comando no corresponde al contrato')
     repo = Path(data['repo'])
     for name, run in data['execution'].items():
-        validate_execution(repo, name, run, data['toolchain'])
-    tests = parse_node(repo, data['execution']['node:test'])
+        validate_execution(repo, name, run, data['toolchain'], contract['node_files'])
+    tests = parse_node(repo, data['execution']['node:test'], contract['node_files'])
     for project in projects:
         tests += parse_angular(repo, project, data['execution']['angular:' + project])
     unique_results(tests)
@@ -345,8 +449,14 @@ def read_base(path, repo, branch, tip, expected_base=None):
     git(repo, 'merge-base', '--is-ancestor', data['sha'], tip)
     require(data['tree'] == git(repo, 'rev-parse', data['sha'] + '^{tree}'), 'base tree/SHA incoherente')
     current = scope(repo)
-    require(all(current[k] == data['scope'][k] for k in ('projects', 'node_files', 'command')),
+    require(all(current[k] == data['scope'][k] for k in ('projects', 'command')),
             'base contrato/proyecto cambio')
+    # test:dist puede ganar o perder archivos entre base y destino, como un spec
+    # de Angular: lo que desaparece lo bloquea compare(). Pero la base tiene que
+    # haber medido TODO el test:dist de su propio commit, o un archivo omitido
+    # dejaria de contar como inventario (sus tests podrian desaparecer sin aviso).
+    require(data['scope']['node_files'] == node_files_en(repo, data['sha']),
+            'base no midio todo el test:dist de su commit')
     require(data['toolchain'] == toolchain(repo, environment()), 'base toolchain/runner/lock stale')
     return data
 
@@ -359,7 +469,7 @@ def leaf_titles(base):
     y en node:test es el nombre plano que exige el contrato ADR.
     """
     repo, hojas = Path(base['repo']), {}
-    parse_node(repo, base['execution']['node:test'], hojas)
+    parse_node(repo, base['execution']['node:test'], base['scope']['node_files'], hojas)
     for project in base['scope']['projects']:
         parse_angular(repo, project, base['execution']['angular:' + project], hojas)
     return hojas

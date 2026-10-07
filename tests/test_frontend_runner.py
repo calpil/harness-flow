@@ -50,6 +50,10 @@ class FrontendFixture(unittest.TestCase):
         self.write('package.json', json.dumps({'private': True, 'type': 'module', 'scripts': {
             'test': 'npm run test:dist && ng test app',
             'test:dist': 'node --test ' + ' '.join(NODE_FILES)}}))
+        # El contrato toma la version de Node de lo que DECLARA el repo: el
+        # fixture declara la del Node que este primero en PATH.
+        self.node_version = subprocess.check_output(['node', '--version'], env=self.env, text=True).strip()
+        self.write('.nvmrc', self.node_version.removeprefix('v') + '\n')
         self.write('package-lock.json', (modules.parent / 'package-lock.json').read_text())
         self.write('angular.json', json.dumps({'version': 1, 'projects': {'app': {
             'projectType': 'application', 'root': 'projects/app', 'sourceRoot': 'projects/app/src',
@@ -313,6 +317,244 @@ class FrontendFixture(unittest.TestCase):
         self.commit('only')
         self.expect(self.cli('base'), 2, 'no pude medir')
         self.assertFalse(self.base.exists())
+
+    # --- test:dist con N archivos y Node declarado por el repo (ADR 2026-10) ---
+
+    def package(self):
+        return json.loads((self.repo / 'package.json').read_text())
+
+    def set_test_dist(self, command):
+        package = self.package()
+        package['scripts']['test:dist'] = command
+        self.write('package.json', json.dumps(package))
+
+    def node_test(self, path, *names, red=()):
+        body = "import {test} from 'node:test';\nimport assert from 'node:assert/strict';\n"
+        body += ''.join(f"test('{n}', () => assert.equal(1, {2 if n in red else 1}));\n" for n in names)
+        self.write(path, body)
+
+    def version(self):
+        return tuple(int(x) for x in self.node_version.removeprefix('v').split('.'))
+
+    def fake_node(self, version):
+        """Un `node` que REPORTA otra version y delega todo lo demas en el real.
+
+        Prueba que el contrato decide por la version declarada y no por una
+        fija, sin instalar otro Node.
+        """
+        import shlex
+        real = shutil.which('node', path=self.env['PATH'])
+        bindir = self.home / ('node-v' + version)
+        bindir.mkdir()
+        (bindir / 'node').write_text('#!/bin/sh\nif [ "$1" = "--version" ]; then echo v' + version
+                                     + '; exit 0; fi\nexec ' + shlex.quote(real) + ' "$@"\n')
+        (bindir / 'node').chmod(0o755)
+        self.env['PATH'] = str(bindir) + os.pathsep + self.env['PATH']
+
+    def test_test_dist_con_n_archivos_mide_cada_archivo_con_su_identidad(self):
+        files = [*NODE_FILES, 'scripts/tercero.test.mjs', 'scripts/sub/cuarto.test.mjs']
+        for path in files[2:]:
+            self.node_test(path, 'healthy')
+        self.set_test_dist('node --test ' + ' '.join(files))
+        self.commit('cuatro archivos node:test')
+        data = self.measured_base()
+        # Mismo titulo en cada archivo: la identidad es (ruta, titulo), no colapsa.
+        self.assertEqual({tuple(x['id']) for x in data['results']},
+                         {('angular:app', 'projects/app/src/a.spec.ts', 'healthy'),
+                          *(('node:test', f, 'healthy') for f in files)})
+        self.assertEqual(data['scope']['node_files'], files)
+        self.assertEqual(data['scope']['files']['node:test'], sorted(files))
+        self.assertEqual(data['execution']['node:test']['argv'][-4:], files)
+
+    def test_test_dist_ambiguo_o_arbitrario_no_se_mide(self):
+        self.write('scripts/sin-sufijo.mjs', "import {test} from 'node:test'; test('x', () => {});\n")
+        self.node_test('scripts/real.test.mjs', 'healthy')
+        (self.repo / 'scripts/enlace.test.mjs').symlink_to(self.repo / 'scripts/real.test.mjs')
+        (self.repo / 'enlazado').symlink_to(self.repo / 'scripts', target_is_directory=True)
+        lista = ' '.join(NODE_FILES)
+        variants = {
+            'glob': 'node --test scripts/*.test.mjs',
+            'llaves': 'node --test scripts/{verificar-dist,catalogo-snapshot}.test.mjs',
+            'duplicado': f'node --test {lista} {NODE_FILES[0]}',
+            'flag only': f'node --test --test-only {lista}',
+            'flag pattern': f'node --test --test-name-pattern=healthy {lista}',
+            'encadenado': f'node --test {lista} && true',
+            'doble espacio': f'node --test  {lista}',
+            'espacio final': f'node --test {lista} ',
+            'sube de nivel': 'node --test ../fuera.test.mjs',
+            'absoluta': 'node --test ' + str(self.repo / NODE_FILES[0]),
+            'punto': f'node --test ./{NODE_FILES[0]}',
+            'sin sufijo': 'node --test scripts/sin-sufijo.mjs',
+            'comillas': f"node --test '{NODE_FILES[0]}'",
+            'vacio': 'node --test',
+            'entorno': f'NODE_ENV=test node --test {lista}',
+            'otro runner': f'npx vitest {lista}',
+            'archivo ausente': f'node --test {lista} scripts/no-existe.test.mjs',
+            'symlink': f'node --test {lista} scripts/enlace.test.mjs',
+            'directorio symlink': f'node --test {lista} enlazado/real.test.mjs',
+        }
+        for label, command in variants.items():
+            with self.subTest(case=label):
+                self.set_test_dist(command)
+                self.commit(label)
+                self.base.unlink(missing_ok=True)
+                result = self.cli('base')
+                self.expect(result, 2, 'contrato node:test')
+                self.assertNotIn('$ [', result.stdout, 'un test:dist fuera de contrato no se ejecuta')
+                self.assertFalse(self.base.exists())
+
+    def test_agregar_un_archivo_a_test_dist_mide_sus_rojos_como_nuevos(self):
+        # Es el caso de ADR 0f9b945 -> 938ff68: la integracion suma un archivo.
+        self.measured_base()
+        files = [*NODE_FILES, 'scripts/tercero.test.mjs']
+        self.node_test(files[2], 'healthy', 'nuevo', red=('nuevo',))
+        self.set_test_dist('node --test ' + ' '.join(files))
+        self.commit('suma un archivo node:test con un rojo')
+        self.expect(self.cli('check'), 1, 'node:test::scripts/tercero.test.mjs::nuevo')
+        self.node_test(files[2], 'healthy', 'nuevo')
+        self.commit('arregla el rojo')
+        self.expect(self.cli('check'), 0)
+
+    def test_quitar_un_archivo_de_test_dist_no_es_una_curacion(self):
+        files = [*NODE_FILES, 'scripts/tercero.test.mjs']
+        self.node_test(files[2], 'healthy', 'deuda', red=('deuda',))
+        self.set_test_dist('node --test ' + ' '.join(files))
+        self.commit('tres archivos, uno con deuda')
+        self.measured_base()
+        self.set_test_dist('node --test ' + ' '.join(NODE_FILES))
+        self.commit('saca el archivo de test:dist sin borrarlo')
+        self.expect(self.cli('check'), 2, 'node:test::scripts/tercero.test.mjs::deuda')
+
+    def test_base_que_no_midio_todo_el_test_dist_de_su_commit_se_rechaza(self):
+        files = [*NODE_FILES, 'scripts/tercero.test.mjs']
+        self.node_test(files[2], 'healthy')
+        self.commit('tercer archivo fuera de test:dist')
+        base = self.measured_base()
+        self.set_test_dist('node --test ' + ' '.join(files))
+        tip = self.commit('test:dist lo incluye')
+        # Base coherente consigo misma, pero atribuida a un commit cuyo test:dist
+        # tiene un archivo que esa base nunca midio.
+        base.update(sha=tip, tree=self.git('rev-parse', 'HEAD^{tree}'))
+        self.base.write_text(json.dumps(base))
+        result = self.cli('check')
+        self.expect(result, 2, 'test:dist de su commit')
+        self.assertNotIn('$ [', result.stdout)
+
+    def test_version_de_node_sale_de_lo_que_declara_el_repo(self):
+        major = self.version()[0]
+        otra = f'{major + 2}.1.0'
+        self.write('.nvmrc', otra + '\n')
+        self.commit('el repo declara otro Node')
+        self.fake_node(otra)
+        data = self.measured_base()
+        self.assertEqual(data['toolchain']['versions']['node'], 'v' + otra)
+        self.assertEqual(data['toolchain']['node_declarado'], {'nvmrc': otra})
+        # El mismo Node con el repo declarando otra version no mide.
+        self.write('.nvmrc', self.node_version + '\n')
+        self.commit('vuelve a declarar el Node real')
+        self.base.unlink()
+        result = self.cli('base')
+        self.expect(result, 2, 'toolchain fuera de contrato')
+        self.assertNotIn('$ [', result.stdout)
+
+    def test_node_que_no_cumple_lo_declarado_no_mide(self):
+        major, minor, patch = self.version()
+        exacta = f'{major}.{minor}.{patch}'
+        package = self.package()
+        variants = {
+            'nvmrc otra': ({'.nvmrc': f'{major + 2}.0.0'}, None, 'toolchain fuera de contrato'),
+            'nvmrc menor': ({'.nvmrc': f'{major}.{minor + 1}'}, None, 'toolchain fuera de contrato'),
+            'sin declarar': ({}, None, 'no declara'),
+            'nvmrc alias': ({'.nvmrc': 'lts/*'}, None, '.nvmrc'),
+            'nvmrc vacio': ({'.nvmrc': ''}, None, '.nvmrc'),
+            'engines otro major': ({}, f'^{major + 1}.0.0', 'toolchain fuera de contrato'),
+            'engines tilde': ({}, f'~{major}.{minor + 1}.0', 'toolchain fuera de contrato'),
+            'engines minimo': ({}, f'>={major}.{minor}.{patch + 1}', 'toolchain fuera de contrato'),
+            'engines rango compuesto': ({}, f'>={major} <{major + 9}', 'engines'),
+            'engines x': ({}, f'{major}.x', 'engines'),
+            'engines no texto': ({}, major, 'engines'),
+            'inconsistentes': ({'.nvmrc': exacta}, f'^{major + 1}.0.0', 'toolchain fuera de contrato'),
+        }
+        for label, (files, engines, reason) in variants.items():
+            with self.subTest(case=label):
+                (self.repo / '.nvmrc').unlink(missing_ok=True)
+                for path, content in files.items():
+                    self.write(path, content + '\n')
+                value = dict(package)
+                if engines is not None:
+                    value['engines'] = {'node': engines}
+                self.write('package.json', json.dumps(value))
+                self.commit(label)
+                self.base.unlink(missing_ok=True)
+                result = self.cli('base')
+                self.expect(result, 2, reason)
+                self.assertNotIn('$ [', result.stdout)
+                self.assertFalse(self.base.exists())
+        with self.subTest(case='nvmrc symlink'):
+            self.write('version-node', exacta + '\n')
+            (self.repo / '.nvmrc').unlink(missing_ok=True)
+            (self.repo / '.nvmrc').symlink_to(self.repo / 'version-node')
+            self.write('package.json', json.dumps(package))
+            self.commit('nvmrc symlink')
+            self.expect(self.cli('base'), 2, '.nvmrc')
+
+    def test_node_declarado_en_las_formas_soportadas_mide(self):
+        major, minor, patch = self.version()
+        exacta = f'{major}.{minor}.{patch}'
+        package = self.package()
+        variants = {
+            'nvmrc con v': ({'.nvmrc': 'v' + exacta}, None),
+            'nvmrc major': ({'.nvmrc': str(major)}, None),
+            'engines caret': ({}, '^' + exacta),
+            'engines tilde': ({}, f'~{major}.{minor}.0'),
+            'engines minimo': ({}, '>=22.0.0'),
+            'engines exacta': ({}, exacta),
+            'ambos': ({'.nvmrc': exacta}, f'^{major}.0.0'),
+        }
+        for label, (files, engines) in variants.items():
+            with self.subTest(case=label):
+                (self.repo / '.nvmrc').unlink(missing_ok=True)
+                for path, content in files.items():
+                    self.write(path, content + '\n')
+                value = dict(package)
+                if engines is not None:
+                    value['engines'] = {'node': engines}
+                self.write('package.json', json.dumps(value))
+                self.commit(label)
+                self.base.unlink(missing_ok=True)
+                data = self.measured_base()
+                declared = {**({'nvmrc': files['.nvmrc']} if files else {}),
+                            **({'engines': engines} if engines else {})}
+                self.assertEqual(data['toolchain']['node_declarado'], declared)
+
+    def test_node_bajo_el_minimo_del_protocolo_no_mide(self):
+        self.write('.nvmrc', '20.11.0\n')
+        self.commit('Node 20')
+        self.fake_node('20.11.0')
+        result = self.cli('base')
+        self.expect(result, 2, 'Node 22')
+        self.assertNotIn('$ [', result.stdout)
+
+    def test_cambiar_el_node_declarado_deja_la_base_incomparable(self):
+        self.measured_base()
+        self.write('.nvmrc', str(self.version()[0]) + '\n')
+        self.commit('relaja .nvmrc al major')
+        self.expect(self.cli('check'), 2, 'toolchain')
+
+    def test_cierre_historico_ve_los_tests_de_todo_test_dist(self):
+        sys.path.insert(0, str(SCRIPTS))
+        self.addCleanup(sys.path.remove, str(SCRIPTS))
+        import medicion_destino
+        base_sha = self.git('rev-parse', 'HEAD')
+        files = [*NODE_FILES, 'scripts/tercero.test.mjs']
+        self.node_test(files[2], 'agregado')
+        self.set_test_dist('node --test ' + ' '.join(files))
+        source = self.commit('la feature agrega un archivo node:test')
+        self.assertIn((files[2], 'agregado'),
+                      medicion_destino.tests_agregados_front(str(self.repo), base_sha, source))
+        self.node_test(files[2], 'agregado', 'otro')
+        solo_tests = self.commit('solo toca ese archivo de test')
+        self.assertTrue(medicion_destino.delta_solo_tests_front(str(self.repo), source, solo_tests))
 
 
 if __name__ == '__main__':

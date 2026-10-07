@@ -1,6 +1,7 @@
 """Medicion obligatoria de cada destino: ejecuta, nunca consume recibos de PASS.
 
-Soporte cerrado a Go JSON/-exec existente y Angular22/Vitest4+Node22 de ADR.
+Soporte cerrado a Go JSON/-exec existente y Angular22/Vitest4+node:test de ADR
+(con el Node que declara el repo).
 La configuracion solo enumera bases: no puede cambiar comando ni omitir repos.
 """
 import hashlib
@@ -24,7 +25,7 @@ def _sha256(path):
 
 
 def _frontend(repo):
-    """El destino se mide con el runner frontend (contrato Angular22/Vitest4)."""
+    """El destino se mide con el runner frontend (contrato Angular22/Vitest4+node:test)."""
     return (Path(repo) / 'angular.json').exists() or (Path(repo) / 'package.json').exists()
 
 
@@ -209,9 +210,12 @@ def tests_agregados_go(repo, base_sha, source_sha) -> set[tuple[str, str]]:
 
 
 def _archivos_front(repo, sha) -> list[str]:
-    from postmerge_frontend import NODE_FILES
+    # node:test: los archivos que declara test:dist EN ESE commit, no una lista
+    # fija; un package.json fuera de contrato bloquea (no se enumera a ciegas).
+    from postmerge_frontend import node_files_en
     nombres = set(git(repo, 'ls-tree', '-r', '--name-only', sha).splitlines())
-    return sorted({f for f in nombres if f.endswith(('.spec.ts', '.test.ts'))} | (nombres & set(NODE_FILES)))
+    return sorted({f for f in nombres if f.endswith(('.spec.ts', '.test.ts'))}
+                  | (nombres & set(node_files_en(repo, sha))))
 
 
 def _declaraciones_commit(repo, sha, archivo) -> set[str]:
@@ -240,9 +244,11 @@ def delta_solo_tests_go(repo, base_sha, source_sha) -> bool:
 
 
 def delta_solo_tests_front(repo, base_sha, source_sha) -> bool:
-    from postmerge_frontend import NODE_FILES
-    return all(f.endswith(('.spec.ts', '.test.ts')) or f in NODE_FILES
-              for f in _delta(repo, base_sha, source_sha))
+    # Si la feature cambio test:dist, package.json ya esta en el delta y no es test.
+    from postmerge_frontend import node_files_en
+    node = set(node_files_en(repo, source_sha))
+    return all(f.endswith(('.spec.ts', '.test.ts')) or f in node
+               for f in _delta(repo, base_sha, source_sha))
 
 
 def _historico_go(row, declared) -> dict:

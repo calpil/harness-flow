@@ -382,7 +382,8 @@ Sirve para diagnosticar una integracion a mano. El unico gate es `close`.
   ejecutar la suite. Conservar bases originales y sus logs/hash para auditar
   procedencia; no escribir deuda a mano. El inventario comparable es el de la
   base: no certifica AC ausentes ni descubre todos los tests esperados del producto.
-- Angular22/Vitest4+Node22 tiene el contrato acotado descrito abajo. Python,
+- Angular22/Vitest4+node:test (con el Node que declara el repo) tiene el
+  contrato acotado descrito abajo. Python,
   Jest y otros protocolos no se disfrazan de Go JSON: quedan BLOQUEADOS, no
   se omiten. Sin base preintegracion genuina tambien se bloquea; no fabricar
   una base despues del merge.
@@ -418,7 +419,7 @@ autorizado_por, at}`.
 Que garantiza:
 
 - El MISMO runner del cierre normal en CADA repo del mapa (Go: comando fijo con
-  evidencia `-exec`; frontend: contrato Angular22/Vitest4+Node22), pero SIN
+  evidencia `-exec`; frontend: contrato Angular22/Vitest4+node:test), pero SIN
   comparar contra una base: exige exit real 0, CERO tests en rojo (no hay deuda
   tolerada porque no hay base que la pruebe), cero skip y medicion completa.
   Cualquier rojo o skip bloquea.
@@ -426,7 +427,9 @@ Que garantiza:
   ausentes en `base_sha`, identidad `(paquete, TestX)` de primer nivel en Go
   (mismo `git grep` ciego a build tags que usa `retiros._definido`) y
   `(ruta del spec, titulo hoja)` en frontend (mismo parser de declaraciones,
-  `retiros.declaraciones`) -- sigan midiendose en el destino.
+  `retiros.declaraciones`; los archivos node:test son los que declara
+  `test:dist` en ese commit, y un package.json fuera de contrato bloquea) --
+  sigan midiendose en el destino.
 - Si una feature POSTERIOR los renombro, movio o borro, se declaran en
   `--retirados` con semantica HISTORICA (distinta de la normal, que exige una
   base medida): declarados en `source_sha`, AUSENTES en `base_sha` (la misma
@@ -511,7 +514,7 @@ ancestria/integracion y controles negativos; no representa datos ni cierres del
 proyecto del usuario. `HARNESS_TEST_SCRIPTS` permite ejercitar el mismo contrato
 por un symlink de instalacion simulado sin modificar skills instaladas.
 
-## Contrato frontend ADR (Angular22/Vitest4 y Node22)
+## Contrato frontend ADR (Angular22/Vitest4 y node:test con el Node del repo)
 
 Antes de integrar, sobre Git limpio y rama destino activa:
 
@@ -532,23 +535,50 @@ proyecto, ni cambia el protocolo Go. El runner frontend no instala dependencias.
 - `scripts.test` debe ser literalmente `npm run test:dist && ng test <p1> ...`,
   un `ng test` por TODOS los proyectos de angular.json, sin filtros, duplicados
   ni hooks npm de test. En ADR: storefront/admin/cafeterias/ui/api-client.
-- `test:dist` es literalmente `node --test scripts/verificar-dist.test.mjs scripts/catalogo-snapshot.test.mjs`.
-  Es el inventario portable oficial, NO los casos opcionales activados por
-  artefactos externos DIST_* ni el test legal cross-repo fuera de ese comando.
+- `test:dist` es `node --test <archivo> <archivo> ...` con N archivos EXPLICITOS
+  (ADR: 13 en develop `0f9b945`, 14 en `integracion/1007-b`). Cada uno es una
+  ruta relativa `*.test.mjs` cuyos segmentos empiezan con alfanumerico o `_`.
+  Se rechazan, antes de ejecutar nada: globs (`*`, `?`, `[]`, `{}`; `node --test`
+  los expande solo y la identidad del archivo seria ambigua), flags
+  (`--test-only`, `--test-name-pattern`), `.`/`..`, rutas absolutas, comillas,
+  espacios dobles, `&&`/`;`, variables de entorno, otro runner, duplicados,
+  archivos ausentes y symlinks (el archivo o un directorio de su ruta). Es el
+  inventario portable oficial, NO los casos opcionales activados por artefactos
+  externos DIST_* ni el test legal cross-repo fuera de ese comando. Cada test se
+  identifica por `(ruta, titulo)`: el mismo titulo en dos archivos son dos tests.
+- `test:dist` puede ganar o perder archivos entre base y destino, como un spec
+  Angular: lo que suma se mide como nuevo (sus rojos son rojos NUEVOS) y lo que
+  sale sin baja verificada en `--retirados` bloquea como test desaparecido.
+  Sacar un archivo de `test:dist` sin borrarlo no es baja: sus tests siguen
+  declarados. La base tiene que haber medido TODO el `test:dist` de su propio
+  commit (`<sha>:package.json`); una que omite un archivo se rechaza.
+- Node: la version la DECLARA el repo, en `.nvmrc` (`X`, `X.Y` o `X.Y.Z`, `v`
+  opcional; un alias como `lts/*` se rechaza) y/o `engines.node` de package.json
+  (`X.Y.Z`, `^X.Y.Z`, `~X.Y.Z` o `>=X.Y.Z`; un rango compuesto o `X.x` se
+  rechaza). Sin ninguna de las dos no mide. El `node` primero en PATH tiene que
+  cumplir TODAS las declaradas y ser >= 22, la version desde la que se verifico
+  el protocolo de eventos node:test (suite con 22 y 24; eventos tambien con 26).
+  ADR declara `.nvmrc` `24.21.0` y `engines` `^24.21.0`. La base graba lo
+  declarado (`toolchain.node_declarado`) junto a version, ruta y sha256 del
+  binario: cambiar `.nvmrc`/`engines`, el Node o el lock entre base y destino
+  deja la base incomparable (exit 2).
 - Cada target test es `@angular/build:unit-test`, options solo `tsConfig` y sin
   configuraciones/defaultConfiguration. Raices `projects/<nombre>`; ningun
   symlink en tests Node/fuentes Angular. Cotejar archivos esperados contra
   archivos y tests efectivamente terminados; ausencias no son curaciones.
-- El runner descompone ese comando literal en los entrypoints NATIVOS con Node
-  fijado (no shell/npm wrappers), agrega solo no-watch y reporters de evidencia.
-  Exige Node22, Angular CLI/build22, Vitest4, lock y hashes de sus propios helpers.
+- El runner descompone ese comando en los entrypoints NATIVOS con el Node
+  resuelto (no shell/npm wrappers), agrega solo no-watch y reporters de evidencia.
+  Exige el Node declarado, Angular CLI/build 22, Vitest 4, lock y hashes de sus
+  propios helpers.
   CI=1/TZ=UTC; rechaza overrides NODE_*, VITEST*, NG_BUILD_*, DIST_* y limpia el
   entorno de tests. No exportar secretos: solo PATH/HOME y variables de sistema.
 - Rechaza skip/todo/only, retry/fails, vacios, duplicados, finales parciales,
   errores de suite/teardown/unhandled e incoherencia con exits nativos. Node
   usa tests planos ADR; diagnosticos con archivo (incl. only/runOnly) quedan
   fuera de contrato. No identificar errores por palabras de stdout del test.
-- Base v1/protocolo propio, esquema cerrado, argv real, repo/rama/SHA/tree,
+- Base v1/protocolo propio (`angular22-vitest4-node-declarado-v2`; una base del
+  protocolo anterior `...-node22-v1` se rechaza y se vuelve a medir), esquema
+  cerrado, argv real, repo/rama/SHA/tree,
   inventario, lock/toolchain/runner y raw verificables. Debe ser ancestro del
   destino y coincidir EXACTAMENTE con base_sha al cerrar. Un homonimo de otro
   proyecto/archivo es otra identidad. Tests desaparecidos bloquean con exit2.
@@ -567,27 +597,30 @@ proyecto, ni cambia el protocolo Go. El runner frontend no instala dependencias.
   reescribe una base vieja para que pase.
 
 `HARNESS_TEST_FRONTEND_MODULES` debe apuntar a node_modules YA instalado con
-estas versiones para `python -m unittest discover -s tests`; no hay skips ni
+estas versiones para la suite (desde `tests/`); no hay skips ni
 instalaciones de rescate. Ejecutar con PATH que fije Node/Go/Git/Python, en dos
 interpretes y rutas simuladas `.hermes/skills/...` y `.claude/skills/...`.
 `HARNESS_TEST_FRONTEND_LOGS` conserva raw de fixtures fuera de sus temporales.
 
-Toolchain de pruebas, una sola vez y fuera del repo (el runner exige Node 22,
-Angular 22, Vitest 4; con Node 24 o TypeScript 7 rechaza con "toolchain fuera
-de contrato"):
+Toolchain de pruebas, una sola vez y fuera del repo (el runner exige Angular 22
+y Vitest 4; fuera de eso rechaza con "toolchain fuera de contrato"). Node no va
+fijo: el fixture declara en `.nvmrc` la version del `node` que este primero en
+PATH, asi que la suite corre con el Node del sistema (>= 22) o con `node@22`
+instalado por npm para no tocar el del sistema:
 
 ```bash
 T=~/.harness-flow/frontend-toolchain && mkdir -p $T && cd $T
 echo '{"name":"harness-frontend-toolchain","private":true}' > package.json
 npm install --save-exact @angular/{cli,build,core,common,compiler,compiler-cli,platform-browser}@22 \
   rxjs tslib typescript@6.0 vitest@4 jsdom node@22
+cd <skill>/tests
 PATH=$T/node_modules/node/bin:$PATH HARNESS_TEST_FRONTEND_MODULES=$T/node_modules \
-  python3 -m unittest discover -s tests
+  python3 -m unittest test_frontend_runner test_frontend_close test_retirados_frontend test_cierre_historico
 ```
 
-`typescript@6.0` porque `@angular/compiler-cli@22` pide `>=6.0 <6.1`; `node@22`
-va por npm para no tocar el Node del sistema. Cada archivo de frontend toma
-minutos: corre la suite en segundo plano.
+`typescript@6.0` porque `@angular/compiler-cli@22` pide `>=6.0 <6.1`. Sin el
+`PATH=` mide con el Node del sistema (asi se probo tambien con Node 24). Cada
+archivo de frontend toma minutos: corre la suite en segundo plano.
 
 Leccion reusable: contrastar inicio/final por archivo y caso con el inventario
 independiente; no contar solo un resumen JSON. Forzar allowOnly ANTES de
