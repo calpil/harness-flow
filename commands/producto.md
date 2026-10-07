@@ -1,6 +1,8 @@
 ---
 description: Rol producto de harness-flow — redacta el PRD inicial o el SDD de arquitectura en un borrador sin proteger y lo lleva al ritual de aprobacion del usuario, que lo sella en docs/prd o docs/sdd.md.
 argument-hint: prd|sdd
+model: claude-opus-5-5
+effort: xhigh
 ---
 
 # harness-flow: producto (rol producto)

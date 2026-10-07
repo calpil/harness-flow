@@ -106,6 +106,14 @@ worktrees comprueban trabajo iniciado, no toda la cola pendiente.
 
 Cuatro roles, en orden. No los saltes. El 0 solo corre cuando el proyecto no tiene PRD/SDD aprobados o el usuario pide cambiarlos.
 
+La politica de modelos depende del proveedor de la tarea. Con OpenAI en Codex o
+Hermes, Producto y Leader usan `gpt-6-astra`: **la skill elige el effort segun la
+tarea antes de iniciar cada rol**, `medium` como base y `high` cuando hay riesgos
+concretos de arquitectura, migracion, concurrencia o requisitos contradictorios.
+Indica el nivel y su motivo en una frase y aplicalo en la invocacion del rol.
+Criterios, resto de roles y configuracion por host: [`references/modelos.md`](references/modelos.md).
+Con Claude 5.5 se usa la politica fija de esa misma referencia.
+
 ### 0. Producto — PRD inicial y SDD de arquitectura, antes del backlog
 
 El agente NUNCA escribe `docs/prd/**`: redacta en `docs/borrador-prd.md` / `docs/borrador-sdd.md` (rutas sin proteger) y el usuario es quien aprueba. `estado.py` muestra en que paso esta cada documento.
@@ -138,7 +146,9 @@ Con evidencia, review o verify encima, `approve-spec` se niega a re-sellar un sp
 1. Verifica el gate: `$PY "$H/gate.py" check-spec --feature <id>` (exit≠0 si no está approved o está stale).
 2. Trabaja DENTRO del worktree de la feature; si aun no existe, crealo con `$PY "$H/worktree.py" start --feature <id>`.
 3. Antes de editar, orientate con `codebase-memory-mcp` (`search_graph`, `trace_path`, `detect_changes`) en vez de leer a ciegas. Indexa la raiz, no tu worktree: confirma leyendo el archivo.
-4. Escribe evidencia en `docs/impl-<id>.md`: una fila por AC-n citando `archivo:linea`.
+4. Escribe evidencia en `docs/impl-<id>.md`: una fila por AC-n citando `archivo:linea`. Commitea en la rama de la feature: el review diffea `base..HEAD`.
+
+En Claude Code no implementa la sesion principal: `/harness-flow:implementar <id>` delega en el subagente `harness-flow:implementer` (`agents/implementer.md`) y contrasta su evidencia. En Hermes con modelos Claude y Claude Code instalado, `claude -p --agent harness-flow:implementer`; con OpenAI, usa el rol nativo y su configuracion en [`references/modelos.md`](references/modelos.md).
 
 ### 3. Reviewer — subagente aislado, veredicto sellado
 
@@ -146,7 +156,7 @@ El review NO lo haces tú mismo. Un revisor que recuerda haber escrito el códig
 
 1. Arma el briefing: `$PY "$H/revision.py" --feature <id> --briefing`
 2. Lanza el revisor con el subagente de tu host, pegando esa salida como contexto. Goal: "Revisa la feature #<id> y escribe docs/review-<id>.md". El subagente lee spec y código por su cuenta, no modifica nada más.
-   - Hermes: `delegate_task` con la salida en `context`.
+   - Hermes: con OpenAI, revisor nativo con el briefing completo y el modelo/effort de [`references/modelos.md`](references/modelos.md). Con modelos Claude y Claude Code instalado, `claude -p --agent harness-flow:revisor` con el briefing por stdin; si no, `delegate_task` con la salida en `context`.
    - Claude Code: la tool `Agent` con `subagent_type: harness-flow:revisor`, pegando la salida en el prompt.
      Ese subagente viene en la propia skill (`agents/revisor.md`); sin el, `general-purpose` sirve igual.
    - GPT/Codex: `codex exec` o el revisor/subagente disponible, pegando el briefing; si no hay aislamiento real, decláralo.
@@ -335,7 +345,8 @@ Esa referencia también describe cómo ejecutar la suite y evaluar las regresion
 
 | Necesitas | Hermes | Claude Code | GPT/Codex | AGY / Gemini | Grok | Kimi Code |
 | --- | --- | --- | --- | --- | --- | --- |
-| Revisor | `delegate_task` | `Agent` | `codex exec` o subagente | `invoke_subagent` | `spawn_subagent` | `Agent` o `kimi -p` |
+| Implementer | sesion o `claude -p --agent` | `Agent` (`harness-flow:implementer`) | sesion | sesion | sesion | sesion |
+| Revisor | `claude -p --agent` o `delegate_task` | `Agent` | `codex exec` o subagente | `invoke_subagent` | `spawn_subagent` | `Agent` o `kimi -p` |
 | Crear lección | `skill_manage` | `leccion.py donde` | `leccion.py donde` | `leccion.py donde` | `leccion.py donde` | `leccion.py donde` |
 | Guía del host | — | [`claude.md`](references/claude.md) | [`openai.md`](references/openai.md) | `entorno.py` | [`grok.md`](references/grok.md) | [`kimi.md`](references/kimi.md) |
 
@@ -356,6 +367,7 @@ Python. Si no hay revisor aislado, puedes revisar localmente con
 | [`references/obsidian.md`](references/obsidian.md) | que genera el vault, config sembrada, `--con-grafo` |
 | [`references/atlassian.md`](references/atlassian.md) | mapeo a Jira/Confluence y sus comandos |
 | [`references/claude.md`](references/claude.md) | Claude Code: plugin, comandos, Windows, raices de lecciones |
+| [`references/modelos.md`](references/modelos.md) | modelo por proveedor y rol; seleccion automatica de effort para Producto/Leader en Codex y Hermes; politica Claude 5.5 |
 | [`references/openai.md`](references/openai.md) | GPT/Codex: instalacion, deteccion y raices |
 | [`references/grok.md`](references/grok.md) | Grok: host, revisor con `spawn_subagent`, lecciones en `~/.grok/skills`, vault |
 | [`references/kimi.md`](references/kimi.md) | Kimi Code: host, plugin, revisor y lecciones |

@@ -1,6 +1,8 @@
 ---
 description: Rol leader de harness-flow — escribe el spec de una feature con AC verificables y lo lleva al ritual de aprobacion del usuario.
 argument-hint: <id-feature>
+model: claude-opus-5-5
+effort: xhigh
 ---
 
 # harness-flow: spec (rol leader)

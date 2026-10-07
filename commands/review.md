@@ -1,6 +1,8 @@
 ---
 description: Rol reviewer de harness-flow — lanza el subagente revisor aislado sobre una feature y sella su veredicto con el gate.
 argument-hint: <id-feature>
+model: claude-opus-5-5
+effort: xhigh
 ---
 
 > **Grok.** Este archivo no se registra como comando. El revisor se lanza con
@@ -42,6 +44,8 @@ Reglas de esta delegacion:
   anula el punto del paso.
 - No le cuentes al revisor lo que implementaste ni le adelantes que esperas que
   apruebe. Lee el codigo solo.
+- **No pases `model` a la tool `Agent`**: pisaria el `model` y el `effort` del
+  frontmatter del revisor (Opus 5.5, xhigh; ver `references/modelos.md`).
 - Si no puedes lanzar un subagente, revisa tu mismo con el paquete de solo
   lectura y **dilo explicitamente en el chat**: el rigor baja y el usuario
   tiene que saberlo.

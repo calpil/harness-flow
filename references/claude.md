@@ -12,8 +12,9 @@ comandos sin instalar nada suelto en `~/.claude/agents/` ni `~/.claude/commands/
 harness-flow/
   SKILL.md                  <- la skill (host-neutral, igual en los tres hosts)
   .claude-plugin/plugin.json <- solo lo lee Claude Code; Hermes y Codex lo ignoran
-  agents/revisor.md         <- subagente revisor aislado
-  commands/*.md             <- estado, producto, spec, review, cierre
+  agents/revisor.md         <- subagente revisor aislado (Opus 5.5)
+  agents/implementer.md     <- subagente implementer (Sonnet 5.5)
+  commands/*.md             <- estado, producto, spec, implementar, review, cierre
 ```
 
 Hermes, GPT/Codex y Grok no miran `.claude-plugin/` ni `commands/`, asi que la capa
@@ -56,9 +57,11 @@ abre una sesion nueva y mira `/agents` y la lista de skills.
 | Pieza | Nombre en la sesion | Reemplaza a |
 | --- | --- | --- |
 | Subagente revisor | `harness-flow:revisor` | pegar el briefing en un `general-purpose` a mano |
+| Subagente implementer | `harness-flow:implementer` | implementar en la sesion principal, con su modelo |
 | `/harness-flow:estado` | arranque de sesion | recordar correr `estado.py` |
 | `/harness-flow:producto` | rol producto: PRD inicial / SDD de arquitectura | leer el flujo entero del SKILL.md |
 | `/harness-flow:spec` | rol leader | leer el flujo entero del SKILL.md |
+| `/harness-flow:implementar` | rol implementer: gate, worktree, delega y contrasta | idem |
 | `/harness-flow:review` | rol reviewer | idem |
 | `/harness-flow:cierre` | verify + base + close + postmerge | idem |
 
@@ -68,6 +71,10 @@ agrega los invariantes que no dependen del spec (aislamiento, arbol correcto, no
 sellar, no tocar codigo). Si los dos se contradicen, gana el script — la leccion
 de "cuando existan dos versiones de un gate, la doc tiene que mandar a la buena"
 aplica igual a los prompts.
+
+Cada subagente y cada comando fija su `model` y su `effort` en el frontmatter
+(familia Claude 5.5, `xhigh`). La tabla por rol, la precedencia y lo que
+quedo comprobado estan en [`modelos.md`](modelos.md).
 
 ## `$PY` y `$H` no sobreviven entre llamadas Bash
 

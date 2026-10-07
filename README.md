@@ -94,8 +94,10 @@ copia en `$KIMI_CODE_HOME/plugins/managed/`, asi que tras un `git pull` del
 clone hay que reinstalarlo.
 
 Ademas de la skill, Claude Code carga la capa nativa que trae el repo
-(`.claude-plugin/plugin.json`): el subagente revisor `harness-flow:revisor` y los
-comandos `/harness-flow:estado`, `:spec`, `:review` y `:cierre`. Comprueba con
+(`.claude-plugin/plugin.json`): los subagentes `harness-flow:revisor` (Opus 5.5) e
+`harness-flow:implementer` (Sonnet 5.5), y los comandos `/harness-flow:estado`,
+`:producto`, `:spec`, `:implementar`, `:review` y `:cierre`, cada uno con su modelo
+y esfuerzo `xhigh` ([`references/modelos.md`](references/modelos.md)). Comprueba con
 `claude plugin list` que aparezca `harness-flow@skills-dir` como `loaded`. Los
 otros hosts ignoran esos archivos. Ver [`references/claude.md`](references/claude.md).
 
@@ -284,6 +286,7 @@ SKILL.md                 el proceso que sigue el agente
 kimi.plugin.json         manifiesto de plugin para Kimi Code (skill + agente revisor)
 agents/openai.yaml       metadata para invocacion automatica en GPT/Codex
 agents/revisor.md        subagente revisor (Claude Code y Kimi lo registran; Grok lee el cuerpo)
+agents/implementer.md    subagente implementer (Claude Code; Hermes via `claude -p --agent`)
 commands/                atajos /harness-flow:... (solo Claude Code)
 scripts/
   entorno.py             detecta host, H y PY por SO (Windows/Linux/macOS)

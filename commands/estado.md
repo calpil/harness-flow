@@ -1,5 +1,7 @@
 ---
 description: Arranque de sesion de harness-flow — features abiertas, gates pendientes y edad del grafo, contrastado contra el backlog.
+model: claude-haiku-5-5
+effort: xhigh
 ---
 
 # harness-flow: estado

@@ -68,6 +68,14 @@ host. Ejecuta los scripts con el interprete resuelto (`"$PY"` en bash/zsh,
 `& $PY` en PowerShell); `python` puede no existir en macOS/Linux y otro
 interprete puede no tener las dependencias del hub.
 
+## Modelo y effort por tarea
+
+Para Producto y Leader, usa `gpt-6-astra` y elige el effort antes de ejecutar
+cada rol: `medium` como base, `high` ante un riesgo concreto de arquitectura,
+migracion, concurrencia o requisitos contradictorios. La skill decide y anuncia
+el motivo. Criterios y forma de aplicar el nivel en Codex y Hermes:
+[`modelos.md`](modelos.md), seccion "OpenAI en Codex y Hermes".
+
 ## Raices de lecciones
 
 Hay que separar dos cosas: donde NACE una leccion y donde se la BUSCA.

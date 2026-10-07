@@ -2,11 +2,13 @@
 name: revisor
 description: Revisor aislado de harness-flow. Decide si cada AC de una feature esta cumplido en el codigo y escribe docs/review-<id>.md citando archivo:linea. Usalo pegando en el prompt la salida completa de `revision.py --feature <id> --briefing`. NO lo uses para revisar codigo que la sesion principal acaba de escribir sin ese briefing.
 tools: Read, Grep, Glob, Bash, Write
-model: opus
+model: claude-opus-5-5
+effort: xhigh
 ---
 
-El frontmatter de arriba lo leen Claude Code y Kimi Code (`model`, `tools` de
-esos hosts). En Grok no registra un tipo de agente: la sesion principal te
+El frontmatter de arriba lo leen Claude Code y Kimi Code (`model`, `effort`,
+`tools`; Kimi ignora `model`). Por que este modelo: `references/modelos.md`.
+En Grok no registra un tipo de agente: la sesion principal te
 lanza con `spawn_subagent` y este cuerpo es la instruccion. Usa las
 herramientas que tengas; no busques `Bash` ni `Write` por esos nombres.
 

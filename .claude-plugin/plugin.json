@@ -23,10 +23,12 @@
     "./commands/estado.md",
     "./commands/producto.md",
     "./commands/spec.md",
+    "./commands/implementar.md",
     "./commands/review.md",
     "./commands/cierre.md"
   ],
   "agents": [
-    "./agents/revisor.md"
+    "./agents/revisor.md",
+    "./agents/implementer.md"
   ]
 }

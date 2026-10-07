@@ -1,6 +1,8 @@
 ---
 description: Cierre de harness-flow — verify, base pre-merge medida, close hacia la rama destino y chequeo postmerge de rojos nuevos.
 argument-hint: <id-feature> [rama-destino]
+model: claude-opus-5-5
+effort: xhigh
 ---
 
 # harness-flow: cierre
