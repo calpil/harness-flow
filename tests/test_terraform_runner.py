@@ -314,6 +314,13 @@ run "aplica" {
         self.assertIn(['infra', 'tests/j.tftest.json', 'json_run'], [x['id'] for x in data['results']])
         self.assertIn('tests/j.tftest.json', data['inventory']['infra']['tests'])
 
+    def test_base_con_inventario_recortado_no_corresponde_a_su_commit(self):
+        data = self.measured_base()
+        data['inventory']['infra']['fmt'].remove('tests/a.tftest.hcl')
+        data['results'] = [r for r in data['results'] if r['id'] != ['infra', 'tests/a.tftest.hcl', 'fmt']]
+        self.base.write_text(json.dumps(data))
+        self.expect(self.cli('check'), 2, 'inventario no corresponde')
+
     def test_stub_con_salida_fuera_de_contrato_termina_en_exit_2_sin_traceback(self):
         real = shutil.which('terraform')
         casos = {'evento que no es objeto': '[1]', 'test_run que no es objeto': '{"type":"test_run","test_run":5}',
