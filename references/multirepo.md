@@ -644,3 +644,83 @@ Leccion reusable: contrastar inicio/final por archivo y caso con el inventario
 independiente; no contar solo un resumen JSON. Forzar allowOnly ANTES de
 coleccion Vitest, porque despues normaliza only a run. Probar la decision REAL
 del cierre, ademas del parser, y conservar el raw de fallos antes de limpiar.
+
+## Contrato Terraform (fmt, validate y `terraform test`)
+
+Un destino es Terraform cuando NO tiene `go.mod`, `package.json` ni `angular.json`
+y SI tiene `*.tf` versionados (un repo mixto, p. ej. `go.mod` mas `.tf`, no es
+Terraform: sigue su camino de siempre). Lo mide `postmerge_terraform.py`, solo con
+stdlib y el binario `terraform` del PATH; en `close --integrated` lo despacha
+`medicion_destino.py` tanto con `--postmerge` como con `--historico`.
+
+- **Se mide el COMMIT, no el checkout.** Terraform carga archivos que git ignora
+  (`terraform.tfvars`, `*.auto.tfvars` tambien en `tests/`, `override.tf`,
+  `*_override.tf`) y `fmt -recursive` entra en directorios ignorados. Por eso el
+  runner reconstruye HEAD blob por blob (`git ls-tree -r` + `git cat-file --batch`, sin
+  filtros ni atributos: `git archive` aplicaria `export-ignore`/`export-subst`, tambien
+  desde `.git/info/attributes`) en un temporal FUERA del repo y corre alli todos los
+  comandos; respeta el modo (ejecutable) y escribe los symlinks sin seguirlos, pero
+  un symlink absoluto o que sale del arbol del commit es Invalid (Terraform lo
+  seguiria y mediria contenido ajeno al commit); los
+  submodulos no se soportan (Invalid) y el arbol exportado debe tener exactamente las
+  rutas del commit. El `.terraform.lock.hcl` es el del commit. El arbol real se
+  exige limpio y con la misma rama/sha/toolchain antes y despues, pero nunca se
+  ejecuta nada en el.
+- **Raices.** Un directorio es raiz si tiene un `.terraform.lock.hcl` versionado o
+  `*.tftest.hcl`/`*.tftest.json` versionados en `<dir>/` o `<dir>/tests/` (rutas POSIX
+  relativas, ordenadas; `.` es la raiz del repo; se ignora lo que cuelga de `.terraform/`).
+  Sin ninguna raiz, `Invalid`. Un directorio con `*.tf` pero sin lockfile ni tests NO es raiz
+  (init con `-lockfile=readonly` fallaria sin lock y los modulos compartidos no son raices):
+  sus archivos solo se formatean si cuelgan de una raiz.
+- **Que se mide, por raiz y en este orden.** (1) `terraform fmt -check -list=true
+  -recursive`: un caso `[raiz, archivo, "fmt"]` por cada archivo `.tf`/`.tfvars`/
+  `.tftest.hcl`/`.tfmock.hcl` versionado de la raiz (fail si fmt lo lista), de modo que
+  la deuda de formato de un archivo no tape una regresion en otro; por eso `fmt` es un
+  nombre de run reservado. (2) `terraform init -backend=false -input=false
+  -lockfile=readonly` con `TF_DATA_DIR` temporal: si falla (p. ej. el lock no cubre las
+  dependencias) es `Invalid`. (3) `terraform validate -json`: un caso
+  `[raiz, "<validate>", "validate"]`, pass o fail; una raiz sin tests se valida y se
+  formatea igual, y su validate rojo es deuda de la base. En una raiz CON tests un validate
+  rojo deja sus runs sin correr: es `Invalid` (medicion incompleta), tambien en la base. (4) `terraform test -json` solo si la raiz tiene tests y su validate
+  paso: un caso `[raiz, archivo, run]` por cada `run "<nombre>"` (`error` cuenta como fail).
+- **Coherencias** (Invalid si fallan): cada run del `test_abstract` tiene exactamente un
+  `complete` y no hay runs fuera del abstract; los archivos del `test_abstract` son
+  EXACTAMENTE los `*.tftest.hcl/json` que el commit declara en la raiz (inventario
+  independiente, guardado en la base); los conteos de `test_summary` cuadran; el exit es
+  0 si y solo si no hay fail/error; ningun run en `skip` (un error deja los siguientes en
+  skip: medicion incompleta); ids sin duplicar; cero runs es Invalid; cualquier campo
+  ausente o de otro tipo, evento no-objeto o timeout (fmt/validate 300 s, init/test 900 s)
+  es `Invalid`, nunca un traceback.
+- **Entorno y credenciales.** Cada comando corre con un entorno minimo explicito: PATH,
+  locale, proxies y certificados, `TF_IN_AUTOMATION=1`, `TF_INPUT=0`,
+  `CHECKPOINT_DISABLE=1`, `TF_DATA_DIR` propio, y `TF_PLUGIN_CACHE_DIR`/
+  `TF_CLI_CONFIG_FILE` solo si existen (el cache tambien se lee de `~/.terraformrc`).
+  `HOME` es un directorio temporal vacio: no se heredan `TF_*` (ni `TF_CLI_ARGS*`,
+  `TF_VAR_*`), `GOOGLE_*`, `CLOUDSDK_*`, `AWS_*`, `AZURE_*`, `ARM_*` ni las credenciales de
+  `~/.config/gcloud`. Esto es lo que se garantiza: `init` nunca usa backend y
+  `terraform test` corre sin credenciales, de modo que un test sin `mock_provider` que
+  intente tocar la nube falla en rojo. NO es una sandbox: `terraform test` ejecuta
+  `apply` (por defecto) y los provisioners `local-exec` de los modulos, y un
+  `provider_installation { dev_overrides }` en `TF_CLI_CONFIG_FILE` cambia los providers
+  sin cambiar la toolchain; revisar el codigo del repo antes del cierre.
+- **CLI.** `postmerge_terraform.py base --repo <r> --guardar <j>` y `check --repo <r>
+  --base <j>` (`--evidence` opcional), con el mismo contrato que el frontend: exit 0
+  sin rojos nuevos (la deuda de la base no bloquea), 1 con rojos nuevos, 2 si no pudo
+  medir. La base es del mismo repo y rama, su sha es ancestro del HEAD, midio TODAS las
+  raices de su commit con su mismo inventario y su toolchain (version y sha del binario)
+  es la que corre; bases y evidencia viven fuera del repo.
+- **Sin `--retirados`.** En `--postmerge` un id que desaparece (run, archivo, raiz) bloquea
+  siempre y el CLI rechaza `--retirados`; en `close`, declararlos para un destino
+  Terraform se rechaza antes de medir.
+- **Cierre historico.** No hay base, asi que `_historico_terraform` mide el `target_sha`
+  (debe ser HEAD), exige cero rojos (formato y validate incluidos) y cero skip, y calcula
+  los runs que la feature agrego (bloques `run "<nombre>"` de `*.tftest.hcl` en
+  `source_sha` y ausentes en `base_sha`, por (archivo, run), leidos con `git` sobre los
+  blobs): cada uno debe medirse en el destino. Los runs que la feature BORRA (en
+  `base_sha` y no en `source_sha`) bloquean, porque no hay `--retirados`; un renombre de
+  archivo cuenta como borrar y agregar. Un `*.tftest.json` agregado, borrado o
+  cambiado en el delta bloquea («.tftest.json no soportado; los runs no se pueden
+  enumerar»). Si no agrego ningun run, el delta `base..source` debe ser solo `*.tftest.hcl`. El recibo lleva `measurement` y `tests_agregados`.
+- **Pruebas.** `tests/test_terraform_runner.py` usa el `terraform` real con raices que
+  solo tienen `variable`/`output`/`terraform_data` (sin red). Si falta `terraform` en el
+  PATH FALLAN: no se omiten.

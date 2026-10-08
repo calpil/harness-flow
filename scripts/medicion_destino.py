@@ -1,12 +1,14 @@
 """Medicion obligatoria de cada destino: ejecuta, nunca consume recibos de PASS.
 
-Soporte cerrado a Go JSON/-exec existente y Angular22/Vitest4+node:test de ADR
-(con el Node que declara el repo).
+Soporte cerrado a Go JSON/-exec existente, Angular22/Vitest4+node:test de ADR
+(con el Node que declara el repo) y Terraform (fmt + validate + terraform test).
 La configuracion solo enumera bases: no puede cambiar comando ni omitir repos.
 """
 import hashlib
 import os
 from pathlib import Path, PurePosixPath
+import re
+import subprocess
 import sys
 
 import postmerge_medido as runner
@@ -27,6 +29,20 @@ def _sha256(path):
 def _frontend(repo):
     """El destino se mide con el runner frontend (contrato Angular22/Vitest4+node:test)."""
     return (Path(repo) / 'angular.json').exists() or (Path(repo) / 'package.json').exists()
+
+
+def _terraform(repo):
+    """Destino Terraform: *.tf versionados y NINGUN go.mod/package.json/angular.json.
+    Un repo mixto (go.mod + .tf) NO es Terraform: sigue el camino que ya tenia."""
+    repo = Path(repo)
+    if any((repo / x).exists() for x in ('go.mod', 'package.json', 'angular.json')):
+        return False
+    return bool(git(repo, 'ls-files', '-z', '--', '*.tf'))
+
+
+def _rechazar_retirados_terraform(name, declared):
+    require(not declared, f'retirados: {name} es un destino Terraform: no admite --retirados '
+            '(un test que desaparece bloquea siempre; no hay bajas declarables)')
 
 
 def _rechazar_repo_mixto(repo):
@@ -58,6 +74,9 @@ def measure(p, f, rules, manifest, config_path, retiros_path=None):
         for row in manifest['repos']:
             declarados = retirados.get(row['microservicio'], set())
             front = _frontend(row['repo'])
+            if not front and _terraform(row['repo']):
+                _rechazar_retirados_terraform(row['microservicio'], declarados)
+                continue
             require(not declarados or retiros.tipo(declarados) == (retiros.FRONT if front else retiros.GO),
                     f"retirados: {row['microservicio']} es un destino "
                     + ("frontend: no acepta ids Go '<paquete>::<Test>', sino el id medido "
@@ -72,7 +91,8 @@ def measure(p, f, rules, manifest, config_path, retiros_path=None):
     initial_context = context(p, f, rules)
     hashes = {name: hashlib.sha256(Path(__file__).with_name(name).read_bytes()).hexdigest()
               for name in ('postmerge_medido.py', 'postmerge_exec.py', 'medicion_destino.py', 'retiros.py',
-                           'postmerge_frontend.py', 'frontend_node_reporter.mjs', 'frontend_vitest_reporter.mjs')}
+                           'postmerge_frontend.py', 'postmerge_terraform.py', 'frontend_node_reporter.mjs',
+                           'frontend_vitest_reporter.mjs')}
     results, failures = [], []
     env = os.environ.copy()
     try:
@@ -107,6 +127,13 @@ def measure(p, f, rules, manifest, config_path, retiros_path=None):
                         result.update(retirados=[list(x) for x in sorted(declared)],
                                       retirados_archivo=str(Path(retiros_path).resolve()),
                                       retirados_sha256=retiros_hash)
+                    results.append(dict(result, integration=row, context=initial_context, at=now_iso(),
+                                        runner_sha256=hashes, python=str(Path(sys.executable).absolute())))
+                    continue
+                if _terraform(repo):
+                    _rechazar_retirados_terraform(name, declared)
+                    from postmerge_terraform import check_destination
+                    result = check_destination(row, path)
                     results.append(dict(result, integration=row, context=initial_context, at=now_iso(),
                                         runner_sha256=hashes, python=str(Path(sys.executable).absolute())))
                     continue
@@ -282,6 +309,73 @@ def _historico_go(row, declared) -> dict:
     return result
 
 
+def _runs_declarados(texto) -> set[str]:
+    """Nombres de los bloques `run "<nombre>"` de un *.tftest.hcl (sin comentarios)."""
+    texto = re.sub(r'/\*.*?\*/', '', texto, flags=re.S)
+    texto = re.sub(r'(?m)^\s*(#|//).*$', '', texto)
+    return set(re.findall(r'(?m)^\s*run\s+"([^"\n]+)"\s*\{', texto))
+
+
+def _runs_en(repo, sha) -> set[tuple[str, str]]:
+    from postmerge_terraform import archivos_test
+    result = set()
+    for archivo in archivos_test(repo, sha):
+        texto = retiros._blob(repo, sha, archivo)
+        for nombre in _runs_declarados(texto or ''):
+            result.add((archivo, nombre))
+    return result
+
+
+def runs_agregados_tf(repo, base_sha, source_sha) -> set[tuple[str, str]]:
+    """(ruta del *.tftest.hcl en el repo, run) que la FEATURE agrego: declarado en
+    source_sha y ausente en base_sha. Se lee con git sobre los blobs."""
+    return _runs_en(repo, source_sha) - _runs_en(repo, base_sha)
+
+
+def delta_solo_tests_tf(repo, base_sha, source_sha) -> bool:
+    return all(f.endswith('.tftest.hcl') for f in _delta(repo, base_sha, source_sha))
+
+
+def _historico_terraform(row) -> dict:
+    """Cualquier salida fuera de contrato del runner (campo ausente, tipo ajeno, timeout)
+    es Invalid: bloquea el cierre sin traceback."""
+    try:
+        return _historico_terraform_medido(row)
+    except (KeyError, TypeError, AttributeError, subprocess.SubprocessError) as exc:
+        raise Invalid(f'historico: terraform fuera de contrato ({type(exc).__name__}: {exc})') from exc
+
+
+def _historico_terraform_medido(row) -> dict:
+    from postmerge_terraform import measure as measure_terraform, VALIDATE
+    repo = row['repo']
+    measured = measure_terraform(Path(repo))
+    require(measured['sha'] == row['target_sha'], 'historico: target stale')
+    rojos = sorted('::'.join(r['id']) for r in measured['results'] if r['state'] == 'fail')
+    require(not rojos, 'historico: rojos en el destino: ' + ', '.join(rojos))
+    require(all(r['state'] == 'pass' for r in measured['results']),
+            'historico: destino contiene tests skip; medicion incompleta')
+    json_tests = sorted(f for f in _delta(repo, row['base_sha'], row['source_sha']) if f.endswith('.tftest.json'))
+    require(not json_tests, 'historico: .tftest.json no soportado; los runs no se pueden enumerar: '
+            + ', '.join(json_tests))
+    agregados = runs_agregados_tf(repo, row['base_sha'], row['source_sha'])
+    borrados = runs_agregados_tf(repo, row['source_sha'], row['base_sha'])
+    # Terraform no tiene --retirados: un run que la feature borra no se puede declarar baja.
+    require(not borrados, 'historico: la feature borra runs y terraform no admite --retirados: '
+            + ', '.join(sorted(f'{a}::{n}' for a, n in borrados)))
+    # El id medido de un run es [raiz, archivo relativo a la raiz, run]; los casos de
+    # formato y de validate no son runs. El delta se lee con rutas del repo: se unen.
+    medidos = {(PurePosixPath(raiz, archivo).as_posix(), nombre)
+               for (raiz, archivo, nombre) in (r['id'] for r in measured['results'])
+               if archivo != VALIDATE and nombre != 'fmt'}
+    faltan = sorted(f'{a}::{n}' for a, n in agregados - medidos)
+    require(not faltan, 'historico: tests de la feature ausentes sin declarar: ' + ', '.join(faltan))
+    if not agregados:
+        require(delta_solo_tests_tf(repo, row['base_sha'], row['source_sha']),
+                f"historico: {row['microservicio']} modifica codigo sin agregar ningun test "
+                "(la garantia 4 quedaria vacia; agrega cobertura)")
+    return {'measurement': measured, 'tests_agregados': sorted(f'{a}::{n}' for a, n in agregados)}
+
+
 def _historico_frontend(row, declared, revisado) -> dict:
     from postmerge_frontend import leaf_titles, measure as measure_frontend
     repo = row['repo']
@@ -328,6 +422,9 @@ def measure_historico(p, f, rules, manifest, retiros_path=None):
         for row in manifest['repos']:
             declarados = retirados.get(row['microservicio'], set())
             front = _frontend(row['repo'])
+            if not front and _terraform(row['repo']):
+                _rechazar_retirados_terraform(row['microservicio'], declarados)
+                continue
             require(not declarados or retiros.tipo(declarados) == (retiros.FRONT if front else retiros.GO),
                     f"retirados: {row['microservicio']} es un destino "
                     + ("frontend: no acepta ids Go '<paquete>::<Test>', sino el id medido "
@@ -340,7 +437,8 @@ def measure_historico(p, f, rules, manifest, retiros_path=None):
     initial_context = context(p, f, rules)
     hashes = {name: hashlib.sha256(Path(__file__).with_name(name).read_bytes()).hexdigest()
               for name in ('postmerge_medido.py', 'postmerge_exec.py', 'medicion_destino.py', 'retiros.py',
-                           'postmerge_frontend.py', 'frontend_node_reporter.mjs', 'frontend_vitest_reporter.mjs')}
+                           'postmerge_frontend.py', 'postmerge_terraform.py', 'frontend_node_reporter.mjs',
+                           'frontend_vitest_reporter.mjs')}
     results, failures = [], []
     env = os.environ.copy()
     try:
@@ -361,6 +459,9 @@ def measure_historico(p, f, rules, manifest, retiros_path=None):
                             f'retirados: {name} es un destino frontend: no acepta ids Go '
                             "'<paquete>::<Test>', sino el id medido [proyecto, archivo, nombre]")
                     result = _historico_frontend(row, declared, revisado)
+                elif _terraform(repo):
+                    _rechazar_retirados_terraform(name, declared)
+                    result = _historico_terraform(row)
                 else:
                     require(retiros.tipo(declared) in (None, retiros.GO),
                             f'retirados: {name} es un destino Go: no acepta ids medidos de '
