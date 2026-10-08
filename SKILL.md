@@ -234,6 +234,7 @@ no es evidencia de integración. Para publicar en Atlassian se requiere
 | `gate.py close --feature <id> --status done --to <rama>` | Todas las reglas activas |
 | `postmerge_medido.py base --repo <r> --guardar <j>` | Foto medida de los rojos ANTES del merge |
 | `postmerge_medido.py check --repo <r> --base <j>` | Rojos NUEVOS, build roto o tests desaparecidos (exit 2) |
+| `postmerge_terraform.py base\|check ...` | Destinos Terraform (fmt, validate, `terraform test`); `close` lo despacha solo, ver `references/multirepo.md#contrato-terraform-fmt-validate-y-terraform-test` |
 
 **Despues de cada `close ... --to <rama>`, corre `postmerge_medido.py`** sobre la
 rama destino. Los AC de una feature miden su worktree y no pueden ver los choques
