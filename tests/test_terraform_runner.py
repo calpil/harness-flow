@@ -391,14 +391,12 @@ run "aplica" {
         self.write('infra/run.sh', '#!/bin/sh\n')
         (self.repo / 'infra/run.sh').chmod(0o755)
         os.symlink('main.tf', self.repo / 'infra/alias.tf')
-        os.symlink('/etc/hosts', self.repo / 'infra/absoluto.txt')
-        self.commit('ejecutable y symlinks')
+        self.commit('ejecutable y symlink relativo dentro del commit')
         destino = self.home / 'export'
         destino.mkdir()
         tf.exportar(self.repo, 'HEAD', destino)
         self.assertTrue(os.access(destino / 'infra/run.sh', os.X_OK))
         self.assertEqual(os.readlink(destino / 'infra/alias.tf'), 'main.tf')
-        self.assertEqual(os.readlink(destino / 'infra/absoluto.txt'), '/etc/hosts')
         self.assertEqual((destino / 'infra/main.tf').read_text(), MAIN)
         self.assertFalse((destino / '.git').exists())
 
@@ -424,7 +422,19 @@ run "aplica" {
         os.symlink('/etc/hosts', self.repo / 'infra/enlace.tf')
         self.commit('symlink absoluto')
         r = self.cli('base')
-        self.expect(r, 2, 'no pude medir')
+        self.expect(r, 2, 'symlink fuera del commit')
+
+    def test_symlink_que_sale_del_commit_es_invalid_aunque_apunte_a_hcl_valido(self):
+        # Revisor, chequeo acotado: Terraform sigue el symlink y mediria contenido que no esta en el commit.
+        afuera = self.home / 'afuera.tf'
+        afuera.write_text('output "fuera" {\n  value = 1\n}\n')
+        os.symlink(str(afuera), self.repo / 'infra/absoluto.tf')
+        self.commit('symlink absoluto a un .tf valido fuera del repo')
+        self.expect(self.cli('base'), 2, 'symlink fuera del commit')
+        self.git('rm', '-q', 'infra/absoluto.tf')
+        os.symlink('../../afuera.tf', self.repo / 'infra/relativo.tf')
+        self.commit('symlink relativo que escapa del repo')
+        self.expect(self.cli('base'), 2, 'symlink fuera del commit')
 
     def test_submodulo_no_soportado(self):
         sub = self.repo / 'infra/sub'

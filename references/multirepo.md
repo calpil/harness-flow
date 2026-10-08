@@ -659,7 +659,9 @@ stdlib y el binario `terraform` del PATH; en `close --integrated` lo despacha
   runner reconstruye HEAD blob por blob (`git ls-tree -r` + `git cat-file --batch`, sin
   filtros ni atributos: `git archive` aplicaria `export-ignore`/`export-subst`, tambien
   desde `.git/info/attributes`) en un temporal FUERA del repo y corre alli todos los
-  comandos; respeta el modo (ejecutable) y escribe los symlinks sin seguirlos; los
+  comandos; respeta el modo (ejecutable) y escribe los symlinks sin seguirlos, pero
+  un symlink absoluto o que sale del arbol del commit es Invalid (Terraform lo
+  seguiria y mediria contenido ajeno al commit); los
   submodulos no se soportan (Invalid) y el arbol exportado debe tener exactamente las
   rutas del commit. El `.terraform.lock.hcl` es el del commit. El arbol real se
   exige limpio y con la misma rama/sha/toolchain antes y despues, pero nunca se

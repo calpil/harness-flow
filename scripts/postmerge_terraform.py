@@ -192,7 +192,12 @@ def exportar(repo, sha, destino):
                                 if destino in x.parents or x == destino), 'export: directorio padre es un symlink: ' + ruta)
                 destino_ruta.parent.mkdir(parents=True, exist_ok=True)
                 if modo == '120000':
-                    os.symlink(datos.decode('utf-8', 'surrogateescape'), destino_ruta)
+                    objetivo = datos.decode('utf-8', 'surrogateescape')
+                    # Terraform sigue el symlink: uno que sale del arbol mediria contenido ajeno al commit.
+                    resuelto = os.path.normpath(os.path.join(str(pure.parent), objetivo))
+                    require(not os.path.isabs(objetivo) and resuelto != '..' and not resuelto.startswith('../'),
+                            f'export: symlink fuera del commit: {ruta} -> {objetivo}')
+                    os.symlink(objetivo, destino_ruta)
                 else:
                     destino_ruta.write_bytes(datos)
                     destino_ruta.chmod(0o755 if modo == '100755' else 0o644)
