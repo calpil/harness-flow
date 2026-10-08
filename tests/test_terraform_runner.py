@@ -238,6 +238,14 @@ run "aplica" {
         self.commit('un test apply crea un directorio ignorado')
         self.expect(self.cli('base'), 2, 'ignorados')
 
+    def test_init_escribe_su_data_dir_fuera_del_repo(self):
+        self.write('infra/main.tf', MAIN + 'module "m" {\n  source = "./m"\n}\n')
+        self.write('infra/m/main.tf', 'output "z" {\n  value = 1\n}\n')
+        self.commit('un modulo local obliga a init a escribir .terraform/modules')
+        self.measured_base()
+        self.assertFalse((self.repo / 'infra/.terraform').exists())
+        self.assert_repo_intact()
+
     def test_lock_que_init_cambiaria_bloquea_y_no_se_toca(self):
         lock = ('provider "registry.terraform.io/hashicorp/null" {\n  version     = "3.2.4"\n'
                 '  constraints = "~> 3.0"\n  hashes = [\n    "h1:hPknxdlW/xw7bBLlEmbunPTPwEEOUWdoHPtH/bjJ6g0=",\n  ]\n}\n')
@@ -267,7 +275,7 @@ run "aplica" {
     def test_init_o_validate_rotos_bloquean(self):
         self.write('infra/main.tf', MAIN + 'output "z" {\n  value = var.no_existe\n}\n')
         self.commit('validate roto')
-        self.expect(self.cli('base'), 2, 'validate')
+        self.expect(self.cli('base'), 2, 'terraform validate no es valido en infra')
 
     def test_head_detached_bloquea(self):
         self.git('checkout', '-q', '--detach')
@@ -328,6 +336,7 @@ class RaicesTests(TerraformFixture):
         self.write('b/tests/z.tftest.hcl', run_ok('z'))
         self.write('c/.terraform/modules/m/tests/w.tftest.hcl', run_ok('w'))
         self.write('tests/r.tftest.hcl', run_ok('r'))
+        self.git('add', '-f', 'c')  # .terraform/ esta en .gitignore: se fuerza como si estuviera versionado
         self.commit('raices')
         self.assertEqual(tf.raices(self.repo), ['.', 'a', 'b', 'infra'])
 
