@@ -333,7 +333,7 @@ def runs_agregados_tf(repo, base_sha, source_sha) -> set[tuple[str, str]]:
 
 
 def delta_solo_tests_tf(repo, base_sha, source_sha) -> bool:
-    return all(f.endswith(('.tftest.hcl', '.tftest.json')) for f in _delta(repo, base_sha, source_sha))
+    return all(f.endswith('.tftest.hcl') for f in _delta(repo, base_sha, source_sha))
 
 
 def _historico_terraform(row) -> dict:
@@ -354,6 +354,9 @@ def _historico_terraform_medido(row) -> dict:
     require(not rojos, 'historico: rojos en el destino: ' + ', '.join(rojos))
     require(all(r['state'] == 'pass' for r in measured['results']),
             'historico: destino contiene tests skip; medicion incompleta')
+    json_tests = sorted(f for f in _delta(repo, row['base_sha'], row['source_sha']) if f.endswith('.tftest.json'))
+    require(not json_tests, 'historico: .tftest.json no soportado; los runs no se pueden enumerar: '
+            + ', '.join(json_tests))
     agregados = runs_agregados_tf(repo, row['base_sha'], row['source_sha'])
     borrados = runs_agregados_tf(repo, row['source_sha'], row['base_sha'])
     # Terraform no tiene --retirados: un run que la feature borra no se puede declarar baja.

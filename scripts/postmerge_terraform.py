@@ -17,7 +17,6 @@ No hay --retirados: un test que desaparece bloquea siempre.
 """
 import argparse
 import hashlib
-import io
 import json
 import os
 from pathlib import Path, PurePosixPath
@@ -25,7 +24,6 @@ import re
 import shutil
 import subprocess
 import sys
-import tarfile
 import tempfile
 import uuid
 
@@ -158,13 +156,57 @@ def inventario(repo, ref, found):
 
 
 def exportar(repo, sha, destino):
-    """El commit, sin nada mas: ni ignorados (tfvars, override.tf), ni .terraform/ previos."""
-    data = git(repo, 'archive', '--format=tar', sha, binary=True)
-    with tarfile.open(fileobj=io.BytesIO(data)) as tar:
-        try:
-            tar.extractall(destino, filter='data')
-        except TypeError:  # Python sin filtros de extraccion
-            tar.extractall(destino)
+    """El commit, blob por blob y nada mas: ni ignorados (tfvars, override.tf), ni
+    .terraform/ previos, ni `export-ignore`/`export-subst` (git archive los aplica, tambien
+    desde .git/info/attributes local). `cat-file --batch` no aplica filtros ni atributos.
+    Respeta el modo (100755 ejecutable) y escribe los symlinks (120000) SIN seguirlos;
+    los submodulos (160000) no se soportan."""
+    destino = Path(destino)
+    try:
+        entradas = git(repo, 'ls-tree', '-r', '-z', '--full-tree', sha, binary=True).split(b'\0')
+        esperadas = set()
+        env = {k: v for k, v in os.environ.items() if not k.startswith('GIT_')}
+        env.update(GIT_CONFIG_NOSYSTEM='1', GIT_CONFIG_GLOBAL=os.devnull, GIT_OPTIONAL_LOCKS='0',
+                   GIT_NO_REPLACE_OBJECTS='1')
+        with subprocess.Popen(['git', '-c', 'core.fsmonitor=false', '-C', str(repo), 'cat-file', '--batch'],
+                              stdin=subprocess.PIPE, stdout=subprocess.PIPE, env=env) as lector:
+            for entrada in filter(None, entradas):
+                meta, _, ruta = entrada.partition(b'\t')
+                modo, tipo, oid = meta.decode().split(' ')
+                ruta = ruta.decode('utf-8', 'surrogateescape')
+                pure = PurePosixPath(ruta)
+                require(not pure.is_absolute() and '..' not in pure.parts and '.' not in pure.parts,
+                        'export: ruta insegura en el commit: ' + ruta)
+                require(modo != '160000', 'export: submodulo no soportado (' + ruta + '): el commit no se puede '
+                        'reconstruir sin red; vendorizalo o quitalo del repo medido')
+                require(tipo == 'blob' and modo in ('100644', '100755', '120000'), f'export: modo {modo} no soportado: {ruta}')
+                lector.stdin.write(oid.encode() + b'\n')
+                lector.stdin.flush()
+                cabecera = lector.stdout.readline().split()
+                require(len(cabecera) == 3 and cabecera[1] == b'blob', 'export: git cat-file no devolvio el blob de ' + ruta)
+                datos = lector.stdout.read(int(cabecera[2]))
+                lector.stdout.read(1)
+                require(len(datos) == int(cabecera[2]), 'export: blob truncado: ' + ruta)
+                destino_ruta = destino.joinpath(*pure.parts)
+                require(not any(x.is_symlink() for x in (destino_ruta.parent, *destino_ruta.parent.parents)
+                                if destino in x.parents or x == destino), 'export: directorio padre es un symlink: ' + ruta)
+                destino_ruta.parent.mkdir(parents=True, exist_ok=True)
+                if modo == '120000':
+                    os.symlink(datos.decode('utf-8', 'surrogateescape'), destino_ruta)
+                else:
+                    destino_ruta.write_bytes(datos)
+                    destino_ruta.chmod(0o755 if modo == '100755' else 0o644)
+                esperadas.add(ruta)
+            lector.stdin.close()
+        obtenidas = {Path(d, f).relative_to(destino).as_posix() for d, _, files in os.walk(destino)
+                     for f in files}
+        obtenidas |= {Path(d, n).relative_to(destino).as_posix() for d, dirs, _ in os.walk(destino)
+                      for n in dirs if Path(d, n).is_symlink()}
+        require(obtenidas == esperadas, 'export: el arbol exportado no es exactamente el del commit')
+    except (OSError, ValueError, subprocess.SubprocessError) as exc:
+        if isinstance(exc, Invalid):
+            raise
+        raise Invalid(f'export: no se pudo reconstruir el commit ({type(exc).__name__}: {exc})') from exc
 
 
 # --- ejecucion ------------------------------------------------------------------------
@@ -289,7 +331,11 @@ def evaluar(raiz, inv, runs):
         evaluar_init(raiz, runs['init'])
         validate = caso_validate(raiz, runs['validate'])
         out.append(validate)
-        corre = bool(inv['tests']) and validate['state'] == 'pass'
+        corre = bool(inv['tests'])
+        # Con tests, un validate rojo deja sus runs sin correr: medicion incompleta (como un
+        # build roto en Go). El validate como deuda es solo para raices SIN tests.
+        require(not corre or validate['state'] == 'pass', f"terraform: validate rojo en {raiz} deja sin correr sus "
+                f"runs ({', '.join(inv['tests'])}): medicion incompleta")
         require(('test' in runs) == corre, f'terraform: ejecucion de test ausente/sobrante en {raiz}')
         if corre:
             out += parse_test(raiz, runs['test'], inv['tests'])

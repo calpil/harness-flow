@@ -359,15 +359,82 @@ run "aplica" {
         self.git('reset', '-q', '--hard', anterior)
         self.expect(self.cli('check'), 2, 'merge-base')
 
-    def test_init_o_validate_rotos_bloquean(self):
+    def test_validate_rojo_en_una_raiz_con_tests_es_medicion_incompleta(self):
         self.measured_base()
         self.write('infra/main.tf', MAIN + 'output "z" {\n  value = var.no_existe\n}\n')
         self.commit('validate roto en una raiz con tests')
-        # sus runs ya no se miden: desaparecen respecto de la base
-        self.expect(self.cli('check'), 2, 'desaparecidos')
+        # sus runs no corren: no es deuda que se pueda aceptar, ni en el check ni en la base
+        self.expect(self.cli('check'), 2, 'validate rojo en infra deja sin correr sus runs')
         self.base.unlink()
-        data = self.measured_base()  # como base es deuda: validate en rojo y sin runs
-        self.assertEqual({tuple(x['id']): x['state'] for x in data['results']}[('infra', '<validate>', 'validate')], 'fail')
+        self.expect(self.cli('base'), 2, 'medicion incompleta')
+        self.assertFalse(self.base.exists())
+
+    def test_el_export_es_el_commit_aunque_haya_export_ignore(self):
+        """git archive aplica export-ignore (tambien el de .git/info/attributes, que no esta
+        en el sha): el archivo desformateado desapareceria del export y su caso pasaria."""
+        self.write('infra/roto.tf', 'variable   "r"{\n  default = 1\n}\n')
+        self.commit('un tf sin formato')
+        variantes = {
+            'info/attributes local': lambda: (self.repo / '.git/info/attributes').write_text('infra/roto.tf export-ignore\n'),
+            '.gitattributes versionado': lambda: (self.write('.gitattributes', 'infra/roto.tf export-ignore\n'),
+                                                   self.commit('export-ignore versionado')),
+        }
+        for label, aplicar in variantes.items():
+            with self.subTest(label):
+                aplicar()
+                self.base.unlink(missing_ok=True)
+                data = self.measured_base()
+                estados = {tuple(x['id']): x['state'] for x in data['results']}
+                self.assertEqual(estados[('infra', 'roto.tf', 'fmt')], 'fail')
+
+    def test_export_respeta_modo_y_symlinks_sin_seguirlos(self):
+        self.write('infra/run.sh', '#!/bin/sh\n')
+        (self.repo / 'infra/run.sh').chmod(0o755)
+        os.symlink('main.tf', self.repo / 'infra/alias.tf')
+        os.symlink('/etc/hosts', self.repo / 'infra/absoluto.txt')
+        self.commit('ejecutable y symlinks')
+        destino = self.home / 'export'
+        destino.mkdir()
+        tf.exportar(self.repo, 'HEAD', destino)
+        self.assertTrue(os.access(destino / 'infra/run.sh', os.X_OK))
+        self.assertEqual(os.readlink(destino / 'infra/alias.tf'), 'main.tf')
+        self.assertEqual(os.readlink(destino / 'infra/absoluto.txt'), '/etc/hosts')
+        self.assertEqual((destino / 'infra/main.tf').read_text(), MAIN)
+        self.assertFalse((destino / '.git').exists())
+
+    def test_export_con_archivos_de_mas_o_de_menos_es_invalid(self):
+        destino = self.home / 'export'
+        destino.mkdir()
+        real_walk = os.walk
+        def con_sobrante(top, *a, **k):
+            for d, dirs, files in real_walk(top, *a, **k):
+                yield d, dirs, files + ['intruso.tf']
+        with mock.patch.object(tf.os, 'walk', con_sobrante):
+            with self.assertRaisesRegex(Invalid, 'exactamente el del commit'):
+                tf.exportar(self.repo, 'HEAD', destino)
+
+    def test_error_de_e_s_del_export_es_invalid_no_traceback(self):
+        destino = self.home / 'export'
+        destino.mkdir()
+        with mock.patch.object(Path, 'write_bytes', side_effect=PermissionError('sin permiso')):
+            with self.assertRaisesRegex(Invalid, 'no se pudo reconstruir el commit'):
+                tf.exportar(self.repo, 'HEAD', destino)
+
+    def test_symlink_absoluto_versionado_no_produce_traceback(self):
+        os.symlink('/etc/hosts', self.repo / 'infra/enlace.tf')
+        self.commit('symlink absoluto')
+        r = self.cli('base')
+        self.expect(r, 2, 'no pude medir')
+
+    def test_submodulo_no_soportado(self):
+        sub = self.repo / 'infra/sub'
+        sub.mkdir()
+        for args in (('init', '-q', '-b', 'main'), ('commit', '-q', '--allow-empty', '-m', 'sub')):
+            r = subprocess.run(['git', '-C', str(sub), *args], env=self.env, capture_output=True, text=True)
+            self.assertEqual(r.returncode, 0, r.stderr)
+        self.commit('un gitlink')
+        self.assertIn('160000', self.git('ls-tree', 'HEAD', 'infra/'))
+        self.expect(self.cli('base'), 2, 'submodulo no soportado')
 
     def test_init_escribe_su_data_dir_fuera_del_repo(self):
         self.write('infra/main.tf', MAIN + 'module "m" {\n  source = "./m"\n}\n')
@@ -746,6 +813,21 @@ class CierreTerraformTests(TerraformFixture):
         r = self.close(historico=True)
         self.assertNotEqual(r.returncode, 0, r.stdout + r.stderr)
         self.assertIn('la feature borra runs y terraform no admite --retirados: infra/tests/a.tftest.hcl::override',
+                      r.stdout + r.stderr)
+        self.assertEqual(self.snapshot(), before)
+
+    def test_historico_tests_json_en_el_delta_bloquean(self):
+        j = json.dumps({'run': {'uno': {'command': 'plan', 'assert': [{'condition': '${output.y == 1}', 'error_message': 'x'}]},
+                                'dos': {'command': 'plan', 'assert': [{'condition': '${output.y == 1}', 'error_message': 'x'}]}}})
+        self.write('infra/tests/j.tftest.json', j)
+        self.base_sha = self.commit('la base ya tiene un test json')
+        self.write('infra/tests/j.tftest.json', json.dumps({'run': {'uno': json.loads(j)['run']['uno']}}))
+        source = self.feature(marca=True)  # quita el run `dos` del json
+        self.register(source)
+        before = self.snapshot()
+        r = self.close(historico=True)
+        self.assertNotEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertIn('historico: .tftest.json no soportado; los runs no se pueden enumerar: infra/tests/j.tftest.json',
                       r.stdout + r.stderr)
         self.assertEqual(self.snapshot(), before)
 
