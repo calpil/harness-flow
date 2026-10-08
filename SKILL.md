@@ -236,8 +236,9 @@ no es evidencia de integración. Para publicar en Atlassian se requiere
 | `postmerge_medido.py check --repo <r> --base <j>` | Rojos NUEVOS, build roto o tests desaparecidos (exit 2) |
 | `postmerge_terraform.py base\|check ...` | Destinos Terraform (fmt, validate, `terraform test`); `close` lo despacha solo, ver `references/multirepo.md#contrato-terraform-fmt-validate-y-terraform-test` |
 
-**Despues de cada `close ... --to <rama>`, corre `postmerge_medido.py`** sobre la
-rama destino. Los AC de una feature miden su worktree y no pueden ver los choques
+**Despues de cada `close ... --to <rama>`, corre `postmerge_medido.py`** (Go; en
+Angular `postmerge_frontend.py`; en Terraform `postmerge_terraform.py`, que mide el
+commit y no admite `--retirados`) sobre la rama destino. Los AC de una feature miden su worktree y no pueden ver los choques
 entre features. El gate compara `(paquete, test)` contra la base pre-merge y solo
 falla por rojos NUEVOS, asi que la deuda tolerada no lo vuelve inservible:
 

@@ -8,6 +8,7 @@ import hashlib
 import os
 from pathlib import Path, PurePosixPath
 import re
+import subprocess
 import sys
 
 import postmerge_medido as runner
@@ -332,11 +333,20 @@ def runs_agregados_tf(repo, base_sha, source_sha) -> set[tuple[str, str]]:
 
 
 def delta_solo_tests_tf(repo, base_sha, source_sha) -> bool:
-    return all(f.endswith('.tftest.hcl') for f in _delta(repo, base_sha, source_sha))
+    return all(f.endswith(('.tftest.hcl', '.tftest.json')) for f in _delta(repo, base_sha, source_sha))
 
 
 def _historico_terraform(row) -> dict:
-    from postmerge_terraform import measure as measure_terraform
+    """Cualquier salida fuera de contrato del runner (campo ausente, tipo ajeno, timeout)
+    es Invalid: bloquea el cierre sin traceback."""
+    try:
+        return _historico_terraform_medido(row)
+    except (KeyError, TypeError, AttributeError, subprocess.SubprocessError) as exc:
+        raise Invalid(f'historico: terraform fuera de contrato ({type(exc).__name__}: {exc})') from exc
+
+
+def _historico_terraform_medido(row) -> dict:
+    from postmerge_terraform import measure as measure_terraform, VALIDATE
     repo = row['repo']
     measured = measure_terraform(Path(repo))
     require(measured['sha'] == row['target_sha'], 'historico: target stale')
@@ -345,10 +355,15 @@ def _historico_terraform(row) -> dict:
     require(all(r['state'] == 'pass' for r in measured['results']),
             'historico: destino contiene tests skip; medicion incompleta')
     agregados = runs_agregados_tf(repo, row['base_sha'], row['source_sha'])
-    # El id medido es [raiz, archivo relativo a la raiz, run]; el delta se lee con
-    # rutas del repo: se unen para compararlos.
+    borrados = runs_agregados_tf(repo, row['source_sha'], row['base_sha'])
+    # Terraform no tiene --retirados: un run que la feature borra no se puede declarar baja.
+    require(not borrados, 'historico: la feature borra runs y terraform no admite --retirados: '
+            + ', '.join(sorted(f'{a}::{n}' for a, n in borrados)))
+    # El id medido de un run es [raiz, archivo relativo a la raiz, run]; los casos de
+    # formato y de validate no son runs. El delta se lee con rutas del repo: se unen.
     medidos = {(PurePosixPath(raiz, archivo).as_posix(), nombre)
-               for (raiz, archivo, nombre) in (r['id'] for r in measured['results']) if archivo != '<fmt>'}
+               for (raiz, archivo, nombre) in (r['id'] for r in measured['results'])
+               if archivo != VALIDATE and nombre != 'fmt'}
     faltan = sorted(f'{a}::{n}' for a, n in agregados - medidos)
     require(not faltan, 'historico: tests de la feature ausentes sin declarar: ' + ', '.join(faltan))
     if not agregados:

@@ -653,42 +653,64 @@ Terraform: sigue su camino de siempre). Lo mide `postmerge_terraform.py`, solo c
 stdlib y el binario `terraform` del PATH; en `close --integrated` lo despacha
 `medicion_destino.py` tanto con `--postmerge` como con `--historico`.
 
-- **Raices.** Salen de `git ls-files` en HEAD: cada directorio con al menos un
-  `*.tftest.hcl` versionado en `<dir>/tests/` o en `<dir>/` (rutas POSIX relativas,
-  ordenadas; `.` es la raiz del repo). Se ignora todo lo que cuelga de `.terraform/`.
-  Sin ninguna raiz, `Invalid`: «terraform: sin tests (*.tftest.hcl): nada que medir».
-- **Que se mide, por raiz y en este orden.** (1) `terraform fmt -check -recursive`:
-  un caso `[raiz, "<fmt>", "fmt"]`, pass o fail. (2) `terraform init -backend=false
-  -input=false -lockfile=readonly` con `TF_DATA_DIR` en un temporal propio: nunca
-  deja `.terraform/` en el repo ni toca `.terraform.lock.hcl`; si el lock no cubre las
-  dependencias, init falla y NO se mide (Invalid). (3) `terraform validate -json`:
-  `valid` tiene que ser true. (4) `terraform test -json`: un caso `[raiz, archivo, run]`
-  por cada `run "<nombre>"` (`archivo` relativo a la raiz; `error` cuenta como fail).
-  Nunca corre plan/apply contra un state real.
-- **Coherencias** (Invalid si fallan): cada run del `test_abstract` tiene exactamente
-  un `complete` y no hay runs fuera del abstract; los conteos de `test_summary`
-  cuadran; el exit es 0 si y solo si no hay fail/error; ningun run en `skip` (un error
-  deja los siguientes en skip: medicion incompleta); ids sin duplicar; cero runs es
-  Invalid. Al final el arbol sigue limpio (tambien de archivos ignorados nuevos) y
-  rama, sha y toolchain (`terraform_version`, ruta y sha256 del binario) no cambiaron.
-  El entorno fija `TF_IN_AUTOMATION=1`, `TF_INPUT=0` y `CHECKPOINT_DISABLE=1`, y no
-  hereda ningun `TF_*` (ni `TF_CLI_ARGS*`, `TF_DATA_DIR`, `TF_VAR_*`) salvo
-  `TF_PLUGIN_CACHE_DIR` y `TF_CLI_CONFIG_FILE`.
+- **Se mide el COMMIT, no el checkout.** Terraform carga archivos que git ignora
+  (`terraform.tfvars`, `*.auto.tfvars` tambien en `tests/`, `override.tf`,
+  `*_override.tf`) y `fmt -recursive` entra en directorios ignorados. Por eso el
+  runner exporta HEAD con `git archive` a un temporal FUERA del repo y corre alli
+  todos los comandos; el `.terraform.lock.hcl` es el del commit. El arbol real se
+  exige limpio y con la misma rama/sha/toolchain antes y despues, pero nunca se
+  ejecuta nada en el.
+- **Raices.** Un directorio es raiz si tiene un `.terraform.lock.hcl` versionado o
+  `*.tftest.hcl`/`*.tftest.json` versionados en `<dir>/` o `<dir>/tests/` (rutas POSIX
+  relativas, ordenadas; `.` es la raiz del repo; se ignora lo que cuelga de `.terraform/`).
+  Sin ninguna raiz, `Invalid`.
+- **Que se mide, por raiz y en este orden.** (1) `terraform fmt -check -list=true
+  -recursive`: un caso `[raiz, archivo, "fmt"]` por cada archivo `.tf`/`.tfvars`/
+  `.tftest.hcl`/`.tfmock.hcl` versionado de la raiz (fail si fmt lo lista), de modo que
+  la deuda de formato de un archivo no tape una regresion en otro; por eso `fmt` es un
+  nombre de run reservado. (2) `terraform init -backend=false -input=false
+  -lockfile=readonly` con `TF_DATA_DIR` temporal: si falla (p. ej. el lock no cubre las
+  dependencias) es `Invalid`. (3) `terraform validate -json`: un caso
+  `[raiz, "<validate>", "validate"]`, pass o fail; una raiz sin tests se valida y se
+  formatea igual. (4) `terraform test -json` solo si la raiz tiene tests y su validate
+  paso: un caso `[raiz, archivo, run]` por cada `run "<nombre>"` (`error` cuenta como fail).
+- **Coherencias** (Invalid si fallan): cada run del `test_abstract` tiene exactamente un
+  `complete` y no hay runs fuera del abstract; los archivos del `test_abstract` son
+  EXACTAMENTE los `*.tftest.hcl/json` que el commit declara en la raiz (inventario
+  independiente, guardado en la base); los conteos de `test_summary` cuadran; el exit es
+  0 si y solo si no hay fail/error; ningun run en `skip` (un error deja los siguientes en
+  skip: medicion incompleta); ids sin duplicar; cero runs es Invalid; cualquier campo
+  ausente o de otro tipo, evento no-objeto o timeout (fmt/validate 300 s, init/test 900 s)
+  es `Invalid`, nunca un traceback.
+- **Entorno y credenciales.** Cada comando corre con un entorno minimo explicito: PATH,
+  locale, proxies y certificados, `TF_IN_AUTOMATION=1`, `TF_INPUT=0`,
+  `CHECKPOINT_DISABLE=1`, `TF_DATA_DIR` propio, y `TF_PLUGIN_CACHE_DIR`/
+  `TF_CLI_CONFIG_FILE` solo si existen (el cache tambien se lee de `~/.terraformrc`).
+  `HOME` es un directorio temporal vacio: no se heredan `TF_*` (ni `TF_CLI_ARGS*`,
+  `TF_VAR_*`), `GOOGLE_*`, `CLOUDSDK_*`, `AWS_*`, `AZURE_*`, `ARM_*` ni las credenciales de
+  `~/.config/gcloud`. Esto es lo que se garantiza: `init` nunca usa backend y
+  `terraform test` corre sin credenciales, de modo que un test sin `mock_provider` que
+  intente tocar la nube falla en rojo. NO es una sandbox: `terraform test` ejecuta
+  `apply` (por defecto) y los provisioners `local-exec` de los modulos, y un
+  `provider_installation { dev_overrides }` en `TF_CLI_CONFIG_FILE` cambia los providers
+  sin cambiar la toolchain; revisar el codigo del repo antes del cierre.
 - **CLI.** `postmerge_terraform.py base --repo <r> --guardar <j>` y `check --repo <r>
   --base <j>` (`--evidence` opcional), con el mismo contrato que el frontend: exit 0
   sin rojos nuevos (la deuda de la base no bloquea), 1 con rojos nuevos, 2 si no pudo
   medir. La base es del mismo repo y rama, su sha es ancestro del HEAD, midio TODAS las
-  raices de su commit y su toolchain es la que corre; bases y evidencia viven fuera del repo.
-- **Sin `--retirados`.** Un id que desaparece (run, archivo o raiz) bloquea siempre y
-  el CLI rechaza `--retirados`; en `close`, declararlos para un destino Terraform se
-  rechaza antes de medir.
-- **Cierre historico.** `_historico_terraform` mide el `target_sha` (debe ser HEAD),
-  exige cero rojos y cero skip, y calcula los runs que la feature agrego: bloques
-  `run "<nombre>"` de `*.tftest.hcl` en `source_sha` y ausentes en `base_sha`,
-  identificados por (archivo, run) y leidos con `git` sobre los blobs. Cada uno debe
-  medirse en el destino («historico: tests de la feature ausentes sin declarar»). Si no
-  agrego ninguno, el delta `base..source` debe ser solo `*.tftest.hcl` («modifica codigo
-  sin agregar ningun test»). El recibo lleva `measurement` y `tests_agregados`.
+  raices de su commit con su mismo inventario y su toolchain (version y sha del binario)
+  es la que corre; bases y evidencia viven fuera del repo.
+- **Sin `--retirados`.** En `--postmerge` un id que desaparece (run, archivo, raiz) bloquea
+  siempre y el CLI rechaza `--retirados`; en `close`, declararlos para un destino
+  Terraform se rechaza antes de medir.
+- **Cierre historico.** No hay base, asi que `_historico_terraform` mide el `target_sha`
+  (debe ser HEAD), exige cero rojos (formato y validate incluidos) y cero skip, y calcula
+  los runs que la feature agrego (bloques `run "<nombre>"` de `*.tftest.hcl` en
+  `source_sha` y ausentes en `base_sha`, por (archivo, run), leidos con `git` sobre los
+  blobs): cada uno debe medirse en el destino. Los runs que la feature BORRA (en
+  `base_sha` y no en `source_sha`) bloquean, porque no hay `--retirados`; un renombre de
+  archivo cuenta como borrar y agregar. Si no agrego ninguno, el delta `base..source`
+  debe ser solo `*.tftest.hcl/json`. El recibo lleva `measurement` y `tests_agregados`.
 - **Pruebas.** `tests/test_terraform_runner.py` usa el `terraform` real con raices que
   solo tienen `variable`/`output`/`terraform_data` (sin red). Si falta `terraform` en el
   PATH FALLAN: no se omiten.

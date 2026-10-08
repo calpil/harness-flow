@@ -15,6 +15,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 SCRIPTS = Path(os.environ.get('HARNESS_TEST_SCRIPTS', Path(__file__).resolve().parents[1] / 'scripts'))
 sys.path.insert(0, str(SCRIPTS))
@@ -92,7 +93,7 @@ class TerraformFixture(unittest.TestCase):
                         GIT_CONFIG_NOSYSTEM='1', GIT_CONFIG_GLOBAL=os.devnull,
                         GIT_AUTHOR_NAME='Fixture', GIT_AUTHOR_EMAIL='fixture@example.invalid',
                         GIT_COMMITTER_NAME='Fixture', GIT_COMMITTER_EMAIL='fixture@example.invalid')
-        self.write('.gitignore', '.terraform/\nignored-dir/\n')
+        self.write('.gitignore', '.terraform/\nignored-dir/\n*.tfvars\noverride.tf\n')
         self.write('infra/main.tf', MAIN)
         self.write(TEST_FILE, TESTS)
         self.git('init', '-b', 'develop')
@@ -138,11 +139,11 @@ class TerraformRunnerTests(TerraformFixture):
     def test_base_en_verde_mide_fmt_y_runs_sin_ensuciar_el_repo(self):
         data = self.measured_base()
         self.assertEqual({tuple(x['id']) for x in data['results']}, {
-            ('infra', '<fmt>', 'fmt'), ('infra', 'tests/a.tftest.hcl', 'defaults'),
-            ('infra', 'tests/a.tftest.hcl', 'override')})
+            ('infra', 'main.tf', 'fmt'), ('infra', 'tests/a.tftest.hcl', 'fmt'), ('infra', '<validate>', 'validate'),
+            ('infra', 'tests/a.tftest.hcl', 'defaults'), ('infra', 'tests/a.tftest.hcl', 'override')})
         self.assertEqual({x['state'] for x in data['results']}, {'pass'})
         self.assertEqual((data['sha'], data['rama'], data['protocol']),
-                         (self.git('rev-parse', 'HEAD'), 'develop', 'terraform-test-json-v1'))
+                         (self.git('rev-parse', 'HEAD'), 'develop', 'terraform-test-json-v2'))
         self.assertEqual(data['tree'], self.git('rev-parse', 'HEAD^{tree}'))
         self.assertEqual(data['repo'], str(self.repo))
         self.assertEqual(data['toolchain']['terraform_version'],
@@ -205,11 +206,11 @@ class TerraformRunnerTests(TerraformFixture):
         self.write('infra/main.tf', MAIN + '\n')
         self.expect(self.cli('check'), 2, 'arbol sucio')
 
-    def test_archivo_que_el_test_escribe_en_el_repo_bloquea(self):
+    def test_lo_que_un_test_apply_escribe_va_al_export_y_no_al_repo(self):
         self.write('infra/main.tf', MAIN + '''
 resource "terraform_data" "escribe" {
   provisioner "local-exec" {
-    command = "echo x > ../fuga.txt"
+    command = "echo x > ../fuga.txt && mkdir ../ignored-dir"
   }
 }
 ''')
@@ -218,25 +219,148 @@ run "aplica" {
   command = apply
 }
 ''')
-        self.commit('un test apply escribe en el repo')
-        self.expect(self.cli('base'), 2, 'arbol sucio')
-        self.assertFalse(self.base.exists())
+        self.commit('un test apply escribe en ../')
+        self.measured_base()
+        self.assertFalse((self.repo / 'fuga.txt').exists())
+        self.assert_repo_intact()
 
-    def test_directorio_ignorado_creado_por_el_test_bloquea(self):
-        self.write('infra/main.tf', MAIN + '''
-resource "terraform_data" "escribe" {
-  provisioner "local-exec" {
-    command = "mkdir ../ignored-dir"
-  }
-}
+    def test_archivos_ignorados_que_terraform_carga_no_cambian_la_medicion(self):
+        """terraform.tfvars, *.auto.tfvars (tambien en tests/) y override.tf harian
+        pasar o fallar un run segun lo que haya en el disco de quien mide."""
+        ignorados = {
+            'tfvars': ('infra/terraform.tfvars', 'x = 9\n'),
+            'auto.tfvars en tests/': ('infra/tests/z.auto.tfvars', 'x = 9\n'),
+            'override.tf': ('infra/override.tf', 'variable "x" {\n  default = 9\n}\n'),
+            'directorio ignorado sin formato': ('infra/ignored-dir/malo.tf', 'variable   "q"{\n  default = 1\n}\n'),
+        }
+        for label, (ruta, contenido) in ignorados.items():
+            with self.subTest(label):
+                self.write(ruta, contenido)
+                self.assertEqual(self.git('status', '--porcelain'), '')
+                self.base.unlink(missing_ok=True)
+                data = self.measured_base()
+                self.assertEqual({x['state'] for x in data['results']}, {'pass'}, data['results'])
+                self.assertEqual(len(data['results']), 5)
+                (self.repo / ruta).unlink()
+        # y el check sigue viendo la regresion real aunque haya un archivo ignorado a favor
+        self.write('infra/override.tf', 'variable "x" {\n  default = 1\n}\n')
+        self.write('infra/main.tf', MAIN.replace('default = 1', 'default = 5'))
+        self.commit('el default cambia')
+        self.expect(self.cli('check'), 1, 'infra::tests/a.tftest.hcl::defaults')
+
+    def test_el_entorno_del_llamador_no_se_hereda(self):
+        self.write('infra/tests/b.tftest.hcl', run_ok('b'))
+        self.commit('segundo archivo de test')
+        self.env.update(TF_CLI_ARGS_test='-filter=tests/a.tftest.hcl', TF_CLI_ARGS='-no-color -var=x=8',
+                        TF_VAR_x='7', TF_WORKSPACE='otro', TF_LOG='TRACE')
+        data = self.measured_base()
+        self.assertIn(['infra', 'tests/b.tftest.hcl', 'b'], [x['id'] for x in data['results']])
+        self.assertEqual({x['state'] for x in data['results']}, {'pass'})
+
+    def test_las_credenciales_y_el_home_del_llamador_no_llegan_a_terraform(self):
+        # El provisioner corre con el entorno de terraform: si algo se heredo, el apply falla.
+        chequeo = ('test -z \\"$GOOGLE_APPLICATION_CREDENTIALS\\" && test -z \\"$AWS_ACCESS_KEY_ID\\" '
+                   '&& test -z \\"$CLOUDSDK_CONFIG\\" && test -z \\"$ARM_CLIENT_SECRET\\" '
+                   f'&& test \\"$HOME\\" != \\"{self.home}\\"')
+        self.write('infra/main.tf', MAIN + f'''
+resource "terraform_data" "entorno" {{
+  provisioner "local-exec" {{
+    command = "{chequeo}"
+  }}
+}}
 ''')
         self.write(TEST_FILE, TESTS + '''
 run "aplica" {
   command = apply
 }
 ''')
-        self.commit('un test apply crea un directorio ignorado')
-        self.expect(self.cli('base'), 2, 'ignorados')
+        self.commit('un apply que exige entorno sin credenciales')
+        self.env.update(GOOGLE_APPLICATION_CREDENTIALS='/x/adc.json', AWS_ACCESS_KEY_ID='AKIAXXXX',
+                        CLOUDSDK_CONFIG='/x/gcloud', ARM_CLIENT_SECRET='s')
+        data = self.measured_base()
+        self.assertEqual({x['state'] for x in data['results']}, {'pass'}, data['results'])
+
+    def test_fmt_es_por_archivo_la_deuda_de_uno_no_tapa_a_otro(self):
+        self.write('infra/viejo.tf', 'variable   "v"{\n  default = 1\n}\n')
+        self.commit('deuda de formato')
+        data = self.measured_base()
+        estados = {tuple(x['id']): x['state'] for x in data['results']}
+        self.assertEqual(estados[('infra', 'viejo.tf', 'fmt')], 'fail')
+        self.assertEqual(estados[('infra', 'main.tf', 'fmt')], 'pass')
+        self.write('infra/nuevo.tf', 'variable   "n"{\n  default = 1\n}\n')
+        self.commit('mas deuda')
+        self.expect(self.cli('check'), 1, 'infra::nuevo.tf::fmt')
+
+    def test_raiz_con_lockfile_sin_tests_se_valida_y_se_formatea(self):
+        self.write('otra/main.tf', MAIN)
+        self.write('otra/.terraform.lock.hcl', '# lock vacio\n')
+        self.commit('raiz sin tests, solo lockfile')
+        data = self.measured_base()
+        ids = {tuple(x['id']): x['state'] for x in data['results']}
+        self.assertEqual(ids[('otra', '<validate>', 'validate')], 'pass')
+        self.assertEqual(ids[('otra', 'main.tf', 'fmt')], 'pass')
+        self.assertNotIn('test', data['execution']['otra'])
+        self.write('otra/main.tf', MAIN.replace('type    = number', 'type=number') + 'output "z" {\n  value = var.no_existe\n}\n')
+        self.commit('la raiz sin tests se rompe')
+        r = self.cli('check')
+        self.expect(r, 1, 'otra::<validate>::validate')
+        self.assertIn('otra::main.tf::fmt', r.stdout)
+
+    def test_tests_en_json_tambien_se_miden_y_cuentan_en_el_inventario(self):
+        self.write('infra/tests/j.tftest.json', json.dumps({'run': {'json_run': {'command': 'plan', 'assert': [
+            {'condition': '${output.y == 1}', 'error_message': 'y debe ser 1'}]}}}))
+        self.commit('un test en JSON')
+        data = self.measured_base()
+        self.assertIn(['infra', 'tests/j.tftest.json', 'json_run'], [x['id'] for x in data['results']])
+        self.assertIn('tests/j.tftest.json', data['inventory']['infra']['tests'])
+
+    def test_stub_con_salida_fuera_de_contrato_termina_en_exit_2_sin_traceback(self):
+        real = shutil.which('terraform')
+        casos = {'evento que no es objeto': '[1]', 'test_run que no es objeto': '{"type":"test_run","test_run":5}',
+                 'abstract sin contenido': '{"type":"test_abstract"}', 'summary que no es objeto': '{"type":"test_summary","test_summary":3}'}
+        for label, salida in casos.items():
+            with self.subTest(label):
+                bin_dir = self.home / ('bin-' + str(abs(hash(label))))
+                bin_dir.mkdir()
+                stub = bin_dir / 'terraform'
+                stub.write_text(f"#!/bin/sh\ncase \"$1\" in\n  version) exec {real} \"$@\" ;;\n  fmt|init) exit 0 ;;\n"
+                                f"  validate) echo '{{\"valid\": true}}' ;;\n  test) echo '{salida}'; exit 0 ;;\nesac\n")
+                stub.chmod(0o755)
+                self.env['PATH'] = str(bin_dir) + os.pathsep + os.environ['PATH']
+                self.base.unlink(missing_ok=True)
+                r = self.cli('base')
+                self.expect(r, 2, 'no pude medir')
+                self.assertFalse(self.base.exists())
+        self.env['PATH'] = os.environ['PATH']
+
+    def test_un_comando_que_se_cuelga_es_invalid_por_timeout(self):
+        with mock.patch.dict(tf.TIMEOUTS, {'test': 1}):
+            with self.assertRaisesRegex(Invalid, 'excedio 1s'):
+                tf.run_process(['sleep', '10'], self.home, os.environ.copy(), 'test', quiet=True)
+
+    def test_base_con_otra_version_de_terraform_se_rechaza(self):
+        data = self.measured_base()
+        data['toolchain']['terraform_version'] = '0.0.1'
+        self.base.write_text(json.dumps(data))
+        self.expect(self.cli('check'), 2, 'toolchain stale')
+
+    def test_base_cuyo_sha_no_es_ancestro_del_head_se_rechaza(self):
+        anterior = self.git('rev-parse', 'HEAD')
+        self.write('infra/extra.tf', 'variable "e" {\n  default = 1\n}\n')
+        self.commit('rama que se abandona')
+        self.measured_base()
+        self.git('reset', '-q', '--hard', anterior)
+        self.expect(self.cli('check'), 2, 'merge-base')
+
+    def test_init_o_validate_rotos_bloquean(self):
+        self.measured_base()
+        self.write('infra/main.tf', MAIN + 'output "z" {\n  value = var.no_existe\n}\n')
+        self.commit('validate roto en una raiz con tests')
+        # sus runs ya no se miden: desaparecen respecto de la base
+        self.expect(self.cli('check'), 2, 'desaparecidos')
+        self.base.unlink()
+        data = self.measured_base()  # como base es deuda: validate en rojo y sin runs
+        self.assertEqual({tuple(x['id']): x['state'] for x in data['results']}[('infra', '<validate>', 'validate')], 'fail')
 
     def test_init_escribe_su_data_dir_fuera_del_repo(self):
         self.write('infra/main.tf', MAIN + 'module "m" {\n  source = "./m"\n}\n')
@@ -260,22 +384,17 @@ run "aplica" {
         self.write('infra/main.tf', MAIN.replace('type    = number', 'type=number'))
         self.commit('desformatea')
         r = self.cli('check')
-        self.expect(r, 1, 'infra::<fmt>::fmt')
+        self.expect(r, 1, 'infra::main.tf::fmt')
         # como deuda de la base, no bloquea
         self.base.unlink()
         data = self.measured_base()
-        self.assertEqual({tuple(x['id']): x['state'] for x in data['results']}[('infra', '<fmt>', 'fmt')], 'fail')
+        self.assertEqual({tuple(x['id']): x['state'] for x in data['results']}[('infra', 'main.tf', 'fmt')], 'fail')
         self.expect(self.cli('check'), 0, 'deuda preexistente')
 
     def test_repo_sin_tftest_es_invalid(self):
         self.git('rm', '-q', TEST_FILE)
         self.commit('sin tests')
-        self.expect(self.cli('base'), 2, 'terraform: sin tests (*.tftest.hcl): nada que medir')
-
-    def test_init_o_validate_rotos_bloquean(self):
-        self.write('infra/main.tf', MAIN + 'output "z" {\n  value = var.no_existe\n}\n')
-        self.commit('validate roto')
-        self.expect(self.cli('base'), 2, 'terraform validate no es valido en infra')
+        self.expect(self.cli('base'), 2, 'terraform: sin raices (.terraform.lock.hcl ni *.tftest.hcl): nada que medir')
 
     def test_head_detached_bloquea(self):
         self.git('checkout', '-q', '--detach')
@@ -309,6 +428,7 @@ run "aplica" {
         self.commit('segunda raiz, la base ya existe sin ella')
         data = self.measured_base()
         data['execution'].pop('otra')
+        data['inventory'].pop('otra')
         data['results'] = [r for r in data['results'] if r['id'][0] != 'otra']
         self.base.write_text(json.dumps(data))
         self.expect(self.cli('check'), 2, 'todas las raices')
@@ -321,7 +441,7 @@ run "aplica" {
         self.assertEqual(sorted(data['execution']), ['infra', 'otra'])
         ids = {tuple(x['id']) for x in data['results']}
         self.assertIn(('otra', 'b.tftest.hcl', 'b'), ids)
-        self.assertIn(('otra', '<fmt>', 'fmt'), ids)
+        self.assertIn(('otra', 'main.tf', 'fmt'), ids)
         self.expect(self.cli('check'), 0)
 
     def test_base_dentro_del_repo_no_se_acepta(self):
@@ -338,12 +458,15 @@ class RaicesTests(TerraformFixture):
         self.write('tests/r.tftest.hcl', run_ok('r'))
         self.git('add', '-f', 'c')  # .terraform/ esta en .gitignore: se fuerza como si estuviera versionado
         self.commit('raices')
-        self.assertEqual(tf.raices(self.repo), ['.', 'a', 'b', 'infra'])
+        self.write('lock/.terraform.lock.hcl', '# lock\n')
+        self.commit('raiz solo con lockfile')
+        self.assertEqual(tf.raices(self.repo), ['.', 'a', 'b', 'infra', 'lock'])
+        self.assertEqual(tf.inventario(self.repo, 'HEAD', ['b'])['b']['tests'], ['tests/z.tftest.hcl', 'y.tftest.hcl'])
 
     def test_sin_tests_es_invalid(self):
         self.git('rm', '-q', TEST_FILE)
         self.commit('sin tests')
-        with self.assertRaisesRegex(Invalid, r'terraform: sin tests \(\*\.tftest\.hcl\): nada que medir'):
+        with self.assertRaisesRegex(Invalid, r'terraform: sin raices'):
             tf.raices(self.repo)
 
     def test_no_versionados_no_cuentan(self):
@@ -374,8 +497,16 @@ def salida(runs, *, abstract=None, resumen=None, extra=()):
 class ParseTestTests(unittest.TestCase):
     """Las coherencias de parse_test sobre eventos sinteticos (no ejecutan terraform)."""
 
-    def parse(self, stdout, exit=0):
-        return tf.parse_test('r', dict(argv=[], exit=exit, stdout=stdout, stderr=''))
+    def parse(self, stdout, exit=0, tests=None):
+        if tests is None:  # inventario coherente con lo que reporta el abstract
+            tests = []
+            for line in stdout.splitlines():
+                if line.startswith('{') and '"test_abstract"' in line:
+                    try:
+                        tests = sorted(json.loads(line)['test_abstract'])
+                    except (ValueError, TypeError, KeyError):
+                        pass
+        return tf.parse_test('r', dict(argv=[], exit=exit, stdout=stdout, stderr=''), tests)
 
     def test_verde_y_rojo_con_error_contado_como_fail(self):
         verde = self.parse(salida([('t.tftest.hcl', 'a', 'pass'), ('t.tftest.hcl', 'b', 'pass')]))
@@ -405,6 +536,23 @@ class ParseTestTests(unittest.TestCase):
                 with self.assertRaises(Invalid) as ctx:
                     self.parse(stdout, exit)
                 self.assertIn(reason, str(ctx.exception))
+
+    def test_inventario_independiente_y_nombre_reservado(self):
+        a = ('t.tftest.hcl', 'a', 'pass')
+        with self.assertRaisesRegex(Invalid, 'inventario incompleto'):
+            self.parse(salida([a]), tests=['t.tftest.hcl', 'otro.tftest.hcl'])
+        with self.assertRaisesRegex(Invalid, 'inventario incompleto'):
+            self.parse(salida([a]), tests=[])
+        with self.assertRaisesRegex(Invalid, 'reservado'):
+            self.parse(salida([('t.tftest.hcl', 'fmt', 'pass')]))
+
+    def test_campos_de_otro_tipo_son_invalid_no_excepciones(self):
+        run = dict(argv=[], exit=0, stdout='', stderr='')
+        for label, runs in {'fmt sin exit': dict(fmt={}, init=run, validate=run),
+                            'validate sin json': dict(fmt=run, init=run, validate=dict(run, stdout='[]'))}.items():
+            with self.subTest(label):
+                with self.assertRaises(Invalid):
+                    tf.evaluar('r', {'tests': [], 'fmt': []}, runs)
 
     def test_ids_duplicados_entre_raices_o_archivos_no_se_aceptan(self):
         dup = [{'id': ['r', 'f', 'a'], 'state': 'pass'}, {'id': ['r', 'f', 'a'], 'state': 'pass'}]
@@ -522,7 +670,7 @@ class CierreTerraformTests(TerraformFixture):
         receipt = json.loads(self.backlog.read_text())['features'][0]['mediciones_destino'][0]
         self.assertEqual(receipt['integration'], row)
         self.assertEqual(receipt['measurement']['sha'], row['target_sha'])
-        self.assertEqual(len(receipt['measurement']['results']), 4)
+        self.assertEqual(len(receipt['measurement']['results']), 6)
         self.assertIn('postmerge_terraform.py', receipt['runner_sha256'])
         self.assertEqual(receipt['delta']['new'], [])
 
@@ -569,7 +717,7 @@ class CierreTerraformTests(TerraformFixture):
         self.assertEqual(medicion['modo'], 'historico')
         self.assertEqual(medicion['tests_agregados'], ['infra/tests/a.tftest.hcl::nuevo'])
         self.assertEqual(medicion['measurement']['sha'], source)
-        self.assertEqual(len(medicion['measurement']['results']), 4)
+        self.assertEqual(len(medicion['measurement']['results']), 6)
         self.assertNotIn('base', medicion)
 
     def test_historico_run_agregado_que_no_se_mide_bloquea(self):
@@ -581,6 +729,16 @@ class CierreTerraformTests(TerraformFixture):
         r = self.close(historico=True)
         self.assertNotEqual(r.returncode, 0, r.stdout + r.stderr)
         self.assertIn('historico: tests de la feature ausentes sin declarar: infra/tests/a.tftest.hcl::nuevo',
+                      r.stdout + r.stderr)
+        self.assertEqual(self.snapshot(), before)
+
+    def test_historico_run_que_la_feature_borra_bloquea(self):
+        source = self.feature(test=TESTS.split('\nrun "override"')[0])
+        self.register(source)
+        before = self.snapshot()
+        r = self.close(historico=True)
+        self.assertNotEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertIn('la feature borra runs y terraform no admite --retirados: infra/tests/a.tftest.hcl::override',
                       r.stdout + r.stderr)
         self.assertEqual(self.snapshot(), before)
 
