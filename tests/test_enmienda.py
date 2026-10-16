@@ -101,7 +101,7 @@ class Proyecto(unittest.TestCase):
         (self.repo / "harness").mkdir(parents=True)
         (self.repo / "docs").mkdir()
         self.backlog = self.repo / "harness" / "feature_list.json"
-        self.backlog.write_text(json.dumps({"project": "t", "features": [
+        self.backlog.write_text(json.dumps({"project": "t", "rules": {"require_docs_al_dia": False}, "features": [
             {"id": "1", "name": "cobro", "status": "in_progress"}]}), encoding="utf-8")
         self.spec = self.repo / "docs" / "spec-feature-1-cobro.md"
         self.spec.write_text(self.spec_inicial, encoding="utf-8")
@@ -354,7 +354,7 @@ class CierreTrasEnmiendaTests(unittest.TestCase):
         (self.repo / "harness").mkdir()
         (self.repo / "docs").mkdir()
         self.backlog = self.repo / "harness" / "feature_list.json"
-        self.backlog.write_text(json.dumps({"project": "t", "features": [
+        self.backlog.write_text(json.dumps({"project": "t", "rules": {"require_docs_al_dia": False}, "features": [
             {"id": "1", "name": "cobro", "status": "in_progress", "branch": "feat-1"}]}),
             encoding="utf-8")
         self.spec = self.repo / "docs" / "spec-feature-1-cobro.md"

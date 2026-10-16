@@ -82,7 +82,9 @@ Aborta sin tocar el backlog si el arbol esta sucio o el merge conflictua.
 backlog en `harness/`. Muestralos con `git status` y pregunta antes de
 commitearlos; no los descartes.
 Despues del `done`, el close sincroniza PRD/SDD y regenera el vault: vuelven a
-quedar cambios en `docs/` y hay que reportarlos, no darlos por publicados. Agrega
+quedar cambios en `docs/` y hay que reportarlos, no darlos por publicados. Si
+`close` avisa que el PRD o el SDD cambio desde que se aprobo el spec, diselo al
+usuario: lo que se cierra cumple el documento anterior. Agrega
 `--publicar-atlassian` SOLO si existe `harness/atlassian.json` y el usuario pidio
 publicar remoto.
 

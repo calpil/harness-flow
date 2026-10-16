@@ -64,7 +64,9 @@ def main() -> None:
         print(f"[ok] .gitignore actualizado")
 
     print(f"\n[ok] harness-flow listo en {root}")
-    print("     Siguiente: agrega una feature con  add.py --name '<nombre>'")
+    print("     Siguiente: rol producto, PRD inicial y SDD de arquitectura:")
+    print("       producto.py borrador --doc prd   (y despues --doc sdd)")
+    print("     Cada F-n aprobada entra al backlog con  add.py --name '<nombre>' --candidata F-n")
 
 
 if __name__ == "__main__":

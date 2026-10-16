@@ -38,7 +38,7 @@ class MultiRepoCloseTests(unittest.TestCase):
         (self.root / "docs" / "review-7.md").write_text("## AC-1\nalpha/feature.txt:1\n")
         (self.root / "docs" / "constitution.md").write_text("User contract\n")
         (self.root / "harness" / "progress" / "current-7.md").write_text("Fixture progress\n")
-        self.data = {"project": "fixture", "rules": {}, "features": [
+        self.data = {"project": "fixture", "rules": {"require_docs_al_dia": False}, "features": [
             {"id": 7, "name": "Closure fixture", "status": "in_progress",
              "microservicios": ["alpha", "beta", "gamma"]}]}
         self.save()

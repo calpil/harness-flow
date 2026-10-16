@@ -212,7 +212,7 @@ class _Fixture(unittest.TestCase):
             'Comando: `git -C alpha merge-base --is-ancestor HEAD HEAD`\n')
         (self.root / "docs" / f"impl-{self.FEATURE}.md").write_text("## AC-1\nalpha/feature.txt:1\n")
         (self.root / "harness" / "progress" / f"current-{self.FEATURE}.md").write_text("Fixture progress\n")
-        self.backlog.write_text(json.dumps({"project": "fixture", "rules": {}, "features": [
+        self.backlog.write_text(json.dumps({"project": "fixture", "rules": {"require_docs_al_dia": False}, "features": [
             {"id": int(self.FEATURE), "name": "Subtests fixture", "status": "in_progress",
              "microservicios": ["alpha"]}]}))
         self.repo = self.root / "alpha"

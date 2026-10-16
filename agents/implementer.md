@@ -32,7 +32,9 @@ detente; no los busques ni los inventes.
 
    Con exit distinto de 0, detente y devuelve el motivo. No implementes contra
    un spec sin sello o con la firma vencida.
-2. Lee el spec entero y las lecciones que nombra el brief, antes de disenar.
+2. Lee el spec entero y las lecciones que nombra el brief, antes de disenar. Si
+   el spec cita decisiones del SDD (`decisiones que aplica: D2`), leelas en
+   `docs/sdd.md`: son la arquitectura acordada, no una sugerencia.
 3. Orientate con `codebase-memory-mcp` (`search_graph`, `trace_path`) si esta
    disponible. Su indice es de la raiz, no del worktree: confirma leyendo el
    archivo en el worktree antes de editarlo.
@@ -47,8 +49,10 @@ detente; no los busques ni los inventes.
   `merge-base(base, HEAD)..HEAD`: lo que no esta commiteado no existe para el
   revisor, y `close` aborta con el arbol sucio. Nunca commitees en la rama base,
   nunca hagas push ni merge.
-- **Rutas protegidas**: `docs/prd/**`, `docs/constitution.md` y `.env` son del
-  usuario. No las tocas.
+- **Rutas protegidas**: `docs/prd/**`, `docs/sdd.md`, `docs/constitution.md` y
+  `.env` son del usuario. No las tocas. Si el codigo que pide el spec contradice
+  una decision del SDD, detente y devuelve la contradiccion: cambiar el SDD es
+  del rol producto y del usuario.
 - **No apruebas, no sellas, no cierras.** `approve-spec`, `enmienda`,
   `revision` y `close` son de la sesion principal y del usuario. Tampoco revisas
   tu propio trabajo: eso lo hace el revisor aislado.

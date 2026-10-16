@@ -69,8 +69,10 @@ lo toca. Rellenalo con las tools de archivo.
 - PRD: `## Features candidatas` lleva una linea por PRD anidado con el formato
   exacto `- F-1: <nombre>: <resultado observable> (cumple O1)`. Es lo que
   despues entra al backlog.
-- SDD: cada decision con la alternativa descartada y el porque. Si hay
-  migraciones numeradas, di contra que rama se reserva el numero.
+- SDD: cada decision con nombre (`- D1: ...`), la alternativa descartada y el
+  porque; sin una `D-n`, `aprobar` se niega, porque el spec de cada feature
+  cita las que aplica. Si hay migraciones numeradas, di contra que rama se
+  reserva el numero.
 
 ## 3. Ritual de aprobacion
 
@@ -90,8 +92,8 @@ Nunca lo corras por tu cuenta ni "para agilizar": el script se niega sin
 `--yes`, y `--yes` significa que el usuario dijo que si, no que tu lo asumiste.
 
 Si `aprobar` se niega porque hay features multi-repo registradas abiertas, no
-las toques: su registro fijo los bytes del PRD y nada lo reautoriza. Diselo al
-usuario; se aprueba cuando cierren.
+las toques: su registro fijo los bytes de ese documento y nada lo reautoriza.
+Diselo al usuario; se aprueba cuando cierren.
 
 ## 4. Despues de aprobar
 
@@ -100,9 +102,14 @@ usuario; se aprueba cuando cierren.
 - Cada `F-n` del PRD entra al backlog con el comando que imprime `aprobar`:
 
   ```bash
-  eval "$(python3 "${CLAUDE_PLUGIN_ROOT}/scripts/entorno.py" --shell)" && "$PY" "$H/add.py" --name "<nombre>" --prd docs/prd/PRD-master.md
+  eval "$(python3 "${CLAUDE_PLUGIN_ROOT}/scripts/entorno.py" --shell)" && "$PY" "$H/add.py" --name "<nombre>" --prd docs/prd/PRD-master.md --candidata F-<n>
   ```
 
-  y su spec se escribe con `/harness-flow:spec <id>`.
+  `--candidata` valida que la `F-n` exista en el PRD, la guarda en la feature
+  (el brief, `estado.py` y el bloque generado la muestran) y la deja en el spec.
+  Su spec se escribe con `/harness-flow:spec <id>`.
 - Cambiar el borrador despues de aprobarlo no cambia el destino: hay que volver
   a mostrarlo y re-aprobar. `estado.py` lo marca como "borrador cambiado despues".
+- Si al re-aprobar `aprobar` lista "specs aprobados contra la version anterior",
+  diselo al usuario: esos specs se revisan con `/harness-flow:spec <id>`
+  (enmienda si un AC deja de valer; re-aprobacion si sigue valiendo).

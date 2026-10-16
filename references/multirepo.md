@@ -354,14 +354,16 @@ Sirve para diagnosticar una integracion a mano. El unico gate es `close`.
   que compartan un mismo worktree bloquean incluso si ambos mapas son completos.
 - Se audita CADA commit de base..fuente y base..destino contra TODOS sus padres,
   incluidos lados de merges y cambios restaurados: un diff neto limpio no basta.
-  Solo se leen nombres, excepto el PRD maestro para la excepcion generada exacta.
-  Marcadores eliminados/malformados/duplicados o bytes manuales distintos bloquean.
-  El fingerprint ignora SOLO el bloque generado bien formado, nunca todo el PRD;
+  Solo se leen nombres, excepto el PRD maestro y `docs/sdd.md` (si es ruta
+  protegida) para la excepcion generada exacta. Marcadores
+  eliminados/malformados/duplicados o bytes manuales distintos bloquean.
+  El fingerprint ignora SOLO el bloque generado bien formado, nunca todo el documento;
   re-registrar no reautoriza cambios. Un registro previo al formato de fingerprint
   nuevo no se migra automaticamente ni re-sella para ocultar divergencias.
 
-  La primera insercion autorizada distingue PRD ausente, manual sin marcadores y
-  generado. Solo admite prefijo manual exacto + bloque generado + LF, sin strip
+  La primera insercion autorizada distingue documento ausente (cada uno con el
+  encabezado que inventa `documentacion.py`: `# PRD maestro` / `# SDD`), manual
+  sin marcadores y generado. Solo admite prefijo manual exacto + bloque generado + LF, sin strip
   ni conversion de saltos. El compromiso de review permanece igual, pero el
   registro/cierre captura el estado generado para rechazar su eliminacion posterior.
   El cierre lo captura dentro de su transaccion: un fallo posterior restaura la

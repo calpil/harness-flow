@@ -51,6 +51,11 @@ def cmd_check(args) -> None:
     for f in abiertas:
         _check_feature(p, f, rules, r)
 
+    import producto
+    try:
+        producto.requeridos(rules)
+    except ValueError as exc:
+        r.fallo(str(exc), "corrigelo en harness/feature_list.json")
     _check_rutas_protegidas(p, rules, r, data)
     _check_aislamiento(abiertas, r, p, rules)
     r.salir()
@@ -89,6 +94,11 @@ def _check_feature(p, f, rules, r) -> None:
                     "vuelve a mostrarlo al usuario y re-aprueba")
         else:
             r.ok(f"#{fid} spec approved y fresco ({len(acs)} AC)")
+
+    import producto
+    for doc in producto.cambiados(p, f):
+        r.aviso(f"#{fid} el {producto.DOCS[doc]['titulo']} cambio desde que se aprobo el spec",
+                "el leader lo revisa: enmienda si un AC deja de valer; si sigue valiendo, re-aprueba")
 
     ip = impl_path(p, f)
     if ip.exists():
@@ -146,26 +156,30 @@ def _porcelain_path(line: str) -> str:
     return ""
 
 
-def _prd_master_seguro(p: dict, rel: str, data: dict | None = None) -> bool:
+# Documento con cuerpo sellado por `producto.py aprobar` -> clave de su sello.
+SELLOS = {"docs/prd/PRD-master.md": "prd", "docs/sdd.md": "sdd"}
+
+
+def _generado_seguro(p: dict, rel: str, data: dict | None = None) -> bool:
     """Misma excepcion en snapshot y Git: solo bloque, bytes manuales exactos.
 
     Segunda via, la unica en que el cuerpo manual puede diferir de HEAD: el
-    sello de `producto.py aprobar --yes` (`documentos.prd` en el backlog). El
+    sello de `producto.py aprobar --yes` (`documentos.prd|sdd` en el backlog). El
     usuario aprobo ESE cuerpo en el chat; vale para bytes identicos a los
     sellados (o su primera insercion del bloque generado) y hasta que lo
     commitea. No autoriza otros archivos bajo docs/prd/ ni ediciones posteriores.
     """
-    from bloques import allowed, compatible, fingerprint
-    if rel != "docs/prd/PRD-master.md":
+    from bloques import GENERADOS, allowed, compatible, fingerprint
+    if rel not in GENERADOS:
         return False
     actual = p["root"] / rel
     if not actual.is_file() or actual.is_symlink():
         return False
     contenido = actual.read_bytes()
     base = subprocess.run(["git", "show", f"HEAD:{rel}"], cwd=p["root"], capture_output=True)
-    if allowed(base.stdout if base.returncode == 0 else None, contenido):
+    if allowed(base.stdout if base.returncode == 0 else None, contenido, GENERADOS[rel]):
         return True
-    sello = ((data or {}).get("documentos") or {}).get("prd") or {}
+    sello = ((data or {}).get("documentos") or {}).get(SELLOS[rel]) or {}
     if not isinstance(sello.get("fingerprint"), dict):
         return False
     try:
@@ -182,10 +196,11 @@ def _rutas_prd_tocadas(p: dict, rel: str) -> list[str]:
 
 
 def _ruta_protegida_permitida(p: dict, rel: str, data: dict | None = None) -> bool:
-    prd_tocadas = _rutas_prd_tocadas(p, rel) if rel.startswith("docs/prd") else []
-    if not prd_tocadas:
+    tocadas = (_rutas_prd_tocadas(p, rel) if rel.startswith("docs/prd")
+               else [rel] if rel in SELLOS else [])
+    if not tocadas:
         return False
-    return all(_prd_master_seguro(p, x, data) for x in prd_tocadas)
+    return all(_generado_seguro(p, x, data) for x in tocadas)
 
 
 def _check_rutas_protegidas(p, rules, r, data: dict | None = None) -> None:
@@ -211,6 +226,11 @@ def _check_rutas_protegidas(p, rules, r, data: dict | None = None) -> None:
                 "son del USUARIO; revierte esos cambios")
     else:
         r.ok(f"{len(pats)} ruta(s) protegida(s) intactas")
+    if not any(fnmatch.fnmatch("docs/sdd.md", pat) for pat in pats):
+        # Un backlog creado antes de proteger el SDD conserva su lista: no se
+        # migra sola porque un registro multi-repo abierto fijo esas rutas.
+        r.info("docs/sdd.md no esta en rules.rutas_protegidas: agregalo para que "
+               "solo cambie por producto.py aprobar y el bloque generado")
 
 
 def _check_aislamiento(abiertas, r, p, rules) -> None:
@@ -296,16 +316,57 @@ def cmd_approve_spec(args) -> None:
                  f"     gate.py enmienda --feature {f['id']} --propuesta docs/<propuesta>.md --yes")
     text = sp.read_text(encoding="utf-8")
     acs = _acs_sellables(text)
+    pendientes = _docs_pendientes(p, data, f)
+    if pendientes:
+        sys.exit(f"[!!] require_docs_al_dia: el spec de #{f['id']} no se sella sin el PRD/SDD del proyecto:\n"
+                 + "".join(f"     - {x}\n" for x in pendientes) +
+                 "     Corre antes el rol producto (/harness-flow:producto prd|sdd o producto.py\n"
+                 "     borrador), MUESTRASELO al usuario y apruebalo con su SI. Si el USUARIO decide\n"
+                 "     que este proyecto no lleva PRD/SDD, es el quien cambia rules.require_docs_al_dia\n"
+                 "     (false, o la lista de documentos que si exige). Un --kind bug|task no lo exige.")
 
+    import producto
+    avisos = producto.avisos_citas(p, f, text)
     quien = _firmante(args.por)
     cuando = now_iso()
     text = _sellar_spec(text, f"Aprobado: {quien} · {cuando} · sellado por gate.py approve-spec --yes")
     sp.write_text(text, encoding="utf-8")
 
-    _registrar_sello(f, sp, text, quien, cuando)
+    _registrar_sello(p, f, sp, text, quien, cuando)
     save_backlog(p, data)
     bitacora(p, f"spec #{f['id']} approved por {quien} ({len(acs)} AC)")
     print(f"[ok] spec #{f['id']} aprobado y sellado. AC: {', '.join(acs)}")
+    for x in avisos:
+        print(f"[!]  {x}")
+
+
+def _docs_pendientes(p: dict, data: dict, f: dict) -> list[str]:
+    """Lo que require_docs_al_dia exige del PRD/SDD y falta para sellar `f`."""
+    import producto
+    if f.get("kind", "feature") not in producto.TIPOS_EXIGIDOS:
+        return []
+    try:
+        docs = producto.requeridos(data["rules"])
+    except ValueError as exc:
+        return [str(exc)]
+    out = []
+    for doc in docs:
+        motivo = producto.falta(p, data, doc)
+        rel = producto.destino_path(p, doc).relative_to(p["root"]).as_posix()
+        if motivo is None and not _limpio_o_sellado(p, rel, data):
+            # Un cuerpo sin sello ni commit lo pudo poner cualquiera; el mismo
+            # criterio que gate.py check aplica a las rutas protegidas.
+            motivo = f"{rel} tiene cambios sin sello de producto.py aprobar ni commit del usuario"
+        if motivo:
+            out.append(f"{doc}: {motivo}")
+    return out
+
+
+def _limpio_o_sellado(p: dict, rel: str, data: dict) -> bool:
+    code, out = git(["status", "--porcelain", "-uall", "--", rel], p["root"])
+    if code != 0:
+        return True  # sin git en la raiz no hay HEAD contra que medir (multi-repo)
+    return not out.strip() or _generado_seguro(p, rel, data)
 
 
 def _trabajo_hecho(p, f) -> list[str]:
@@ -349,13 +410,17 @@ def _sellar_spec(text: str, sello: str) -> str:
                   text, count=1, flags=re.M)
 
 
-def _registrar_sello(f: dict, sp: Path, text: str, quien: str, cuando: str) -> None:
+def _registrar_sello(p: dict, f: dict, sp: Path, text: str, quien: str, cuando: str) -> None:
+    import producto
     f["last_spec_sig"] = sign(sp)   # se firma DESPUES de escribir el sello
     f["aprobado_por"] = quien
     f["aprobado_at"] = cuando
     # La huella por AC es la linea base de la proxima enmienda: sin ella no hay
     # forma de saber que AC toco.
     f["spec_huella"] = spec_huella(text)
+    # Contra que PRD/SDD se aprobo: si despues cambian, el spec habla de otro
+    # documento y estado/check/brief lo avisan.
+    f["docs_base"] = producto.huellas(p)
 
 
 # --- enmienda --------------------------------------------------------------
@@ -548,7 +613,7 @@ def cmd_enmienda(args) -> None:
         "propuesta_sig": sign(prop), "acs": alcance,
         "spec_sig_anterior": {k: anterior.get(k) for k in ("size", "hash")},
     })
-    _registrar_sello(f, sp, text, quien, cuando)
+    _registrar_sello(p, f, sp, text, quien, cuando)
     save_backlog(p, data)
     bitacora(p, f"spec #{fid} enmienda {eid} aprobada por {quien} ({rel}; AC tocados: {detalle})")
     print(f"[ok] enmienda {eid} de #{fid} sellada. AC tocados: {detalle}")
@@ -926,6 +991,12 @@ def cmd_close(args) -> None:
                         f"{len(sin_cmd)}/{len(acs)} AC no los midio ninguna suite "
                         f"(sin comando declarado): {', '.join(sin_cmd)}. "
                         "El verde de verify NO habla de ellos; responde el review.")
+
+        import producto
+        for doc in producto.cambiados(p, f):
+            avisos_cierre.append(
+                f"el {producto.DOCS[doc]['titulo']} cambio desde que se aprobo el spec: "
+                "lo que se cierra cumple el documento anterior")
 
         if multi:
             from multirepo import Invalid, context

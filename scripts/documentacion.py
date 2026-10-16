@@ -76,6 +76,8 @@ def _bloque_prd(p: dict, data: dict) -> str:
         ]
         if f.get("prd"):
             lines.append(f"- PRD fuente: `{f['prd']}`")
+        if f.get("prd_candidata"):
+            lines.append(f"- Candidata del PRD: {f['prd_candidata']}")
         acs = _acs_desde_spec(sp)
         if acs:
             lines.append("- Criterios de aceptacion:")

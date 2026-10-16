@@ -149,6 +149,11 @@ class CloseFixes(unittest.TestCase):
         prd.parent.mkdir()
         prefix, suffix = b'User prefix  \r\n\r\n\t', b'\r\n\r\nUser suffix \t\r\n'
         prd.write_bytes(prefix + documentacion.INICIO.encode() + b'\nSTALE\n' + documentacion.FIN.encode() + suffix)
+        # El SDD tambien es ruta protegida: con un bloque viejo, el sync lo
+        # refresca y no hace su primera insercion (esa cambia el registro a proposito).
+        sdd = t.root / 'docs/sdd.md'
+        sdd_prefix = b'# SDD del usuario\r\n'
+        sdd.write_bytes(sdd_prefix + documentacion.INICIO.encode() + b'\nSTALE\n' + documentacion.FIN.encode() + b'\n')
         t.register()
         t.seal()
         original_registration = t.load()['multi_repo_protected']
@@ -156,6 +161,8 @@ class CloseFixes(unittest.TestCase):
         current = prd.read_bytes()
         self.assertEqual(current.split(documentacion.INICIO.encode())[0], prefix, 'F4 changed manual prefix bytes')
         self.assertEqual(current.split(documentacion.FIN.encode())[1], suffix, 'F4 changed manual suffix bytes')
+        self.assertTrue(sdd.read_bytes().startswith(sdd_prefix + documentacion.INICIO.encode()))
+        self.assertNotIn(b'STALE', sdd.read_bytes())
         t.register()
         self.assertEqual(t.load()['multi_repo_protected'], original_registration)
         result = t.close()

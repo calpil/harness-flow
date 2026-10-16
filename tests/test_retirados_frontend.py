@@ -112,7 +112,7 @@ class FrontendRetirosTests(unittest.TestCase):
         self.retirados = t.home / 'retirados.json'
         self.backlog = self.root / 'harness/feature_list.json'
         self.backlog.write_text(json.dumps(dict(
-            project='fixture', rules={'rutas_protegidas': ['docs/constitution.md']},
+            project='fixture', rules={'rutas_protegidas': ['docs/constitution.md'], 'require_docs_al_dia': False},
             features=[dict(id=7, name='Frontend fixture', status='in_progress',
                            microservicios=['front'])])))
         (self.root / 'docs/spec-feature-7-frontend-fixture.md').write_text(

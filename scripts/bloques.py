@@ -5,6 +5,10 @@ import json
 START = b'<!-- harness-flow:features:start -->'
 END = b'<!-- harness-flow:features:end -->'
 PRD_PREFIX = b'# PRD maestro\n\nContenido manual arriba; harness-flow mantiene solo el bloque generado.\n\n'
+SDD_PREFIX = b'# SDD\n\nContenido manual arriba; harness-flow mantiene solo el bloque generado.\n\n'
+# Documentos con bloque generado -> encabezado que inventa documentacion.py sobre
+# un archivo ausente: la unica primera insercion que no parte de bytes del usuario.
+GENERADOS = {'docs/prd/PRD-master.md': PRD_PREFIX, 'docs/sdd.md': SDD_PREFIX}
 
 
 def parts(content):
@@ -19,12 +23,12 @@ def parts(content):
     return prefix, suffix
 
 
-def allowed(before, after):
+def allowed(before, after, prefix=PRD_PREFIX):
     try:
         current = parts(after)
         if current is None:
             return False
-        previous = parts(before) if before is not None else (PRD_PREFIX, b'\n')
+        previous = parts(before) if before is not None else (prefix, b'\n')
         if previous is None and before is not None:
             previous = (before, b'\n')
         return previous is not None and previous == current
@@ -32,13 +36,12 @@ def allowed(before, after):
         return False
 
 
-def fingerprint(content):
+def fingerprint(content, prefix=PRD_PREFIX):
     if content is None:
         return {'kind': 'missing', 'generated_sha256': hashlib.sha256(
-            json.dumps([PRD_PREFIX.hex(), b'\n'.hex()]).encode()).hexdigest()}
-    manual = parts(content) if content is not None else (PRD_PREFIX, b'\n')
+            json.dumps([prefix.hex(), b'\n'.hex()]).encode()).hexdigest()}
+    manual = parts(content)
     if manual is None:
-        assert content is not None  # None usa siempre PRD_PREFIX y sufijo LF.
         # Compromiso de la unica insercion permitida: prefijo exacto + bloque + LF.
         return {'kind': 'manual', 'sha256': hashlib.sha256(content).hexdigest(),
                 'generated_sha256': hashlib.sha256(

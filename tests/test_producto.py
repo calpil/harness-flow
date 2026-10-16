@@ -89,7 +89,7 @@ Tabla `payments.attempts` con clave unica por `idempotency_key`.
 
 ## Decisiones
 
-Clave de idempotencia en base de datos y no en cache: sobrevive reinicios.
+- D1: Clave de idempotencia en base de datos y no en cache: sobrevive reinicios.
 
 ## Riesgos
 

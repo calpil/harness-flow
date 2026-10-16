@@ -705,6 +705,12 @@ def cmd_brief(args) -> None:
     L.append("rutas protegidas (NO editar): " +
              ", ".join(data["rules"].get("rutas_protegidas", [])))
 
+    # Lo que el PRD/SDD dice de esta feature; el revisor no lo recibe por la
+    # misma razon que no recibe los relacionados.
+    if getattr(args, "con_producto", True):
+        import producto
+        L += producto.lineas_brief(p, data, f)
+
     if micros:
         L.append("")
         L.append("impacto cross-repo (Memory Hub):")
@@ -782,6 +788,8 @@ def main() -> None:
     s.add_argument("--max-lecciones", type=int, default=12, dest="max_lecciones")
     s.add_argument("--max-relacionados", type=int, default=8, dest="max_relacionados",
                    help="rutas de docs/ relacionadas (0 = sin la seccion)")
+    s.add_argument("--sin-producto", action="store_false", dest="con_producto",
+                   help="sin la seccion del PRD/SDD (el briefing del revisor la omite)")
     s.set_defaults(fn=cmd_brief)
     a = ap.parse_args(); a.fn(a)
 
