@@ -359,15 +359,39 @@ class EntornoTests(unittest.TestCase):
         self.assertEqual(out, "")
         self.assertIn("Python", err)
 
+    def test_venv_neutro_bloqueado_por_sandbox_cae_a_sys_executable(self):
+        # En el sandbox de AGY/Codex, ~/.harness-flow/venv/bin/python existe pero
+        # no puede ejecutarse (returncode != 0); sin HARNESS_PYTHON explicito,
+        # main() cae a sys.executable para que los gates locales sigan corriendo.
+        falso_neutro = self.home / ".harness-flow/venv/bin/python"
+        falso_neutro.parent.mkdir(parents=True)
+        falso_neutro.touch()
+        with mock.patch.object(entorno, "ES_WINDOWS", False):
+            rc, out, err = self.cli("--shell")
+        self.assertEqual(rc, 0, err)
+        self.assertIn(shlex.quote(sys.executable), out)
+
     def test_ruta_python_windows_y_override_venv(self):
         os.environ["HARNESS_VENV"] = str(self.home / "mi venv")
         with mock.patch.object(entorno, "ES_WINDOWS", True):
             self.assertEqual(entorno._bin_python(entorno.venv_neutro()), self.home / "mi venv/Scripts/python.exe")
 
     def test_gemini_antigravity_detecta_host_gemini(self):
-        os.environ["ANTIGRAVITY_AGENT"] = "1"
-        with mock.patch.object(entorno, "__file__", str(self._script_heredado_hermes())):
-            self.assertEqual(entorno.host_agente(), "gemini")
+        agents = self.home / ".agents/skills/harness-flow/scripts/entorno.py"
+        agents.parent.mkdir(parents=True)
+        agents.touch()
+        hermes = self._script_heredado_hermes()
+        for marca in ("ANTIGRAVITY_AGENT", "GEMINI_CLI"):
+            with self.subTest(marca=marca), mock.patch.dict(os.environ, {marca: "1"}, clear=True):
+                with mock.patch.object(entorno, "__file__", str(hermes)):
+                    self.assertEqual(entorno.host_agente(), "gemini")
+                with mock.patch.object(entorno, "__file__", str(agents)):
+                    self.assertEqual(entorno.host_agente(), "gemini")
+            for apagado in ("", "0", "false", "off", "no"):
+                with self.subTest(marca=marca, apagado=apagado), \
+                        mock.patch.dict(os.environ, {marca: apagado}, clear=True), \
+                        mock.patch.object(entorno, "__file__", str(agents)):
+                    self.assertEqual(entorno.host_agente(), "gpt")
 
     def test_gemini_skills_dir_detecta_host_gemini(self):
         script = self.home / ".gemini/config/skills/harness-flow/scripts/entorno.py"

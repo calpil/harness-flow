@@ -35,10 +35,11 @@ class MultiHostTests(unittest.TestCase):
         (self.casa / ".hermes" / "skills").mkdir(parents=True)
         (self.casa / ".agents" / "skills").mkdir(parents=True)
         (self.casa / ".gemini" / "config" / "skills").mkdir(parents=True)
-        # Grok y Codex dejan marcas de sesion en el entorno. Estos tests fijan
+        # Grok, Codex y Gemini/AGY dejan marcas de sesion en el entorno. Estos tests fijan
         # el host por HARNESS_HOST o por la ruta; la marca no puede pisarlos.
         self._marcas = {k: os.environ.pop(k, None) for k in
-                        ("GROK_AGENT", "GROK_SESSION_ID", "CODEX_THREAD_ID", "CODEX_SESSION_ID")}
+                        ("GROK_AGENT", "GROK_SESSION_ID", "CODEX_THREAD_ID", "CODEX_SESSION_ID",
+                         "ANTIGRAVITY_AGENT", "GEMINI_CLI")}
         self.addCleanup(self._restaurar_marcas)
 
     def _restaurar_marcas(self):
@@ -259,6 +260,25 @@ class MultiHostTests(unittest.TestCase):
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
         self.assertEqual(Path(r.stdout.splitlines()[0]).resolve(), grok.resolve(),
                          r.stdout)
+
+    def test_antigravity_agent_crea_en_gemini_aunque_entre_por_agents_o_hermes(self):
+        """En AGY el symlink ~/.agents/skills o el clone en ~/.hermes siguen siendo host gemini."""
+        gemini = self.casa / ".gemini" / "config" / "skills"
+        agents = self.casa / ".agents" / "skills"
+        os.symlink(ROOT, agents / "harness-flow")
+        env = dict(os.environ, HOME=str(self.casa), ANTIGRAVITY_AGENT="1")
+        for k in ("HARNESS_SKILLS_DIR", "HARNESS_HOST", "HERMES_SKILLS_DIR",
+                  "HERMES_HOME", "HERMES_PYTHON", "CLAUDE_CONFIG_DIR", "CLAUDECODE",
+                  "CODEX_THREAD_ID", "CODEX_SESSION_ID", "GROK_AGENT", "GROK_SESSION_ID"):
+            env.pop(k, None)
+        for script in (SCRIPTS / "leccion.py", agents / "harness-flow" / "scripts" / "leccion.py"):
+            with self.subTest(script=str(script)):
+                r = subprocess.run(
+                    [sys.executable, str(script), "donde"],
+                    capture_output=True, text=True, env=env, cwd=str(self.casa))
+                self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+                self.assertEqual(Path(r.stdout.splitlines()[0]).resolve(), gemini.resolve(),
+                                 r.stdout)
 
     def test_las_raices_ajenas_no_sirven_para_crear(self):
         """Solo para buscar: una skill nueva no nace en el CLI de otro.

@@ -9,9 +9,10 @@ effort: xhigh
 El frontmatter de arriba lo leen Claude Code y Kimi Code (`model`, `effort`,
 `tools`; Kimi ignora `model`). El `effort` lo elige por ronda la sesion que te
 lanza; el del frontmatter es la red. Por que: `references/modelos.md`.
-En Grok no registra un tipo de agente: la sesion principal te
-lanza con `spawn_subagent` y este cuerpo es la instruccion. Usa las
-herramientas que tengas; no busques `Bash` ni `Write` por esos nombres.
+En Grok y en AGY / Gemini no registra un tipo de agente: la sesion principal te
+lanza con `spawn_subagent` (Grok) o `invoke_subagent` con `TypeName: "self"` (AGY)
+y este cuerpo es la instruccion. Usa las herramientas que tengas (`run_command`,
+`view_file`, `write_to_file`, etc.); no busques `Bash` ni `Write` por esos nombres.
 
 Eres el revisor del arnes harness-flow. Respondes SIEMPRE en espanol.
 

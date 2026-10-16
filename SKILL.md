@@ -58,7 +58,7 @@ documento funcionan tal cual en los tres SO y en los hosts soportados:
 $PY "$H/estado.py"
 ```
 
-En Codex, Claude Code y Grok las llamadas de terminal independientes no conservan
+En Codex, Claude Code, AGY / Gemini y Grok las llamadas de terminal independientes no conservan
 `$PY`, `$H` ni `HARNESS_HOST`. Pega el `eval` al comando, en la misma llamada.
 En Codex fija el host incluso si `<skill>` es la ruta real del clone de Hermes:
 
@@ -117,6 +117,11 @@ revisor reciben el effort que la skill elige por tarea**: implementer `high` y
 `xhigh` ante un riesgo concreto; revisor `xhigh` en la primera ronda y `high` en la
 de seguimiento. Se anuncia igual y se pasa en la invocacion (`effort` de la tool
 `Agent`, o `claude -p --effort`).
+Con Gemini 4 Argon (`gemini-4-argon`) en AGY o Hermes, la sesion y los subagentes
+corren en `high` (`Gemini 4 Argon (High)`); en AGY los subagentes se lanzan con
+`Model: "inherit"` y `TypeName: "self"`, y en Hermes se anuncia el esfuerzo antes de
+cada rol (detalle y limite actual de `_build_gemini_thinking_config` en
+[`references/modelos.md`](references/modelos.md)).
 
 ### 0. Producto — PRD inicial y SDD de arquitectura, antes del backlog
 
@@ -164,7 +169,7 @@ El review NO lo haces tú mismo. Un revisor que recuerda haber escrito el códig
    - Claude Code: la tool `Agent` con `subagent_type: harness-flow:revisor`, pegando la salida en el prompt.
      Ese subagente viene en la propia skill (`agents/revisor.md`); sin el, `general-purpose` sirve igual.
    - GPT/Codex: `codex exec` o el revisor/subagente disponible, pegando el briefing; si no hay aislamiento real, decláralo.
-   - AGY / Gemini: `invoke_subagent` (tipo `research` o subagente definido), pegando el briefing en el prompt.
+   - AGY / Gemini: `invoke_subagent` con `TypeName: "self"` (o un subagente definido con `define_subagent` y `enable_write_tools: true`), `Model: "inherit"` y `Workspace: "inherit"`, pegando el briefing entero más "sigue el cuerpo de `<skill>/agents/revisor.md`; ignora su frontmatter". NO uses `TypeName: "research"`: es de solo lectura y no puede correr los comandos de los AC ni escribir `docs/review-<id>.md`.
    - Grok: `spawn_subagent`. En `prompt`, el briefing entero mas "sigue el cuerpo de `<skill>/agents/revisor.md`; ignora su frontmatter". `isolation: none` (el acta queda en el worktree de la feature; `worktree` la escribiria en un worktree de Grok). No pases `resume_from`: hereda el historial. No uses `codex exec` ni `delegate_task`. Detalle en [`references/grok.md`](references/grok.md).
    NO uses un fork de la sesión como revisor: hereda tu historial y con él el sesgo que el aislamiento evita.
 3. Cuando vuelva, LEE tú `docs/review-<id>.md`. El veredicto del subagente es un autoinforme: verifica que cada fila cite `archivo:linea` real antes de sellar.
@@ -351,10 +356,10 @@ Esa referencia también describe cómo ejecutar la suite y evaluar las regresion
 
 | Necesitas | Hermes | Claude Code | GPT/Codex | AGY / Gemini | Grok | Kimi Code |
 | --- | --- | --- | --- | --- | --- | --- |
-| Implementer | sesion o `claude -p --agent` | `Agent` (`harness-flow:implementer`) | sesion | sesion | sesion | sesion |
-| Revisor | `claude -p --agent` o `delegate_task` | `Agent` | `codex exec` o subagente | `invoke_subagent` | `spawn_subagent` | `Agent` o `kimi -p` |
+| Implementer | sesion o `claude -p --agent` | `Agent` (`harness-flow:implementer`) | sesion | sesion o `invoke_subagent` (`self`) | sesion | sesion |
+| Revisor | `claude -p --agent` o `delegate_task` | `Agent` | `codex exec` o subagente | `invoke_subagent` (`self`) | `spawn_subagent` | `Agent` o `kimi -p` |
 | Crear lección | `skill_manage` | `leccion.py donde` | `leccion.py donde` | `leccion.py donde` | `leccion.py donde` | `leccion.py donde` |
-| Guía del host | — | [`claude.md`](references/claude.md) | [`openai.md`](references/openai.md) | `entorno.py` | [`grok.md`](references/grok.md) | [`kimi.md`](references/kimi.md) |
+| Guía del host | [`modelos.md`](references/modelos.md) | [`claude.md`](references/claude.md) | [`openai.md`](references/openai.md) | [`modelos.md`](references/modelos.md) / [`hosts.md`](references/hosts.md) | [`grok.md`](references/grok.md) | [`kimi.md`](references/kimi.md) |
 
 Los gates, worktrees, specs, memoria y documentación usan los mismos scripts
 Python. Si no hay revisor aislado, puedes revisar localmente con
@@ -373,7 +378,7 @@ Python. Si no hay revisor aislado, puedes revisar localmente con
 | [`references/obsidian.md`](references/obsidian.md) | que genera el vault, config sembrada, `--con-grafo` |
 | [`references/atlassian.md`](references/atlassian.md) | mapeo a Jira/Confluence y sus comandos |
 | [`references/claude.md`](references/claude.md) | Claude Code: plugin, comandos, Windows, raices de lecciones |
-| [`references/modelos.md`](references/modelos.md) | modelo por proveedor y rol; seleccion automatica de effort para Producto/Leader en Codex y Hermes, y para implementer/revisor con Claude 5.5 |
+| [`references/modelos.md`](references/modelos.md) | modelo por proveedor y rol; seleccion de effort para OpenAI, Claude 5.5 y Gemini 4 Argon (AGY y Hermes) |
 | [`references/openai.md`](references/openai.md) | GPT/Codex: instalacion, deteccion y raices |
 | [`references/grok.md`](references/grok.md) | Grok: host, revisor con `spawn_subagent`, lecciones en `~/.grok/skills`, vault |
 | [`references/kimi.md`](references/kimi.md) | Kimi Code: host, plugin, revisor y lecciones |

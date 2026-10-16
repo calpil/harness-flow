@@ -22,8 +22,10 @@ resuelve, exporta `HARNESS_PYTHON` a mano. `--host claude|hermes|gpt|codex|gemin
 el host cuando la detección no aplica. `codex` se normaliza a `gpt` y `agy` a `gemini`.
 Dentro de una sesion de Grok el host es `grok` aunque el script viva en el clone
 de Hermes o entre por el symlink de `.agents/skills`: manda `GROK_AGENT`, no la ruta.
-Codex se reconoce como `gpt` por `CODEX_THREAD_ID` o `CODEX_SESSION_ID`, tambien
-desde el clone de Hermes. `HARNESS_HOST` o `--host` tienen prioridad.
+Codex se reconoce como `gpt` por `CODEX_THREAD_ID` o `CODEX_SESSION_ID`, y
+AGY / Gemini CLI como `gemini` por `ANTIGRAVITY_AGENT` o `GEMINI_CLI`, tambien
+desde el clone de Hermes o el symlink de `.agents/skills`. `HARNESS_HOST` o
+`--host` tienen prioridad.
 
 ## `psycopg` va en `$PY`
 

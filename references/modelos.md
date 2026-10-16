@@ -276,3 +276,53 @@ el worktree, lee `docs/review-<id>.md` y sella con `gate.py revision`.
 Sin Claude Code instalado, el revisor vuelve a `delegate_task` y hereda el
 modelo y el effort de la sesion: ahi no hay seleccion por tarea. No fijes `delegation.model` para esto: es global, y los
 subagentes de tus sesiones con otro modelo tambien pasarian a cobrarse por API.
+
+## Gemini 4 Argon en AGY y Hermes
+
+Cuando la tarea corre sobre Gemini 4 Argon (`Gemini 4 Argon (High)` en AGY /
+Antigravity o `gemini-4-argon` en Hermes), todos los roles usan Argon en nivel
+`high` como base operativa.
+
+| Rol | Modelo | Effort | Como corre en AGY | Como corre en Hermes |
+| --- | --- | --- | --- | --- |
+| 0 Producto: PRD/SDD | `gemini-4-argon` | `high` | Sesion principal (`Gemini 4 Argon (High)`) | Sesion o `--provider gemini -m gemini-4-argon` |
+| 1 Leader: spec y AC | `gemini-4-argon` | `high` | Sesion principal | Sesion |
+| 2 Implementer | `gemini-4-argon` | `high` | Sesion principal o `invoke_subagent` (`TypeName: "self"`, `Model: "inherit"`) | Sesion o `delegate_task` |
+| 3 Revisor independiente | `gemini-4-argon` | `high` | `invoke_subagent` (`TypeName: "self"`, `Model: "inherit"`, `Workspace: "inherit"`) | `delegate_task` con el briefing en `context` |
+| 4 Cierre y Estado | `gemini-4-argon` | `high` | Gates Python + sesion principal | Gates Python + sesion principal |
+
+### En AGY / Antigravity (`agy`)
+
+- **Instalacion global**: AGY descubre `.agents/skills/` solo dentro del arbol
+  del proyecto (subiendo hasta `.git`). Para que `harness-flow` este disponible
+  en cualquier workspace de la maquina, enlazala en `~/.gemini/config/skills/harness-flow`
+  (ademas de `~/.agents/skills/harness-flow` para Gemini CLI, Codex y Grok).
+- **Modelo y effort**: se fijan en `~/.gemini/antigravity-cli/settings.json`
+  (`"model": "Gemini 4 Argon (High)"`) o en el selector de la sesion. La regla de
+  `invoke_subagent` en AGY exige pasar siempre `Model: "inherit"` salvo pedido
+  explicito del usuario, por lo que los subagentes heredan el modelo y el effort
+  de la sesion.
+- **Revisor aislado**: usa `invoke_subagent` con `TypeName: "self"`,
+  `Model: "inherit"` y `Workspace: "inherit"`. En `Prompt`, pega la salida
+  completa de `revision.py --feature <id> --briefing` mas la instruccion de
+  seguir el cuerpo de `<skill>/agents/revisor.md` ignorando su frontmatter.
+  **No uses `TypeName: "research"`**: en AGY el subagente `research` es de solo
+  lectura (carece de `run_command` y `write_to_file`), asi que no puede ejecutar
+  los comandos de verificacion de los AC ni escribir `docs/review-<id>.md`.
+  Alternativa: registrar un subagente para la conversacion con
+  `define_subagent(name="revisor", enable_write_tools=True, ...)` usando el
+  cuerpo de `agents/revisor.md` y lanzarlo con `invoke_subagent`.
+- **Shell**: cada `run_command` (salvo terminal persistente) abre un subproceso
+  nuevo; pega siempre el `eval` de `entorno.py --shell` en la misma llamada.
+
+### En Hermes con Gemini 4 Argon
+
+- Lanza Hermes con `--provider gemini -m gemini-4-argon --reasoning high`
+  (requiere `GEMINI_API_KEY` o `GOOGLE_API_KEY` en `~/.hermes/.env`).
+- **Limite actual de effort en Hermes**: en `agent/transports/chat_completions.py`
+  (`_build_gemini_thinking_config`), Hermes solo traduce `reasoning.effort` a
+  `thinkingLevel` cuando el ID empieza por `gemini-3` (y `thinkingBudget` para
+  `gemini-2.5-`). Con `gemini-4-*` devuelve solo `{"includeThoughts": True}` sin
+  `thinkingLevel` explicito. Informa el nivel solicitado y este comportamiento
+  efectivo si corres `gemini-4-argon` desde Hermes. Verificado en el codigo el
+  2026-10-16.

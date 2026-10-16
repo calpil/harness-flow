@@ -64,6 +64,9 @@ def _host() -> str:
         if any(os.environ.get(k, "").strip().lower() not in ("", "0", "false", "off", "no")
                for k in ("CODEX_THREAD_ID", "CODEX_SESSION_ID")):
             return "gpt"
+        if any(os.environ.get(k, "").strip().lower() not in ("", "0", "false", "off", "no")
+               for k in ("ANTIGRAVITY_AGENT", "GEMINI_CLI")):
+            return "gemini"
         for padre in Path(__file__).absolute().parents:
             if padre.name == "skills" and padre.parent.name == ".grok":
                 return "grok"
@@ -91,8 +94,6 @@ def _host() -> str:
         for padre in Path(__file__).absolute().parents:
             if padre.name == "skills" and padre.parent.name == ".claude":
                 return "claude"
-        if os.environ.get("ANTIGRAVITY_AGENT") == "1" or os.environ.get("GEMINI_CLI"):
-            return "gemini"
         if any(os.environ.get(k) for k in ("HERMES_HOME", "HERMES_PYTHON", "HERMES_SKILLS_DIR")):
             return "hermes"
         return "generic"
@@ -194,8 +195,9 @@ def _raices_gemini() -> list[Path]:
         else:
             padres = [cwd]
         for padre in padres:
-            raices.append(padre / ".gemini" / "skills")
-            raices.append(padre / ".agents" / "skills")
+            if padre.resolve() != _casa().resolve():
+                raices.append(padre / ".gemini" / "skills")
+                raices.append(padre / ".agents" / "skills")
     except OSError:
         pass
     raices.append(_casa() / ".gemini" / "config" / "skills")
@@ -526,19 +528,22 @@ def cmd_existe(args) -> None:
         raices = "\n       ".join(str(r) for r in skills_roots(todos_los_hosts=True))
         sys.exit("[!!] la leccion '%s' no existe como skill.\n"
                  "     Raices consultadas:\n       %s\n"
-                 "     Creala (skill_manage en Hermes; SKILL.md en Claude Code, GPT o Grok), o cierra con\n"
+                 "     Creala (skill_manage en Hermes; SKILL.md en Claude Code, GPT, Gemini/AGY o Grok), o cierra con\n"
                  "     --leccion ninguna --leccion-motivo '<por que>'."
                  % (args.clase, raices))
     print("[ok] %s -> %s" % (args.clase, sm))
 
 
 def _raiz_grok_aunque_no_exista() -> Path | None:
-    """~/.grok/skills aunque falte el directorio. 'donde' tiene que decir cual crear."""
+    """Raiz personal del host aunque falte el directorio. 'donde' tiene que decir cual crear."""
     if os.environ.get("HARNESS_SKILLS_DIR"):
         return None
-    if _host() != "grok":
-        return None
-    return _raices_grok()[0]
+    host = _host()
+    if host == "grok":
+        return _raices_grok()[0]
+    if host == "gemini":
+        return _casa() / ".gemini" / "config" / "skills"
+    return None
 
 
 def cmd_donde(args) -> None:
@@ -609,8 +614,9 @@ def cmd_plantilla(args) -> None:
           "     Claude Code: escribelo en <raiz>/%s/SKILL.md (leccion.py donde) y luego\n"
           "       leccion.py espejar %s (el close lo hace solo si Hermes esta instalado)\n"
           "     GPT/Codex: escribelo en <raiz>/%s/SKILL.md, tipicamente ~/.agents/skills/%s/SKILL.md\n"
+          "     Gemini/AGY: escribelo en <raiz>/%s/SKILL.md, tipicamente ~/.gemini/config/skills/%s/SKILL.md\n"
           "     Grok: escribelo en ~/.grok/skills/%s/SKILL.md (leccion.py donde)"
-          % ((args.clase,) * 6), file=sys.stderr)
+          % ((args.clase,) * 8), file=sys.stderr)
 
 
 def cmd_espejar(args) -> None:

@@ -83,9 +83,20 @@ En una sesion de Grok `entorno.py` reporta host `grok` (`GROK_AGENT`), aunque
 el script resuelva al clone. El revisor es `spawn_subagent` y las lecciones se
 escriben en `~/.grok/skills`. Ver [`references/grok.md`](references/grok.md).
 
-**Otros CLIs** (Gemini CLI, Kimi Code) leen el mismo `SKILL.md`. Gemini carga
-`~/.agents/skills`. `leccion.py` busca lecciones tambien en `~/.codex/skills`,
-`~/.grok/skills` y `~/.kimi-code/skills`.
+**AGY (Google Antigravity) y Gemini CLI** leen el mismo `SKILL.md`. Gemini CLI
+carga `~/.agents/skills`, mientras que AGY descubre `.agents/skills` solo a nivel
+de proyecto y usa `~/.gemini/config/skills` como raiz global de la maquina:
+
+```bash
+ln -s ~/.hermes/skills/software-development/harness-flow \
+  ~/.gemini/config/skills/harness-flow
+```
+
+En una sesion de AGY (`ANTIGRAVITY_AGENT=1`) o Gemini CLI (`GEMINI_CLI=1`),
+`entorno.py` reporta host `gemini` aunque el script entre por `~/.agents/skills`
+o el clone de Hermes. `leccion.py` busca lecciones tambien en
+`~/.gemini/config/skills`, `~/.codex/skills`, `~/.grok/skills` y
+`~/.kimi-code/skills`.
 
 Kimi Code ademas puede instalar el repo como plugin (`/plugins install
 <ruta-del-clone>`, manifiesto `kimi.plugin.json`): registra el agente `revisor`

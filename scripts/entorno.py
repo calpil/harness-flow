@@ -64,6 +64,8 @@ def host_agente() -> str:
         return "grok"
     if any(_marca_encendida(os.environ.get(k)) for k in ("CODEX_THREAD_ID", "CODEX_SESSION_ID")):
         return "gpt"
+    if any(_marca_encendida(os.environ.get(k)) for k in ("ANTIGRAVITY_AGENT", "GEMINI_CLI")):
+        return "gemini"
     # No resolve(): un symlink en .grok, .gemini, .agents o .claude puede apuntar al clone de Hermes.
     for padre in Path(__file__).absolute().parents:
         if padre.name == "skills" and padre.parent.name == ".grok":
@@ -96,8 +98,6 @@ def host_agente() -> str:
     for padre in Path(__file__).absolute().parents:
         if padre.name == "skills" and padre.parent.name == ".claude":
             return "claude"
-    if os.environ.get("ANTIGRAVITY_AGENT") == "1" or os.environ.get("GEMINI_CLI"):
-        return "gemini"
     if any(os.environ.get(k) for k in ("HERMES_HOME", "HERMES_PYTHON", "HERMES_SKILLS_DIR")):
         return "hermes"
     if _home_instalacion() is not None:
@@ -234,9 +234,24 @@ def main() -> int:
     try:
         host = host_agente()
         py = python_harness()
-        probe = subprocess.run([str(py), "-c", "import sys; sys.exit(0 if sys.version_info >= (3, 10) else 1)"],
-                               capture_output=True, timeout=30)
-        if probe.returncode != 0:
+        cmd_probe = ["-c", "import sys; sys.exit(0 if sys.version_info >= (3, 10) else 1)"]
+        try:
+            probe = subprocess.run([str(py), *cmd_probe],
+                                   capture_output=True, timeout=30)
+            ok_probe = probe.returncode == 0
+        except (OSError, subprocess.SubprocessError):
+            if os.environ.get("HARNESS_PYTHON"):
+                raise
+            ok_probe = False
+        if not ok_probe and not os.environ.get("HARNESS_PYTHON"):
+            actual = Path(sys.executable)
+            if actual != py:
+                probe_actual = subprocess.run([str(actual), *cmd_probe],
+                                              capture_output=True, timeout=30)
+                if probe_actual.returncode == 0:
+                    py = actual
+                    ok_probe = True
+        if not ok_probe:
             raise ValueError("PY requiere Python 3.10+ ejecutable; revisa HARNESS_PYTHON")
     except (ValueError, OSError, subprocess.SubprocessError) as exc:
         print(f"[!!] Python no disponible: {exc}", file=sys.stderr)
