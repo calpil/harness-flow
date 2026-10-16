@@ -20,7 +20,7 @@ class EstadoTests(unittest.TestCase):
 
     def panorama(self, features):
         self.backlog.write_text(json.dumps({
-            "project": "prueba", "rules": {}, "features": features,
+            "project": "prueba", "rules": {"require_docs_al_dia": False}, "features": features,
         }, ensure_ascii=False) + "\n", encoding="utf-8")
         antes = self.backlog.read_bytes()
         resultado = subprocess.run(

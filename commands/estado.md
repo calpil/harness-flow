@@ -35,13 +35,18 @@ ANTES de responder nada sustantivo sobre el proyecto.
 
 ## Que reportar
 
-Del output de `estado.py`, al usuario le importan tres cosas y en este orden:
+Del output de `estado.py`, al usuario le importan cuatro cosas y en este orden:
 
 1. **Si hay una feature `in_progress`, retomala.** No arranques otra. Di cual es
    y en que paso del flujo quedo (spec / evidencia / review / cierre).
 2. **Gates pendientes.** Cual es el proximo gate que toca correr y con que
    comando exacto.
-3. **Edad del contexto.** Si `estado.py` dice que el grafo o el brief estan
+3. **PRD y SDD.** Las lineas `prd:`/`sdd:` dicen en que paso esta cada uno y
+   `candidatas:` que `F-n` ya tienen feature. Si falta un documento que exige
+   `require_docs_al_dia`, el paso siguiente es `/harness-flow:producto`, no un
+   spec: `approve-spec` se negaria. Si una feature dice "PRD cambio desde el
+   spec", su spec se revisa contra el documento nuevo (`/harness-flow:spec <id>`).
+4. **Edad del contexto.** Si `estado.py` dice que el grafo o el brief estan
    vencidos, avisa y ofrece refrescarlo. Un contexto viejo miente, y nadie lo
    refresca solo:
 

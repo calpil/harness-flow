@@ -80,14 +80,14 @@ def protected_paths(p, rules):
                     "rutas protegidas con symlink no auditables")
             if path.is_file():
                 snapshot[path.relative_to(root).as_posix()] = hashlib.sha256(path.read_bytes()).hexdigest()
-    rel = "docs/prd/PRD-master.md"
-    if any(fnmatch.fnmatchcase(rel, pat) for pat in rules.get("rutas_protegidas", [])):
-        from bloques import fingerprint
-        path = root / rel
-        try:
-            snapshot[rel] = fingerprint(path.read_bytes() if path.exists() else None)
-        except (OSError, ValueError) as exc:
-            raise Invalid(f"rutas protegidas: {exc}") from exc
+    from bloques import GENERADOS, fingerprint
+    for rel, prefijo in GENERADOS.items():
+        if any(fnmatch.fnmatchcase(rel, pat) for pat in rules.get("rutas_protegidas", [])):
+            path = root / rel
+            try:
+                snapshot[rel] = fingerprint(path.read_bytes() if path.exists() else None, prefijo)
+            except (OSError, ValueError) as exc:
+                raise Invalid(f"rutas protegidas: {exc}") from exc
     return snapshot
 
 
@@ -160,14 +160,14 @@ def validate(p, f, manifest, rules=None, integrated=False, target=None):
                     for path in changed:
                         if path and any(fnmatch.fnmatchcase(path, pat) for pat in (rules or {}).get("rutas_protegidas", [])):
                             safe = False
-                            if path == "docs/prd/PRD-master.md":
-                                from bloques import allowed
+                            from bloques import GENERADOS, allowed
+                            if path in GENERADOS:
                                 # Unica excepcion; nunca leer blobs .env/secretos.
                                 before = (git(repo, "show", f"{parent}:{path}", binary=True)
                                           if git(repo, "ls-tree", parent, "--", path) else None)
                                 after = (git(repo, "show", f"{commit}:{path}", binary=True)
                                          if git(repo, "ls-tree", commit, "--", path) else b"")
-                                safe = allowed(before, after)
+                                safe = allowed(before, after, GENERADOS[path])
                             require(safe, f"rutas protegidas modificadas en commits de {name}: {commit} {path}")
         if integrated:
             try:
@@ -195,7 +195,7 @@ def check_registered(p, f, rules, integrated=False, target=None):
 
 
 def snapshot_matches(before, after):
-    from bloques import compatible
+    from bloques import GENERADOS, compatible
     if not isinstance(before, dict) or not isinstance(after, dict) or before.keys() != after.keys():
         return False
     for root, values in after.items():
@@ -203,7 +203,7 @@ def snapshot_matches(before, after):
         if not isinstance(old, dict) or not isinstance(values, dict) or old.keys() != values.keys():
             return False
         for path, value in values.items():
-            if path == 'docs/prd/PRD-master.md':
+            if path in GENERADOS:
                 if not compatible(old[path], value):
                     return False
             elif old[path] != value:
@@ -212,8 +212,8 @@ def snapshot_matches(before, after):
 
 
 def protected_context(snapshot):
-    from bloques import context_fingerprint
-    return {root: {path: context_fingerprint(value) if path == 'docs/prd/PRD-master.md' else value
+    from bloques import GENERADOS, context_fingerprint
+    return {root: {path: context_fingerprint(value) if path in GENERADOS else value
                    for path, value in values.items()} for root, values in snapshot.items()}
 
 

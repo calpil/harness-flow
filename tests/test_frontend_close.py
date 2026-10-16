@@ -37,7 +37,7 @@ class FrontendCloseTests(unittest.TestCase):
         self.map = t.home / 'postmerge.json'
         self.map.write_text(json.dumps(dict(version=1, feature='7', bases={'front': str(t.base)})))
         self.backlog = self.root / 'harness/feature_list.json'
-        self.backlog.write_text(json.dumps(dict(project='fixture', rules={'rutas_protegidas':['docs/constitution.md','docs/prd/**']},
+        self.backlog.write_text(json.dumps(dict(project='fixture', rules={'rutas_protegidas':['docs/constitution.md','docs/prd/**'], 'require_docs_al_dia': False},
                 features=[dict(id=7, name='Frontend fixture', status='in_progress', microservicios=['front'])])))
         (self.root / 'docs/spec-feature-7-frontend-fixture.md').write_text('Estado: draft\n- AC-1: Given frontend When integrated Then measured\nComando: `git -C front merge-base --is-ancestor HEAD HEAD`\n')
         for name in ('impl-7.md', 'review-7.md'):

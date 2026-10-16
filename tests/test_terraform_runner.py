@@ -693,7 +693,7 @@ class CierreTerraformTests(TerraformFixture):
         lesson.write_text('---\nname: closure-contract\ndescription: Fixture\n---\n')
         self.base_sha = self.git('rev-parse', 'HEAD')
         self.backlog = self.root / 'harness/feature_list.json'
-        self.backlog.write_text(json.dumps(dict(project='fixture', rules={}, features=[
+        self.backlog.write_text(json.dumps(dict(project='fixture', rules={'require_docs_al_dia': False}, features=[
             dict(id=9, name='Terraform fixture', status='in_progress', microservicios=['infra'])])))
         (self.root / 'docs/spec-feature-9-terraform-fixture.md').write_text(
             'Estado: draft\n- AC-1: Given terraform When integrated Then measured\n'

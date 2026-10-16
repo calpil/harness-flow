@@ -9,8 +9,8 @@ Los dos documentos viven en `docs/` y tienen dos capas:
 - el **bloque generado** `harness-flow:features`, que `documentacion.py sync`
   mantiene desde las features `status=done`. Deterministico y host-neutral.
 
-Ningun agente escribe `docs/prd/**` a mano: es ruta protegida y `gate.py check`
-lo marca en rojo.
+Ningun agente escribe `docs/prd/**` ni `docs/sdd.md` a mano: son rutas
+protegidas y `gate.py check` las marca en rojo.
 
 ## Archivos
 
@@ -18,8 +18,8 @@ lo marca en rojo.
 | --- | --- | --- |
 | `docs/borrador-prd.md` | borrador del PRD (sin proteger) | nunca |
 | `docs/borrador-sdd.md` | borrador del SDD (sin proteger) | nunca |
-| `docs/prd/PRD-master.md` | PRD aprobado (protegido) | features cerradas y sus AC |
-| `docs/sdd.md` | SDD aprobado | microservicios, rama, merge, evidencia, review, progreso archivado, Jira/Confluence |
+| `docs/prd/PRD-master.md` | PRD aprobado (protegido) | features cerradas, su candidata `F-n` y sus AC |
+| `docs/sdd.md` | SDD aprobado (protegido) | microservicios, rama, merge, evidencia, review, progreso archivado, Jira/Confluence |
 
 ## Rol producto: PRD inicial y SDD de arquitectura
 
@@ -74,8 +74,10 @@ debajo valen igual. Un bloque cercado con lenguaje (` ```go `, ` ```sql `,
 que la historia convenza lo decide el usuario en el ritual.
 
 - SDD: Contexto, Componentes, Datos e integraciones, Decisiones, Riesgos, cada
-  una con contenido. El flujo, los datos y el pseudo-codigo de cada cambio ya
-  viven en el PRD; el SDD fija la arquitectura que los sostiene.
+  una con contenido, y al menos una decision con nombre (`- D1: ...`) para que
+  el spec de cada feature cite las que aplica. El flujo, los datos y el
+  pseudo-codigo de cada cambio ya viven en el PRD; el SDD fija la arquitectura
+  que los sostiene.
 
 `aprobar --yes` es el mismo ritual del spec: se muestra el borrador en el chat,
 se pregunta, y solo con el SI explicito se corre. Se niega, sin escribir nada:
@@ -83,13 +85,14 @@ se pregunta, y solo con el SI explicito se corre. Se niega, sin escribir nada:
 - sin `--yes`;
 - con una seccion ausente o que solo tiene guia (nombra cual), o una parte del
   PRD sin lo que exige la tabla de arriba (Alcance, Hoy/Despues, Antes/Despues,
-  O-n/NO-n, F-n);
+  O-n/NO-n, F-n), o un SDD sin ninguna `D-n`;
 - con codigo final en el PRD (un bloque cercado con lenguaje);
 - si el borrador trae el bloque `harness-flow:features` (lo mantiene el sync);
 - si el destino tiene marcadores malformados (no se pisa a ciegas);
-- para el PRD, si hay features multi-repo **registradas** abiertas: su registro
-  fijo los bytes manuales del PRD y nada lo reautoriza, ni re-registrar. Se
-  cierran primero, o se aprueba el PRD antes de registrar.
+- si hay features multi-repo **registradas** abiertas cuyo registro fijo los
+  bytes de ese destino (era ruta protegida al registrar): nada los reautoriza,
+  ni re-registrar. Se cierran primero, o se aprueba el documento antes de
+  registrar.
 
 Cuando aprueba: pone `Estado: approved` y la linea `Aprobado: <quien> · <fecha>
 · sellado por producto.py aprobar --yes` en el cuerpo, lo copia al destino
@@ -99,23 +102,73 @@ destino, fingerprint del destino y sha256 del borrador), anota la bitacora y
 deja el borrador tambien como `approved`. Todo dentro de la transaccion de
 cierre local: un fallo restaura backlog, destino y bitacora a sus bytes previos.
 Para el PRD imprime ademas el `add.py --name "<nombre>" --prd
-docs/prd/PRD-master.md` de cada `F-n`.
+docs/prd/PRD-master.md --candidata F-n` de cada `F-n`. Si hay features abiertas
+con un spec aprobado contra la version anterior del documento, las lista.
 
 ## El sello y el gate de rutas protegidas
 
-`gate.py check` acepta `docs/prd/PRD-master.md` distinto de HEAD por dos vias, y
-solo dos:
+`gate.py check` acepta `docs/prd/PRD-master.md` o `docs/sdd.md` distinto de HEAD
+por dos vias, y solo dos:
 
 1. la de siempre: los bytes manuales son identicos a HEAD y solo cambio el bloque
-   generado bien formado (o es su primera insercion sobre el prefijo por defecto);
+   generado bien formado (o es su primera insercion sobre el encabezado que
+   inventa `documentacion.py`, `# PRD maestro` o `# SDD`);
 2. el sello: los bytes actuales dan el mismo fingerprint que guardo `aprobar
-   --yes` en `documentos.prd`, o son su primera insercion del bloque generado.
+   --yes` en `documentos.prd|sdd`, o son su primera insercion del bloque generado.
 
 El sello no autoriza otros archivos bajo `docs/prd/`, ni una edicion posterior
 del cuerpo (vuelve el rojo), ni un fingerprint que no corresponda. El usuario
-commitea el PRD cuando quiere; a partir de ahi manda HEAD y el sello queda como
-historia. El agente no lo commitea. El registro multi-repo (`multi_repo_protected`)
-mantiene su contrato aparte y no lee el sello.
+commitea el documento cuando quiere; a partir de ahi manda HEAD y el sello queda
+como historia. El agente no lo commitea. El registro multi-repo
+(`multi_repo_protected`) mantiene su contrato aparte y no lee el sello.
+
+`docs/sdd.md` entro a `rutas_protegidas` por defecto despues que el PRD. Un
+backlog creado antes conserva su lista (un registro multi-repo abierto fijo esas
+rutas, asi que no se migra sola): `gate.py check` avisa con `[i]` y el usuario
+lo agrega cuando no haya registros abiertos.
+
+## El PRD/SDD en el resto del flujo
+
+El rol producto los escribe y el cierre les agrega el bloque generado. Entre
+medio, cada rol los usa asi:
+
+| Paso | Que hace con el PRD/SDD |
+| --- | --- |
+| `init.py`, `estado.py` | mandan al rol producto antes que a `add.py` si falta un documento exigido; `estado.py` muestra `candidatas:` (que `F-n` tiene feature y en que estado) |
+| `add.py --candidata F-n` | valida que la `F-n` exista en el PRD, la guarda en la feature (`prd_candidata`) y crea el spec desde el bloque de `templates/spec.md` con el PRD y la linea de la candidata en el Contexto |
+| `contexto.py brief` | seccion `producto`: estado de cada documento, la linea `F-n` de la feature, objetivos `O-n`/`NO-n` y decisiones `D-n`. El briefing del revisor la omite: el revisor juzga spec contra codigo |
+| `gate.py approve-spec` | con `require_docs_al_dia`, se niega sin los documentos exigidos; avisa si el spec no cita `O-n`/`D-n` o cita uno inexistente; guarda en `docs_base` la huella del cuerpo de cada documento |
+| `estado.py`, `gate.py check`, brief, `close` | avisan cuando el PRD/SDD cambio desde que se aprobo el spec de una feature abierta |
+| `close --status done` | el sync escribe la candidata `F-n` de cada feature cerrada en el bloque del PRD |
+
+### `require_docs_al_dia`
+
+| Valor | Exige a `approve-spec` |
+| --- | --- |
+| `["prd", "sdd"]` (por defecto en un backlog nuevo) | PRD y SDD |
+| `true` (lo que escribian los backlogs viejos, cuando la regla no hacia nada) | solo el PRD |
+| `["prd"]` / `["sdd"]` | ese documento |
+| `false` | nada |
+
+Un documento cuenta si su destino tiene cuerpo manual (sellado por `aprobar
+--yes` o escrito por el usuario) y ese cuerpo no tiene cambios sin sello ni
+commit: un PRD que un agente puso ahi sin el ritual no cuenta. Solo se exige a
+`kind: feature`; `bug` y `task` no nacen de un PRD. Un valor que la regla no
+entiende hace fallar `approve-spec` y `gate.py check` en vez de apagarse. Apagarla
+es decision del usuario: el agente no edita `rules` para destrabar un spec.
+
+### Citas y cambios despues del spec
+
+El Contexto del spec cita lo que la feature cumple (`cumple: O1`) y las
+decisiones que aplica (`decisiones que aplica: D2`); `cumple: ninguno` y
+`decisiones que aplica: ninguna` lo dicen a proposito. `approve-spec` solo
+avisa: el validador mide estructura y la cita correcta la decide el usuario.
+
+La huella de `docs_base` ignora el bloque generado (cambia en cada cierre) y las
+lineas `Estado:`/`Aprobado:` (re-aprobar el mismo texto no es un cambio de
+producto). Si el cuerpo cambia, el spec habla de otro documento: el leader lo
+revisa y, si un AC deja de valer, es una enmienda; si sigue valiendo, se
+re-aprueba con el SI del usuario, lo que actualiza la huella.
 
 `estado.py` distingue: sin documento, borrador sin aprobar, aprobado (autor y
 fecha), borrador cambiado despues de aprobar (re-aprobar), destino cambiado

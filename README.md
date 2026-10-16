@@ -29,9 +29,14 @@ del agente para lanzar el subagente revisor y escribir lecciones.
 - **PRD inicial / SDD de arquitectura**: `producto.py borrador` redacta en
   `docs/borrador-<doc>.md` (sin proteger) y `producto.py aprobar --yes`, solo con
   el SÍ del usuario, copia el cuerpo a su destino y lo sella; `gate.py check`
-  reconoce el sello. Ningún agente escribe `docs/prd/**` a mano. El PRD sigue
-  la anatomía historia → objetivos → flujo → datos → pseudo-código, y `aprobar`
-  se niega si trae código final.
+  reconoce el sello. Ningún agente escribe `docs/prd/**` ni `docs/sdd.md` a mano.
+  El PRD sigue la anatomía historia → objetivos → flujo → datos → pseudo-código,
+  y `aprobar` se niega si trae código final.
+- **PRD/SDD en todo el flujo**: con `require_docs_al_dia`, `approve-spec` no
+  sella una feature sin ellos. Cada feature lleva su candidata `F-n` del PRD
+  (`add.py --candidata`), el brief del leader trae sus objetivos y las decisiones
+  del SDD, el spec los cita (`cumple: O1`, `decisiones que aplica: D2`) y, si el
+  documento cambia después de aprobar un spec, `estado`, `check` y `close` lo avisan.
 - **PRD / SDD generados**: `documentacion.py sync` crea o actualiza
   `docs/prd/PRD-master.md` y `docs/sdd.md` desde las features cerradas,
   preservando el contenido manual fuera del bloque generado.

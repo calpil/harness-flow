@@ -47,7 +47,7 @@ class CierreHistoricoGoTests(unittest.TestCase):
             'Comando: `git -C alpha merge-base --is-ancestor HEAD HEAD`\n')
         (self.root / "docs" / "impl-15.md").write_text("## AC-1\nalpha/feature.txt:1\n")
         (self.root / "harness" / "progress" / "current-15.md").write_text("Fixture progress\n")
-        self.backlog.write_text(json.dumps({"project": "fixture", "rules": {}, "features": [
+        self.backlog.write_text(json.dumps({"project": "fixture", "rules": {"require_docs_al_dia": False}, "features": [
             {"id": 15, "name": "Historico fixture", "status": "in_progress", "microservicios": ["alpha"]}]}))
         self.repo = self.root / "alpha"
         self.repo.mkdir()
@@ -417,7 +417,7 @@ class CierreHistoricoFrontendTests(unittest.TestCase):
         lesson.write_text("---\nname: closure-contract\ndescription: Fixture\n---\n")
         self.base_sha = t.git("rev-parse", "HEAD")
         self.backlog = self.root / "harness/feature_list.json"
-        self.backlog.write_text(json.dumps(dict(project="fixture", rules={}, features=[
+        self.backlog.write_text(json.dumps(dict(project="fixture", rules={"require_docs_al_dia": False}, features=[
             dict(id=15, name="Historico frontend fixture", status="in_progress", microservicios=["front"])])))
         (self.root / "docs/spec-feature-15-historico-frontend-fixture.md").write_text(
             'Estado: draft\n- AC-1: Given frontend When cerrado historico Then integrado\n'

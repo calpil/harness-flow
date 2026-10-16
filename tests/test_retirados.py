@@ -40,7 +40,7 @@ class RetiradosTests(unittest.TestCase):
             'Comando: `git -C alpha merge-base --is-ancestor HEAD HEAD`\n')
         (self.root / "docs" / "impl-7.md").write_text("## AC-1\nalpha/feature.txt:1\n")
         (self.root / "harness" / "progress" / "current-7.md").write_text("Fixture progress\n")
-        self.backlog.write_text(json.dumps({"project": "fixture", "rules": {}, "features": [
+        self.backlog.write_text(json.dumps({"project": "fixture", "rules": {"require_docs_al_dia": False}, "features": [
             {"id": 7, "name": "Retiro fixture", "status": "in_progress", "microservicios": ["alpha"]}]}))
         self.repo = self.root / "alpha"
         self.repo.mkdir()

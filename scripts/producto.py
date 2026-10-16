@@ -51,6 +51,7 @@ DOCS = {
         "secciones": ("Contexto", "Componentes", "Datos e integraciones", "Decisiones", "Riesgos"),
     },
 }
+TIPOS_EXIGIDOS = ("feature",)  # kind: bug y task no nacen de un PRD
 
 # `- F-1: nombre: resultado` -> (1, "nombre"). Todo en UNA linea, como los AC.
 CANDIDATA_RE = re.compile(r"^[^\S\n]*[-*][^\S\n]*F-(\d+)[^\S\n]*:[^\S\n]*([^:\n]+?)[^\S\n]*(?::|$)", re.M)
@@ -58,8 +59,14 @@ COMENTARIO_RE = re.compile(r"<!--.*?-->", re.S)
 ESTADO_RE = re.compile(r"^Estado:[^\S\n]*(\S+)", re.M)
 ALCANCE_RE = re.compile(r"^Alcance:[^\S\n]*(\S.*)?$", re.M)
 # `- O1: ...` / `- NO1: ...` (tambien O-1 / NO-1): objetivos con nombre, para citarlos.
-OBJETIVO_RE = re.compile(r"^[^\S\n]*[-*][^\S\n]*O-?\d+[^\S\n]*:", re.M)
-NO_OBJETIVO_RE = re.compile(r"^[^\S\n]*[-*][^\S\n]*NO-?\d+[^\S\n]*:", re.M)
+OBJETIVO_RE = re.compile(r"^[^\S\n]*[-*][^\S\n]*(O-?\d+)[^\S\n]*:", re.M)
+NO_OBJETIVO_RE = re.compile(r"^[^\S\n]*[-*][^\S\n]*(NO-?\d+)[^\S\n]*:", re.M)
+# `- D1: ...` en las Decisiones del SDD: con nombre, para que el spec las cite.
+DECISION_RE = re.compile(r"^[^\S\n]*[-*][^\S\n]*(D-?\d+)[^\S\n]*:", re.M)
+# Una cita en el spec: `O1` suelto, no `NO1`, `IO1` ni `AC-O1`.
+CITA_OBJETIVO_RE = re.compile(r"(?<![\w-])(O-?\d+)(?![\w-])")
+CITA_DECISION_RE = re.compile(r"(?<![\w-])(D-?\d+)(?![\w-])")
+SIN_CITA_RE = re.compile(r"(cumple|decisiones que aplica)[^\S\n]*:[^\S\n]*ningun", re.I)
 # Un bloque ```<lenguaje> es codigo final: el PRD lleva pseudo-codigo.
 FENCE_RE = re.compile(r"^[^\S\n]*```[^\S\n]*([A-Za-z][A-Za-z0-9_+#.-]*)", re.M)
 PSEUDO = frozenset({"text", "txt", "pseudo", "pseudocodigo", "pseudocode", "md", "markdown", "plain"})
@@ -182,6 +189,10 @@ def validar(text: str, doc: str) -> list[str]:
         if lenguajes:
             problemas.append("trae codigo final (bloque " + ", ".join(f"```{x}" for x in lenguajes)
                              + "): el PRD lleva pseudo-codigo; el codigo se escribe despues, en otra parte")
+    if doc == "sdd":
+        dec = secs.get("Decisiones", "")
+        if dec.strip() and not DECISION_RE.search(dec):
+            problemas.append("'## Decisiones' no declara ninguna '- D1: ...' (con nombre, para que el spec la cite)")
     return problemas
 
 
@@ -220,6 +231,195 @@ def componer(destino: Path, cuerpo: str) -> bytes:
         return manual
     generado = previo.split(START, 1)[1].split(END, 1)[0]
     return manual + b"\n" + START + generado + END + partes[1]
+
+
+# --- el PRD/SDD a lo largo del flujo ------------------------------------------
+#
+# El rol producto los escribe y el cierre les agrega el bloque generado; lo de
+# abajo es lo que usan los roles del medio: approve-spec (la regla
+# require_docs_al_dia y la huella con que se aprobo cada spec), el brief del
+# leader y estado.py.
+
+def requeridos(rules: dict) -> list[str]:
+    """Documentos que exige `require_docs_al_dia`. ValueError si el valor no se entiende:
+    una regla mal escrita que se apaga sola es un verde falso."""
+    valor = rules.get("require_docs_al_dia")
+    if valor is True:
+        return ["prd"]
+    if valor is False or valor is None:
+        return []
+    if isinstance(valor, list) and all(isinstance(x, str) and x in DOCS for x in valor):
+        return [doc for doc in DOCS if doc in valor]
+    raise ValueError(f"rules.require_docs_al_dia invalido ({valor!r}): usa true (solo prd), "
+                     f"false o una lista de {sorted(DOCS)}")
+
+
+def texto_manual(path: Path) -> str | None:
+    """Cuerpo manual de un documento, arriba y abajo del bloque generado; None si no
+    hay uno del usuario. Con marcadores malformados tampoco: no se adivina."""
+    from bloques import GENERADOS, parts
+    try:
+        previo = path.read_bytes()
+        partes = parts(previo)
+    except (OSError, ValueError):
+        return None
+    if partes is None:
+        partes = (previo, b"")
+    if partes[0] in GENERADOS.values():  # el encabezado que inventa documentacion.py
+        partes = (b"", partes[1])
+    manual = partes[0] + partes[1]
+    return manual.decode("utf-8", "replace") if manual.strip() else None
+
+
+def falta(p: dict, data: dict, doc: str) -> str | None:
+    """Por que `doc` no tiene cuerpo para approve-spec; None si lo tiene.
+
+    Vale el cuerpo sellado por `aprobar --yes` y el que el usuario escribio a
+    mano. Que nadie mas lo haya tocado lo decide gate.py con las rutas protegidas.
+    """
+    from bloques import parts
+    destino = destino_path(p, doc)
+    if texto_manual(destino) is not None:
+        return None
+    try:
+        if destino.is_file():
+            parts(destino.read_bytes())
+    except ValueError as exc:
+        return f"{_rel(p['root'], destino)}: {exc}"
+    return estado_documentos(p, data)[doc]
+
+
+def huella(p: dict, doc: str) -> str | None:
+    """Firma del cuerpo manual con que se aprueba un spec; None sin cuerpo.
+
+    Ignora el bloque generado (cambia en cada cierre) y las lineas Estado/Aprobado
+    (re-aprobar el mismo texto no es un cambio de producto).
+    """
+    texto = texto_manual(destino_path(p, doc))
+    if texto is None:
+        return None
+    texto = re.sub(r"^(?:Estado|Aprobado):.*(?:\n|$)", "", texto, flags=re.M)
+    return hashlib.sha256(texto.strip().encode("utf-8")).hexdigest()
+
+
+def huellas(p: dict) -> dict[str, str]:
+    return {doc: h for doc in DOCS if (h := huella(p, doc)) is not None}
+
+
+def cambiados(p: dict, f: dict) -> list[str]:
+    """Documentos que cambiaron desde que se aprobo el spec de `f`."""
+    base = f.get("docs_base") or {}
+    return [doc for doc in DOCS if doc in base and base[doc] != huella(p, doc)]
+
+
+def _ids(regex: re.Pattern, texto: str) -> list[str]:
+    vistos: dict[str, None] = {}
+    for m in regex.finditer(COMENTARIO_RE.sub("", texto)):
+        vistos.setdefault(m.group(1).replace("-", ""), None)
+    return list(vistos)
+
+
+def objetivos(prd: str) -> tuple[list[str], list[str]]:
+    sec = secciones(prd).get("Objetivos y no-objetivos", "")
+    return _ids(OBJETIVO_RE, sec), _ids(NO_OBJETIVO_RE, sec)
+
+
+def decisiones(sdd: str) -> list[str]:
+    return _ids(DECISION_RE, secciones(sdd).get("Decisiones", ""))
+
+
+def candidata(prd: str, fid: str) -> str | None:
+    """La linea `- F-n: ...` de las Features candidatas, o None si no esta."""
+    sec = COMENTARIO_RE.sub("", secciones(prd).get("Features candidatas", ""))
+    for linea in sec.splitlines():
+        m = CANDIDATA_RE.match(linea)
+        if m and f"F-{m.group(1)}" == fid:
+            return linea.strip().lstrip("-* ").strip()
+    return None
+
+
+def prd_de(p: dict, f: dict) -> Path:
+    return p["root"] / (f.get("prd") or "docs/prd/PRD-master.md")
+
+
+def avisos_citas(p: dict, f: dict, spec: str) -> list[str]:
+    """Lo que el spec no cita del PRD/SDD que lo origina. Avisos, no rechazos:
+    el validador mide estructura; si la cita es la correcta lo decide el usuario."""
+    if f.get("kind", "feature") not in TIPOS_EXIGIDOS:
+        return []
+    spec = COMENTARIO_RE.sub("", spec)
+    sin_cita = {m.group(1).lower() for m in SIN_CITA_RE.finditer(spec)}
+    out = []
+    prd = texto_manual(prd_de(p, f))
+    if prd is not None:
+        declarados = objetivos(prd)[0]
+        citados = _ids(CITA_OBJETIVO_RE, spec)
+        if declarados and not citados and "cumple" not in sin_cita:
+            out.append(f"el spec no cita ningun objetivo del PRD ({', '.join(declarados)}): "
+                       "escribe 'cumple: O1' en el Contexto, o 'cumple: ninguno'")
+        ajenos = [x for x in citados if x not in declarados]
+        if ajenos:
+            out.append(f"el spec cita {', '.join(ajenos)}, que el PRD no declara")
+        fid = f.get("prd_candidata")
+        if fid and candidata(prd, fid) is None:
+            out.append(f"la candidata {fid} de esta feature ya no esta en el PRD")
+    sdd = texto_manual(destino_path(p, "sdd"))
+    if sdd is not None:
+        declaradas = decisiones(sdd)
+        citadas = _ids(CITA_DECISION_RE, spec)
+        if declaradas and not citadas and "decisiones que aplica" not in sin_cita:
+            out.append(f"el spec no cita ninguna decision del SDD ({', '.join(declaradas)}): escribe "
+                       "'decisiones que aplica: D1' en el Contexto, o 'decisiones que aplica: ninguna'")
+        ajenas = [x for x in citadas if x not in declaradas]
+        if ajenas:
+            out.append(f"el spec cita {', '.join(ajenas)}, que el SDD no declara")
+    return out
+
+
+def cobertura(p: dict, data: dict) -> str | None:
+    """Que candidatas del PRD ya tienen feature y en que estado."""
+    prd = texto_manual(destino_path(p, "prd"))
+    if prd is None:
+        return None
+    filas = []
+    for n, _ in candidatas(secciones(prd).get("Features candidatas", "")):
+        fid = f"F-{n}"
+        feats = [f for f in data["features"]
+                 if f.get("prd_candidata") == fid and f.get("status") != "superseded"]
+        filas.append(f"{fid} " + (", ".join(f"#{f['id']} {f.get('status')}" for f in feats)
+                                  if feats else "sin feature"))
+    return " · ".join(filas) or None
+
+
+def lineas_brief(p: dict, data: dict, f: dict) -> list[str]:
+    """Seccion del brief del leader: que dice el PRD/SDD de esta feature."""
+    estados = estado_documentos(p, data)
+    L = ["", "producto (leelo antes de disenar; el spec cita sus O-n y D-n):"]
+    prd_path = prd_de(p, f)
+    prd = texto_manual(prd_path)
+    L.append(f"  prd: {_rel(p['root'], prd_path)} · "
+             + (estados["prd"] if prd_path == destino_path(p, "prd") else
+                ("con cuerpo" if prd is not None else "sin cuerpo")))
+    if prd is not None:
+        fid = f.get("prd_candidata")
+        linea = candidata(prd, fid) if fid else None
+        if linea:
+            L.append(f"       {linea[:200]}")
+        elif fid:
+            L.append(f"       [!] la candidata {fid} ya no esta en el PRD")
+        elif f.get("kind", "feature") in TIPOS_EXIGIDOS and candidatas(prd):
+            L.append("       (sin candidata F-n declarada: add.py --candidata la registra)")
+        obj, no_obj = objetivos(prd)
+        if obj or no_obj:
+            L.append(f"       objetivos: {', '.join(obj) or '-'} · no-objetivos: {', '.join(no_obj) or '-'}")
+    sdd = texto_manual(destino_path(p, "sdd"))
+    L.append(f"  sdd: {_rel(p['root'], destino_path(p, 'sdd'))} · {estados['sdd']}")
+    if sdd is not None and decisiones(sdd):
+        L.append(f"       decisiones: {', '.join(decisiones(sdd))}")
+    for doc in cambiados(p, f):
+        L.append(f"  [!] el {DOCS[doc]['titulo']} cambio desde que se aprobo este spec: si un AC "
+                 "deja de valer es una enmienda; si sigue valiendo, re-aprueba el spec")
+    return L
 
 
 def estado_documentos(p: dict, data: dict) -> dict[str, str]:
@@ -305,17 +505,19 @@ def cmd_aprobar(args) -> None:
     problemas = validar(text, doc)
     if problemas:
         sys.exit(f"[!!] el borrador de {cfg['titulo']} no se puede aprobar:\n     - " + "\n     - ".join(problemas))
-    if doc == "prd":
-        # El registro multi-repo fijo los bytes manuales del PRD y su contrato
-        # dice que nada los reautoriza (ni re-registrar). Aprobar aqui dejaria
-        # esas features sin cierre posible: mejor negarse antes de escribir.
-        registradas = [f for f in data["features"]
-                       if f.get("status") in ABIERTOS and f.get("multi_repo_protected")]
-        if registradas:
-            ids = ", ".join(f"#{f['id']}" for f in registradas)
-            sys.exit(f"[!!] hay features multi-repo registradas abiertas ({ids}): su registro fijo\n"
-                     "     los bytes manuales del PRD y el sello NO lo reautoriza. Cierralas antes,\n"
-                     "     o aprueba el PRD antes de registrar.")
+    # El registro multi-repo fijo los bytes manuales del documento si era ruta
+    # protegida, y su contrato dice que nada los reautoriza (ni re-registrar).
+    # Aprobar aqui dejaria esas features sin cierre posible: mejor negarse antes.
+    rel_destino = _rel(p["root"], destino)
+    registradas = [f for f in data["features"]
+                   if f.get("status") in ABIERTOS and isinstance(f.get("multi_repo_protected"), dict)
+                   and any(isinstance(v, dict) and rel_destino in v
+                           for v in f["multi_repo_protected"].values())]
+    if registradas:
+        ids = ", ".join(f"#{f['id']}" for f in registradas)
+        sys.exit(f"[!!] hay features multi-repo registradas abiertas ({ids}): su registro fijo\n"
+                 f"     los bytes manuales de {rel_destino} y el sello NO lo reautoriza. Cierralas\n"
+                 f"     antes, o aprueba el {cfg['titulo']} antes de registrar.")
 
     quien = args.por or getpass.getuser()
     cuando = now_iso()
@@ -351,10 +553,16 @@ def cmd_aprobar(args) -> None:
         cands = candidatas(secciones(sellado).get("Features candidatas", ""))
         if cands:
             print("[i]  features candidatas para el backlog:")
-            for _, nombre in cands:
-                print(f'     add.py --name "{nombre}" --prd docs/prd/PRD-master.md')
+            for n, nombre in cands:
+                print(f'     add.py --name "{nombre}" --prd docs/prd/PRD-master.md --candidata F-{n}')
     else:
         print("[i]  documentacion.py sync seguira agregando el bloque por feature debajo del cuerpo.")
+    viejas = [f for f in data["features"] if f.get("status") in ABIERTOS and doc in cambiados(p, f)]
+    if viejas:
+        print(f"[!]  specs aprobados contra la version anterior del {cfg['titulo']}: "
+              + ", ".join(f"#{f['id']}" for f in viejas) + ".")
+        print("     El leader los revisa: si un AC deja de valer es una enmienda; si sigue")
+        print("     valiendo, se re-aprueba el spec (approve-spec --yes, con el SI del usuario).")
 
 
 def cmd_estado(args) -> None:

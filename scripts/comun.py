@@ -125,8 +125,11 @@ DEFAULT_RULES = {
     "require_review": True,
     "require_leccion": True,
     "require_verify_green": True,
-    "require_docs_al_dia": True,
-    "rutas_protegidas": ["docs/prd/**", "docs/constitution.md", ".env"],
+    # Documentos del rol producto que approve-spec exige con cuerpo antes de
+    # sellar una feature (kind=feature). `true` es el valor que escribian los
+    # backlogs viejos, cuando la regla no hacia nada: exige solo el PRD.
+    "require_docs_al_dia": ["prd", "sdd"],
+    "rutas_protegidas": ["docs/prd/**", "docs/sdd.md", "docs/constitution.md", ".env"],
 }
 
 def load_backlog(p: dict) -> dict:

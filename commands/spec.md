@@ -28,11 +28,14 @@ Para consultas puntuales de estructura (quien llama a X, impacto de un cambio) u
 el MCP `codebase-memory-mcp` (`search_graph`, `trace_path`, `detect_changes`) antes de
 leer archivos a ciegas.
 
-Ese brief trae AC, reglas, lecciones, impacto del hub, superficie de contacto
-del grafo y **documentos relacionados**: rutas de `docs/` (decisiones, enmiendas,
-reviews de features previas del mismo servicio, notas del usuario). Abre solo las
-que toquen tu diseno; no barras `docs/` por tu cuenta. Si dice que el contexto
-esta vencido, refresca antes de disenar:
+Ese brief trae AC, reglas, la seccion **producto** (el PRD y el SDD: la `F-n`
+de la feature, los objetivos `O-n`/`NO-n` y las decisiones `D-n`), lecciones,
+impacto del hub, superficie de contacto del grafo y **documentos relacionados**:
+rutas de `docs/` (decisiones, enmiendas, reviews de features previas del mismo
+servicio, notas del usuario). Lee en el PRD la historia y los objetivos que toca
+la feature, y en el SDD las decisiones que aplica; de los relacionados abre solo
+los que toquen tu diseno; no barras `docs/` por tu cuenta. Si dice que el
+contexto esta vencido, refresca antes de disenar:
 
 ```bash
 eval "$(python3 "${CLAUDE_PLUGIN_ROOT}/scripts/entorno.py" --shell)" && "$PY" "$H/contexto.py" refrescar
@@ -57,6 +60,10 @@ Las lecciones se leen **antes** de disenar, no despues de romper algo.
 
 - AC numerados `AC-1`, `AC-2`, … sin saltos, en Given/When/Then, cada uno
   verificable por un tercero.
+- El Contexto cita el PRD y el SDD: `cumple: O1` (o `cumple: ninguno`) y
+  `decisiones que aplica: D2` (o `ninguna`). Los no-objetivos `NO-n` que roza la
+  feature van a "Fuera de alcance". `approve-spec` avisa si falta la cita o si
+  nombra una que el documento no declara.
 - El comando de verificacion va `` `verificar: <cmd>` `` dentro del backtick o en
   una linea `Comando: `` `<cmd>` `` debajo del AC. Un AC sin comando es legitimo:
   lo verifica el reviewer a mano.
@@ -88,8 +95,18 @@ eval "$(python3 "${CLAUDE_PLUGIN_ROOT}/scripts/entorno.py" --shell)" && "$PY" "$
 Nunca corras eso por tu cuenta ni "para agilizar". El script se niega sin
 `--yes`, y `--yes` significa que el usuario dijo que si — no que tu lo asumiste.
 
+Tambien se niega, con la regla `require_docs_al_dia`, si el proyecto no tiene el
+PRD/SDD que esa regla exige: corre antes `/harness-flow:producto prd|sdd`. No
+apagues la regla para destrabarlo: si el proyecto no lleva PRD/SDD lo decide el
+usuario. Un `--kind bug|task` no lo exige.
+
 Cambiar el spec despues de aprobarlo invalida el sello (firma sha256 del cuerpo).
 Eso es deliberado: hay que volver a mostrarlo y re-aprobarlo.
+
+Si el PRD o el SDD cambian despues de aprobar el spec (`estado.py` marca "PRD
+cambio desde el spec"), releelo contra el documento nuevo: si un AC deja de
+valer es una enmienda (seccion 4); si sigue valiendo, muestraselo al usuario y
+re-aprueba con su SI.
 
 ## 4. Enmienda: el spec ya tiene trabajo encima
 

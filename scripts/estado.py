@@ -47,10 +47,16 @@ def main() -> None:
         print(f"   [!] no se pudo evaluar el contexto: {exc}")
     print(f"   vault: {vault}")
     print(f"   jira:  {'configurado' if p['atlassian'].exists() else 'sin binding'}")
+    faltan_docs: list[str] = []
     try:
         import producto
         for doc, texto in producto.estado_documentos(p, data).items():
             print(f"   {doc}:   {texto}")
+        cob = producto.cobertura(p, data)
+        if cob:
+            print(f"   candidatas: {cob}")
+        faltan_docs = [doc for doc in producto.requeridos(data["rules"])
+                       if producto.falta(p, data, doc)]
     except Exception as exc:
         print(f"   [!] no se pudo evaluar PRD/SDD: {exc}")
 
@@ -71,11 +77,17 @@ def main() -> None:
         print(f"   [!] #{f['id']} [{f.get('status')}] {f.get('name')}: "
               "estado desconocido; revisa status en feature_list.json")
 
+    # require_docs_al_dia: sin esos documentos approve-spec se niega, asi que el
+    # rol producto va antes que cualquier spec nuevo.
+    producto_antes = (f"rol producto antes de cualquier spec: producto.py borrador --doc "
+                      f"{faltan_docs[0]} (falta {', '.join(faltan_docs)})") if faltan_docs else ""
     if not abiertas:
         if desconocidas:
             print("   Revisa los estados desconocidos antes de iniciar otra feature.")
+        elif producto_antes:
+            print(f"   Nada en curso. Primero el {producto_antes}")
         else:
-            print("   Nada en curso. Para arrancar: add.py --name '<nombre>'")
+            print("   Nada en curso. Para arrancar: add.py --name '<nombre>' --candidata F-n")
         return
 
     for f in abiertas:
@@ -86,6 +98,8 @@ def main() -> None:
     pendientes = [f for f in abiertas if f.get("status") in ("todo", "pending")]
     if en_curso:
         print(f"   retoma la feature #{en_curso[0]['id']} (ya esta in_progress)")
+    elif pendientes and producto_antes:
+        print(f"   {producto_antes}")
     elif pendientes:
         fid = pendientes[0]["id"]
         print(f"   arranca la #{fid}: worktree.py start --feature {fid}")
@@ -126,6 +140,12 @@ def _fila(p, f) -> None:
                       + (f" (anterior a {', '.join(tarde)})" if tarde else ""))
     else:
         marcas.append("sin review")
+
+    try:
+        import producto
+        marcas += [f"{doc.upper()} cambio desde el spec" for doc in producto.cambiados(p, f)]
+    except Exception:
+        pass  # el panorama no se cae por esto: la linea prd/sdd ya dijo que fallo
 
     wt = f.get("worktree")
     marcas.append(f"wt {Path(wt).name}" if wt else "SIN worktree")

@@ -84,7 +84,7 @@ Al entrar a un proyecto con `harness/feature_list.json`, ANTES de responder nada
 $PY "$H/estado.py"
 ```
 
-Muestra features abiertas, gates pendientes y edad del grafo. Si hay una feature `in_progress`, retómala; no arranques otra.
+Muestra features abiertas, gates pendientes, edad del grafo y en que paso estan el PRD y el SDD (`prd:`/`sdd:`, mas `candidatas:` con la feature de cada `F-n`). Si hay una feature `in_progress`, retómala; no arranques otra. Si falta un documento que exige `require_docs_al_dia`, el siguiente paso es el rol 0, no un spec: `approve-spec` se negaria.
 
 Si dice `vault: ausente` o `vault: desactualizado` y el grafo esta fresco, regenera solo el panel de Obsidian. No relances graphify ni el hub:
 
@@ -104,7 +104,7 @@ worktrees comprueban trabajo iniciado, no toda la cola pendiente.
 
 ## El flujo
 
-Cuatro roles, en orden. No los saltes. El 0 solo corre cuando el proyecto no tiene PRD/SDD aprobados o el usuario pide cambiarlos.
+Cuatro roles, en orden. No los saltes. El 0 solo corre cuando el proyecto no tiene PRD/SDD aprobados o el usuario pide cambiarlos. Mientras la regla `require_docs_al_dia` los exija (por defecto `["prd", "sdd"]`; `true` = solo el PRD), `approve-spec` se niega a sellar una feature sin ellos; `--kind bug|task` no los exige. Apagarla (`false`) es decision del USUARIO, nunca del agente.
 
 La politica de modelos depende del proveedor de la tarea. Con OpenAI en Codex o
 Hermes, Producto y Leader usan `gpt-6-astra`: **la skill elige el effort segun la
@@ -125,26 +125,30 @@ cada rol (detalle y limite actual de `_build_gemini_thinking_config` en
 
 ### 0. Producto — PRD inicial y SDD de arquitectura, antes del backlog
 
-El agente NUNCA escribe `docs/prd/**`: redacta en `docs/borrador-prd.md` / `docs/borrador-sdd.md` (rutas sin proteger) y el usuario es quien aprueba. `estado.py` muestra en que paso esta cada documento.
+El agente NUNCA escribe `docs/prd/**` ni `docs/sdd.md`: redacta en `docs/borrador-prd.md` / `docs/borrador-sdd.md` (rutas sin proteger) y el usuario es quien aprueba. `estado.py` muestra en que paso esta cada documento.
 
-1. `$PY "$H/producto.py" borrador --doc prd|sdd` crea el borrador desde `templates/prd.md` / `templates/sdd.md`, o desde el cuerpo manual que ya exista. El PRD cuenta una historia (antes/despues, con nombre y momento), el flujo hoy/despues, los datos y el pseudo-codigo del acuerdo; NUNCA codigo final (un bloque ```go lo rechaza). Rellena cada seccion con lo que cuente el usuario; para el SDD cruza `contexto.py estado`, `hub.py impacto` y `leccion.py list`. Las guias `<!-- -->` se reemplazan: una seccion que solo tiene guia cuenta como vacia y la aprobacion se niega.
-2. **Ritual de aprobacion**, el mismo del spec: MUESTRA el borrador, PREGUNTA, y solo con el SI explicito corre `$PY "$H/producto.py" aprobar --doc prd|sdd --yes`. Copia el cuerpo a `docs/prd/PRD-master.md` / `docs/sdd.md` conservando el bloque generado, y sella `documentos.<doc>` en el backlog; `gate.py check` acepta ese cuerpo por el sello hasta que el usuario lo commitea. Sin `--yes` se niega, y tambien con features multi-repo registradas abiertas (su registro fijo los bytes del PRD).
-3. Cada `- F-n: nombre: resultado` de "Features candidatas" entra al backlog con `add.py --name "<nombre>" --prd docs/prd/PRD-master.md`; su spec se escribe en el rol 1.
+1. `$PY "$H/producto.py" borrador --doc prd|sdd` crea el borrador desde `templates/prd.md` / `templates/sdd.md`, o desde el cuerpo manual que ya exista. El PRD cuenta una historia (antes/despues, con nombre y momento), el flujo hoy/despues, los datos y el pseudo-codigo del acuerdo; NUNCA codigo final (un bloque ```go lo rechaza). Rellena cada seccion con lo que cuente el usuario; para el SDD cruza `contexto.py estado`, `hub.py impacto` y `leccion.py list`, y nombra cada decision (`- D1: ...`) para que los specs la citen. Las guias `<!-- -->` se reemplazan: una seccion que solo tiene guia cuenta como vacia y la aprobacion se niega.
+2. **Ritual de aprobacion**, el mismo del spec: MUESTRA el borrador, PREGUNTA, y solo con el SI explicito corre `$PY "$H/producto.py" aprobar --doc prd|sdd --yes`. Copia el cuerpo a `docs/prd/PRD-master.md` / `docs/sdd.md` conservando el bloque generado, y sella `documentos.<doc>` en el backlog; `gate.py check` acepta ese cuerpo por el sello hasta que el usuario lo commitea. Sin `--yes` se niega, y tambien si una feature multi-repo registrada abierta fijo los bytes de ese documento. Si al re-aprobar hay specs abiertos aprobados contra la version anterior, los lista: el leader los revisa.
+3. Cada `- F-n: nombre: resultado` de "Features candidatas" entra al backlog con `add.py --name "<nombre>" --prd docs/prd/PRD-master.md --candidata F-n` (valida que la `F-n` exista y la deja en el spec); su spec se escribe en el rol 1.
 
 ### 1. Leader — spec antes que código
 
 1. Lee el backlog y `progress/current-<id>.md`. Consulta el grafo antes de leer archivos a ciegas:
-   `$PY "$H/contexto.py" brief --feature <id>` (indice compacto: AC, reglas, lecciones,
+   `$PY "$H/contexto.py" brief --feature <id>` (indice compacto: AC, reglas, lo que el PRD/SDD
+   dice de la feature —su `F-n`, objetivos `O-n`/`NO-n` y decisiones `D-n`—, lecciones,
    impacto del hub y superficie de contacto del grafo). Si el contexto esta vencido lo dice;
    refresca con `$PY "$H/contexto.py" refrescar`. Para algo puntual: `codebase-memory-mcp`
    (`search_graph`, `trace_path`) o `graphify query "<pregunta>" --graph <combinado>`.
 2. Consulta impacto cross-repo: `$PY "$H/hub.py" impacto --microservicio <proyecto>/<servicio>`.
 3. Revisa lecciones aplicables: `$PY "$H/leccion.py" list` **antes** de diseñar.
-4. Escribe `docs/spec-feature-<id>-<slug>.md` con `Estado: draft` usando `templates/spec.md`. Los AC-n en Given/When/Then son obligatorios.
+4. Escribe `docs/spec-feature-<id>-<slug>.md` con `Estado: draft` usando `templates/spec.md` (`add.py` ya lo crea desde ahi). Los AC-n en Given/When/Then son obligatorios. El Contexto cita lo que cumple del PRD (`cumple: O1`) y las decisiones del SDD que aplica (`decisiones que aplica: D2`); `approve-spec` avisa si no cita ninguna o cita una que no existe.
 5. Si los comandos de AC usan rutas de worktree, crea el worktree con `$PY "$H/worktree.py" start --feature <id>` antes de sellar el spec. Esto prepara las rutas; no autoriza implementar todavía.
 6. **Ritual de aprobación**: MUESTRA el spec al usuario en el chat, PREGUNTA si lo aprueba, y solo con su SÍ explícito corre:
    `$PY "$H/gate.py" approve-spec --feature <id> --yes`
    Nunca apruebes por tu cuenta. El script se niega sin `--yes`.
+   El sello guarda contra que PRD/SDD se aprobo el spec. Si despues cambian, `estado.py`,
+   `gate.py check`, el brief y `close` lo avisan: el leader lo revisa; si un AC deja de valer
+   es una enmienda, y si sigue valiendo se re-aprueba con el SI del usuario.
 
 ### Enmienda — cambiar un spec que ya tiene trabajo encima
 
@@ -232,7 +236,7 @@ no es evidencia de integración. Para publicar en Atlassian se requiere
 | --- | --- |
 | `gate.py check` | Todo el proceso; es el gate maestro |
 | `gate.py check-spec --feature <id>` | Spec existe, `Estado: approved`, firma fresca |
-| `gate.py approve-spec --feature <id> --yes` | Solo con SÍ del usuario; sella quién/cuándo. Se niega a re-sellar un spec cambiado con trabajo encima |
+| `gate.py approve-spec --feature <id> --yes` | Solo con SÍ del usuario; sella quién/cuándo y contra qué PRD/SDD. Se niega a re-sellar un spec cambiado con trabajo encima, y sin el PRD/SDD que exige `require_docs_al_dia` |
 | `gate.py enmienda --feature <id> --propuesta <md> --yes` | Solo con SÍ del usuario; la propuesta nombra cada AC que cambió; deja sin valor el review y el verify anteriores |
 | `producto.py aprobar --doc prd\|sdd --yes` | Solo con SÍ del usuario; borrador completo y sin bloque generado; copia al destino y sella |
 | `gate.py revision --feature <id> --veredicto <v>` | Review responde por CADA AC-n con `archivo:linea` |
@@ -261,9 +265,9 @@ Si aparecen rojos nuevos: ficha el choque, no bajes la asercion que lo detecto.
 Al verificar el exit a mano no uses un pipe (`| tail`): te devuelve el status
 del tail, no el del gate.
 
-Reglas en `harness/feature_list.json` → `rules`: `require_spec_approved`, `require_review`, `require_leccion`, `require_verify_green`, `require_docs_al_dia`.
+Reglas en `harness/feature_list.json` → `rules`: `require_spec_approved`, `require_review`, `require_leccion`, `require_verify_green`, `require_docs_al_dia` (documentos que `approve-spec` exige; un valor que no entiende hace fallar `check`, no la apaga).
 
-**Rutas protegidas**: `docs/prd/**`, `docs/constitution.md`, `.env`. Son del USUARIO. Ningún agente las reescribe a mano — `documentacion.py sync` solo actualiza el bloque generado `harness-flow:features`, y `gate.py check` reporta violaciones fuera de ese contrato. La otra via, la unica que cambia el cuerpo manual del PRD, es el sello de `producto.py aprobar --yes` (`documentos.prd`): el usuario aprobo ESE cuerpo en el chat y vale hasta que lo commitea.
+**Rutas protegidas**: `docs/prd/**`, `docs/sdd.md`, `docs/constitution.md`, `.env`. Son del USUARIO. Ningún agente las reescribe a mano — `documentacion.py sync` solo actualiza el bloque generado `harness-flow:features`, y `gate.py check` reporta violaciones fuera de ese contrato. La otra via, la unica que cambia el cuerpo manual del PRD o del SDD, es el sello de `producto.py aprobar --yes` (`documentos.prd|sdd`): el usuario aprobo ESE cuerpo en el chat y vale hasta que lo commitea. Un backlog anterior conserva su lista: si no trae `docs/sdd.md`, `check` lo avisa.
 
 ## Contexto y memoria del proyecto
 
@@ -292,7 +296,9 @@ nativa. Rutas y precedencia: [`references/hosts.md`](references/hosts.md).
 
 `documentacion.py sync` mantiene el bloque generado de `docs/prd/PRD-master.md`
 y `docs/sdd.md`; nunca reescribas su contenido manual. El cierre `done` ejecuta
-el sync. Para el flujo de aprobación del PRD/SDD, consulta
+el sync. Entre medio, cada feature lleva su `F-n` (`add.py --candidata`), su spec
+cita `O-n`/`D-n` y el sello del spec recuerda contra que version se aprobo. Para
+la aprobación del PRD/SDD y esa trazabilidad, consulta
 [`references/documentacion.md`](references/documentacion.md).
 
 Abre `docs/` como vault de Obsidian. Las notas se generan en `docs/vault/` y
@@ -326,7 +332,7 @@ solicita publicar. No inventes el binding ni publiques por defecto; consulta
   `revision.py` diffea contra `merge-base base HEAD`, no `HEAD~1`. `--base <rama>`
   para un caso puntual.
 - Con features paralelas, usa worktrees independientes para los AC, reserva las migraciones contra la rama de integración y corre la suite completa de destino después de cada cierre. `verify` mide los AC del worktree, no la integración. Reglas y casos límite: [`references/multirepo.md`](references/multirepo.md).
-- El cuerpo manual del PRD y la constitution son del USUARIO. No los reescribas; `documentacion.py sync` solo puede tocar su bloque generado `harness-flow:features`.
+- El cuerpo manual del PRD, el del SDD y la constitution son del USUARIO. No los reescribas; `documentacion.py sync` solo puede tocar su bloque generado `harness-flow:features`.
 - Aislamiento: una feature sin worktree bloquea a las demás sin worktree.
 - No afirmes lo que no puedes comprobar. Si un gate no corrió, dilo.
 - Los AC pueden declarar su comando de dos formas, ambas válidas:

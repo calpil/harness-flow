@@ -89,7 +89,8 @@ class ApproveSpecConAcInvisibleTests(unittest.TestCase):
         (self.repo / "harness").mkdir(parents=True)
         (self.repo / "docs").mkdir()
         (self.repo / "harness" / "feature_list.json").write_text(json.dumps(
-            {"project": "t", "features": [{"id": "1", "name": "cobro"}]}),
+            {"project": "t", "rules": {"require_docs_al_dia": False},
+             "features": [{"id": "1", "name": "cobro"}]}),
             encoding="utf-8")
         self.spec = self.repo / "docs" / "spec-feature-1-cobro.md"
 
@@ -130,7 +131,8 @@ class RevisionSinAcTests(unittest.TestCase):
         (self.repo / "harness").mkdir(parents=True)
         (self.repo / "docs").mkdir()
         (self.repo / "harness" / "feature_list.json").write_text(json.dumps(
-            {"project": "t", "features": [{"id": "1", "name": "f uno"}]}),
+            {"project": "t", "rules": {"require_docs_al_dia": False},
+             "features": [{"id": "1", "name": "f uno"}]}),
             encoding="utf-8")
         # Spec cuyos "AC" no los ve el parser (prosa, sin declaracion).
         (self.repo / "docs" / "spec-feature-1-f-uno.md").write_text(
@@ -160,7 +162,8 @@ class VerifyParcialTests(unittest.TestCase):
         (self.repo / "docs").mkdir()
         self.backlog = self.repo / "harness" / "feature_list.json"
         self.backlog.write_text(json.dumps(
-            {"project": "t", "features": [{"id": "1", "name": "f uno"}]}),
+            {"project": "t", "rules": {"require_docs_al_dia": False},
+             "features": [{"id": "1", "name": "f uno"}]}),
             encoding="utf-8")
         (self.repo / "a.txt").write_text("a\n", encoding="utf-8")
         sh("git", "add", "-A", cwd=self.repo)
