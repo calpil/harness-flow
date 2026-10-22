@@ -357,6 +357,63 @@ def _cbm_en_enfriamiento(pendiente: dict | None) -> bool:
     return (time.time() - float(pendiente.get("ts") or 0)) < tope
 
 
+def _cbm_diagnostico() -> dict:
+    """Foto barata de la maquina cuando cbm no atiende. No toca el daemon.
+
+    El disparador del "no acepta clientes" no se pudo reproducir con un cierre
+    aislado ni con sondas concurrentes; esto deja datos en vez de hipotesis para
+    la proxima vez. Es telemetria: cualquier fallo al medir se omite.
+    """
+    d: dict = {"at": now_iso()}
+    try:
+        d["carga"] = [round(x, 1) for x in os.getloadavg()]
+    except (OSError, AttributeError):
+        pass
+    try:
+        import cbm_procesos
+        cbm, _ = cbm_procesos.leer_procesos()
+        roles: dict[str, int] = {}
+        for p in cbm:
+            roles[p["rol"]] = roles.get(p["rol"], 0) + 1
+        d["procesos"] = roles
+        d["rss_cbm_mb"] = round(sum(p["rss_mb"] for p in cbm))
+        d["sesiones_cortadas"] = len(cbm_procesos.enlaces_cortados(
+            [p["pid"] for p in cbm if p["rol"] == "sesion"]))
+        log = cbm_procesos.cache_dir() / "logs" / "cbm-daemon.log"
+        with open(log, "rb") as fh:  # solo la cola: el log crece sin limite
+            fh.seek(0, os.SEEK_END)
+            fh.seek(max(0, fh.tell() - 65536))
+            cola = fh.read().decode("utf-8", "replace")
+        d["log_64KB"] = {m: cola.count(f"msg={m}")
+                         for m in ("watcher.changed", "daemon.start", "ui.unavailable")}
+    except (OSError, subprocess.SubprocessError, ValueError):
+        pass
+    if sys.platform == "darwin":
+        try:
+            r = subprocess.run(["sysctl", "-n", "vm.swapusage"], capture_output=True,
+                               text=True, timeout=5)
+            m = re.search(r"used = ([\d.]+)M", r.stdout)
+            if m:
+                d["swap_usado_mb"] = round(float(m.group(1)))
+        except (OSError, subprocess.SubprocessError):
+            pass
+    return d
+
+
+def _resumen_diagnostico(d: dict) -> str:
+    partes = []
+    if "procesos" in d:
+        partes.append(f"{d['procesos'].get('sesion', 0)} sesiones cbm "
+                      f"({d.get('sesiones_cortadas', 0)} cortadas)")
+    if "carga" in d:
+        partes.append(f"carga {d['carga'][0]}")
+    if "swap_usado_mb" in d:
+        partes.append(f"swap {d['swap_usado_mb']} MB")
+    if d.get("log_64KB"):
+        partes.append(f"{d['log_64KB'].get('watcher.changed', 0)} reindexados del watcher en el log reciente")
+    return ", ".join(partes)
+
+
 def lineas_cbm_pendiente(pendientes: dict) -> list[str]:
     """Texto para quien lee el cierre: que paso, que NO hacer y cuando se resuelve."""
     if not pendientes:
@@ -369,7 +426,15 @@ def lineas_cbm_pendiente(pendientes: dict) -> list[str]:
             "     ni toques el daemon (`daemon stop`, kill a mano): puede cortar el"
             " indexado en curso y las sesiones MCP conectadas.",
             "     Para procesos huerfanos: `contexto.py limpiar-cbm` (mata solo los"
-            " que no tienen sesion viva)."]
+            " que no tienen sesion viva)."] + _lineas_diagnostico(pendientes)
+
+
+def _lineas_diagnostico(pendientes: dict) -> list[str]:
+    for v in pendientes.values():
+        resumen = _resumen_diagnostico(v.get("diagnostico") or {})
+        if resumen:
+            return [f"     Al fallar: {resumen}."]
+    return []
 
 
 def cbm_indexar(p: dict, parte: dict, verboso: bool, *, forzar=False,
@@ -461,10 +526,15 @@ def cbm_indexar(p: dict, parte: dict, verboso: bool, *, forzar=False,
                     "head": huella[0] if estable else None}
                 resultado = "completo (primera vez)" if nueva else "incremental"
             elif clase == "transitorio":
+                if not circuito_abierto:
+                    diag = _cbm_diagnostico()
+                    previas = estado.get("diagnosticos") or []
+                    estado["diagnosticos"] = (previas + [{"raiz": nombre, "motivo": err, **diag}])[-20:]
                 circuito_abierto = True
                 pend = {"nombre": nombre, "motivo": err, "ts": time.time(),
                         "desde": previo.get("desde") or now_iso(),
-                        "intentos": int(previo.get("intentos") or 0) + usados}
+                        "intentos": int(previo.get("intentos") or 0) + usados,
+                        "diagnostico": diag}
                 estado["pendientes"][clave] = pend
                 cbm["pendientes"][nombre] = pend
                 resultado = f"PENDIENTE ({usados} intento(s); se reintenta solo)"

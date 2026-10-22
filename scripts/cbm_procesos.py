@@ -14,6 +14,7 @@ tampoco se toca nunca (pararlo corta indexados y las sesiones de los demas).
 from __future__ import annotations
 
 import os
+import re
 import signal
 import subprocess
 import time
@@ -92,6 +93,32 @@ def clasificar(procesos: list[dict], todos: dict[int, tuple[int, str]],
     return out
 
 
+def enlaces_cortados(pids: list[int]) -> set[int]:
+    """Sesiones MCP cuyo enlace con el daemon esta cortado.
+
+    El servidor MCP de una sesion mantiene un socket unix hacia el daemon. Si el
+    daemon muere por la fuerza, el peer pasa a `->(none)` pero el servidor sigue
+    vivo hasta su proxima consulta; en esa se cierra y la sesion se queda sin cbm.
+    stdio (fd 0-2) tambien puede ser un socket, por eso solo cuentan fd >= 3.
+    Verificado en macOS (lsof); donde lsof no muestre `(none)` no detecta nada,
+    que es la direccion segura: no avisa de mas.
+    """
+    if not pids:
+        return set()
+    try:
+        r = subprocess.run(["lsof", "-nP", "-p", ",".join(map(str, pids))],
+                           capture_output=True, text=True, timeout=20)
+    except (OSError, subprocess.TimeoutExpired):
+        return set()
+    cortados = set()
+    for ln in r.stdout.splitlines()[1:]:
+        c = ln.split()
+        m = re.match(r"(\d+)", c[3]) if len(c) > 7 else None
+        if m and int(m.group(1)) >= 3 and c[4] == "unix" and c[-1] == "->(none)":
+            cortados.add(int(c[1]))
+    return cortados
+
+
 def cache_dir() -> Path:
     return Path(os.environ.get("CBM_CACHE_DIR") or Path.home() / ".cache" / "codebase-memory-mcp")
 
@@ -145,13 +172,15 @@ def matar(p: dict, *, kill=os.kill, vivo=_vivo, comando=_comando, dormir=time.sl
     return "matado (SIGKILL)" if not vivo(p["pid"]) else "NO SE PUDO MATAR"
 
 
-def limpiar(*, matar_huerfanos=True, **inyectado) -> int:
+def limpiar(*, matar_huerfanos=True, enlaces=enlaces_cortados, **inyectado) -> int:
     """Imprime el estado de cada proceso cbm y, salvo --solo-avisar, quita lo huerfano."""
     if ES_WINDOWS:
         print("[i]  limpiar-cbm usa `ps`: no esta soportado en Windows.")
         return 0
     procesos, todos = leer_procesos()
     filas = clasificar(procesos, todos, protegidos(todos))
+    vivas = [p["pid"] for p in filas if p["rol"] == "sesion" and p["estado"] == "EN USO"]
+    cortadas = enlaces(vivas)
     print("== procesos de codebase-memory-mcp ==")
     if not filas:
         print("   (ninguno)")
@@ -161,13 +190,19 @@ def limpiar(*, matar_huerfanos=True, **inyectado) -> int:
         if p["estado"] == "HUERFANO" and matar_huerfanos:
             accion = " -> " + matar(p, **inyectado)
             fallos += "NO SE PUDO" in accion
+        corte = "  | enlace al daemon CORTADO" if p["pid"] in cortadas else ""
         print(f"   {p['estado']:<8} pid={p['pid']:<6} {p['rol']:<7} {p['rss_mb']:>6.0f}MB "
-              f"{p['etime']:>11}  {p['motivo']}{accion}")
+              f"{p['etime']:>11}  {p['motivo']}{corte}{accion}")
     huerfanos = [p for p in filas if p["estado"] == "HUERFANO"]
     if not huerfanos:
         print("[ok] ninguno es huerfano: nada que matar.")
     elif not matar_huerfanos:
         print(f"[i]  {len(huerfanos)} huerfano(s); sin --solo-avisar se matarian.")
+    if cortadas:
+        print(f"[!]  {len(cortadas)} sesion(es) con el enlace a cbm cortado: su proxima consulta "
+              "cbm falla y su servidor MCP se cierra.\n"
+              "     Siguen EN USO y no se matan: reconecta el MCP desde tu agente (en Claude Code "
+              "`/mcp`) o reinicia la sesion.")
     restos = stage_abandonado(procesos)
     for f in restos:
         mb = f.stat().st_size / 1048576

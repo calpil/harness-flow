@@ -151,11 +151,14 @@ dependen de cbm. `contexto.py cbm` (comando explicito) si sale con 1 mientras ha
 pendientes, y `--forzar` reindexa aunque HEAD no haya cambiado.
 
 **Un agente que ve "cbm pendiente" no hace nada.** No reintenta en bucle y, sobre
-todo, **no ejecuta `codebase-memory-mcp daemon stop` ni mata procesos cbm a mano**:
-ese daemon es de todas las sesiones, y pararlo cancela el indexado en curso y corta
-las conexiones MCP de los demas agentes (en el log del daemon aparece como
-`stop_requested` + un `connection_end` por sesion). Si hace falta mirar, es solo
-lectura: `codebase-memory-mcp daemon status` y `contexto.py estado`.
+todo, **no mata el daemon ni sus procesos a mano**. Lo que se verifico: `daemon stop`
+ordenado se NIEGA mientras haya sesiones MCP conectadas ("NOT stopped -- N committed
+client(s) still use it"), asi que no es el riesgo; el riesgo es matar el proceso
+(`kill`, `pkill`): el daemon es de todas las sesiones, eso cancela el indexado en
+curso y deja a cada sesion con su servidor MCP vivo pero sin daemon, que se cierra en
+su siguiente consulta (la sesion se queda sin cbm hasta reconectar). En el log del
+daemon aparece como `stop_requested` + un `connection_end` por sesion. Si hace falta
+mirar, es solo lectura: `codebase-memory-mcp daemon status` y `contexto.py estado`.
 
 **Procesos cbm sobrantes: `contexto.py limpiar-cbm [--solo-avisar]`.** Lista cada
 proceso cbm como `EN USO` o `HUERFANO` y mata solo los huerfanos. Huerfano es lo
@@ -167,6 +170,23 @@ comando ni a sus ancestros, vuelve a leer el comando justo antes del `kill` (si 
 pid ya es otro programa, no lo toca) y usa SIGTERM antes de SIGKILL. Tambien borra los
 `*.db.stage.*` del cache (~100 MB cada uno) con mas de 1 h, pero solo si no hay
 daemon, worker ni cli de cbm vivos. No esta soportado en Windows (usa `ps`).
+
+**Sesiones con cbm cortado.** `limpiar-cbm` marca ademas `| enlace al daemon CORTADO`
+en las sesiones EN USO cuyo servidor MCP perdio su socket hacia el daemon (en `lsof` el
+descriptor de datos, fd >= 3, dice `->(none)`; uno sano apunta a un peer). Se comprobo
+tumbando a la fuerza un daemon de prueba aislado: el servidor sigue vivo y falla en su
+siguiente consulta. **No se arregla desde fuera**: esa sesion tiene que reconectar el
+MCP (en Claude Code, `/mcp`) o reiniciarse; matar su servidor solo adelanta el fallo.
+Verificado en macOS; donde `lsof` no muestre `(none)` no detecta nada y no avisa de mas.
+
+**Cuando el daemon no atiende, el arnes deja evidencia.** El disparador de los
+"30 s sin aceptar cliente" no se pudo reproducir (ni con un cierre real de 5 raices
+ni con sondas concurrentes), asi que al quedar una raiz pendiente se guarda una foto
+barata, sin tocar el daemon: carga, swap, procesos cbm por rol, sesiones cortadas y
+cuantos reindexados del watcher hay en la cola del log. Sale en `estado`/el cierre
+como `Al fallar: ...` y las ultimas 20 quedan en `diagnosticos` de
+`graphify-out/.cbm_estado.json`. Si el aviso reaparece, esos datos dicen si fue carga,
+memoria, churn del watcher o sesiones cortadas, en vez de adivinar.
 
 Variables: `HARNESS_CBM_INTENTOS` (3), `HARNESS_CBM_ESPERA_S` (5, base del
 backoff), `HARNESS_CBM_ENFRIAMIENTO_S` (600).

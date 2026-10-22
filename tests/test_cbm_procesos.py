@@ -136,6 +136,40 @@ class MatarTests(unittest.TestCase):
         self.assertIn("ya no existia", r)
 
 
+LSOF = """COMMAND     PID USER   FD   TYPE             DEVICE  SIZE/OFF                NODE NAME
+codebase- 100 alan  cwd    DIR                1,18       640                 2 /
+codebase- 100 alan    0u  unix 0xb022dfd1c2066508       0t0                     ->0xcbcdc346095a9e8c
+codebase- 100 alan    6u  unix 0x387dd0eedc8c085f       0t0                     ->0x27b25a6db4996416
+codebase- 200 alan    0u  unix 0xaaaaaaaaaaaaaaaa       0t0                     ->(none)
+codebase- 200 alan    6u  unix 0x387dd0eedc8c085f       0t0                     ->(none)
+codebase- 300 alan    1u  unix 0xbbbbbbbbbbbbbbbb       0t0                     ->(none)
+codebase- 400 alan    7u  PIPE 0xcccccccccccccccc     16384                     ->(none)
+"""
+
+
+class EnlacesCortadosTests(unittest.TestCase):
+    def _lsof(self, salida):
+        return mock.patch.object(cp.subprocess, "run", return_value=mock.Mock(stdout=salida))
+
+    def test_solo_marca_el_socket_de_datos_con_peer_none(self):
+        # 100 sano; 200 cortado (fd 6); 300 solo tiene stdio (fd 1) con (none): no es el enlace;
+        # 400 es un pipe, no un socket unix
+        with self._lsof(LSOF):
+            self.assertEqual(cp.enlaces_cortados([100, 200, 300, 400]), {200})
+
+    def test_sin_pids_no_ejecuta_lsof(self):
+        with mock.patch.object(cp.subprocess, "run") as m:
+            self.assertEqual(cp.enlaces_cortados([]), set())
+        m.assert_not_called()
+
+    def test_si_lsof_falla_no_avisa_de_mas(self):
+        with mock.patch.object(cp.subprocess, "run", side_effect=OSError("sin lsof")):
+            self.assertEqual(cp.enlaces_cortados([100]), set())
+        with mock.patch.object(cp.subprocess, "run",
+                               side_effect=cp.subprocess.TimeoutExpired("lsof", 20)):
+            self.assertEqual(cp.enlaces_cortados([100]), set())
+
+
 class LimpiarTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
@@ -223,6 +257,25 @@ class LimpiarTests(unittest.TestCase):
             rc = cp.limpiar(kill=lambda *a: None, vivo=lambda pid: True,
                             comando=lambda pid: p["cmd"], dormir=lambda s: None)
         self.assertEqual(rc, 1)
+
+    def test_avisa_las_sesiones_con_enlace_cortado_y_no_las_mata(self):
+        procs = [proc(900, 200), proc(902, 300)]
+        rc, muertos, out = self._correr(procs, enlaces=lambda pids: {900})
+        self.assertEqual(muertos, [])                       # en uso: no se toca
+        filas = [l for l in out.splitlines() if "pid=" in l]
+        self.assertEqual([("CORTADO" in l) for l in filas], [True, False])   # solo la 900
+        self.assertIn("1 sesion(es) con el enlace a cbm cortado", out)
+        self.assertIn("/mcp", out)
+
+    def test_sin_enlaces_cortados_no_hay_aviso(self):
+        rc, muertos, out = self._correr([proc(900, 200)], enlaces=lambda pids: set())
+        self.assertNotIn("CORTADO", out)
+
+    def test_solo_consulta_el_enlace_de_las_sesiones_en_uso(self):
+        pedidos = []
+        self._correr([proc(900, 200), proc(901, 1), proc(930, 1, "--cbm-daemon-internal")],
+                     enlaces=lambda pids: pedidos.append(list(pids)) or set())
+        self.assertEqual(pedidos, [[900]])
 
     def test_windows_no_hace_nada(self):
         with mock.patch.object(cp, "ES_WINDOWS", True), \
