@@ -16,6 +16,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import random
 import re
 import shutil
 import subprocess
@@ -92,6 +93,9 @@ def estado_contexto(p: dict) -> dict:
                   "edad_h": _edad_h(p["vault"] / "Indice.md"),
                   "vencido": _vault_vencido(p)},
         "graphify": bool(shutil.which("graphify")),
+        # Lectura de un archivo local: estado no llama al daemon. No entra en
+        # 'vencidas': el brief y el vault no dependen de cbm.
+        "cbm_pendientes": _cbm_pendientes(p),
     }
     for r in raices:
         g = r["path"] / "graphify-out" / "graph.json"
@@ -141,6 +145,8 @@ def cmd_estado(args) -> None:
         edad_c = "ausente" if not c["existe"] else f"{c['edad_h']:.1f}h"
         print(f"   combinado: {edad_c}  {c['path']}")
     print(f"   vault: {_estado_vault(e)}")
+    for linea in lineas_cbm_pendiente(e["cbm_pendientes"]):
+        print("  " + linea)
     if e["fresco"]:
         print("   [ok] contexto fresco")
     else:
@@ -237,49 +243,252 @@ def _rama_indexable(raiz: Path, permitidas) -> tuple[bool, str]:
     return True, rama
 
 
-def cbm_indexar(p: dict, parte: dict, verboso: bool) -> None:
+# El daemon de cbm es UN proceso compartido por todas las sesiones y agentes de la
+# maquina (y su watcher reindexa por su cuenta). Que no atienda en un momento dado
+# es transitorio; el cierre no puede depender de eso ni un agente improvisar la
+# salida. Por eso: se evita llamarlo si no hay nada nuevo, se reintenta con espera
+# creciente, y si sigue sin atender se anota como PENDIENTE y se reintenta solo.
+CBM_ESTADO = ".cbm_estado.json"
+CBM_INTENTOS = 3
+CBM_ESPERA_S = 5.0            # base de la espera: 5s, 15s, 45s...
+CBM_ENFRIAMIENTO_S = 600      # entre reintentos AUTOMATICOS de un pendiente
+
+# Lo que reintentar no arregla: seguir golpeando solo suma carga al daemon.
+CBM_PERMANENTE = ("fingerprint_mismatch", "different build", "binary image",
+                  "different cache directory", "conflicting cbm process",
+                  "likely dead", "allow-root", "no encontrado")
+# Lo que si pasa con el tiempo: daemon ocupado, arrancando, parandose o con otra
+# mutacion del mismo proyecto en curso. Son los textos del propio binario.
+CBM_TRANSITORIO = ("could not accept this client", "connection capacity",
+                   "could not start", "is stopping", "connection failed",
+                   "session initialization failed", "startup failed",
+                   "blocked by another mutation", "another index operation",
+                   "coordination could not be verified", "worker_cancelled",
+                   "timeout:")
+
+
+def _env_num(nombre: str, defecto: float) -> float:
+    try:
+        return float(os.environ.get(nombre, "").strip() or defecto)
+    except ValueError:
+        return defecto
+
+
+def _cbm_estado_path(p: dict) -> Path:
+    return p["root"] / "graphify-out" / CBM_ESTADO
+
+
+def _cbm_estado(p: dict) -> dict:
+    """Sello de lo ya indexado y de lo pendiente. Es un atajo, no una verdad:
+    ausente o ilegible = vacio, y lo peor que pasa es indexar de mas."""
+    try:
+        d = json.loads(_cbm_estado_path(p).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        d = {}
+    d = d if isinstance(d, dict) else {}
+    d.setdefault("indexado", {})
+    d.setdefault("pendientes", {})
+    return d
+
+
+def _cbm_pendientes(p: dict) -> dict:
+    """{nombre: pendiente} de lo que el arnes va a reintentar. Vacio si cbm esta
+    apagado o ya no esta instalado: decir "se reintenta solo" cuando nada lo va a
+    reintentar seria una mentira que nadie corregiria."""
+    if _cbm_desactivado() or not shutil.which("codebase-memory-mcp"):
+        return {}
+    return {v.get("nombre", k): v for k, v in _cbm_estado(p)["pendientes"].items()}
+
+
+def _cbm_guardar(p: dict, estado: dict) -> None:
+    f = _cbm_estado_path(p)
+    try:
+        f.parent.mkdir(parents=True, exist_ok=True)
+        tmp = f.with_suffix(".tmp")
+        tmp.write_text(json.dumps(estado, ensure_ascii=False, indent=2) + "\n",
+                       encoding="utf-8")
+        tmp.replace(f)
+    except OSError:
+        pass  # sin sello solo se pierde el atajo; nunca tumba el refresco
+
+
+def _cbm_huella(raiz: Path) -> tuple[str, bool] | None:
+    """(HEAD, arbol limpio). None si git no responde: sin huella no hay atajo."""
+    head = _git_out(raiz, "rev-parse", "HEAD")
+    sucio = _git_out(raiz, "status", "--porcelain")
+    if not head or sucio is None:
+        return None
+    return head, not sucio
+
+
+def _cbm_clasificar(code: int, out: str) -> str:
+    """'permanente', 'transitorio' o 'desconocido'. Lo desconocido se trata como
+    fallo visible, igual que antes: solo se difiere lo que se SABE transitorio."""
+    bajo = out.lower()
+    if code == 127 or any(m in bajo for m in CBM_PERMANENTE):
+        return "permanente"
+    if code == 124 or any(m in bajo for m in CBM_TRANSITORIO):
+        return "transitorio"
+    return "desconocido"
+
+
+def _cbm_indexar_raiz(raiz: Path, intentos: int) -> tuple[bool, str, str, int]:
+    """(ok, ultimo_error, clase, intentos_usados). Reintenta solo lo transitorio."""
+    espera = _env_num("HARNESS_CBM_ESPERA_S", CBM_ESPERA_S)
+    err, clase = "", "desconocido"
+    for n in range(1, max(intentos, 1) + 1):
+        code, out = _cbm_cli("index_repository", {"repo_path": str(raiz)}, raiz)
+        # El exit code solo no alcanza: se exige el status que reporta la tool.
+        if code == 0 and '"status":"indexed"' in out.replace(" ", ""):
+            return True, "", "", n
+        err = out[-300:] or f"exit {code}"
+        clase = _cbm_clasificar(code, out)
+        if clase != "transitorio":
+            return False, err, clase, n
+        if n < intentos:
+            time.sleep(espera * 3 ** (n - 1) * random.uniform(0.8, 1.2))
+    return False, err, clase, max(intentos, 1)
+
+
+def _cbm_en_enfriamiento(pendiente: dict | None) -> bool:
+    if not pendiente:
+        return False
+    tope = _env_num("HARNESS_CBM_ENFRIAMIENTO_S", CBM_ENFRIAMIENTO_S)
+    return (time.time() - float(pendiente.get("ts") or 0)) < tope
+
+
+def lineas_cbm_pendiente(pendientes: dict) -> list[str]:
+    """Texto para quien lee el cierre: que paso, que NO hacer y cuando se resuelve."""
+    if not pendientes:
+        return []
+    cuales = ", ".join(f"{n} ({(v.get('motivo') or '?')[:110]})"
+                       for n, v in pendientes.items())
+    return [f"[i]  cbm pendiente (el cierre no depende de el): {cuales}.",
+            "     El arnes lo reintenta solo en el proximo `worktree start` o cierre."
+            " No lo reintentes a mano",
+            "     ni toques el daemon (`daemon stop`, kill): puede cortar el indexado"
+            " en curso y las sesiones MCP conectadas."]
+
+
+def cbm_indexar(p: dict, parte: dict, verboso: bool, *, forzar=False,
+                intentos: int | None = None, respetar_enfriamiento=False) -> None:
     """Indexa (o reindexa) cada raiz declarada en codebase-memory-mcp.
 
     Complementa a graphify, no lo reemplaza. `index_repository` es incremental:
     la primera vez sobre una raiz indexa el proyecto entero y despues solo lo
     que cambio, asi que el mismo llamado sirve para "primera vez" y para
-    "tras implementar una feature". Nunca lanza ni bloquea: los fallos van al
-    parte, igual que el resto del refresco.
+    "tras implementar una feature". Nunca lanza ni bloquea.
+
+    Cada raiz termina en una de cuatro: al dia (HEAD sin cambios y arbol limpio
+    desde el ultimo indexado: ni se llama al daemon), indexada, PENDIENTE (el
+    daemon no atendio tras reintentar: queda anotado y se reintenta solo; no es
+    un fallo) o fallo (algo que reintentar no arregla, o desconocido: va a
+    `fallos` y alguien lo mira). Si una raiz queda pendiente el daemon esta mal
+    para todas, asi que las que faltan se anotan sin llamarlo: cinco raices no
+    pagan cinco veces la espera.
     """
-    parte["cbm"] = {"indexadas": [], "nuevas": [], "omitido": None,
-                    "ramas_omitidas": {}}
+    cbm = parte["cbm"] = {"indexadas": [], "nuevas": [], "omitido": None,
+                          "ramas_omitidas": {}, "al_dia": [], "pendientes": {}}
     if _cbm_desactivado():
-        parte["cbm"]["omitido"] = "HARNESS_SIN_CBM"
+        cbm["omitido"] = "HARNESS_SIN_CBM"
         return
     if not shutil.which("codebase-memory-mcp"):
-        parte["cbm"]["omitido"] = "codebase-memory-mcp no esta en el PATH"
+        cbm["omitido"] = "codebase-memory-mcp no esta en el PATH"
         if verboso:
             print("   cbm: omitido (codebase-memory-mcp no esta en el PATH)")
         return
-    code, out = _cbm_cli("list_projects", {}, p["root"])
-    conocidas = out if code == 0 else ""
+    intentos = intentos or int(_env_num("HARNESS_CBM_INTENTOS", CBM_INTENTOS))
     permitidas = tuple(grafos_config(p).get("ramas_indexables") or RAMAS_CBM)
-    for r in raices_grafo(p):
-        raiz = Path(r["path"])
+    estado = _cbm_estado(p)
+    raices = raices_grafo(p)
+    claves = {str(Path(r["path"])) for r in raices}
+    for k in [k for k in estado["pendientes"] if k not in claves]:
+        del estado["pendientes"][k]  # raiz que ya no se declara
+
+    plan = []
+    for r in raices:
+        raiz, nombre = Path(r["path"]), r["nombre"]
+        clave = str(raiz)
         ok, motivo = _rama_indexable(raiz, permitidas)
         if not ok:
-            parte["cbm"]["ramas_omitidas"][r["nombre"]] = motivo
+            cbm["ramas_omitidas"][nombre] = motivo
             if verboso:
-                print(f"   cbm index {r['nombre']}: omitido ({motivo})")
+                print(f"   cbm index {nombre}: omitido ({motivo})")
             continue
-        nueva = str(raiz) not in conocidas
-        code, out = _cbm_cli("index_repository", {"repo_path": str(raiz)}, raiz)
-        # El exit code solo no alcanza: se exige el status que reporta la tool.
-        if code != 0 or '"status":"indexed"' not in out.replace(" ", ""):
-            parte["fallos"].append(f"cbm index {r['nombre']}: {out[-300:]}")
-        else:
-            parte["cbm"]["indexadas"].append(r["nombre"])
-            if nueva:
-                parte["cbm"]["nuevas"].append(r["nombre"])
-        if verboso:
-            tipo = "completo (primera vez)" if nueva else "incremental"
-            print(f"   cbm index {r['nombre']}: "
-                  f"{tipo if r['nombre'] in parte['cbm']['indexadas'] else 'FALLO'}")
+        huella = _cbm_huella(raiz)
+        sello = estado["indexado"].get(clave) or {}
+        if not forzar and huella and huella[1] and sello.get("head") == huella[0]:
+            cbm["al_dia"].append(nombre)
+            estado["pendientes"].pop(clave, None)
+            if verboso:
+                print(f"   cbm index {nombre}: al dia (HEAD {huella[0][:7]}, "
+                      "sin llamar al daemon)")
+            continue
+        previo = estado["pendientes"].get(clave)
+        if respetar_enfriamiento and _cbm_en_enfriamiento(previo):
+            cbm["pendientes"][nombre] = previo
+            if verboso:
+                print(f"   cbm index {nombre}: pendiente, en espera antes de reintentar")
+            continue
+        plan.append((r, raiz, clave, huella))
+
+    if plan:
+        circuito_abierto = False
+        for r, raiz, clave, huella in plan:
+            nombre = r["nombre"]
+            previo = estado["pendientes"].get(clave) or {}
+            # "Nueva" sale del sello local, no de `list_projects`: esa tool
+            # abrevia las rutas (@2+sufijo), asi que buscar la ruta en su salida
+            # nunca coincidia, y la llamada solo daba otra ocasion de esperar al daemon.
+            nueva = clave not in estado["indexado"]
+            if circuito_abierto:
+                ok, clase, usados = False, "transitorio", 0
+                err = "daemon no disponible (sin llamarlo de nuevo)"
+            else:
+                ok, err, clase, usados = _cbm_indexar_raiz(raiz, intentos)
+            if ok:
+                cbm["indexadas"].append(nombre)
+                if nueva:
+                    cbm["nuevas"].append(nombre)
+                estado["pendientes"].pop(clave, None)
+                # Solo sella si el arbol estaba limpio y sigue igual: un indexado
+                # con cambios sin commit no prueba que HEAD este al dia.
+                estable = bool(huella and huella[1] and _cbm_huella(raiz) == huella)
+                estado["indexado"][clave] = {
+                    "nombre": nombre, "at": now_iso(),
+                    "head": huella[0] if estable else None}
+                resultado = "completo (primera vez)" if nueva else "incremental"
+            elif clase == "transitorio":
+                circuito_abierto = True
+                pend = {"nombre": nombre, "motivo": err, "ts": time.time(),
+                        "desde": previo.get("desde") or now_iso(),
+                        "intentos": int(previo.get("intentos") or 0) + usados}
+                estado["pendientes"][clave] = pend
+                cbm["pendientes"][nombre] = pend
+                resultado = f"PENDIENTE ({usados} intento(s); se reintenta solo)"
+            else:
+                estado["pendientes"].pop(clave, None)
+                parte["fallos"].append(f"cbm index {nombre}: {err}")
+                resultado = "FALLO"
+            if verboso:
+                print(f"   cbm index {nombre}: {resultado}")
+    _cbm_guardar(p, estado)
+    if cbm["pendientes"]:
+        cbm["accion"] = ("pendiente: se reintenta solo en el proximo worktree start o "
+                         "cierre; no lo reintentes a mano ni toques el daemon "
+                         "(daemon stop / kill)")
+
+
+def _drenar_cbm(p: dict) -> None:
+    """Reintenta, una vez y con enfriamiento, lo que un cierre dejo pendiente."""
+    if not _cbm_pendientes(p):
+        return
+    parte = {"fallos": []}
+    cbm_indexar(p, parte, verboso=True, intentos=1, respetar_enfriamiento=True)
+    for x in parte["fallos"]:
+        print(f"[!] {x}")
+    for linea in lineas_cbm_pendiente(parte["cbm"]["pendientes"]):
+        print(linea)
 
 
 def refrescar(p: dict, *, forzar=False, max_horas=None, con_vault=True,
@@ -300,7 +509,7 @@ def refrescar(p: dict, *, forzar=False, max_horas=None, con_vault=True,
              "fallos": [], "combinado": None, "hub": None, "vault": None}
 
     # Independiente de graphify: se indexa aunque graphify falte.
-    cbm_indexar(p, parte, verboso)
+    cbm_indexar(p, parte, verboso, forzar=forzar)
 
     if not shutil.which("graphify"):
         parte["fallos"].append("graphify no esta en el PATH")
@@ -395,11 +604,13 @@ def refrescar_si_vencido(p: dict, *, etiqueta: str, bloqueante=False) -> dict | 
         return None
     e = estado_contexto(p)
     if e["fresco"] and not e["vault"]["vencido"]:
+        _drenar_cbm(p)  # el grafo fresco no dice nada de un cbm que quedo pendiente
         print(f"[i]  contexto fresco ({etiqueta}); no hay nada que refrescar.")
         return None
     if e["fresco"]:
         # Solo cambio el backlog o un doc: regenerar el vault basta, sin
         # relanzar el merge de grafos ni el hub.
+        _drenar_cbm(p)
         print(f"[i]  grafo fresco, vault desactualizado; regenerandolo antes de {etiqueta}...")
         parte = {"at": now_iso(), "fallos": [], "vault": None}
         _construir_vault(p, parte, verboso=True)
@@ -412,6 +623,8 @@ def refrescar_si_vencido(p: dict, *, etiqueta: str, bloqueante=False) -> dict | 
             print(f"     - {x}")
         if bloqueante:
             sys.exit("[!!] contexto no refrescado y se pidio bloqueante")
+    for linea in lineas_cbm_pendiente((parte.get("cbm") or {}).get("pendientes")):
+        print(linea)
     return parte
 
 
@@ -425,10 +638,12 @@ def cmd_refrescar(args) -> None:
 
 def cmd_cbm(args) -> None:
     parte = {"fallos": []}
-    cbm_indexar(paths(), parte, verboso=True)
+    cbm_indexar(paths(), parte, verboso=True, forzar=args.forzar)
     print(json.dumps(parte, ensure_ascii=False, indent=2))
-    # Omitido (sin binario / apagado) no es exito silencioso: sale con 1.
-    sys.exit(1 if parte["fallos"] or parte["cbm"]["omitido"] else 0)
+    # Omitido (sin binario / apagado) o pendiente no son exito silencioso: este
+    # es el comando explicito, asi que sale con 1. El cierre automatico no.
+    sys.exit(1 if parte["fallos"] or parte["cbm"]["omitido"]
+             or parte["cbm"]["pendientes"] else 0)
 
 
 # --- briefing compacto ------------------------------------------------------
@@ -689,6 +904,9 @@ def cmd_brief(args) -> None:
     if not e["fresco"]:
         L.append(f"[!] contexto VENCIDO ({', '.join(e['vencidas'])}): lo de abajo "
                  "puede no reflejar el arbol actual. Corre contexto.py refrescar.")
+    if e["cbm_pendientes"]:
+        L.append("[i] el indice de codebase-memory-mcp esta atrasado en "
+                 f"{', '.join(e['cbm_pendientes'])}: orienta menos; confirma leyendo el archivo.")
 
     L.append("")
     L.append(f"AC ({len(acs)}):")
@@ -781,6 +999,8 @@ def main() -> None:
     s.add_argument("--sin-hub", action="store_true", dest="sin_hub")
     s.set_defaults(fn=cmd_refrescar)
     s = sub.add_parser("cbm", help="indexa/reindexa las raices en codebase-memory-mcp")
+    s.add_argument("--forzar", action="store_true",
+                   help="reindexa aunque HEAD no haya cambiado desde el ultimo indexado")
     s.set_defaults(fn=cmd_cbm)
     s = sub.add_parser("brief"); s.add_argument("--feature", required=True)
     s.add_argument("--max-lineas", type=int, default=90, dest="max_lineas")

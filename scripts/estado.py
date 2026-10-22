@@ -43,6 +43,8 @@ def main() -> None:
         if not est["fresco"]:
             print(f"   [!] contexto vencido ({', '.join(est['vencidas'])}): "
                   "corre contexto.py refrescar")
+        for linea in contexto.lineas_cbm_pendiente(est["cbm_pendientes"]):
+            print("  " + linea)
     except Exception as exc:
         print(f"   [!] no se pudo evaluar el contexto: {exc}")
     print(f"   vault: {vault}")

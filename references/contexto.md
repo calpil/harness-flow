@@ -126,6 +126,40 @@ incremental, que cubre la feature recien integrada. Exige `"status":"indexed"`,
 no solo exit 0. Nunca bloquea el cierre; si falla, queda en el parte.
 `HARNESS_SIN_CBM=1` lo apaga (CI y tests del arnes).
 
+**El daemon es compartido y a veces no atiende.** Un solo daemon sirve a todas las
+sesiones y agentes de la maquina (Claude, Hermes, Codex, Grok, Kimi...) y su
+watcher reindexa por su cuenta cada cambio de git; con varias sesiones abiertas
+puede tardar mas de 30 s en aceptar un cliente (`could not accept this client`,
+`connection capacity reached`, `blocked by another mutation`). Eso es
+transitorio, y el arnes lo trata asi en vez de dejarlo como un fallo que cada
+agente resuelve a su manera:
+
+| Situacion de una raiz | Que hace el arnes | Parte (`cbm.*`) |
+|---|---|---|
+| HEAD igual al ultimo indexado y arbol limpio | no llama al daemon | `al_dia` |
+| indexa | sella HEAD (solo si el arbol estaba limpio) | `indexadas` |
+| daemon ocupado/arrancando/parandose | 3 intentos con espera 5 s, 15 s; si sigue, **PENDIENTE** | `pendientes` (no es fallo) |
+| ya fallo una raiz por esto | las demas quedan pendientes sin llamarlo (5 raices no pagan 5 esperas) | `pendientes` |
+| build distinto, ruta no indexable, binario ausente | un solo intento, fallo visible | `fallos` |
+| error que no reconoce | un solo intento, fallo visible (no se difiere lo que no se entiende) | `fallos` |
+
+Un pendiente queda en `graphify-out/.cbm_estado.json` (local, ignorado por git), se
+muestra en `estado.py`, `contexto.py estado` y el brief, y **se reintenta solo** en el
+siguiente `worktree start` o cierre, una vez y con 10 min de enfriamiento. No
+cambia `fresco`/`vencidas` ni el exit code del cierre: el brief y el vault no
+dependen de cbm. `contexto.py cbm` (comando explicito) si sale con 1 mientras haya
+pendientes, y `--forzar` reindexa aunque HEAD no haya cambiado.
+
+**Un agente que ve "cbm pendiente" no hace nada.** No reintenta en bucle y, sobre
+todo, **no ejecuta `codebase-memory-mcp daemon stop` ni mata procesos cbm**: ese
+daemon es de todas las sesiones, y pararlo cancela el indexado en curso y corta las
+conexiones MCP de los demas agentes (en el log del daemon aparece como
+`stop_requested` + un `connection_end` por sesion). Si hace falta mirar, es solo
+lectura: `codebase-memory-mcp daemon status` y `contexto.py estado`.
+
+Variables: `HARNESS_CBM_INTENTOS` (3), `HARNESS_CBM_ESPERA_S` (5, base del
+backoff), `HARNESS_CBM_ENFRIAMIENTO_S` (600).
+
 **Solo ramas estables, nunca worktrees.** Se indexa una raiz solo si esta parada
 en `develop`, `main`, `master` o `release`/`release/*`/`release-*`. Un worktree de
 feature se omite siempre, aunque su rama se llame `develop`: es trabajo en curso,
