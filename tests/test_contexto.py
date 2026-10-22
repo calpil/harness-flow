@@ -698,7 +698,7 @@ class CbmIndexarTests(unittest.TestCase):
         self.assertEqual(parte["cbm"]["omitido"], "HARNESS_SIN_CBM")
 
 
-class CbmResilienciaTests(unittest.TestCase):
+class _CbmBase(unittest.TestCase):
     """El daemon de cbm es compartido por todas las sesiones: que no atienda un
     momento no puede tumbar el cierre ni dejar a un agente improvisando."""
 
@@ -770,6 +770,9 @@ class CbmResilienciaTests(unittest.TestCase):
     def _cae(self, tool, n):
         return (1, self.TRANSITORIO)
 
+
+
+class CbmResilienciaTests(_CbmBase):
     def test_transitorio_se_reintenta_y_termina_indexado(self):
         a = self._repo("a")
         self._declarar(a)
@@ -982,3 +985,119 @@ class CbmDiagnosticoTests(unittest.TestCase):
             d = contexto._cbm_diagnostico()
         self.assertNotIn("log_64KB", d)
         self.assertEqual(d["sesiones_cortadas"], 0)
+
+
+def _salida(dirs, truncado=False):
+    """Lo que devuelve `index_repository`: el status y lo que excluyo por diseno."""
+    return json.dumps({"status": "indexed", "nodes": 5, "edges": 4,
+                       "excluded": {"dirs": dirs, "count": len(dirs), "truncated": truncado}})
+
+
+class CbmNodeModulesTests(_CbmBase):
+    """node_modules no se indexa ni en cbm ni en graphify: el arnes lo vigila.
+
+    Ambas herramientas lo excluyen por diseno (comprobado: raiz y anidado, con y sin
+    .gitignore, y cbm ni siquiera deja re-incluirlo con `!node_modules/`). El vigilante
+    existe para que una version nueva que lo rompa no pase en silencio.
+    """
+
+    def _con(self, salida, node_modules=("node_modules",)):
+        a = self._repo("a")
+        for nm in node_modules:
+            (a / nm).mkdir(parents=True)
+            (a / nm / "x.js").write_text("function x(){}\n")
+        self._declarar(a)
+        return self._correr(lambda tool, n: (0, salida))[0]
+
+    def test_cbm_excluyo_node_modules_no_hay_fallo(self):
+        parte = self._con(_salida(["node_modules", ".git"]))
+        self.assertEqual(parte["fallos"], [])
+        self.assertEqual(parte["cbm"]["indexadas"], ["a"])
+
+    def test_si_cbm_lo_indexara_se_ve_como_fallo_y_dice_que_hacer(self):
+        parte = self._con(_salida([".git"]))
+        self.assertEqual(len(parte["fallos"]), 1)
+        self.assertIn("cbm no excluyo node_modules", parte["fallos"][0])
+        self.assertIn(".cbmignore", parte["fallos"][0])
+        self.assertEqual(parte["cbm"]["indexadas"], ["a"])       # se indexo; el aviso es aparte
+
+    def test_node_modules_anidado_de_un_monorepo(self):
+        nm = ("packages/web/node_modules",)
+        self.assertEqual(self._con(_salida(["packages/web/node_modules", ".git"]), nm)["fallos"], [])
+
+    def test_node_modules_anidado_no_excluido_es_fallo(self):
+        parte = self._con(_salida([".git"]), ("packages/web/node_modules",))
+        self.assertEqual(len(parte["fallos"]), 1)
+
+    def test_lista_truncada_sin_node_modules_no_afirma_nada(self):
+        # excluded.dirs viene recortada (count 9, 5 mostradas): ausencia no es prueba
+        self.assertEqual(self._con(_salida(["dist", ".angular"], truncado=True))["fallos"], [])
+
+    def test_sin_dato_de_exclusion_no_afirma_nada(self):
+        self.assertEqual(self._con('{"status":"indexed"}')["fallos"], [])
+
+    def test_dato_de_exclusion_con_otra_forma_no_afirma_nada(self):
+        self.assertEqual(self._con('{"status":"indexed","excluded":"node_modules"}')["fallos"], [])
+
+    def test_raiz_sin_node_modules_no_se_vigila(self):
+        a = self._repo("a")
+        self._declarar(a)
+        parte = self._correr(lambda tool, n: (0, _salida([".git"])))[0]
+        self.assertEqual(parte["fallos"], [])
+
+    def test_busqueda_de_node_modules_es_acotada_y_no_entra_en_git(self):
+        r = Path(self.tmp.name) / "r"
+        (r / "a" / "b" / "c" / "d" / "e" / "node_modules").mkdir(parents=True)   # nivel 6
+        (r / ".git" / "node_modules").mkdir(parents=True)
+        (r / "graphify-out" / "node_modules").mkdir(parents=True)
+        self.assertFalse(contexto._tiene_node_modules(r))
+        (r / "a" / "node_modules").mkdir()                                       # nivel 2
+        self.assertTrue(contexto._tiene_node_modules(r))
+
+
+class GrafoNodeModulesTests(unittest.TestCase):
+    """graphify: un grafo con nodos de node_modules no cuenta como actualizado."""
+
+    def _grafo(self, *archivos):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        g = Path(tmp.name) / "graph.json"
+        g.write_text(json.dumps({"nodes": [{"id": i, "source_file": a} if a else {"id": i}
+                                           for i, a in enumerate(archivos)] + ["no-es-un-nodo"],
+                                 "links": []}))
+        return g
+
+    def test_grafo_limpio_es_utilizable(self):
+        ok, motivo = contexto._grafo_utilizable(self._grafo("src/app.ts", "projects/web/src/a.ts", None))
+        self.assertTrue(ok, motivo)
+
+    def test_nodos_en_node_modules_a_cualquier_profundidad_no_son_utilizables(self):
+        for ruta in ("node_modules/lodash/index.js", "projects/web/node_modules/dep/a.js",
+                     "projects\\web\\node_modules\\dep\\a.js"):
+            ok, motivo = contexto._grafo_utilizable(self._grafo("src/app.ts", ruta))
+            self.assertFalse(ok, ruta)
+            self.assertIn("node_modules", motivo)
+            self.assertIn(".graphifyignore", motivo)
+
+    def test_no_confunde_nombres_parecidos(self):
+        ok, motivo = contexto._grafo_utilizable(self._grafo(
+            "src/node_modules_helper.ts", "src/my_node_modules/a.ts", "docs/node_modules.md"))
+        self.assertTrue(ok, motivo)
+
+    def test_refrescar_lo_reporta_como_fallo_y_no_sella_la_raiz(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        root = Path(tmp.name) / "front"
+        (root / "harness" / "progress").mkdir(parents=True)
+        g = root / "graphify-out" / "graph.json"
+        g.parent.mkdir(parents=True)
+        g.write_text(json.dumps({"nodes": [{"id": 1, "source_file": "node_modules/x/a.js"}]}))
+        p = comun.paths(root)
+        with mock.patch.dict(os.environ, {"HARNESS_SIN_CBM": "1"}), \
+                mock.patch.object(contexto.shutil, "which", return_value="/x"), \
+                mock.patch.object(contexto, "_run", return_value=(0, "")), \
+                contextlib.redirect_stdout(io.StringIO()):
+            parte = contexto.refrescar(p, forzar=True, con_vault=False, con_hub=False)
+        self.assertEqual(parte["actualizadas"], [])
+        self.assertTrue(any("node_modules" in x for x in parte["fallos"]), parte["fallos"])
+        self.assertFalse((g.parent / contexto.SELLO_VERIFICADO).exists())

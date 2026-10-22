@@ -197,7 +197,25 @@ def _grafo_utilizable(g: Path) -> tuple[bool, str]:
         return False, "el grafo no es un objeto JSON"
     if not datos.get("nodes"):
         return False, "el grafo quedo sin nodos"
+    dentro = _nodos_en_node_modules(datos["nodes"])
+    if dentro:
+        return False, (f"el grafo indexo {dentro} nodos dentro de node_modules: "
+                       "agrega node_modules/ a .graphifyignore o actualiza graphify")
     return True, ""
+
+
+def _nodos_en_node_modules(nodos: list) -> int:
+    """Nodos cuyo archivo fuente cuelga de un directorio node_modules (a cualquier
+    profundidad; separador / o \\). graphify y cbm lo excluyen por diseno; esto
+    existe para que una version nueva que lo rompa no pase en silencio."""
+    n = 0
+    for nodo in nodos:
+        if not isinstance(nodo, dict):
+            continue
+        ruta = str(nodo.get("source_file") or nodo.get("file") or "")
+        if "node_modules" in ruta.replace("\\", "/").split("/"):
+            n += 1
+    return n
 
 
 def _cbm_desactivado() -> bool:
@@ -332,22 +350,56 @@ def _cbm_clasificar(code: int, out: str) -> str:
     return "desconocido"
 
 
-def _cbm_indexar_raiz(raiz: Path, intentos: int) -> tuple[bool, str, str, int]:
-    """(ok, ultimo_error, clase, intentos_usados). Reintenta solo lo transitorio."""
+def _cbm_indexar_raiz(raiz: Path, intentos: int) -> tuple[bool, str, str, int, str]:
+    """(ok, ultimo_error, clase, intentos_usados, salida_del_exito). Reintenta solo
+    lo transitorio."""
     espera = _env_num("HARNESS_CBM_ESPERA_S", CBM_ESPERA_S)
     err, clase = "", "desconocido"
     for n in range(1, max(intentos, 1) + 1):
         code, out = _cbm_cli("index_repository", {"repo_path": str(raiz)}, raiz)
         # El exit code solo no alcanza: se exige el status que reporta la tool.
         if code == 0 and '"status":"indexed"' in out.replace(" ", ""):
-            return True, "", "", n
+            return True, "", "", n, out
         err = out[-300:] or f"exit {code}"
         clase = _cbm_clasificar(code, out)
         if clase != "transitorio":
-            return False, err, clase, n
+            return False, err, clase, n, ""
         if n < intentos:
             time.sleep(espera * 3 ** (n - 1) * random.uniform(0.8, 1.2))
-    return False, err, clase, max(intentos, 1)
+    return False, err, clase, max(intentos, 1), ""
+
+
+def _tiene_node_modules(raiz: Path, profundidad: int = 4) -> bool:
+    """Hay un node_modules en la raiz o dentro de sus primeros niveles (monorepos)."""
+    base = len(raiz.parts)
+    for d, dirs, _ in os.walk(raiz):
+        if "node_modules" in dirs:
+            return True
+        dirs[:] = [x for x in dirs if x not in (".git", "graphify-out")
+                   and len(Path(d).parts) - base < profundidad]
+    return False
+
+
+def _cbm_node_modules_indexado(raiz: Path, salida: str) -> str | None:
+    """Motivo si cbm pudo haber indexado node_modules; None si no hay indicio.
+
+    cbm lo excluye por diseno y no se puede re-incluir ni con `!node_modules/` en
+    .cbmignore (comprobado en 0.11.0); esto lo vigila para que un cambio de version
+    no lo rompa en silencio. No llama al daemon: lee `excluded` del propio resultado
+    del indexado. Sin ese dato, o con la lista truncada, no afirma nada.
+    """
+    if not _tiene_node_modules(raiz):
+        return None
+    try:
+        ex = json.loads(salida).get("excluded")
+    except (ValueError, AttributeError):
+        return None
+    if not isinstance(ex, dict):
+        return None
+    dirs = ex.get("dirs") or []
+    if any(Path(str(d)).name == "node_modules" for d in dirs) or ex.get("truncated"):
+        return None
+    return f"cbm no excluyo node_modules (excluded.dirs={dirs[:6]})"
 
 
 def _cbm_en_enfriamiento(pendiente: dict | None) -> bool:
@@ -512,8 +564,13 @@ def cbm_indexar(p: dict, parte: dict, verboso: bool, *, forzar=False,
                 ok, clase, usados = False, "transitorio", 0
                 err = "daemon no disponible (sin llamarlo de nuevo)"
             else:
-                ok, err, clase, usados = _cbm_indexar_raiz(raiz, intentos)
+                ok, err, clase, usados, salida = _cbm_indexar_raiz(raiz, intentos)
             if ok:
+                indicio = _cbm_node_modules_indexado(raiz, salida)
+                if indicio:
+                    parte["fallos"].append(
+                        f"cbm index {nombre}: {indicio}; excluyelo con .cbmignore "
+                        "(node_modules/) o revisa la version de cbm")
                 cbm["indexadas"].append(nombre)
                 if nueva:
                     cbm["nuevas"].append(nombre)

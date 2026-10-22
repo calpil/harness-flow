@@ -188,6 +188,31 @@ como `Al fallar: ...` y las ultimas 20 quedan en `diagnosticos` de
 `graphify-out/.cbm_estado.json`. Si el aviso reaparece, esos datos dicen si fue carga,
 memoria, churn del watcher o sesiones cortadas, en vez de adivinar.
 
+**`node_modules` no se indexa, ni en cbm ni en graphify.** Las dos herramientas lo
+excluyen por diseno, a cualquier profundidad y con o sin `.gitignore`. Comprobado en
+cbm 0.11.0 y graphify 0.9.73 con un repo de prueba con `node_modules` suelto y anidado
+(`packages/web/node_modules`) y sin `.gitignore`; y en los 8 proyectos que cbm tenia
+indexados (dos fronts incluidos) hay 0 nodos dentro de `node_modules`. cbm ni siquiera
+deja re-incluirlo con `!node_modules/` en `.cbmignore`, y un `.graphifyignore` solo puede
+excluir mas. Aun asi el arnes lo vigila, para que una version nueva que lo rompa no pase
+en silencio y sin llamadas extra al daemon:
+
+- graphify: `refrescar` da por fallido el update (y no sella la raiz) si `graph.json` trae
+  nodos cuyo archivo cuelga de un `node_modules`.
+- cbm: si la raiz tiene un `node_modules` (en sus 4 primeros niveles) y el `excluded` del
+  propio resultado del indexado no lo lista, va a `fallos` con el remedio (`.cbmignore`).
+  Con `excluded.dirs` truncada, o sin ese dato, no afirma nada: la ausencia no es prueba.
+
+Otros directorios de dependencias o artefactos que un front puede tener **no** estan
+cubiertos por igual. En un repo SIN `.gitignore` se colaron: en ambas herramientas
+`.pnpm`, `jspm_packages`, `.nx`, `.vite`, `out`, `www`, `public`, `.output`, `.firebase`,
+`playwright-report`, `test-results`; solo en graphify `bower_components`, `.pnpm-store`,
+`.yarn/cache`, `.yarn/releases`, `vendor`, `coverage`, `tmp`, `deploy`, `.vercel`,
+`.netlify`; solo en cbm `build` y `storybook-static`. Ambas respetan `.gitignore` (graphify
+tiene `--no-gitignore`), que en un front normal ya los cubre. Si alguno estorba, se excluye
+por proyecto con `.cbmignore` / `.graphifyignore` (sintaxis gitignore); el arnes no
+modifica repos ajenos por su cuenta.
+
 Variables: `HARNESS_CBM_INTENTOS` (3), `HARNESS_CBM_ESPERA_S` (5, base del
 backoff), `HARNESS_CBM_ENFRIAMIENTO_S` (600).
 
