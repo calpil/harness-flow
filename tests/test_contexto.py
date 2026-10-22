@@ -718,6 +718,11 @@ class CbmResilienciaTests(unittest.TestCase):
             m = patcher.start()
             self.addCleanup(patcher.stop)
         self.sleep = m
+        self.foto = {"at": "2026-10-22T20:00:00Z", "procesos": {"sesion": 9},
+                     "sesiones_cortadas": 9, "carga": [2.5, 2.0, 1.8], "swap_usado_mb": 4443}
+        diag = mock.patch.object(contexto, "_cbm_diagnostico", return_value=dict(self.foto))
+        diag.start()
+        self.addCleanup(diag.stop)
         self.root = Path(self.tmp.name) / "front"
         (self.root / "harness" / "progress").mkdir(parents=True)
         self.p = comun.paths(self.root)
@@ -896,3 +901,84 @@ class CbmResilienciaTests(unittest.TestCase):
         f.write_text("{no es json")
         parte, _ = self._correr(self._indexa)
         self.assertEqual(parte["cbm"]["indexadas"], ["a"])
+
+
+    def test_al_quedar_pendiente_deja_la_foto_de_la_maquina(self):
+        a, b = self._repo("a"), self._repo("b")
+        self._declarar(a, b)
+        self._correr(self._cae)
+        est = contexto._cbm_estado(self.p)
+        self.assertEqual(len(est["diagnosticos"]), 1)            # una por corrida, no por raiz
+        self.assertEqual(est["diagnosticos"][0]["raiz"], "a")
+        for v in est["pendientes"].values():
+            self.assertEqual(v["diagnostico"]["sesiones_cortadas"], 9)
+        texto = "\n".join(contexto.lineas_cbm_pendiente(contexto.estado_contexto(self.p)["cbm_pendientes"]))
+        self.assertIn("Al fallar: 9 sesiones cbm (9 cortadas), carga 2.5, swap 4443 MB", texto)
+
+    def test_el_historial_de_fotos_esta_acotado(self):
+        a = self._repo("a")
+        self._declarar(a)
+        for _ in range(25):
+            self._correr(self._cae)
+        self.assertEqual(len(contexto._cbm_estado(self.p)["diagnosticos"]), 20)
+
+    def test_un_indexado_exitoso_no_toma_fotos(self):
+        a = self._repo("a")
+        self._declarar(a)
+        self._correr(self._indexa)
+        self.assertEqual(contexto._cbm_estado(self.p).get("diagnosticos", []), [])
+
+
+class CbmDiagnosticoTests(unittest.TestCase):
+    """La foto es telemetria: barata, sin tocar el daemon y sin tumbar el refresco."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        env = mock.patch.dict(os.environ, {"CBM_CACHE_DIR": self.tmp.name})
+        env.start()
+        self.addCleanup(env.stop)
+        import cbm_procesos
+        self.cp = cbm_procesos
+        logs = Path(self.tmp.name) / "logs"
+        logs.mkdir()
+        (logs / "cbm-daemon.log").write_text(
+            "x\n" * 50 + "level=info msg=watcher.changed p=1\n" * 3
+            + "level=info msg=daemon.start v=1\n" + "level=warn msg=ui.unavailable\n" * 2)
+
+    def _procs(self):
+        return [{"pid": 1, "rol": "sesion", "rss_mb": 1.5}, {"pid": 2, "rol": "sesion", "rss_mb": 1.5},
+                {"pid": 3, "rol": "worker", "rss_mb": 430.0}]
+
+    def test_reune_procesos_enlaces_log_carga_y_swap(self):
+        sysctl = mock.Mock(stdout="total = 6144.00M  used = 4443.81M  free = 1700.19M  (encrypted)")
+        with mock.patch.object(self.cp, "leer_procesos", return_value=(self._procs(), {})), \
+                mock.patch.object(self.cp, "enlaces_cortados", return_value={1}) as enl, \
+                mock.patch.object(contexto.os, "getloadavg", return_value=(2.54, 2.0, 1.8)), \
+                mock.patch.object(contexto.sys, "platform", "darwin"), \
+                mock.patch.object(contexto.subprocess, "run", return_value=sysctl):
+            d = contexto._cbm_diagnostico()
+        self.assertEqual(d["procesos"], {"sesion": 2, "worker": 1})
+        self.assertEqual(d["rss_cbm_mb"], 433)
+        self.assertEqual(d["sesiones_cortadas"], 1)
+        enl.assert_called_once_with([1, 2])                       # solo las sesiones
+        self.assertEqual(d["log_64KB"], {"watcher.changed": 3, "daemon.start": 1, "ui.unavailable": 2})
+        self.assertEqual(d["carga"], [2.5, 2.0, 1.8])
+        self.assertEqual(d["swap_usado_mb"], 4444)
+
+    def test_sobrevive_a_cualquier_fallo_de_medicion(self):
+        with mock.patch.object(self.cp, "leer_procesos", side_effect=OSError("sin ps")), \
+                mock.patch.object(contexto.os, "getloadavg", side_effect=OSError), \
+                mock.patch.object(contexto.sys, "platform", "darwin"), \
+                mock.patch.object(contexto.subprocess, "run", side_effect=OSError("sin sysctl")):
+            d = contexto._cbm_diagnostico()
+        self.assertEqual(list(d), ["at"])                         # solo la marca de tiempo
+
+    def test_sin_log_no_falla(self):
+        (Path(self.tmp.name) / "logs" / "cbm-daemon.log").unlink()
+        with mock.patch.object(self.cp, "leer_procesos", return_value=(self._procs(), {})), \
+                mock.patch.object(self.cp, "enlaces_cortados", return_value=set()), \
+                mock.patch.object(contexto.sys, "platform", "linux"):
+            d = contexto._cbm_diagnostico()
+        self.assertNotIn("log_64KB", d)
+        self.assertEqual(d["sesiones_cortadas"], 0)
