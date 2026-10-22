@@ -286,8 +286,9 @@ $PY "$H/leccion.py" list
 El Memory Hub y `codebase-memory-mcp` son opcionales para los gates locales.
 Si el cierre dice "cbm pendiente" (el daemon compartido no atendio), no es un fallo ni
 requiere accion: el arnes lo reintenta solo. No lo reintentes a mano ni ejecutes
-`codebase-memory-mcp daemon stop` ni mates procesos cbm: cortas las sesiones de los demas
-agentes.
+`codebase-memory-mcp daemon stop` ni mates procesos cbm a mano: cortas las sesiones de los
+demas agentes. Para procesos cbm sobrantes: `$PY "$H/contexto.py" limpiar-cbm` (avisa cuales
+estan en uso y mata solo los huerfanos).
 Detalles de refresco, cobertura y fallos: [`references/contexto.md`](references/contexto.md)
 y [`references/hub.md`](references/hub.md).
 

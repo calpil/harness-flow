@@ -366,8 +366,10 @@ def lineas_cbm_pendiente(pendientes: dict) -> list[str]:
     return [f"[i]  cbm pendiente (el cierre no depende de el): {cuales}.",
             "     El arnes lo reintenta solo en el proximo `worktree start` o cierre."
             " No lo reintentes a mano",
-            "     ni toques el daemon (`daemon stop`, kill): puede cortar el indexado"
-            " en curso y las sesiones MCP conectadas."]
+            "     ni toques el daemon (`daemon stop`, kill a mano): puede cortar el"
+            " indexado en curso y las sesiones MCP conectadas.",
+            "     Para procesos huerfanos: `contexto.py limpiar-cbm` (mata solo los"
+            " que no tienen sesion viva)."]
 
 
 def cbm_indexar(p: dict, parte: dict, verboso: bool, *, forzar=False,
@@ -644,6 +646,11 @@ def cmd_cbm(args) -> None:
     # es el comando explicito, asi que sale con 1. El cierre automatico no.
     sys.exit(1 if parte["fallos"] or parte["cbm"]["omitido"]
              or parte["cbm"]["pendientes"] else 0)
+
+
+def cmd_limpiar_cbm(args) -> None:
+    import cbm_procesos
+    sys.exit(cbm_procesos.limpiar(matar_huerfanos=not args.solo_avisar))
 
 
 # --- briefing compacto ------------------------------------------------------
@@ -1002,6 +1009,10 @@ def main() -> None:
     s.add_argument("--forzar", action="store_true",
                    help="reindexa aunque HEAD no haya cambiado desde el ultimo indexado")
     s.set_defaults(fn=cmd_cbm)
+    s = sub.add_parser("limpiar-cbm", help="avisa que procesos cbm estan en uso y mata "
+                                           "solo los huerfanos")
+    s.add_argument("--solo-avisar", action="store_true", dest="solo_avisar")
+    s.set_defaults(fn=cmd_limpiar_cbm)
     s = sub.add_parser("brief"); s.add_argument("--feature", required=True)
     s.add_argument("--max-lineas", type=int, default=90, dest="max_lineas")
     s.add_argument("--max-archivos", type=int, default=12, dest="max_archivos")
