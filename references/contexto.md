@@ -151,11 +151,22 @@ dependen de cbm. `contexto.py cbm` (comando explicito) si sale con 1 mientras ha
 pendientes, y `--forzar` reindexa aunque HEAD no haya cambiado.
 
 **Un agente que ve "cbm pendiente" no hace nada.** No reintenta en bucle y, sobre
-todo, **no ejecuta `codebase-memory-mcp daemon stop` ni mata procesos cbm**: ese
-daemon es de todas las sesiones, y pararlo cancela el indexado en curso y corta las
-conexiones MCP de los demas agentes (en el log del daemon aparece como
+todo, **no ejecuta `codebase-memory-mcp daemon stop` ni mata procesos cbm a mano**:
+ese daemon es de todas las sesiones, y pararlo cancela el indexado en curso y corta
+las conexiones MCP de los demas agentes (en el log del daemon aparece como
 `stop_requested` + un `connection_end` por sesion). Si hace falta mirar, es solo
 lectura: `codebase-memory-mcp daemon status` y `contexto.py estado`.
+
+**Procesos cbm sobrantes: `contexto.py limpiar-cbm [--solo-avisar]`.** Lista cada
+proceso cbm como `EN USO` o `HUERFANO` y mata solo los huerfanos. Huerfano es lo
+unico que se prueba: su padre murio y el sistema lo reasigno al init. Un servidor
+MCP cuya sesion sigue viva es `EN USO` aunque este inactivo o tenga el enlace con el
+daemon roto: no hay forma de saber si esa sesion lo va a necesitar, y matarlo la deja
+con cbm caido. El daemon tampoco se toca nunca. Seguridad: nunca mata a este mismo
+comando ni a sus ancestros, vuelve a leer el comando justo antes del `kill` (si el
+pid ya es otro programa, no lo toca) y usa SIGTERM antes de SIGKILL. Tambien borra los
+`*.db.stage.*` del cache (~100 MB cada uno) con mas de 1 h, pero solo si no hay
+daemon, worker ni cli de cbm vivos. No esta soportado en Windows (usa `ps`).
 
 Variables: `HARNESS_CBM_INTENTOS` (3), `HARNESS_CBM_ESPERA_S` (5, base del
 backoff), `HARNESS_CBM_ENFRIAMIENTO_S` (600).
