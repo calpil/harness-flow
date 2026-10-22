@@ -1158,6 +1158,11 @@ def cmd_close(args) -> None:
             else:
                 if parte:
                     print("[ok] contexto refrescado")
+            # cbm pendiente no es un fallo del cierre ni del grafo: el arnes lo
+            # reintenta solo. Se dice aparte para que nadie improvise con el daemon.
+            for linea in contexto.lineas_cbm_pendiente(
+                    ((parte or {}).get("cbm") or {}).get("pendientes")):
+                print(linea)
         except Exception as exc:
             print(f"[!] no se pudo refrescar el contexto: {exc}")
     if atlassian_sync:

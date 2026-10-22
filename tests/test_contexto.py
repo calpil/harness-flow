@@ -613,26 +613,20 @@ class CbmIndexarTests(unittest.TestCase):
 
         def fake(tool, args, cwd):
             llamadas.append(tool)
-            return (0, "projects: 0" if tool == "list_projects" else ok)
+            return (0, ok)
 
-        parte = self._parte()
-        with mock.patch.dict(os.environ, {"HARNESS_SIN_CBM": ""}), \
-                mock.patch.object(contexto.shutil, "which", return_value="/x"), \
-                mock.patch.object(contexto, "_rama_indexable", return_value=(True, "develop")), \
-                mock.patch.object(contexto, "_cbm_cli", side_effect=fake):
-            contexto.cbm_indexar(self.p, parte, verboso=False)
-        self.assertEqual(parte["cbm"]["nuevas"], ["front"])
-        self.assertEqual(llamadas, ["list_projects", "index_repository"])
-
-        parte = self._parte()
-        with mock.patch.dict(os.environ, {"HARNESS_SIN_CBM": ""}), \
-                mock.patch.object(contexto.shutil, "which", return_value="/x"), \
-                mock.patch.object(contexto, "_rama_indexable", return_value=(True, "develop")), \
-                mock.patch.object(contexto, "_cbm_cli", side_effect=lambda t, a, c: (
-                    0, f"/{self.root}" if t == "list_projects" else ok)):
-            contexto.cbm_indexar(self.p, parte, verboso=False)
-        self.assertEqual(parte["cbm"]["indexadas"], ["front"])
-        self.assertEqual(parte["cbm"]["nuevas"], [])
+        for esperada in (["front"], []):
+            parte = self._parte()
+            with mock.patch.dict(os.environ, {"HARNESS_SIN_CBM": ""}), \
+                    mock.patch.object(contexto.shutil, "which", return_value="/x"), \
+                    mock.patch.object(contexto, "_rama_indexable",
+                                      return_value=(True, "develop")), \
+                    mock.patch.object(contexto, "_cbm_cli", side_effect=fake):
+                contexto.cbm_indexar(self.p, parte, verboso=False)
+            self.assertEqual(parte["cbm"]["indexadas"], ["front"])
+            self.assertEqual(parte["cbm"]["nuevas"], esperada)
+        # una sola tool por corrida: `list_projects` abrevia rutas y no servia
+        self.assertEqual(llamadas, ["index_repository", "index_repository"])
 
     def test_exit_cero_sin_status_indexed_es_fallo(self):
         parte = self._parte()
@@ -690,7 +684,8 @@ class CbmIndexarTests(unittest.TestCase):
                 mock.patch.object(contexto, "_cbm_cli",
                                   return_value=(0, "projects: 0")) as m:
             contexto.cbm_indexar(self.p, parte, verboso=False)
-        self.assertEqual([c.args[0] for c in m.call_args_list], ["list_projects"])
+        # sin nada que indexar no se molesta al daemon, ni siquiera para listar
+        m.assert_not_called()
         self.assertEqual(parte["cbm"]["ramas_omitidas"], {"front": "es un worktree"})
         self.assertEqual(parte["cbm"]["indexadas"], [])
 
@@ -701,3 +696,203 @@ class CbmIndexarTests(unittest.TestCase):
             contexto.cbm_indexar(self.p, parte, verboso=False)
         m.assert_not_called()
         self.assertEqual(parte["cbm"]["omitido"], "HARNESS_SIN_CBM")
+
+
+class CbmResilienciaTests(unittest.TestCase):
+    """El daemon de cbm es compartido por todas las sesiones: que no atienda un
+    momento no puede tumbar el cierre ni dejar a un agente improvisando."""
+
+    TRANSITORIO = ("CBM daemon is active or starting but could not accept this "
+                   "client within 30000 ms")
+    OK = '{"status":"indexed"}'
+
+    def setUp(self):
+        env = mock.patch.dict(os.environ, {"HARNESS_SIN_CBM": "",
+                                           "HARNESS_CBM_ESPERA_S": "0"})
+        env.start()
+        self.addCleanup(env.stop)
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        for patcher in (mock.patch.object(contexto.shutil, "which", return_value="/x"),
+                        mock.patch.object(contexto.time, "sleep")):
+            m = patcher.start()
+            self.addCleanup(patcher.stop)
+        self.sleep = m
+        self.root = Path(self.tmp.name) / "front"
+        (self.root / "harness" / "progress").mkdir(parents=True)
+        self.p = comun.paths(self.root)
+
+    def _repo(self, nombre):
+        import subprocess
+        r = Path(self.tmp.name) / nombre
+        r.mkdir()
+        self.g = lambda *a, r=r: subprocess.run(["git", "-C", str(r), *a], check=True,
+                                                capture_output=True)
+        self.g("init", "-q", "-b", "develop")
+        (r / "a.py").write_text("x=1\n")
+        self.g("add", ".")
+        self._commit(r, "i")
+        return r
+
+    def _commit(self, r, msg):
+        import subprocess
+        subprocess.run(["git", "-C", str(r), "-c", "user.email=a@b", "-c",
+                        "user.name=t", "commit", "-qm", msg, "--allow-empty"],
+                       check=True, capture_output=True)
+
+    def _declarar(self, *repos):
+        (self.root / "harness" / "grafos.json").write_text(json.dumps(
+            {"raices": [{"nombre": r.name, "path": str(r)} for r in repos]}))
+        self.p = comun.paths(self.root)
+
+    def _correr(self, respuestas, **kw):
+        """Ejecuta cbm_indexar con un cli falso; devuelve (parte, llamadas)."""
+        llamadas = []
+
+        def fake(tool, args, cwd):
+            llamadas.append((tool, args.get("repo_path")))
+            return respuestas(tool, len(llamadas))
+
+        parte = {"fallos": []}
+        with mock.patch.object(contexto, "_cbm_cli", side_effect=fake):
+            contexto.cbm_indexar(self.p, parte, verboso=False, **kw)
+        self.assertNotIn("list_projects", [t for t, _ in llamadas])
+        return parte, llamadas
+
+    def _indexa(self, tool, n):
+        return (0, self.OK)
+
+    def _cae(self, tool, n):
+        return (1, self.TRANSITORIO)
+
+    def test_transitorio_se_reintenta_y_termina_indexado(self):
+        a = self._repo("a")
+        self._declarar(a)
+        intentos = iter([(1, self.TRANSITORIO), (1, self.TRANSITORIO), (0, self.OK)])
+        parte, llamadas = self._correr(
+            lambda tool, n: next(intentos))
+        self.assertEqual(parte["cbm"]["indexadas"], ["a"])
+        self.assertEqual(parte["cbm"]["pendientes"], {})
+        self.assertEqual(parte["fallos"], [])
+        self.assertEqual([t for t, _ in llamadas].count("index_repository"), 3)
+        self.assertEqual(self.sleep.call_count, 2)
+
+    def test_agotado_queda_pendiente_sin_ser_fallo_y_no_golpea_las_demas(self):
+        a, b = self._repo("a"), self._repo("b")
+        self._declarar(a, b)
+        parte, llamadas = self._correr(self._cae)
+        self.assertEqual(parte["fallos"], [])
+        self.assertEqual(set(parte["cbm"]["pendientes"]), {"a", "b"})
+        # circuito abierto: 3 intentos sobre la primera, ninguno sobre la segunda
+        self.assertEqual(
+            [r for t, r in llamadas if t == "index_repository"], [str(a)] * 3)
+        self.assertIn("daemon stop", parte["cbm"]["accion"])
+        guardado = contexto._cbm_estado(self.p)["pendientes"]
+        self.assertEqual({v["nombre"] for v in guardado.values()}, {"a", "b"})
+
+    def test_permanente_no_se_reintenta_y_si_es_fallo(self):
+        a = self._repo("a")
+        self._declarar(a)
+        parte, llamadas = self._correr(
+            lambda tool, n: (1, "CBM daemon rejected this client: fingerprint_mismatch"))
+        self.assertEqual([t for t, _ in llamadas].count("index_repository"), 1)
+        self.assertEqual(len(parte["fallos"]), 1)
+        self.assertEqual(parte["cbm"]["pendientes"], {})
+        self.sleep.assert_not_called()
+
+    def test_error_desconocido_no_se_difiere_en_silencio(self):
+        a = self._repo("a")
+        self._declarar(a)
+        parte, llamadas = self._correr(
+            lambda tool, n: (0, '{"status":"error"}'))
+        self.assertEqual([t for t, _ in llamadas].count("index_repository"), 1)
+        self.assertTrue(parte["fallos"])
+        self.assertEqual(parte["cbm"]["pendientes"], {})
+
+    def test_sin_cambios_no_se_llama_al_daemon(self):
+        a = self._repo("a")
+        self._declarar(a)
+        parte, _ = self._correr(self._indexa)
+        self.assertEqual(parte["cbm"]["indexadas"], ["a"])
+
+        parte, llamadas = self._correr(self._indexa)          # mismo HEAD, limpio
+        self.assertEqual(llamadas, [])
+        self.assertEqual(parte["cbm"]["al_dia"], ["a"])
+
+        parte, llamadas = self._correr(self._indexa, forzar=True)
+        self.assertEqual(parte["cbm"]["indexadas"], ["a"])
+
+        self._commit(a, "otro")                                # HEAD nuevo
+        parte, llamadas = self._correr(self._indexa)
+        self.assertEqual(parte["cbm"]["indexadas"], ["a"])
+
+    def test_indexar_con_cambios_sin_commit_no_sella_al_dia(self):
+        a = self._repo("a")
+        self._declarar(a)
+        (a / "b.py").write_text("y=2\n")                       # arbol sucio
+        self._correr(self._indexa)
+        (a / "b.py").unlink()                                  # vuelve a estar limpio
+        parte, llamadas = self._correr(self._indexa)
+        self.assertEqual(parte["cbm"]["indexadas"], ["a"])     # no asumio que estaba al dia
+
+    def test_pendiente_se_reintenta_solo_y_respeta_el_enfriamiento(self):
+        a = self._repo("a")
+        self._declarar(a)
+        self._correr(self._cae)
+        salida = io.StringIO()
+        with mock.patch.object(contexto, "_cbm_cli") as m, \
+                contextlib.redirect_stdout(salida):
+            contexto._drenar_cbm(self.p)
+        m.assert_not_called()                                  # recien fallo: espera
+        self.assertIn("cbm pendiente", salida.getvalue())
+
+        est = contexto._cbm_estado(self.p)
+        for v in est["pendientes"].values():
+            v["ts"] = 0                                        # ya paso el enfriamiento
+        contexto._cbm_guardar(self.p, est)
+        llamadas = []
+
+        def fake(tool, args, cwd):
+            llamadas.append(tool)
+            return self._indexa(tool, len(llamadas))
+
+        with mock.patch.object(contexto, "_cbm_cli", side_effect=fake), \
+                contextlib.redirect_stdout(io.StringIO()):
+            contexto._drenar_cbm(self.p)
+        self.assertEqual(llamadas, ["index_repository"])
+        self.assertEqual(contexto._cbm_estado(self.p)["pendientes"], {})
+
+    def test_estado_expone_el_pendiente_sin_llamar_al_daemon(self):
+        a = self._repo("a")
+        self._declarar(a)
+        self._correr(self._cae)
+        with mock.patch.object(contexto, "_cbm_cli") as m:
+            e = contexto.estado_contexto(self.p)
+        m.assert_not_called()
+        self.assertEqual(set(e["cbm_pendientes"]), {"a"})
+        # cbm no vence el brief ni el vault: la frescura es la misma sin pendiente
+        contexto._cbm_estado_path(self.p).unlink()
+        sin = contexto.estado_contexto(self.p)
+        self.assertEqual((e["fresco"], e["vencidas"]), (sin["fresco"], sin["vencidas"]))
+        self.assertEqual(sin["cbm_pendientes"], {})
+        texto = "\n".join(contexto.lineas_cbm_pendiente(e["cbm_pendientes"]))
+        self.assertIn("No lo reintentes a mano", texto)
+        self.assertIn("daemon stop", texto)
+
+    def test_pendiente_viejo_no_se_anuncia_si_cbm_ya_no_esta(self):
+        a = self._repo("a")
+        self._declarar(a)
+        self._correr(self._cae)
+        with mock.patch.object(contexto.shutil, "which", return_value=None):
+            self.assertEqual(contexto.estado_contexto(self.p)["cbm_pendientes"], {})
+        with mock.patch.dict(os.environ, {"HARNESS_SIN_CBM": "1"}):
+            self.assertEqual(contexto.estado_contexto(self.p)["cbm_pendientes"], {})
+
+    def test_sello_ilegible_no_tumba_el_refresco(self):
+        a = self._repo("a")
+        self._declarar(a)
+        f = contexto._cbm_estado_path(self.p)
+        f.parent.mkdir(parents=True, exist_ok=True)
+        f.write_text("{no es json")
+        parte, _ = self._correr(self._indexa)
+        self.assertEqual(parte["cbm"]["indexadas"], ["a"])
