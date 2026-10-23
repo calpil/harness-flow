@@ -50,9 +50,10 @@ cambios. **Nunca contiene** codigo final, la implementacion exacta, pantallas
 terminadas ni configuracion: si el razonamiento esta bien en papel, el codigo
 es la parte facil; si esta mal, ningun codigo lo arregla. El tamano lo decide
 el cambio: un ajuste cabe en una pagina, una funcionalidad en 3-8, una grande
-en 10 o mas, y un producto nuevo son varios PRDs anidados. En este arnes cada
-"Feature candidata" es uno de esos PRDs anidados: entra al backlog y su spec,
-con AC, cuenta su propia historia.
+en 10 o mas. Un producto grande no se parte en otros archivos PRD: el ritual
+solo sella `docs/prd/PRD-master.md`. Cada "Feature candidata" es una linea
+`F-n` de ese maestro; entra al backlog y su spec, con AC, cuenta la historia
+de esa candidata.
 
 Secciones, en este orden, y lo que `aprobar` exige de cada una:
 
@@ -65,19 +66,22 @@ Secciones, en este orden, y lo que `aprobar` exige de cada una:
 | `## Como funciona hoy y como va a funcionar` | el flujo dibujado dos veces, reusando lo que existe | contenido |
 | `## Los datos` | disparador, entidades y tablas tocadas, interruptor, candado | contenido |
 | `## Pseudo-codigo: el acuerdo` | que lo dispara, que lo frena, que promete; en palabras | contenido |
-| `## Features candidatas` | los PRDs anidados: `- F-n: nombre: resultado (cumple O1)` | al menos una `F-n` |
+| `## Features candidatas` | una linea por candidata: `- F-n: nombre: resultado (cumple O1)` | al menos una `F-n` |
 
 `Despues:`/`Después:`, `**Antes:**` en negrita y la etiqueta sola con el parrafo
-debajo valen igual. Un bloque cercado con lenguaje (` ```go `, ` ```sql `,
+debajo valen igual. Un titulo `##` con tilde o mayusculas es la misma seccion
+(`## Pseudo-código` cuenta como `## Pseudo-codigo`). Un bloque cercado con lenguaje (` ```go `, ` ```sql `,
 ` ```ts `...) en cualquier parte es codigo final y se niega; ` ``` ` pelado o
 ` ```text ` es pseudo-codigo y pasa. El validador mide estructura, no calidad:
 que la historia convenza lo decide el usuario en el ritual.
 
 - SDD: Contexto, Componentes, Datos e integraciones, Decisiones, Riesgos, cada
-  una con contenido, y al menos una decision con nombre (`- D1: ...`) para que
-  el spec de cada feature cite las que aplica. El flujo, los datos y el
-  pseudo-codigo de cada cambio ya viven en el PRD; el SDD fija la arquitectura
-  que los sostiene.
+  una con contenido, y al menos una decision con nombre (`- D1: ...`). Cada
+  `D-n` nombra la opcion descartada (`Descartada: cache, porque ...`;
+  `Descartado:` vale igual, con o sin tilde). Sin eso `aprobar` se niega: una
+  decision sin alternativa no es una decision. El spec de cada feature cita
+  las que aplica. El flujo, los datos y el pseudo-codigo de cada cambio ya
+  viven en el PRD; el SDD fija la arquitectura que los sostiene.
 
 `aprobar --yes` es el mismo ritual del spec: se muestra el borrador en el chat,
 se pregunta, y solo con el SI explicito se corre. Se niega, sin escribir nada:
@@ -150,9 +154,13 @@ medio, cada rol los usa asi:
 | `["prd"]` / `["sdd"]` | ese documento |
 | `false` | nada |
 
-Un documento cuenta si su destino tiene cuerpo manual (sellado por `aprobar
---yes` o escrito por el usuario) y ese cuerpo no tiene cambios sin sello ni
-commit: un PRD que un agente puso ahi sin el ritual no cuenta. Solo se exige a
+Un documento cuenta si su destino tiene cuerpo manual y ese cuerpo esta
+probado: sello vigente de `aprobar --yes`, o commit del usuario sin cambios
+encima. Un PRD que un agente puso ahi sin el ritual no cuenta. Sin repo git
+no hay commit que medir, asi que el sello es la unica prueba para `approve-spec`,
+`estado.py` y `add.py`. `gate.py check` ademas acepta los bytes que un registro
+multi-repo ya fijo: sin git, ese registro es el commit de esas rutas. Un cuerpo
+escrito a mano y sin registrar se reabre con `producto.py borrador` y se sella. Solo se exige a
 `kind: feature`; `bug` y `task` no nacen de un PRD. Un valor que la regla no
 entiende hace fallar `approve-spec` y `gate.py check` en vez de apagarse. Apagarla
 es decision del usuario: el agente no edita `rules` para destrabar un spec.

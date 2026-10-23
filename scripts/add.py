@@ -45,6 +45,9 @@ def main() -> None:
             sys.exit(f"[!!] ya existe la feature #{f['id']} '{f['name']}' abierta con el mismo nombre.")
 
     prd = a.prd or "docs/prd/PRD-master.md"
+    if a.prd and a.prd.replace("\\", "/").removeprefix("./") != "docs/prd/PRD-master.md":
+        sys.exit("[!!] --prd solo puede ser docs/prd/PRD-master.md: es el unico cuerpo que sella "
+                 "producto.py aprobar. Una candidata F-n no es otro archivo; su historia la cuenta el spec.")
     linea = None
     if a.candidata:
         if not re.fullmatch(r"F-\d+", a.candidata):
@@ -84,9 +87,10 @@ def main() -> None:
     print(f"[ok] feature #{fid} agregada")
     print(f"[ok] spec en draft: {sp}")
     try:
+        import gate
         pendientes = [] if a.kind not in producto.TIPOS_EXIGIDOS else [
             f"{doc}: {m}" for doc in producto.requeridos(data["rules"])
-            if (m := producto.falta(p, data, doc))]
+            if (m := gate.motivo_doc(p, data, doc))]
     except ValueError as exc:
         pendientes = [str(exc)]
     if pendientes:

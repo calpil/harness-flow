@@ -65,14 +65,16 @@ lo toca. Rellenalo con las tools de archivo.
   candado) y el pseudo-codigo como acuerdo. **Nunca codigo final**: un bloque
   ` ```go ` o ` ```sql ` hace que `aprobar` se niegue; el codigo se escribe en
   el spec y en el repo. El tamano lo decide el cambio: un ajuste, una pagina;
-  una funcionalidad, 3-8; un producto nuevo, varios PRDs anidados.
-- PRD: `## Features candidatas` lleva una linea por PRD anidado con el formato
+  una funcionalidad, 3-8; un producto grande sigue siendo un solo PRD maestro.
+  Cada candidata es una linea, no otro archivo.
+- PRD: `## Features candidatas` lleva una linea por candidata con el formato
   exacto `- F-1: <nombre>: <resultado observable> (cumple O1)`. Es lo que
-  despues entra al backlog.
-- SDD: cada decision con nombre (`- D1: ...`), la alternativa descartada y el
-  porque; sin una `D-n`, `aprobar` se niega, porque el spec de cada feature
-  cita las que aplica. Si hay migraciones numeradas, di contra que rama se
-  reserva el numero.
+  despues entra al backlog. `--prd` solo acepta `docs/prd/PRD-master.md`.
+- SDD: cada decision con nombre (`- D1: ...`) y la alternativa descartada
+  (`Descartada: cache, porque ...`). Sin una `D-n`, o con una `D-n` que no
+  descarte nada, `aprobar` se niega, porque el spec de cada feature cita las
+  que aplica. Si hay migraciones numeradas, di contra que rama se reserva el
+  numero.
 
 ## 3. Ritual de aprobacion
 

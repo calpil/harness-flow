@@ -4,6 +4,11 @@ Leelas antes de tocar un gate o de escribir uno nuevo: cada una nacio de un
 falso verde que ya paso en este repo. Salieron de auditar sus propios
 gates y todas tienen repro verificada.
 
+- **Un gate que no puede medir no devuelve verdadero.** Sin repo git,
+  `approve-spec` aceptaba un PRD escrito a mano porque no habia commit contra
+  el que comparar. Si no hay medicion, la prueba es otra que si se puede medir
+  (el sello, o los bytes que un registro multi-repo ya fijo), nunca la ausencia
+  del repo.
 - **Un gate que deduce el veredicto de un regex sobre texto no es un gate.** El
   `postmerge.py` viejo parseaba `--- FAIL:` de la salida `-v` y nunca leía el
   exit code: daba verde con build roto, con `panic` en `init()` y con tests
@@ -45,6 +50,12 @@ Una regresion debe fallar contra el codigo previo y pasar con la correccion.
 Compara ambas versiones en un checkout temporal; un test que pasa en las dos
 no demuestra el arreglo. Revisa tambien las pruebas existentes: pueden
 certificar un comportamiento incorrecto.
+
+- Al probar `require_docs_al_dia` de un solo documento, fija la regla a ese
+  documento. El default exige PRD y SDD: el que falta dispara el gate y la
+  asercion pasa sin haber medido el hueco.
+- Antes de reescribir una frase de una fixture compartida, buscala en `tests/`.
+  Un `.replace()` que ya no matchea no cambia el archivo y el gate sale verde.
 
 La suite usa `unittest`. Ejecuta los modulos desde `tests/`, por ejemplo:
 

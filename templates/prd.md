@@ -21,10 +21,12 @@ Alcance: <!-- una linea: que toca y que NO toca. "Llamada de voz al cerrar la ve
      facil; si esta mal, ningun codigo lo arregla.
 
      El tamano lo decide el cambio: un ajuste cabe en una pagina, una
-     funcionalidad en 3-8, una grande en 10 o mas, y un producto nuevo son
-     varios PRDs anidados que cuentan cada uno su propia historia. Aqui cada
-     "Feature candidata" es uno de esos PRDs anidados: entra al backlog y su
-     spec, con AC, cuenta la suya. Las secciones van en este orden. -->
+     funcionalidad en 3-8, una grande en 10 o mas. Un producto grande no se
+     parte en otros archivos: el ritual solo sella docs/prd/PRD-master.md.
+     Cada "Feature candidata" es una linea F-n de ese maestro; entra al
+     backlog y su spec, con AC, cuenta la historia de esa candidata. Un
+     titulo con tilde o mayusculas es la misma seccion. Las secciones van
+     en este orden. -->
 
 ## Resumen
 
@@ -90,8 +92,7 @@ Despues:
 
 ## Features candidatas
 
-<!-- Los PRDs anidados de este producto: una por linea, en orden de
-     prioridad, con el formato exacto
+<!-- Una linea por candidata, en orden de prioridad, con el formato exacto
        - F-1: <nombre>: <resultado observable para el usuario> (cumple O1)
      Cada una entra al backlog con
        add.py --name "<nombre>" --prd docs/prd/PRD-master.md

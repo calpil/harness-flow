@@ -52,13 +52,14 @@ def main() -> None:
     faltan_docs: list[str] = []
     try:
         import producto
+        import gate
         for doc, texto in producto.estado_documentos(p, data).items():
             print(f"   {doc}:   {texto}")
         cob = producto.cobertura(p, data)
         if cob:
             print(f"   candidatas: {cob}")
         faltan_docs = [doc for doc in producto.requeridos(data["rules"])
-                       if producto.falta(p, data, doc)]
+                       if gate.motivo_doc(p, data, doc)]
     except Exception as exc:
         print(f"   [!] no se pudo evaluar PRD/SDD: {exc}")
 

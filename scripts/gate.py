@@ -203,6 +203,54 @@ def _ruta_protegida_permitida(p: dict, rel: str, data: dict | None = None) -> bo
     return all(_generado_seguro(p, x, data) for x in tocadas)
 
 
+def _matchea_protegida(rel: str, pats: list) -> bool:
+    return any(fnmatch.fnmatch(rel, pat) or (pat.endswith("/**") and rel.startswith(pat[:-2]))
+               for pat in pats)
+
+
+def _registrado_ok(p, rel: str, data) -> bool:
+    """Bytes que un registro multi-repo ya fijo. Sin git, ese registro es el commit."""
+    from bloques import GENERADOS, compatible, fingerprint
+    if rel not in GENERADOS or not isinstance(data, dict):
+        return False
+    actual = p["root"] / rel
+    if not actual.is_file() or actual.is_symlink():
+        return False
+    try:
+        ahora = fingerprint(actual.read_bytes(), GENERADOS[rel])
+    except ValueError:
+        return False
+    for f in data.get("features") or []:
+        prot = f.get("multi_repo_protected")
+        if not isinstance(prot, dict):
+            continue
+        for repo_map in prot.values():
+            if isinstance(repo_map, dict) and rel in repo_map and compatible(repo_map[rel], ahora):
+                return True
+    return False
+
+
+def _check_rutas_protegidas_sin_git(p, pats, r, data) -> None:
+    """Sin HEAD no hay diff. El sello si se puede medir, y un archivo de mas tambien."""
+    candidatos = []
+    prd = p["root"] / "docs" / "prd"
+    if prd.is_dir():
+        candidatos += [x.relative_to(p["root"]).as_posix() for x in prd.rglob("*") if x.is_file()]
+    sdd = p["root"] / "docs" / "sdd.md"
+    if sdd.is_file():
+        candidatos.append("docs/sdd.md")
+    tocadas = [rel for rel in candidatos
+               if _matchea_protegida(rel, pats) and not _generado_seguro(p, rel, data)
+               and not _registrado_ok(p, rel, data)]
+    if tocadas:
+        r.fallo("rutas protegidas sin sello vigente: " + ", ".join(sorted(set(tocadas))),
+                "sin repo git no hay commit que medir; producto.py aprobar --yes sella el cuerpo. "
+                "Otro archivo bajo docs/prd/ no lo autoriza el sello")
+    else:
+        r.ok(f"{len(pats)} ruta(s) protegida(s) intactas")
+        r.info("sin repo git: constitution y .env no se auditan; PRD y SDD se auditan por el sello")
+
+
 def _check_rutas_protegidas(p, rules, r, data: dict | None = None) -> None:
     pats = rules.get("rutas_protegidas") or []
     if data is None:
@@ -211,21 +259,18 @@ def _check_rutas_protegidas(p, rules, r, data: dict | None = None) -> None:
     # matchea docs/prd/** y escondia un PRD-master.md nuevo bajo ese directorio.
     code, out = git(["status", "--porcelain", "-uall"], p["root"])
     if code != 0:
-        r.info("sin repo git en la raiz: no se puede auditar rutas protegidas")
-        return
-    tocadas = []
-    for line in out.splitlines():
-        f = _porcelain_path(line)
-        for pat in pats:
-            # pat[:-3] sin el separador marcaba docs/prdX/ como si fuera docs/prd/.
-            if fnmatch.fnmatch(f, pat) or (pat.endswith("/**") and f.startswith(pat[:-2])):
-                if not _ruta_protegida_permitida(p, f, data):
-                    tocadas.append(f)
-    if tocadas:
-        r.fallo("rutas protegidas modificadas: " + ", ".join(sorted(set(tocadas))),
-                "son del USUARIO; revierte esos cambios")
+        _check_rutas_protegidas_sin_git(p, pats, r, data)
     else:
-        r.ok(f"{len(pats)} ruta(s) protegida(s) intactas")
+        tocadas = []
+        for line in out.splitlines():
+            f = _porcelain_path(line)
+            if _matchea_protegida(f, pats) and not _ruta_protegida_permitida(p, f, data):
+                tocadas.append(f)
+        if tocadas:
+            r.fallo("rutas protegidas modificadas: " + ", ".join(sorted(set(tocadas))),
+                    "son del USUARIO; revierte esos cambios")
+        else:
+            r.ok(f"{len(pats)} ruta(s) protegida(s) intactas")
     if not any(fnmatch.fnmatch("docs/sdd.md", pat) for pat in pats):
         # Un backlog creado antes de proteger el SDD conserva su lista: no se
         # migra sola porque un registro multi-repo abierto fijo esas rutas.
@@ -340,6 +385,24 @@ def cmd_approve_spec(args) -> None:
         print(f"[!]  {x}")
 
 
+def motivo_doc(p: dict, data: dict, doc: str) -> str | None:
+    """Por que `doc` no cuenta para require_docs_al_dia. None si cuenta.
+
+    La misma prueba para approve-spec, estado y add: cuerpo, y sello o commit.
+    Sin repo git el sello es la unica prueba; un cuerpo a mano no cuenta.
+    """
+    import producto
+    motivo = producto.falta(p, data, doc)
+    rel = producto.destino_path(p, doc).relative_to(p["root"]).as_posix()
+    if motivo is None and not _limpio_o_sellado(p, rel, data):
+        if _hay_git(p):
+            motivo = f"{rel} tiene cambios sin sello de producto.py aprobar ni commit del usuario"
+        else:
+            motivo = (f"{rel} tiene cuerpo sin sello vigente y no hay repo git "
+                      "para probar un commit del usuario")
+    return motivo
+
+
 def _docs_pendientes(p: dict, data: dict, f: dict) -> list[str]:
     """Lo que require_docs_al_dia exige del PRD/SDD y falta para sellar `f`."""
     import producto
@@ -349,23 +412,20 @@ def _docs_pendientes(p: dict, data: dict, f: dict) -> list[str]:
         docs = producto.requeridos(data["rules"])
     except ValueError as exc:
         return [str(exc)]
-    out = []
-    for doc in docs:
-        motivo = producto.falta(p, data, doc)
-        rel = producto.destino_path(p, doc).relative_to(p["root"]).as_posix()
-        if motivo is None and not _limpio_o_sellado(p, rel, data):
-            # Un cuerpo sin sello ni commit lo pudo poner cualquiera; el mismo
-            # criterio que gate.py check aplica a las rutas protegidas.
-            motivo = f"{rel} tiene cambios sin sello de producto.py aprobar ni commit del usuario"
-        if motivo:
-            out.append(f"{doc}: {motivo}")
-    return out
+    return [f"{doc}: {m}" for doc in docs if (m := motivo_doc(p, data, doc))]
+
+
+def _hay_git(p: dict) -> bool:
+    code, _ = git(["rev-parse", "--is-inside-work-tree"], p["root"])
+    return code == 0
 
 
 def _limpio_o_sellado(p: dict, rel: str, data: dict) -> bool:
     code, out = git(["status", "--porcelain", "-uall", "--", rel], p["root"])
     if code != 0:
-        return True  # sin git en la raiz no hay HEAD contra que medir (multi-repo)
+        # Sin repo no hay HEAD. Devolver True aqui aceptaba un PRD escrito a
+        # mano: el sello (o el bloque generado solo) es la unica prueba.
+        return _generado_seguro(p, rel, data)
     return not out.strip() or _generado_seguro(p, rel, data)
 
 

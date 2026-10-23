@@ -23,6 +23,7 @@ import getpass
 import hashlib
 import re
 import sys
+import unicodedata
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
@@ -110,6 +111,12 @@ def cuerpo_manual(destino: Path, titulo: str) -> bytes | None:
     return manual
 
 
+def plegar(texto: str) -> str:
+    """Sin tildes y en minusculas: 'Pseudo-código' y 'PSEUDO-CODIGO' son el mismo titulo."""
+    nfd = unicodedata.normalize("NFD", texto)
+    return "".join(c for c in nfd if unicodedata.category(c) != "Mn").casefold()
+
+
 def secciones(text: str) -> dict[str, str]:
     """Cuerpo de cada seccion `## X`, ya sin las guias `<!-- -->`."""
     out: dict[str, str] = {}
@@ -124,6 +131,15 @@ def secciones(text: str) -> dict[str, str]:
     return out
 
 
+def seccion(text: str, nombre: str) -> str | None:
+    """Cuerpo de `## nombre`, aunque el titulo traiga tildes o mayusculas. None si no esta."""
+    clave = plegar(nombre)
+    for titulo, cuerpo in secciones(text).items():
+        if plegar(titulo) == clave:
+            return cuerpo
+    return None
+
+
 def candidatas(text: str) -> list[tuple[str, str]]:
     return [(n, nombre.strip()) for n, nombre in CANDIDATA_RE.findall(COMENTARIO_RE.sub("", text))]
 
@@ -131,12 +147,13 @@ def candidatas(text: str) -> list[tuple[str, str]]:
 def _etiqueta_con_contenido(seccion: str, etiqueta: str) -> bool:
     """`Hoy: texto` en la linea, o `Hoy:` y el parrafo debajo (hasta el blanco o la otra etiqueta)."""
     pat = re.compile(rf"^[^\S\n]*[*_]{{0,2}}{etiqueta}[*_]{{0,2}}[^\S\n]*:[^\S\n]*(.*)$", re.M | re.I)
-    m = pat.search(seccion.replace("é", "e"))
+    plano = plegar(seccion)
+    m = pat.search(plano)
     if not m:
         return False
     if m.group(1).strip():
         return True
-    resto = seccion.replace("é", "e")[m.end():].splitlines()
+    resto = plano[m.end():].splitlines()
     for linea in resto:
         if not linea.strip():
             return False
@@ -144,6 +161,26 @@ def _etiqueta_con_contenido(seccion: str, etiqueta: str) -> bool:
             return False
         return True
     return False
+
+
+def _decisiones_sin_alternativa(seccion_txt: str) -> list[str]:
+    """Ids D-n cuyo bloque no nombra una opcion descartada. Estructura, no calidad."""
+    bloques: list[tuple[str, list[str]]] = []
+    actual = None
+    lineas: list[str] = []
+    for linea in seccion_txt.splitlines():
+        m = DECISION_RE.match(linea)
+        if m:
+            if actual:
+                bloques.append((actual, lineas))
+            actual = m.group(1).replace("-", "")
+            lineas = [linea]
+        elif actual:
+            lineas.append(linea)
+    if actual:
+        bloques.append((actual, lineas))
+    marca = re.compile(r"descartad\w*[^\S\n]*:[^\S\n]*\S")
+    return [did for did, ls in bloques if not marca.search(plegar("\n".join(ls)))]
 
 
 def validar(text: str, doc: str) -> list[str]:
@@ -161,38 +198,44 @@ def validar(text: str, doc: str) -> list[str]:
     if not ESTADO_RE.search(text):
         problemas.append("falta la linea 'Estado: draft'")
     limpio = COMENTARIO_RE.sub("", text)
-    secs = secciones(text)
     for nombre in DOCS[doc]["secciones"]:
-        if nombre not in secs:
+        cuerpo = seccion(text, nombre)
+        if cuerpo is None:
             problemas.append(f"falta la seccion '## {nombre}'")
-        elif not secs[nombre].strip():
+        elif not cuerpo.strip():
             problemas.append(f"la seccion '## {nombre}' esta vacia (solo guia)")
     if doc == "prd":
         m = ALCANCE_RE.search(limpio)
         if not m or not (m.group(1) or "").strip():
             problemas.append("falta 'Alcance:' en el encabezado (una linea: que toca y que NO toca)")
         for nombre, etiquetas in ETIQUETAS.items():
-            if nombre in secs and secs[nombre].strip():
-                faltan = [e for e in etiquetas if not _etiqueta_con_contenido(secs[nombre], e)]
+            cuerpo = seccion(text, nombre)
+            if cuerpo and cuerpo.strip():
+                faltan = [e for e in etiquetas if not _etiqueta_con_contenido(cuerpo, e)]
                 if faltan:
                     problemas.append(f"'## {nombre}' necesita {' y '.join(repr(e + ':') for e in etiquetas)} "
                                      f"con contenido (falta {', '.join(faltan)})")
-        obj = secs.get("Objetivos y no-objetivos", "")
+        obj = seccion(text, "Objetivos y no-objetivos") or ""
         if obj.strip():
             if not OBJETIVO_RE.search(obj):
                 problemas.append("'## Objetivos y no-objetivos' no declara ningun '- O1: ...' (con nombre, para citarlo)")
             if not NO_OBJETIVO_RE.search(obj):
                 problemas.append("'## Objetivos y no-objetivos' no declara ningun '- NO1: ...' (frenan el 'ya que estamos')")
-        if "Features candidatas" in secs and not candidatas(secs["Features candidatas"]):
+        feats = seccion(text, "Features candidatas")
+        if feats is not None and not candidatas(feats):
             problemas.append("'## Features candidatas' no declara ninguna '- F-n: nombre: resultado'")
         lenguajes = sorted({m.group(1).lower() for m in FENCE_RE.finditer(limpio)} - PSEUDO)
         if lenguajes:
             problemas.append("trae codigo final (bloque " + ", ".join(f"```{x}" for x in lenguajes)
                              + "): el PRD lleva pseudo-codigo; el codigo se escribe despues, en otra parte")
     if doc == "sdd":
-        dec = secs.get("Decisiones", "")
+        dec = seccion(text, "Decisiones") or ""
         if dec.strip() and not DECISION_RE.search(dec):
             problemas.append("'## Decisiones' no declara ninguna '- D1: ...' (con nombre, para que el spec la cite)")
+        sin_alt = _decisiones_sin_alternativa(dec)
+        if sin_alt:
+            problemas.append("'## Decisiones' declara " + ", ".join(sin_alt)
+                             + " sin alternativa descartada: escribe 'Descartada: <opcion>, porque <motivo>'")
     return problemas
 
 
@@ -320,17 +363,17 @@ def _ids(regex: re.Pattern, texto: str) -> list[str]:
 
 
 def objetivos(prd: str) -> tuple[list[str], list[str]]:
-    sec = secciones(prd).get("Objetivos y no-objetivos", "")
+    sec = seccion(prd, "Objetivos y no-objetivos") or ""
     return _ids(OBJETIVO_RE, sec), _ids(NO_OBJETIVO_RE, sec)
 
 
 def decisiones(sdd: str) -> list[str]:
-    return _ids(DECISION_RE, secciones(sdd).get("Decisiones", ""))
+    return _ids(DECISION_RE, seccion(sdd, "Decisiones") or "")
 
 
 def candidata(prd: str, fid: str) -> str | None:
     """La linea `- F-n: ...` de las Features candidatas, o None si no esta."""
-    sec = COMENTARIO_RE.sub("", secciones(prd).get("Features candidatas", ""))
+    sec = COMENTARIO_RE.sub("", seccion(prd, "Features candidatas") or "")
     for linea in sec.splitlines():
         m = CANDIDATA_RE.match(linea)
         if m and f"F-{m.group(1)}" == fid:
@@ -382,7 +425,7 @@ def cobertura(p: dict, data: dict) -> str | None:
     if prd is None:
         return None
     filas = []
-    for n, _ in candidatas(secciones(prd).get("Features candidatas", "")):
+    for n, _ in candidatas(seccion(prd, "Features candidatas") or ""):
         fid = f"F-{n}"
         feats = [f for f in data["features"]
                  if f.get("prd_candidata") == fid and f.get("status") != "superseded"]
@@ -550,7 +593,7 @@ def cmd_aprobar(args) -> None:
     if doc == "prd":
         print("[i]  gate.py check acepta ese cuerpo por el sello; commitea docs/prd/PRD-master.md")
         print("     cuando corresponda (es del usuario, el agente no lo commitea).")
-        cands = candidatas(secciones(sellado).get("Features candidatas", ""))
+        cands = candidatas(seccion(sellado, "Features candidatas") or "")
         if cands:
             print("[i]  features candidatas para el backlog:")
             for n, nombre in cands:

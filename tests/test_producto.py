@@ -89,7 +89,7 @@ Tabla `payments.attempts` con clave unica por `idempotency_key`.
 
 ## Decisiones
 
-- D1: Clave de idempotencia en base de datos y no en cache: sobrevive reinicios.
+- D1: Clave de idempotencia en base de datos. Descartada: cache, porque no sobrevive un reinicio.
 
 ## Riesgos
 
@@ -529,6 +529,32 @@ class ValidacionTests(unittest.TestCase):
     def test_el_borrador_completo_de_las_fixtures_es_aprobable(self):
         self.assertEqual(producto.validar(PRD_COMPLETO, "prd"), [])
         self.assertEqual(producto.validar(SDD_COMPLETO, "sdd"), [])
+
+    def test_una_decision_sin_alternativa_descartada_no_se_aprueba(self):
+        sin = SDD_COMPLETO.replace(
+            "- D1: Clave de idempotencia en base de datos. Descartada: cache, porque no sobrevive un reinicio.",
+            "- D1: Clave en base de datos.")
+        problemas = producto.validar(sin, "sdd")
+        self.assertTrue(any("D1" in p and "alternativa descartada" in p for p in problemas), problemas)
+        con = SDD_COMPLETO.replace(
+            "## Riesgos",
+            "- D2: Un solo writer. Descartado: lock en memoria, porque no cruza procesos.\n\n## Riesgos")
+        self.assertEqual(producto.validar(con, "sdd"), [])
+        self.assertEqual(producto.validar(con.replace("Descartada:", "Descartáda:"), "sdd"), [])
+        sin_d2 = con.replace(
+            "- D2: Un solo writer. Descartado: lock en memoria, porque no cruza procesos.",
+            "- D2: Un solo writer.")
+        problemas = producto.validar(sin_d2, "sdd")
+        self.assertTrue(any("D2" in p and "alternativa descartada" in p for p in problemas), problemas)
+
+    def test_un_titulo_con_tilde_o_mayusculas_es_la_misma_seccion(self):
+        texto = (PRD_COMPLETO
+                 .replace("## Pseudo-codigo: el acuerdo", "## Pseudo-código: el acuerdo")
+                 .replace("## Como funciona hoy y como va a funcionar",
+                          "## Cómo funciona hoy y cómo va a funcionar")
+                 .replace("## Objetivos y no-objetivos", "## OBJETIVOS Y NO-OBJETIVOS"))
+        self.assertEqual(producto.validar(texto, "prd"), [])
+        self.assertEqual(producto.objetivos(texto)[0], ["O1", "O2"])
 
     def test_sellar_pone_estado_y_aprobado_una_sola_vez(self):
         una = producto.sellar(PRD_COMPLETO, "quien", "2026-09-19T00:00:00Z")

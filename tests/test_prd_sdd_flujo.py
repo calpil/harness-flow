@@ -92,6 +92,15 @@ class FlujoPrdSddTests(unittest.TestCase):
         self.assertIn("F-1", r.stderr)
         self.assertEqual(self.datos()["features"], [])
 
+    def test_add_rechaza_un_prd_que_no_es_el_que_sella_el_ritual(self):
+        self.aprobar_prd()
+        otro = self.root / "docs" / "prd" / "otro.md"
+        otro.write_text(PRD_COMPLETO, encoding="utf-8")
+        r = self.falla("add.py", "--name", "X", "--prd", "docs/prd/otro.md", "--candidata", "F-1")
+        self.assertIn("docs/prd/PRD-master.md", r.stderr)
+        self.assertEqual(self.datos()["features"], [])
+        self.ok("add.py", "--name", "Cobro idempotente", "--prd", "docs/prd/PRD-master.md", "--candidata", "F-1")
+
     def test_add_avisa_que_approve_spec_se_va_a_negar_sin_documentos(self):
         r = self.ok("add.py", "--name", "Cobro idempotente")
         self.assertIn("approve-spec se va a negar", r.stdout)
@@ -155,6 +164,49 @@ class FlujoPrdSddTests(unittest.TestCase):
         self.git("add", "docs/prd/PRD-master.md")
         self.git("commit", "-m", "usuario: PRD a mano")
         self.ok("gate.py", "approve-spec", "--feature", "1", "--yes")
+
+    def test_sin_repo_git_el_cuerpo_sin_sello_no_cuenta_y_el_sellado_si(self):
+        self.reglas(require_docs_al_dia=["prd"])
+        self.feature()
+        self.spec()
+        self.prd.parent.mkdir()
+        self.prd.write_text(PRD_COMPLETO, encoding="utf-8")  # un agente, y no hay commit que medir
+        r = self.falla("gate.py", "approve-spec", "--feature", "1", "--yes")
+        self.assertIn("sin sello vigente", r.stderr)
+        self.assertIn("repo git", r.stderr)
+        self.assertNotIn("last_spec_sig", self.datos()["features"][0])
+        self.aprobar_prd()
+        self.ok("gate.py", "approve-spec", "--feature", "1", "--yes")
+
+    def test_sin_repo_git_check_rechaza_el_cuerpo_sin_sello_y_acepta_el_sellado(self):
+        self.prd.parent.mkdir()
+        self.prd.write_text(PRD_COMPLETO, encoding="utf-8")
+        r = self.falla("gate.py", "check")
+        self.assertIn("docs/prd/PRD-master.md", r.stdout)
+        self.assertIn("sin sello", r.stdout)
+        self.aprobar_prd()
+        r = self.ok("gate.py", "check")
+        self.assertIn("ruta(s) protegida(s) intactas", r.stdout)
+        (self.root / "docs" / "prd" / "otro.md").write_text("colado", encoding="utf-8")
+        r = self.falla("gate.py", "check")
+        self.assertIn("docs/prd/otro.md", r.stdout)
+
+    def test_sin_repo_git_el_encabezado_que_inventa_el_generador_no_es_violacion(self):
+        self.ok("documentacion.py", "sync")
+        r = self.ok("gate.py", "check")
+        self.assertIn("ruta(s) protegida(s) intactas", r.stdout)
+
+    def test_sin_repo_git_estado_y_add_no_dan_por_listo_un_cuerpo_sin_sello(self):
+        self.reglas(require_docs_al_dia=["prd"])
+        self.prd.parent.mkdir()
+        self.prd.write_text(PRD_COMPLETO, encoding="utf-8")
+        out = self.ok("estado.py").stdout
+        self.assertIn("manual del usuario sin sello", out)
+        self.assertIn("Primero el rol producto", out)
+        self.assertNotIn("Para arrancar: add.py", out)
+        r = self.ok("add.py", "--name", "Cobro idempotente")
+        self.assertIn("approve-spec se va a negar", r.stdout)
+        self.assertIn("sin sello vigente", r.stdout)
 
     # --- citas al PRD/SDD -------------------------------------------------------
 
@@ -266,7 +318,7 @@ class SddProtegidoTests(unittest.TestCase):
         self.assertIn(bloques.START, self.sdd.read_bytes())
         self.ok("gate.py", "check")
         self.sdd.write_text(self.sdd.read_text(encoding="utf-8")
-                            .replace("sobrevive reinicios", "sobrevive todo"), encoding="utf-8")
+                            .replace("no sobrevive un reinicio", "sobrevive todo"), encoding="utf-8")
         r = self.falla("gate.py", "check")
         self.assertIn("rutas protegidas modificadas: docs/sdd.md", r.stdout)
 

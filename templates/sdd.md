@@ -32,6 +32,7 @@ Estado: draft
 <!-- Cada decision con nombre, la alternativa descartada y el porque. Una
      decision sin alternativa no es una decision, es una descripcion. El nombre
      es para que el spec de cada feature la cite ("decisiones que aplica: D2").
+     Sin `Descartada:` (o `Descartado:`) con texto, aprobar se niega.
        - D1: clave de idempotencia en base de datos. Descartada: cache, porque
          no sobrevive un reinicio. -->
 
