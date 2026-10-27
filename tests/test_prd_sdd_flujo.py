@@ -191,6 +191,120 @@ class FlujoPrdSddTests(unittest.TestCase):
         r = self.falla("gate.py", "check")
         self.assertIn("docs/prd/otro.md", r.stdout)
 
+    # --- anexos del usuario bajo docs/prd/ sin git -----------------------------
+    #
+    # Online-Invoice tiene 16 anexos suyos (prd-00..13, SDD-master, README, la guia)
+    # sin tocar desde hace meses: sin git, `check` los bloqueaba todos aunque el
+    # registro multi-repo ya hubiera fijado sus bytes.
+
+    ANEXOS = {"prd-00-contexto.md": "# Contexto\nlo escribio el usuario\n",
+              "README.md": "indice de anexos\n", "COMO-ESCRIBIR-UN-PRD.md": "guia\n"}
+
+    def anexos(self):
+        self.aprobar_prd()                       # el PRD maestro pasa por su sello
+        for nombre, texto in self.ANEXOS.items():
+            (self.prd.parent / nombre).write_text(texto, encoding="utf-8")
+
+    def foto(self, raiz=None):
+        """La foto que fija `worktree.py register`: la misma funcion del producto."""
+        import comun
+        p = comun.paths(self.root)
+        return {str(raiz or self.root): multirepo.protected_paths(p, comun.load_backlog(p)["rules"])}
+
+    def features(self, *filas):
+        data = self.datos()
+        data["features"] = [{"id": i, "name": f"F{i}", **fila} for i, fila in enumerate(filas, 1)]
+        self.backlog.write_text(json.dumps(data), encoding="utf-8")
+
+    def rutas(self):
+        """La linea de rutas protegidas de `check`; otros gates pueden fallar sin relacion."""
+        out = self.cli("gate.py", "check").stdout
+        return "\n".join(x for x in out.splitlines() if "protegida" in x)
+
+    def test_sin_repo_git_los_anexos_sin_registro_siguen_bloqueando(self):
+        self.anexos()
+        linea = self.rutas()
+        self.assertIn("sin sello vigente", linea)
+        for nombre in self.ANEXOS:
+            self.assertIn(f"docs/prd/{nombre}", linea)
+        self.assertIn("worktree.py register", self.cli("gate.py", "check").stdout)  # dice como se autoriza
+
+    def test_sin_repo_git_un_anexo_fijado_por_el_registro_pasa_check(self):
+        self.anexos()
+        self.features({"status": "in_progress", "multi_repo_protected": self.foto()})
+        linea = self.rutas()
+        self.assertIn("ruta(s) protegida(s) intactas", linea)
+        self.assertNotIn("sin sello vigente", linea)
+
+    def test_sin_repo_git_el_anexo_modificado_despues_del_registro_falla(self):
+        self.anexos()
+        self.features({"status": "in_progress", "multi_repo_protected": self.foto()})
+        (self.prd.parent / "prd-00-contexto.md").write_text("# Contexto\neditado por un agente\n",
+                                                           encoding="utf-8")
+        linea = self.rutas()
+        self.assertIn("sin sello vigente: docs/prd/prd-00-contexto.md", linea)
+        self.assertNotIn("README.md", linea)                        # los intactos siguen pasando
+
+    def test_sin_repo_git_un_anexo_colado_sin_registro_falla_aunque_haya_registro(self):
+        self.anexos()
+        self.features({"status": "in_progress", "multi_repo_protected": self.foto()})
+        (self.prd.parent / "otro.md").write_text("colado", encoding="utf-8")
+        linea = self.rutas()
+        self.assertIn("sin sello vigente: docs/prd/otro.md", linea)
+
+    def test_sin_repo_git_todas_las_features_abiertas_deben_coincidir(self):
+        # una feature se registro DESPUES de que alguien cambio el anexo: no lo bendice
+        self.anexos()
+        antes = self.foto()
+        (self.prd.parent / "README.md").write_text("cambiado\n", encoding="utf-8")
+        despues = self.foto()
+        self.features({"status": "in_progress", "multi_repo_protected": antes},
+                      {"status": "in_progress", "multi_repo_protected": despues})
+        self.assertIn("sin sello vigente: docs/prd/README.md", self.rutas())
+
+    def test_sin_repo_git_las_cerradas_viejas_no_vetan_una_edicion_legitima_entre_features(self):
+        self.anexos()
+        vieja = self.foto()
+        (self.prd.parent / "README.md").write_text("editado por el usuario entre features\n",
+                                                  encoding="utf-8")
+        self.features({"status": "done", "closed_at": "2026-07-01T10:00:00Z",
+                       "multi_repo_protected": vieja},
+                      {"status": "in_progress", "multi_repo_protected": self.foto()})
+        self.assertIn("ruta(s) protegida(s) intactas", self.rutas())
+
+    def test_sin_repo_git_sin_features_abiertas_vale_la_foto_de_la_ultima_cerrada(self):
+        self.anexos()
+        vieja = self.foto()
+        (self.prd.parent / "README.md").write_text("version nueva\n", encoding="utf-8")
+        nueva = self.foto()
+        self.features({"status": "done", "closed_at": "2026-07-01T10:00:00Z", "multi_repo_protected": vieja},
+                      {"status": "done", "closed_at": "2026-09-01T10:00:00Z", "multi_repo_protected": nueva})
+        self.assertIn("ruta(s) protegida(s) intactas", self.rutas())
+        # al reves, la ultima cerrada es la vieja: el README actual no es lo que ella fijo
+        self.features({"status": "done", "closed_at": "2026-09-01T10:00:00Z", "multi_repo_protected": vieja},
+                      {"status": "done", "closed_at": "2026-07-01T10:00:00Z", "multi_repo_protected": nueva})
+        self.assertIn("sin sello vigente: docs/prd/README.md", self.rutas())
+
+    def test_sin_repo_git_solo_cuenta_la_foto_de_esta_raiz_y_solo_un_sha256(self):
+        self.anexos()
+        self.features({"status": "in_progress", "multi_repo_protected": self.foto(raiz="/otra/raiz")})
+        self.assertIn("sin sello vigente", self.rutas())
+        ajena = self.foto()
+        rel = "docs/prd/README.md"
+        ajena[str(self.root)][rel] = {"head": "no es un sha256"}
+        self.features({"status": "in_progress", "multi_repo_protected": ajena})
+        self.assertIn("sin sello vigente: " + rel, self.rutas())
+
+    def test_sin_repo_git_el_anexo_reemplazado_por_un_symlink_no_pasa(self):
+        self.anexos()
+        self.features({"status": "in_progress", "multi_repo_protected": self.foto()})
+        readme = self.prd.parent / "README.md"
+        copia = self.root / "copia-readme.md"
+        copia.write_text(readme.read_text(encoding="utf-8"), encoding="utf-8")
+        readme.unlink()
+        readme.symlink_to(copia)
+        self.assertIn("sin sello vigente: docs/prd/README.md", self.rutas())
+
     def test_sin_repo_git_el_encabezado_que_inventa_el_generador_no_es_violacion(self):
         self.ok("documentacion.py", "sync")
         r = self.ok("gate.py", "check")

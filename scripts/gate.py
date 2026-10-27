@@ -18,6 +18,7 @@ from __future__ import annotations
 import argparse
 import fnmatch
 import getpass
+import hashlib
 import re
 import subprocess
 import sys
@@ -211,8 +212,10 @@ def _matchea_protegida(rel: str, pats: list) -> bool:
 def _registrado_ok(p, rel: str, data) -> bool:
     """Bytes que un registro multi-repo ya fijo. Sin git, ese registro es el commit."""
     from bloques import GENERADOS, compatible, fingerprint
-    if rel not in GENERADOS or not isinstance(data, dict):
+    if not isinstance(data, dict):
         return False
+    if rel not in GENERADOS:
+        return _anexo_fijado(p, rel, data)
     actual = p["root"] / rel
     if not actual.is_file() or actual.is_symlink():
         return False
@@ -230,6 +233,38 @@ def _registrado_ok(p, rel: str, data) -> bool:
     return False
 
 
+def _anexo_fijado(p, rel: str, data: dict) -> bool:
+    """Anexo del usuario (no generado) cuyos bytes un registro multi-repo ya fijo.
+
+    `protected_paths` guarda el sha256 de cada archivo protegido no generado al
+    registrar la feature, y al cerrarla lo vuelve a fijar. Sin git, ese registro es
+    el commit. La referencia son las fotos de las features abiertas que lo nombran
+    (todas deben coincidir: un anexo cambiado a mitad de una feature no se bendice
+    porque otra feature se registro despues); sin features abiertas, la foto de la
+    ultima cerrada. Las demas cerradas son historia: el usuario pudo editar el anexo
+    entre una y otra. Solo cuenta la foto de ESTA raiz, y solo un sha256 (string):
+    un archivo ausente de la foto, o un anexo nuevo, sigue sin autorizar.
+    """
+    actual = p["root"] / rel
+    if not actual.is_file() or actual.is_symlink():
+        return False
+    abiertas, cerradas = [], []
+    for f in data.get("features") or []:
+        prot = f.get("multi_repo_protected")
+        mapa = prot.get(str(p["root"])) if isinstance(prot, dict) else None
+        if not isinstance(mapa, dict) or rel not in mapa:
+            continue
+        if f.get("status") in ABIERTOS:
+            abiertas.append(mapa[rel])
+        else:
+            cerradas.append((str(f.get("closed_at") or ""), mapa[rel]))
+    fotos = abiertas or ([max(cerradas, key=lambda c: c[0])[1]] if cerradas else [])
+    if not fotos:
+        return False
+    ahora = hashlib.sha256(actual.read_bytes()).hexdigest()
+    return all(isinstance(x, str) and x == ahora for x in fotos)
+
+
 def _check_rutas_protegidas_sin_git(p, pats, r, data) -> None:
     """Sin HEAD no hay diff. El sello si se puede medir, y un archivo de mas tambien."""
     candidatos = []
@@ -245,7 +280,9 @@ def _check_rutas_protegidas_sin_git(p, pats, r, data) -> None:
     if tocadas:
         r.fallo("rutas protegidas sin sello vigente: " + ", ".join(sorted(set(tocadas))),
                 "sin repo git no hay commit que medir; producto.py aprobar --yes sella el cuerpo. "
-                "Otro archivo bajo docs/prd/ no lo autoriza el sello")
+                "Otro archivo bajo docs/prd/ no lo autoriza el sello: un anexo del usuario "
+                "solo pasa si el registro multi-repo de la feature (worktree.py register) lo fijo "
+                "con esos mismos bytes")
     else:
         r.ok(f"{len(pats)} ruta(s) protegida(s) intactas")
         r.info("sin repo git: constitution y .env no se auditan; PRD y SDD se auditan por el sello")
