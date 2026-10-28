@@ -7,9 +7,9 @@ import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from comun import (cubre_acs, enmiendas_posteriores, impl_path, load_backlog,  # noqa: E402
-                   paths, review_path, sello_revision, sig_fresh, spec_acs,
-                   spec_estado, spec_path)
+from comun import (bloqueos_feature, cubre_acs, enmiendas_posteriores, impl_path,  # noqa: E402
+                   load_backlog, paths, requiere_declarados, review_path,
+                   sello_revision, sig_fresh, spec_acs, spec_estado, spec_path)
 
 ABIERTOS = ("todo", "pending", "in_progress", "blocked", "review")
 CERRADOS = ("done", "superseded")
@@ -94,23 +94,28 @@ def main() -> None:
         return
 
     for f in abiertas:
-        _fila(p, f)
+        _fila(p, f, data)
 
     print("\nSiguiente paso sugerido:")
     en_curso = [f for f in abiertas if f.get("status") == "in_progress"]
     pendientes = [f for f in abiertas if f.get("status") in ("todo", "pending")]
+    listas = [f for f in pendientes if not bloqueos_feature(data, f)]
     if en_curso:
         print(f"   retoma la feature #{en_curso[0]['id']} (ya esta in_progress)")
     elif pendientes and producto_antes:
         print(f"   {producto_antes}")
-    elif pendientes:
-        fid = pendientes[0]["id"]
+    elif listas:
+        fid = listas[0]["id"]
         print(f"   arranca la #{fid}: worktree.py start --feature {fid}")
+    elif pendientes:
+        f0 = pendientes[0]
+        bloq = ", ".join(bloqueos_feature(data, f0))
+        print(f"   la #{f0['id']} esta bloqueada por {bloq}: cierra primero su dependencia")
     else:
         print("   revisa las features blocked/review antes de iniciar otra.")
 
 
-def _fila(p, f) -> None:
+def _fila(p, f, data: dict | None = None) -> None:
     fid = f["id"]
     sp = spec_path(p, f)
     marcas = []
@@ -152,6 +157,9 @@ def _fila(p, f) -> None:
 
     wt = f.get("worktree")
     marcas.append(f"wt {Path(wt).name}" if wt else "SIN worktree")
+    if data is not None and requiere_declarados(f):
+        bloq = bloqueos_feature(data, f)
+        marcas.append(f"bloqueada por {', '.join(bloq)}" if bloq else "dependencias ok")
     print(f"   #{fid} [{f.get('status')}] {f.get('name')}")
     print(f"        {' · '.join(marcas)}")
 

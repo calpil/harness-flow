@@ -144,6 +144,95 @@ def candidatas(text: str) -> list[tuple[str, str]]:
     return [(n, nombre.strip()) for n, nombre in CANDIDATA_RE.findall(COMENTARIO_RE.sub("", text))]
 
 
+REQUIERE_CANDIDATA_RE = re.compile(
+    r"(?:requiere|requires|bloquead[ao]\s+por)\s*:\s*([Ff]-\d+(?:\s*[,;y]\s*[Ff]-\d+)*)",
+    re.I,
+)
+_CAPA_HORIZONTAL_RE = re.compile(
+    r"\b(?:crear\s+tabla\w*|esquema\s+(?:sql|db|base\s+de\s+datos)|migraci[oó]n(?:es)?\s+(?:sql|db|inicial\w*)"
+    r"|configurar\s+(?:orm|base\s+de\s+datos|db)|capa\s+de\s+(?:repositorio|datos|persistencia)"
+    r"|solo\s+(?:backend|frontend|base\s+de\s+datos|api|ui)|como\s+(?:desarrollador|sistema))\b",
+    re.I,
+)
+
+
+def candidatas_dependencias(text: str) -> dict[str, list[str]]:
+    """Mapa F-n -> [F-m, ...] declaradas con 'requiere: F-m' en las lineas de Features candidatas."""
+    out: dict[str, list[str]] = {}
+    for linea in COMENTARIO_RE.sub("", text).splitlines():
+        m = CANDIDATA_RE.match(linea)
+        if not m:
+            continue
+        fid = f"F-{m.group(1)}"
+        deps: list[str] = []
+        for rm in REQUIERE_CANDIDATA_RE.finditer(linea):
+            for tok in re.findall(r"[Ff]-\d+", rm.group(1)):
+                norm = f"F-{tok.split('-', 1)[1]}"
+                if norm not in deps:
+                    deps.append(norm)
+        if deps:
+            out[fid] = deps
+    return out
+
+
+def _problemas_dependencias_candidatas(feats_txt: str) -> list[str]:
+    declaradas = {f"F-{n}" for n, _ in candidatas(feats_txt)}
+    deps = candidatas_dependencias(feats_txt)
+    problemas: list[str] = []
+    for fid, reqs in deps.items():
+        for r in reqs:
+            if r == fid:
+                problemas.append(f"'## Features candidatas': {fid} no puede depender de si misma (requiere: {r})")
+            elif r not in declaradas:
+                problemas.append(f"'## Features candidatas': {fid} requiere {r}, que no existe en la lista")
+    # Deteccion de ciclos simples
+    visitados: dict[str, int] = {}  # 0=visiting, 1=done
+
+    def dfs(nodo: str, camino: list[str]) -> None:
+        estado = visitados.get(nodo)
+        if estado == 0:
+            ciclo = " -> ".join(camino[camino.index(nodo):] + [nodo])
+            msg = f"'## Features candidatas' tiene un ciclo de dependencias: {ciclo}"
+            if msg not in problemas:
+                problemas.append(msg)
+            return
+        if estado == 1:
+            return
+        visitados[nodo] = 0
+        for sig in deps.get(nodo, []):
+            if sig in declaradas and sig != nodo:
+                dfs(sig, camino + [sig])
+        visitados[nodo] = 1
+
+    for fid in declaradas:
+        if fid not in visitados:
+            dfs(fid, [fid])
+    return problemas
+
+
+def avisos_vertical_prd(text: str, max_candidatas: int = 15) -> list[str]:
+    """Avisos (no bloqueantes) cuando una candidata parece capa horizontal, historia tecnica o excede el tope."""
+    sec = COMENTARIO_RE.sub("", seccion(text, "Features candidatas") or "")
+    avisos: list[str] = []
+    cands = candidatas(sec)
+    if max_candidatas > 0 and len(cands) > max_candidatas:
+        avisos.append(
+            f"vertical-slice: el PRD declara {len(cands)} candidatas (recomendado <= {max_candidatas}); "
+            "prefiere empezar con 10-15 historias verticales e ir agregando despues"
+        )
+    for linea in sec.splitlines():
+        m = CANDIDATA_RE.match(linea)
+        if not m:
+            continue
+        fid = f"F-{m.group(1)}"
+        if _CAPA_HORIZONTAL_RE.search(linea):
+            avisos.append(
+                f"vertical-slice: {fid} ('{m.group(2).strip()}') parece cortada por capa tecnica "
+                "o actor de sistema; cada F-n debe atravesar las capas y dar valor observable al usuario"
+            )
+    return avisos
+
+
 def _etiqueta_con_contenido(seccion: str, etiqueta: str) -> bool:
     """`Hoy: texto` en la linea, o `Hoy:` y el parrafo debajo (hasta el blanco o la otra etiqueta)."""
     pat = re.compile(rf"^[^\S\n]*[*_]{{0,2}}{etiqueta}[*_]{{0,2}}[^\S\n]*:[^\S\n]*(.*)$", re.M | re.I)
@@ -224,6 +313,8 @@ def validar(text: str, doc: str) -> list[str]:
         feats = seccion(text, "Features candidatas")
         if feats is not None and not candidatas(feats):
             problemas.append("'## Features candidatas' no declara ninguna '- F-n: nombre: resultado'")
+        elif feats is not None:
+            problemas.extend(_problemas_dependencias_candidatas(feats))
         lenguajes = sorted({m.group(1).lower() for m in FENCE_RE.finditer(limpio)} - PSEUDO)
         if lenguajes:
             problemas.append("trae codigo final (bloque " + ", ".join(f"```{x}" for x in lenguajes)
@@ -424,13 +515,16 @@ def cobertura(p: dict, data: dict) -> str | None:
     prd = texto_manual(destino_path(p, "prd"))
     if prd is None:
         return None
+    sec_feats = seccion(prd, "Features candidatas") or ""
+    deps = candidatas_dependencias(sec_feats)
     filas = []
-    for n, _ in candidatas(seccion(prd, "Features candidatas") or ""):
+    for n, _ in candidatas(sec_feats):
         fid = f"F-{n}"
         feats = [f for f in data["features"]
                  if f.get("prd_candidata") == fid and f.get("status") != "superseded"]
+        req_txt = f" (requiere {', '.join(deps[fid])})" if fid in deps and not feats else ""
         filas.append(f"{fid} " + (", ".join(f"#{f['id']} {f.get('status')}" for f in feats)
-                                  if feats else "sin feature"))
+                                  if feats else f"sin feature{req_txt}"))
     return " · ".join(filas) or None
 
 
@@ -593,11 +687,18 @@ def cmd_aprobar(args) -> None:
     if doc == "prd":
         print("[i]  gate.py check acepta ese cuerpo por el sello; commitea docs/prd/PRD-master.md")
         print("     cuando corresponda (es del usuario, el agente no lo commitea).")
-        cands = candidatas(seccion(sellado, "Features candidatas") or "")
+        max_cands = int(data.get("rules", {}).get("max_candidatas_prd", 15) or 15)
+        for aviso in avisos_vertical_prd(sellado, max_candidatas=max_cands):
+            print(f"[!]  {aviso}")
+        sec_feats = seccion(sellado, "Features candidatas") or ""
+        cands = candidatas(sec_feats)
+        deps_cands = candidatas_dependencias(sec_feats)
         if cands:
             print("[i]  features candidatas para el backlog:")
             for n, nombre in cands:
-                print(f'     add.py --name "{nombre}" --prd docs/prd/PRD-master.md --candidata F-{n}')
+                fid = f"F-{n}"
+                flags_req = "".join(f" --requiere {r}" for r in deps_cands.get(fid, []))
+                print(f'     add.py --name "{nombre}" --prd docs/prd/PRD-master.md --candidata {fid}{flags_req}')
     else:
         print("[i]  documentacion.py sync seguira agregando el bloque por feature debajo del cuerpo.")
     viejas = [f for f in data["features"] if f.get("status") in ABIERTOS and doc in cambiados(p, f)]

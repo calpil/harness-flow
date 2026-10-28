@@ -65,6 +65,29 @@ detente; no los busques ni los inventes.
 - **Un verde que no engancha nada no es evidencia.** Al correr el comando de un
   AC, mira cuantos casos corrio: un `-run` que no matchea ningun test sale con
   exit 0.
+- **Bucle TDD Vertical (prohibido el TDD horizontal).** No escribas todos los
+  tests de todos los AC primero y luego todo el codigo. Arma primero la lista de
+  tests desde los AC (en el nivel publico mas alto practico) y avanza **un test
+  a la vez**: (1) escribe **1 test** acoplado a la costura publica declarada en
+  el AC (`[costura: ...]`), con el valor esperado tomado del AC y **nunca
+  calculado con la misma logica que el codigo**, y comprueba que falla por el
+  motivo esperado (**Red**); (2) escribe el **codigo minimo** para pasar ese test
+  (**Green**); (3) refactoriza solo en verde (**Refactor**), separando los
+  commits funcionales (`feat:`/`fix:`) de los commits de refactor puro
+  (`refactor:`).
+- **Las 5 paradas inmediatas (estilo `/pair` de `hola-ai`):**
+  1. **Decision de diseno fuera del plan/spec:** si necesitas decidir algo que el
+     spec/SDD no fija, detente y devuelve la pregunta.
+  2. **Alcance no pedido (YAGNI):** si estas escribiendo codigo que ningun AC
+     pide, borralo.
+  3. **Integridad de tests:** NUNCA borres, comentes, saltes (`skip`) ni
+     debilites un test existente para forzar el verde, ni escribas aserciones
+     tautologicas.
+  4. **Dos intentos sin llegar a verde:** si tras 2 intentos el test sigue en
+     rojo o arreglarlo rompe otro, **PARA**, revierte al ultimo verde y replantea
+     o devuelve el bloqueo concreto.
+  5. **Paso demasiado grande (> ~50 lineas o > 3 archivos en un ciclo):** parte
+     el incremento en pasos mas chicos antes de seguir.
 
 ## Evidencia
 

@@ -59,7 +59,16 @@ Las lecciones se leen **antes** de disenar, no despues de romper algo.
 `${CLAUDE_PLUGIN_ROOT}/templates/spec.md`. Lo que no es negociable:
 
 - AC numerados `AC-1`, `AC-2`, … sin saltos, en Given/When/Then, cada uno
-  verificable por un tercero.
+  verificable por un tercero (describe *que* ve o recibe el usuario, nunca *como*
+  se implementa). Apunta a **2-3 AC** (tope en `rules.max_acs_por_slice`, por
+  defecto 5): si necesita mas, **no infles el spec**, propon partir la historia
+  en nuevas candidatas `F-n`.
+- Cada AC declara su **costura publica de prueba** (`[costura: endpoint|servicio|ui|integracion|manual]`
+  en la linea del AC o `Costura: ...` debajo), en el nivel practico mas alto, sin
+  acoplar a detalles internos ni mocks propios. Incluye `## Plan vertical` con
+  hasta 5 bullets (sin codigo ni nombres de archivos) y, solo si hay una senal
+  concreta en el codigo actual (algo que ya se repite), `## Sugerencias (decision
+  del usuario)` ("sugiere, no decidas").
 - El Contexto cita el PRD y el SDD: `cumple: O1` (o `cumple: ninguno`) y
   `decisiones que aplica: D2` (o `ninguna`). Los no-objetivos `NO-n` que roza la
   feature van a "Fuera de alcance". `approve-spec` avisa si falta la cita o si

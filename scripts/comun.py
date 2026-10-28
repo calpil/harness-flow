@@ -150,6 +150,57 @@ def get_feature(data: dict, fid) -> dict:
             return f
     raise SystemExit(f"Feature #{fid} no existe en el backlog.")
 
+
+def requiere_declarados(f: dict) -> list[str]:
+    """Dependencias declaradas por una feature ('#1', 'F-1'). Lista limpia y sin duplicados."""
+    crudo = f.get("requiere") or f.get("bloqueada_por") or []
+    if isinstance(crudo, (str, int)):
+        crudo = [str(crudo)]
+    out: list[str] = []
+    for item in crudo:
+        for trozo in re.split(r"[,;\s]+", str(item or "").strip()):
+            trozo = trozo.strip()
+            if not trozo or trozo.lower() in ("ninguna", "ninguno", "none", "n/a", "-"):
+                continue
+            if re.fullmatch(r"#?\d+", trozo):
+                norm = f"#{trozo.lstrip('#')}"
+            elif re.fullmatch(r"[Ff]-\d+", trozo):
+                norm = f"F-{trozo.split('-', 1)[1]}"
+            else:
+                norm = trozo
+            if norm not in out:
+                out.append(norm)
+    return out
+
+
+def bloqueos_feature(data: dict, f: dict) -> list[str]:
+    """Dependencias de `f` que aun NO estan en status=done (frontera de vertical slices)."""
+    reqs = requiere_declarados(f)
+    if not reqs:
+        return []
+    feats = data.get("features") or []
+    bloqueos: list[str] = []
+    for req in reqs:
+        if req.startswith("#"):
+            tid = req[1:]
+            match = next((x for x in feats if str(x.get("id")) == tid), None)
+            if match is None:
+                bloqueos.append(f"{req} (inexistente)")
+            elif match.get("status") != "done":
+                bloqueos.append(f"#{match['id']} ({match.get('status')})")
+        elif req.startswith("F-"):
+            matches = [x for x in feats
+                       if x.get("prd_candidata") == req and x.get("status") != "superseded"]
+            if not matches:
+                bloqueos.append(f"{req} (sin feature)")
+            else:
+                for m in matches:
+                    if m.get("status") != "done":
+                        bloqueos.append(f"#{m['id']} ({req} {m.get('status')})")
+        else:
+            bloqueos.append(req)
+    return list(dict.fromkeys(bloqueos))
+
 SERVICE_RE = re.compile(r"(ms-[a-z0-9-]+-service|[a-z0-9-]+-ui|fn-[a-z0-9-]+)")
 
 def micros_declarados(f: dict) -> list[str]:
@@ -390,6 +441,92 @@ def ac_comandos(text: str) -> dict[str, str]:
             out[actual] = c
             actual = None
     return out
+
+
+def ac_costuras(text: str) -> dict[str, str]:
+    """AC-n -> costura/seam de prueba declarada en la linea del AC o debajo."""
+    out: dict[str, str] = {}
+    actual = None
+    # Formas admitidas:
+    #   - AC-1 [costura: endpoint]: ...  /  - AC-1 (seam: servicio): ...
+    #   Costura: endpoint  /  `costura: endpoint`  /  Seam: ui
+    inline_re = re.compile(
+        r"(?:\[\s*(?:costura|seam|frontera)\s*:\s*([^\]\n]+)\]"
+        r"|\(\s*(?:costura|seam|frontera)\s*:\s*([^)\n]+)\)"
+        r"|`\s*(?:costura|seam|frontera)\s*:\s*([^`\n]+)`"
+        r"|(?:^|·|\|)\s*(?:costura|seam|frontera)\s*:\s*`?([^`\n|·]+)`?)",
+        re.IGNORECASE,
+    )
+
+    def extraer(ln: str) -> str | None:
+        m = inline_re.search(ln)
+        if not m:
+            return None
+        val = next((g for g in m.groups() if g is not None), "").strip()
+        return val or None
+
+    for ln in re.sub(r"<!--.*?-->", "", text, flags=re.S).splitlines():
+        m = AC_RE.match(ln)
+        if m:
+            actual = m.group(1)
+            ci = extraer(ln)
+            if ci:
+                out[actual] = ci
+            continue
+        if ENCABEZADO_RE.match(ln):
+            actual = None
+            continue
+        if actual and actual not in out:
+            c = extraer(ln)
+            if c:
+                out[actual] = c
+    return out
+
+
+_COSTURA_INTERNA_RE = re.compile(
+    r"\b(?:intern[ao]s?|privad[ao]s?|mock\w*|detalle\s+interno)\b", re.IGNORECASE
+)
+_PLAN_VERTICAL_RE = re.compile(r"^##[^\S\n]+Plan\s+vertical\b.*$", re.IGNORECASE | re.MULTILINE)
+
+
+def avisos_vertical_spec(text: str, rules: dict | None = None) -> list[str]:
+    """Avisos (no bloqueantes) de vertical slice sobre un spec: tamano de AC, plan y costuras."""
+    limpio = re.sub(r"<!--.*?-->", "", text, flags=re.S)
+    acs = spec_acs(limpio)
+    reglas = rules or {}
+    max_acs = int(reglas.get("max_acs_por_slice", 5))
+    avisos: list[str] = []
+    if len(acs) > max_acs:
+        avisos.append(
+            f"vertical-slice: el spec declara {len(acs)} AC (recomendado <= {max_acs} por slice); "
+            "considera dividir la feature en slices verticales mas chicos"
+        )
+    m_plan = _PLAN_VERTICAL_RE.search(limpio)
+    if m_plan:
+        resto = limpio[m_plan.end():]
+        fin = re.search(r"^#{1,2}[^\S\n#]", resto, re.MULTILINE)
+        cuerpo_plan = resto[:fin.start()] if fin else resto
+        pasos = [ln for ln in cuerpo_plan.splitlines()
+                 if re.match(r"^[^\S\n]*(?:[-*+]|\d+[.)])[^\S\n]+\S", ln)]
+        if len(pasos) > 5:
+            avisos.append(
+                f"vertical-slice: '## Plan vertical' tiene {len(pasos)} pasos (maximo recomendado: 5); "
+                "manten el plan en el minimo que atraviesa las capas sin sobreingenieria"
+            )
+    costuras = ac_costuras(limpio)
+    if (m_plan is not None or reglas.get("warn_sin_costura")) and acs and not costuras:
+        avisos.append(
+            "vertical-slice: ningun AC declara su costura de prueba (seam: endpoint, servicio, ui, "
+            "integracion, manual); agrega '[costura: <seam>]' o 'Costura: <seam>'"
+        )
+    internas = [ac for ac, val in costuras.items() if _COSTURA_INTERNA_RE.search(val)]
+    if internas:
+        detalle = ", ".join(f"{ac}={costuras[ac]}" for ac in internas)
+        avisos.append(
+            f"vertical-slice: costura acoplada a detalles internos ({detalle}); "
+            "prueba comportamiento en la interfaz publica mas alta practica"
+        )
+    return avisos
 
 # --- huella del spec por partes ---------------------------------------------
 #

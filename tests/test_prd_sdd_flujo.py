@@ -483,6 +483,30 @@ class SddProtegidoTests(unittest.TestCase):
         self.assertFalse(bloques.allowed(None, bloques.PRD_PREFIX + bloques.START + b"\nx\n" + bloques.END + b"\n",
                                          bloques.SDD_PREFIX))
 
+    def test_add_hereda_requiere_de_la_candidata_del_prd_y_admite_flag_requiere(self):
+        prd_deps = fx.PRD_COMPLETO.replace(
+            "- F-2: Alerta de duplicados: operaciones ve los intentos repetidos (cumple O2)",
+            "- F-2: Alerta de duplicados: operaciones ve los intentos repetidos (cumple O2; requiere: F-1)",
+        )
+        self.borrador_prd.write_text(prd_deps, encoding="utf-8")
+        r_ap = self.ok("producto.py", "aprobar", "--doc", "prd", "--yes")
+        self.assertIn("--candidata F-2 --requiere F-1", r_ap.stdout)
+
+        self.ok("add.py", "--name", "Cobro idempotente", "--prd", "docs/prd/PRD-master.md", "--candidata", "F-1")
+        r_f2 = self.ok("add.py", "--name", "Alerta de duplicados", "--prd", "docs/prd/PRD-master.md", "--candidata", "F-2")
+        self.assertIn("requiere: F-1", r_f2.stdout)
+
+        features = self.datos()["features"]
+        f2 = next(f for f in features if f["id"] == 2)
+        self.assertEqual(f2.get("requiere"), ["F-1"])
+
+        # Flag explicito --requiere por id numerico y rechazo de auto-dependencia
+        r_f3 = self.ok("add.py", "--name", "Reporte", "--kind", "task", "--requiere", "1,F-2")
+        f3 = next(f for f in self.datos()["features"] if f["id"] == 3)
+        self.assertEqual(f3.get("requiere"), ["#1", "F-2"])
+        r_auto = self.falla("add.py", "--name", "Ciclo propio", "--kind", "task", "--requiere", "4")
+        self.assertIn("no puede depender de si misma", r_auto.stdout + r_auto.stderr)
+
 
 if __name__ == "__main__":
     unittest.main()

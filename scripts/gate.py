@@ -27,9 +27,10 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 from comun import (  # noqa: E402
-    ENMIENDAS_RE, Reporte, acs_faltantes, acs_no_reconocidos, bitacora, comparar_huellas, cubre_acs,
+    ENMIENDAS_RE, Reporte, ac_comandos, ac_costuras, acs_faltantes, acs_no_reconocidos,
+    avisos_vertical_spec, bitacora, bloqueos_feature, comparar_huellas, cubre_acs,
     enmiendas_posteriores, get_feature, git, impl_path, load_backlog, n_enmiendas,
-    now_iso, paths, review_path, ac_comandos, save_backlog, sello_revision,
+    now_iso, paths, review_path, save_backlog, sello_revision,
     sig_fresh, sign, spec_acs, spec_estado, spec_huella, spec_path,
 )
 
@@ -100,6 +101,12 @@ def _check_feature(p, f, rules, r) -> None:
     for doc in producto.cambiados(p, f):
         r.aviso(f"#{fid} el {producto.DOCS[doc]['titulo']} cambio desde que se aprobo el spec",
                 "el leader lo revisa: enmienda si un AC deja de valer; si sigue valiendo, re-aprueba")
+    for av in avisos_vertical_spec(text, rules):
+        r.aviso(f"#{fid} {av}")
+    bloq = bloqueos_feature(load_backlog(p), f)
+    if bloq:
+        r.aviso(f"#{fid} tiene dependencia(s) sin cerrar: {', '.join(bloq)}",
+                "cierra primero los slices de los que depende")
 
     ip = impl_path(p, f)
     if ip.exists():
@@ -369,6 +376,15 @@ def cmd_check_spec(args) -> None:
     cmds = ac_comandos(text)
     if cmds:
         print(f"[i]  {len(cmds)} AC con comando declarado (gate.py verify los corre)")
+    costuras = ac_costuras(text)
+    if costuras:
+        print(f"[i]  costuras declaradas ({len(costuras)}/{len(acs)}): "
+              + ", ".join(f"{k}={v}" for k, v in costuras.items()))
+    for av in avisos_vertical_spec(text, data["rules"]):
+        print(f"[!]  {av}")
+    bloq = bloqueos_feature(data, f)
+    if bloq:
+        print(f"[!]  dependencias sin cerrar: {', '.join(bloq)}")
 
 
 # --- approve-spec ----------------------------------------------------------
@@ -408,7 +424,11 @@ def cmd_approve_spec(args) -> None:
                  "     (false, o la lista de documentos que si exige). Un --kind bug|task no lo exige.")
 
     import producto
-    avisos = producto.avisos_citas(p, f, text)
+    avisos = (producto.avisos_citas(p, f, text)
+              + avisos_vertical_spec(text, data["rules"]))
+    bloq = bloqueos_feature(data, f)
+    if bloq:
+        avisos.append(f"dependencias pendientes antes de implementar: {', '.join(bloq)}")
     quien = _firmante(args.por)
     cuando = now_iso()
     text = _sellar_spec(text, f"Aprobado: {quien} · {cuando} · sellado por gate.py approve-spec --yes")

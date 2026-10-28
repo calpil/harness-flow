@@ -1,16 +1,20 @@
 ---
-description: Rol implementer de harness-flow — verifica el gate del spec, delega la implementacion al subagente implementer en el worktree de la feature y contrasta su evidencia antes del review.
-argument-hint: <id-feature>
+description: Rol implementer de harness-flow — verifica el gate del spec, delega la implementacion al subagente implementer (o ejecuta en modo Pair interactivo con --pair) en el worktree de la feature y contrasta su evidencia antes del review.
+argument-hint: <id-feature> [--pair]
 model: claude-opus-5-5
 effort: xhigh
 ---
 
 # harness-flow: implementar (rol implementer)
 
-Implementa la feature `$1`. **El codigo no lo escribes tu**: lo escribe el
-subagente `harness-flow:implementer` (Sonnet 5.5, effort por tarea, ver
-`${CLAUDE_PLUGIN_ROOT}/references/modelos.md`). Tu orquestas, contrastas su
-evidencia y llevas al usuario lo que el spec no resuelve.
+Implementa la feature `$1`. Por defecto **el codigo no lo escribes tu**: lo
+escribe el subagente `harness-flow:implementer` (Sonnet 5.5, effort por tarea,
+ver `${CLAUDE_PLUGIN_ROOT}/references/modelos.md`), mientras tu orquestas y
+contrastas su evidencia. Si el usuario pasa `--pair` (o pide **modo Pair**),
+ejecutas el bucle **TDD vertical interactivo** en esta sesion (Driver = IA,
+Navigator = humano), avanzando **1 ciclo** (`1 test -> Red -> codigo minimo ->
+Green`) por turno y pausando con el micro-reporte (ver
+`${CLAUDE_PLUGIN_ROOT}/references/vertical-slice.md`).
 
 > **Shell.** Cada llamada Bash abre un shell nuevo: `$PY` y `$H` no sobreviven,
 > asi que el bootstrap va pegado a cada comando, siempre. Los bloques de abajo
@@ -64,7 +68,9 @@ Anuncialo en una frase antes de lanzar: `Implementer: claude-sonnet-5-5 / high �
 un repo, AC con comando`. Criterios completos en
 `${CLAUDE_PLUGIN_ROOT}/references/modelos.md` ("Seleccion automatica").
 
-## 5. Delega
+## 5. Delega (por defecto) o ejecuta en Modo Pair (`--pair`)
+
+### 5a. Modo delegado (por defecto, sin `--pair`)
 
 Tool `Agent` con `subagent_type: "harness-flow:implementer"` y `effort` con el
 nivel del paso 4. En el prompt, una linea de goal, la ruta del spec, la del
@@ -82,6 +88,40 @@ worktree y la salida ENTERA del paso 3:
   sobre el spec, llevala tu al chat. Si la respuesta cambia un AC, es una
   enmienda (`/harness-flow:spec $1`, seccion 4), no una instruccion nueva al
   implementer.
+
+### 5b. Modo Pair interactivo (`--pair`: Driver = IA, Navigator = humano)
+
+Si los argumentos incluyen `--pair` (o el usuario pidio modo pair, estilo `/pair` de `hola-ai`):
+
+1. **Revisa el plan y propone la Lista de Tests (sin escribirlos aun):**
+   - No lances el subagente `implementer`: tu eres el **Driver** en el worktree y
+     el usuario es el **Navigator**.
+   - Contrasta el `## Plan vertical` contra el codigo del worktree (si algo ya no
+     encaja, avisalo; si no hay plan, propon uno de ≤5 bullets).
+   - A partir de los AC, propon **la lista de tests (solo nombres)** diciendo
+     **donde** se prueba cada uno (endpoint, servicio, componente/UI, integracion;
+     o **verificacion manual** si es visual) y **espera la aprobacion del usuario**.
+2. **Ciclo (`1 paso = 1 test de la lista`):**
+   - Escribe 1 test -> correlo y muestra que falla (**Red**) -> escribe el
+     **codigo minimo** (con el valor esperado del AC, nunca calculado con la misma
+     logica del codigo) -> corre los tests y muestra que pasan (**Green**).
+   - Por defecto haz **1 paso y detente** con este micro-mensaje:
+     `✅ Pasa "<nombre del test>". <que hice en una linea> (<archivo:linea>)` /
+     `Decision tomada: <criterio aplicado, si hubo>` /
+     `¿Cambiamos algo o seguimos con "<siguiente test>"?`
+   - Si el usuario dice `"haz N"` / `"avanza N"`, ejecuta `N` ciclos completos uno
+     tras otro (nunca `N` tests juntos y luego el codigo) mostrando **primero los
+     tests y despues el codigo**.
+3. **Detente de inmediato (incluso a mitad de un lote de `N`) ante las 5 paradas:**
+   - (1) necesitas tomar una decision de diseno que no esta en el plan/spec;
+   - (2) se te ocurre agregar algo que no pidieron (YAGNI);
+   - (3) hacer pasar un test requeriria cambiar, saltar (`skip`) o borrar un test;
+   - (4) llevas **dos intentos** sin llegar a verde;
+   - (5) el paso supera **~50 lineas o toca mas de 3 archivos** (propon partirlo).
+4. **Chequeo y Commits:** con toda la lista en verde, verifica con el usuario los
+   AC de verificacion manual, **sugiere** refactors sin aplicarlos solo (solo en
+   verde), y **sugiere el mensaje de commit** separando funcionalidad y refactor
+   para commitear en el worktree con su OK y escribir `docs/impl-$1.md`.
 
 ## 6. Contrasta la evidencia
 

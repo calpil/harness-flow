@@ -127,21 +127,21 @@ cada rol (detalle y limite actual de `_build_gemini_thinking_config` en
 
 El agente NUNCA escribe `docs/prd/**` ni `docs/sdd.md`: redacta en `docs/borrador-prd.md` / `docs/borrador-sdd.md` (rutas sin proteger) y el usuario es quien aprueba. `estado.py` muestra en que paso esta cada documento.
 
-1. `$PY "$H/producto.py" borrador --doc prd|sdd` crea el borrador desde `templates/prd.md` / `templates/sdd.md`, o desde el cuerpo manual que ya exista. El PRD cuenta una historia (antes/despues, con nombre y momento), el flujo hoy/despues, los datos y el pseudo-codigo del acuerdo; NUNCA codigo final (un bloque ```go lo rechaza). Rellena cada seccion con lo que cuente el usuario; un titulo con tilde es la misma seccion. Para el SDD cruza `contexto.py estado`, `hub.py impacto` y `leccion.py list`, y nombra cada decision (`- D1: ... Descartada: <opcion>, porque ...`) para que los specs la citen. Las guias `<!-- -->` se reemplazan: una seccion que solo tiene guia cuenta como vacia y la aprobacion se niega.
+1. `$PY "$H/producto.py" borrador --doc prd|sdd` crea el borrador desde `templates/prd.md` / `templates/sdd.md`, o desde el cuerpo manual que ya exista. No inventes requisitos: si algo falta, pregunta **una pregunta a la vez con tu respuesta sugerida** (estilo `/backlog` de `hola-ai`). El PRD cuenta una historia (antes/despues, con nombre y momento), el flujo hoy/despues, los datos y el pseudo-codigo del acuerdo; NUNCA codigo final (un bloque ```go lo rechaza). Para el SDD cruza `contexto.py estado`, `hub.py impacto` y `leccion.py list`, pregunta solo si aplica alguna de las **4 decisiones caras de cambiar** (multi-tenant/org, permisos/roles, offline/sync, multi-idioma/moneda), aplica YAGNI al resto y nombra cada decision (`- D1: ... Descartada: <opcion>, porque ...`). Las guias `<!-- -->` se reemplazan: una seccion que solo tiene guia cuenta como vacia y la aprobacion se niega.
 2. **Ritual de aprobacion**, el mismo del spec: MUESTRA el borrador, PREGUNTA, y solo con el SI explicito corre `$PY "$H/producto.py" aprobar --doc prd|sdd --yes`. Copia el cuerpo a `docs/prd/PRD-master.md` / `docs/sdd.md` conservando el bloque generado, y sella `documentos.<doc>` en el backlog; `gate.py check` acepta ese cuerpo por el sello hasta que el usuario lo commitea. Sin `--yes` se niega, y tambien si una feature multi-repo registrada abierta fijo los bytes de ese documento. Si al re-aprobar hay specs abiertos aprobados contra la version anterior, los lista: el leader los revisa.
-3. Cada `- F-n: nombre: resultado` de "Features candidatas" entra al backlog con `add.py --name "<nombre>" --prd docs/prd/PRD-master.md --candidata F-n` (valida que la `F-n` exista y la deja en el spec); su spec se escribe en el rol 1. `--prd` solo acepta ese maestro: una candidata no es otro archivo PRD.
+3. **Candidatas como rebanadas verticales (`Vertical Slice` / `/backlog`)**: `F-1` es un *walking skeleton* punta a punta (sin mocks). Corta cada `- F-n: nombre: resultado (cumple O1; requiere: F-m)` (10–15 candidatas maximo, una linea sin estimaciones ni detalles tecnicos) por comportamiento observable del usuario (`UI/API -> logica -> datos -> tests`), NUNCA por capa horizontal ni como historia del sistema, y usa *expand–contract* para refactors amplios. Declara bloqueos con `requiere: F-m` solo cuando una historia no tiene sentido sin otra (`producto.py` valida que existan y no formen ciclos). Cada una entra al backlog con `add.py --name "<nombre>" --prd docs/prd/PRD-master.md --candidata F-n` (que hereda sus bloqueos o recibe `--requiere`); su spec se escribe en el rol 1. Detalles en [`references/vertical-slice.md`](references/vertical-slice.md).
 
 ### 1. Leader — spec antes que código
 
-1. Lee el backlog y `progress/current-<id>.md`. Consulta el grafo antes de leer archivos a ciegas:
-   `$PY "$H/contexto.py" brief --feature <id>` (indice compacto: AC, reglas, lo que el PRD/SDD
+1. Lee el backlog y `progress/current-<id>.md`. Prioriza la **frontera** (features sin bloqueos `requiere` pendientes en `estado.py`). Consulta el grafo antes de leer archivos a ciegas:
+   `$PY "$H/contexto.py" brief --feature <id>` (indice compacto: AC, costuras, bloqueos, reglas, lo que el PRD/SDD
    dice de la feature —su `F-n`, objetivos `O-n`/`NO-n` y decisiones `D-n`—, lecciones,
    impacto del hub y superficie de contacto del grafo). Si el contexto esta vencido lo dice;
    refresca con `$PY "$H/contexto.py" refrescar`. Para algo puntual: `codebase-memory-mcp`
    (`search_graph`, `trace_path`) o `graphify query "<pregunta>" --graph <combinado>`.
 2. Consulta impacto cross-repo: `$PY "$H/hub.py" impacto --microservicio <proyecto>/<servicio>`.
 3. Revisa lecciones aplicables: `$PY "$H/leccion.py" list` **antes** de diseñar.
-4. Escribe `docs/spec-feature-<id>-<slug>.md` con `Estado: draft` usando `templates/spec.md` (`add.py` ya lo crea desde ahi). Los AC-n en Given/When/Then son obligatorios. El Contexto cita lo que cumple del PRD (`cumple: O1`) y las decisiones del SDD que aplica (`decisiones que aplica: D2`); `approve-spec` avisa si no cita ninguna o cita una que no existe.
+4. Escribe `docs/spec-feature-<id>-<slug>.md` con `Estado: draft` usando `templates/spec.md` (`add.py` ya lo crea desde ahi, estilo `/story` de `hola-ai`). Apunta a **2–3 AC** en Given/When/Then (tope en `rules.max_acs_por_slice = 5`; si necesita mas, propon partir la historia en nuevas `F-n`), declara en cada AC su **costura publica de prueba** (`[costura: endpoint|servicio|ui|integracion|manual]` o `Costura: ...` debajo, en el nivel practico mas alto, sin acoplar a detalles internos/mocks), define `## Plan vertical` (≤5 bullets sin codigo ni nombres de archivos) y `## Sugerencias (decision del usuario)` solo si hay senal concreta en el codigo actual. El Contexto cita lo que cumple del PRD (`cumple: O1`) y las decisiones del SDD que aplica (`decisiones que aplica: D2`); `approve-spec` avisa si no cita ninguna, si excede el tamano del slice o si falta costura.
 5. Si los comandos de AC usan rutas de worktree, crea el worktree con `$PY "$H/worktree.py" start --feature <id>` antes de sellar el spec. Esto prepara las rutas; no autoriza implementar todavía.
 6. **Ritual de aprobación**: MUESTRA el spec al usuario en el chat, PREGUNTA si lo aprueba, y solo con su SÍ explícito corre:
    `$PY "$H/gate.py" approve-spec --feature <id> --yes`
@@ -154,14 +154,16 @@ El agente NUNCA escribe `docs/prd/**` ni `docs/sdd.md`: redacta en `docs/borrado
 
 Con evidencia, review o verify encima, `approve-spec` se niega a re-sellar un spec cambiado: es una **enmienda**. Escribe `docs/propuesta-<id>-enmienda-<slug>.md` desde [`templates/enmienda.md`](templates/enmienda.md), aplica los cambios al spec, MUESTRA ambos y, solo con el SÍ explícito: `$PY "$H/gate.py" enmienda --feature <id> --propuesta docs/<propuesta>.md --yes`. Se niega si cambió un AC que la propuesta no nombra; numera `E-n`, la anota en el spec, sella spec y propuesta, y deja sin valor para `close` el review y el verify anteriores.
 
-### 2. Implementer — evidencia por AC
+### 2. Implementer — TDD vertical y modo Pair (`--pair`)
 
-1. Verifica el gate: `$PY "$H/gate.py" check-spec --feature <id>` (exit≠0 si no está approved o está stale).
+1. Verifica el gate: `$PY "$H/gate.py" check-spec --feature <id>` (exit≠0 si no está approved o está stale; avisa bloqueos `requiere` y alertas de slice).
 2. Trabaja DENTRO del worktree de la feature; si aun no existe, crealo con `$PY "$H/worktree.py" start --feature <id>`.
 3. Antes de editar, orientate con `codebase-memory-mcp` (`search_graph`, `trace_path`, `detect_changes`) en vez de leer a ciegas. Indexa la raiz, no tu worktree: confirma leyendo el archivo.
-4. Escribe evidencia en `docs/impl-<id>.md`: una fila por AC-n citando `archivo:linea`. Commitea en la rama de la feature: el review diffea `base..HEAD`.
-
-En Claude Code no implementa la sesion principal: `/harness-flow:implementar <id>` delega en el subagente `harness-flow:implementer` (`agents/implementer.md`) y contrasta su evidencia. En Hermes con modelos Claude y Claude Code instalado, `claude -p --agent harness-flow:implementer`; con OpenAI, usa el rol nativo y su configuracion en [`references/modelos.md`](references/modelos.md).
+4. **Bucle TDD vertical (prohibido el TDD horizontal)**: avanza **un test a la vez** (`1 test en la costura publica -> Red -> codigo minimo -> Green -> Refactor en verde`), con el valor esperado tomado del AC (nunca calculado con la misma logica que el codigo) y separando los commits funcionales de los de refactor puro. Detente de inmediato ante cualquiera de las **5 paradas de `/pair`**: (a) decision de diseno no prevista en el plan/spec, (b) alcance no pedido (YAGNI), (c) cambiar/saltar/borrar un test para que pase, (d) **dos intentos** sin llegar a verde (revierte al ultimo verde), (e) paso que supera **~50 lineas o 3 archivos** (propon partirlo).
+5. **Dos modos de ejecucion** (detalle en [`references/vertical-slice.md`](references/vertical-slice.md)):
+   - **Subagente delegado (por defecto)**: en Claude Code `/harness-flow:implementar <id>` delega en `harness-flow:implementer` (`agents/implementer.md`) y contrasta su evidencia; en Hermes con Claude Code usa `claude -p --agent harness-flow:implementer`, y con OpenAI/Gemini usa el rol segun [`references/modelos.md`](references/modelos.md).
+   - **Modo Pair interactivo (`--pair` = `/pair` de `hola-ai`, Driver = IA, Navigator = humano)**: corre en la sesion principal (`/harness-flow:implementar <id> --pair` o pidiendo modo pair en cualquier host). Primero propone la **lista de tests** (solo nombres, donde se prueba cada uno y cuales son verificacion manual) y espera el OK del usuario; luego ejecuta **1 paso** (`1 test -> Red -> codigo minimo -> Green`) y **pausa** con el micro-mensaje (`✅ Pasa "<test>"... Decision tomada:... ¿Cambiamos algo o seguimos con "<siguiente>"?`), o ejecuta `N` ciclos si el usuario dice `"haz N"` (mostrando primero los tests y luego el codigo). En `--pair` sugiere el mensaje de commit cuando hay una unidad logica en verde y espera el OK del usuario.
+6. Escribe evidencia en `docs/impl-<id>.md`: una fila por AC-n citando `archivo:linea`. Commitea en la rama de la feature: el review diffea `base..HEAD`.
 
 ### 3. Reviewer — subagente aislado, veredicto sellado
 
@@ -367,7 +369,7 @@ Esa referencia también describe cómo ejecutar la suite y evaluar las regresion
 
 | Necesitas | Hermes | Claude Code | GPT/Codex | AGY / Gemini | Grok | Kimi Code |
 | --- | --- | --- | --- | --- | --- | --- |
-| Implementer | sesion o `claude -p --agent` | `Agent` (`harness-flow:implementer`) | sesion | sesion o `invoke_subagent` (`self`) | sesion | sesion |
+| Implementer | sesion (`--pair`) o `claude -p --agent` | `Agent` (`harness-flow:implementer`) o sesion (`--pair`) | sesion (`--pair` o autonomo) | sesion (`--pair`) o `invoke_subagent` (`self`) | sesion (`--pair` o autonomo) | sesion (`--pair` o autonomo) |
 | Revisor | `claude -p --agent` o `delegate_task` | `Agent` | `codex exec` o subagente | `invoke_subagent` (`self`) | `spawn_subagent` | `Agent` o `kimi -p` |
 | Crear lección | `skill_manage` | `leccion.py donde` | `leccion.py donde` | `leccion.py donde` | `leccion.py donde` | `leccion.py donde` |
 | Guía del host | [`modelos.md`](references/modelos.md) | [`claude.md`](references/claude.md) | [`openai.md`](references/openai.md) | [`modelos.md`](references/modelos.md) / [`hosts.md`](references/hosts.md) | [`grok.md`](references/grok.md) | [`kimi.md`](references/kimi.md) |
@@ -380,6 +382,7 @@ Python. Si no hay revisor aislado, puedes revisar localmente con
 
 | Archivo | Cuando leerlo |
 | --- | --- |
+| [`references/vertical-slice.md`](references/vertical-slice.md) | Vertical Slice, frontera `requiere`, costuras de test, TDD vertical, 3 alarmas y modo Pair (`--pair`) |
 | [`references/entorno.md`](references/entorno.md) | `entorno.py` no resuelve el interprete o el host, falta `psycopg` |
 | [`references/multirepo.md`](references/multirepo.md) | raiz multi-repo sin `.git`: registro, `--integrated`, postmerge medido |
 | [`references/contexto.md`](references/contexto.md) | varias raices de grafo, el parte de `refrescar`, algo del contexto no cuadra |

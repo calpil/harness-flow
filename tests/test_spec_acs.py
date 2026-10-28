@@ -237,5 +237,53 @@ class UnSoloParserTests(unittest.TestCase):
         self.assertTrue(any("cola por estado" in x for x in del_prd))
 
 
+class CosturasYVerticalSliceTests(unittest.TestCase):
+    """Pruebas de costuras publicas de test y avisos de Vertical Slice en specs."""
+
+    def test_extrae_costuras_en_linea_y_debajo_del_ac(self):
+        from comun import ac_costuras
+        spec = (
+            "## Criterios de aceptacion\n\n"
+            "- AC-1: Given X, When Y, Then Z. [costura: endpoint] `verificar: pytest -q`\n"
+            "- AC-2: Given A, When B, Then C.\n"
+            "  Costura: servicio\n"
+            "  Comando: `pytest -q`\n"
+            "- AC-3: Given M, When N, Then O.\n"
+        )
+        self.assertEqual(ac_costuras(spec), {"AC-1": "endpoint", "AC-2": "servicio"})
+
+    def test_avisos_vertical_spec_detecta_exceso_de_acs_plan_largo_y_costura_interna(self):
+        from comun import avisos_vertical_spec
+        spec_limpio = (
+            "## Criterios de aceptacion\n\n"
+            "- AC-1: Given X, When Y, Then Z. [costura: endpoint] `verificar: pytest -q`\n"
+            "- AC-2: Given A, When B, Then C. [costura: servicio] `verificar: pytest -q`\n\n"
+            "## Plan vertical\n\n"
+            "- 1. Red/Green AC-1\n"
+            "- 2. Red/Green AC-2\n"
+        )
+        self.assertEqual(avisos_vertical_spec(spec_limpio), [])
+
+        spec_pesado = (
+            "## Criterios de aceptacion\n\n"
+            + "\n".join(f"- AC-{i}: Given {i}, When {i}, Then {i}. [costura: mock privado]" for i in range(1, 7))
+            + "\n\n## Plan vertical\n\n"
+            + "\n".join(f"- {i}. Paso {i}" for i in range(1, 7))
+        )
+        avisos = avisos_vertical_spec(spec_pesado)
+        self.assertTrue(any("6 AC" in a for a in avisos), avisos)
+        self.assertTrue(any("6 pasos" in a for a in avisos), avisos)
+        self.assertTrue(any("detalles internos" in a for a in avisos), avisos)
+
+        spec_sin_costura = (
+            "## Criterios de aceptacion\n\n"
+            "- AC-1: Given X, When Y, Then Z.\n\n"
+            "## Plan vertical\n\n"
+            "- 1. Paso unico\n"
+        )
+        avisos_sc = avisos_vertical_spec(spec_sin_costura)
+        self.assertTrue(any("ningun AC declara su costura" in a for a in avisos_sc), avisos_sc)
+
+
 if __name__ == "__main__":
     unittest.main()

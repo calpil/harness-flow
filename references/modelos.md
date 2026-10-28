@@ -326,3 +326,20 @@ Antigravity o `gemini-4-argon` en Hermes), todos los roles usan Argon en nivel
   `thinkingLevel` explicito. Informa el nivel solicitado y este comportamiento
   efectivo si corres `gemini-4-argon` desde Hermes. Verificado en el codigo el
   2026-10-16.
+
+## Modo Pair interactivo (`--pair`: Driver = IA, Navigator = Humano)
+
+Cuando el Rol 2 (Implementer) se ejecuta en **modo Pair interactivo** (`--pair`,
+ver `references/vertical-slice.md`), la implementacion corre en la **sesion
+principal** en vez de un subagente batch, para pausar en cada ciclo
+(`1 test -> Red -> codigo minimo -> Green`) y esperar la direccion del usuario.
+Para mantener baja latencia entre micro-pasos sin perder rigor:
+
+| Proveedor / Host | Modelo en `--pair` | Effort recomendado en `--pair` |
+| --- | --- | --- |
+| **OpenAI (Codex / Hermes)** | `gpt-6-astra` o `gpt-6.1-sol` en la sesion | `medium` por defecto para ciclos agiles; `high` si el paso resuelve concurrencia o migracion |
+| **Claude 5.5 (Claude Code / Hermes)** | Sesion en `claude-opus-5-5` o `claude-sonnet-5-5` | `high` (o `medium` si el usuario prioriza velocidad en pasos triviales; `xhigh` ante riesgo concreto) |
+| **Gemini 4 Argon (AGY / Hermes)** | `gemini-4-argon` en la sesion principal | `high` (`Gemini 4 Argon (High)`) |
+| **Grok** | Modelo activo de la sesion en Grok | `medium` / `high` en la sesion; el Rol 3 (Revisor) sigue corriendo aislado con `spawn_subagent` |
+| **Kimi Code** | Modelo activo de la sesion en Kimi | Sesion principal; el Rol 3 sigue corriendo en el subagente `revisor` |
+

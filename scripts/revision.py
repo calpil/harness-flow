@@ -220,6 +220,7 @@ Criterio del veredicto global:
 Reglas:
 - Un AC sin cita `archivo:linea` NO es 'ok'.
 - Si la evidencia cita una linea que no existe o no hace lo que dice, es 'falla'.
+- Audita la integridad de los tests en el diff: si se borro, salto (skip) o debilito un test existente para forzar el verde, o si el test es tautologico (recalcula el valor esperado con la misma logica del codigo en vez de contrastar contra el AC en la costura publica), reportalo como hallazgo mayor/bloqueante.
 - No modifiques codigo. Solo lees y escribes {rp.name}.
 """)
     # Solo un sello del gate cuenta como ronda cerrada: un 'Veredicto propuesto'

@@ -566,6 +566,49 @@ class ValidacionTests(unittest.TestCase):
         sin_estado = producto.sellar("# T\n\n## Problema\n\nx\n", "q", "c")
         self.assertTrue(sin_estado.startswith("# T\n\nEstado: approved\nAprobado: q · c"))
 
+    def test_candidatas_dependencias_extrae_requiere_y_valida_inexistentes_y_ciclos(self):
+        con_deps = PRD_COMPLETO.replace(
+            "- F-2: Alerta de duplicados: operaciones ve los intentos repetidos (cumple O2)",
+            "- F-2: Alerta de duplicados: operaciones ve los intentos repetidos (cumple O2; requiere: F-1)",
+        )
+        self.assertEqual(producto.candidatas_dependencias(con_deps), {"F-2": ["F-1"]})
+        self.assertEqual(producto.validar(con_deps, "prd"), [])
+
+        inexistente = PRD_COMPLETO.replace(
+            "(cumple O2)",
+            "(cumple O2; requiere: F-99)",
+        )
+        probs = producto.validar(inexistente, "prd")
+        self.assertTrue(any("F-99" in p and "no existe" in p for p in probs), probs)
+
+        auto_dep = PRD_COMPLETO.replace(
+            "(cumple O1)",
+            "(cumple O1; requiere: F-1)",
+        )
+        probs_auto = producto.validar(auto_dep, "prd")
+        self.assertTrue(any("depender de si misma" in p for p in probs_auto), probs_auto)
+
+        ciclo = (PRD_COMPLETO
+                 .replace("(cumple O1)", "(cumple O1; requiere: F-2)")
+                 .replace("(cumple O2)", "(cumple O2; requiere: F-1)"))
+        probs_ciclo = producto.validar(ciclo, "prd")
+        self.assertTrue(any("ciclo" in p for p in probs_ciclo), probs_ciclo)
+
+    def test_avisos_vertical_prd_detecta_corte_horizontal_e_historia_del_sistema(self):
+        self.assertEqual(producto.avisos_vertical_prd(PRD_COMPLETO), [])
+        horizontal = PRD_COMPLETO.replace(
+            "- F-1: Cobro idempotente: un reintento no crea un segundo pedido (cumple O1)",
+            "- F-1: Crear tabla SQL: migracion de esquema para cobros (cumple O1)",
+        ).replace(
+            "- F-2: Alerta de duplicados: operaciones ve los intentos repetidos (cumple O2)",
+            "- F-2: Cola interna: como sistema quiero encolar eventos internos (cumple O2)",
+        )
+        avisos = producto.avisos_vertical_prd(horizontal)
+        self.assertTrue(any("F-1" in a and "capa tecnica" in a for a in avisos), avisos)
+        self.assertTrue(any("F-2" in a and "actor de sistema" in a for a in avisos), avisos)
+        avisos_exceso = producto.avisos_vertical_prd(PRD_COMPLETO, max_candidatas=1)
+        self.assertTrue(any("2 candidatas" in a and "10-15" in a for a in avisos_exceso), avisos_exceso)
+
 
 if __name__ == "__main__":
     unittest.main()

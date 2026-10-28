@@ -2,7 +2,7 @@
 """Alta de feature en el backlog y creacion del spec en draft.
 
   add.py --name "cobro idempotente" [--kind bug|task] [--microservicio a --microservicio b]
-         [--prd docs/prd/PRD-master.md] [--candidata F-1]
+         [--prd docs/prd/PRD-master.md] [--candidata F-1] [--requiere F-1]
 """
 from __future__ import annotations
 
@@ -12,8 +12,8 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from comun import (bitacora, load_backlog, now_iso, paths, save_backlog,  # noqa: E402
-                   slugify, spec_path)
+from comun import (bitacora, load_backlog, now_iso, paths, requiere_declarados,  # noqa: E402
+                   save_backlog, slugify, spec_path)
 
 TEMPLATE = Path(__file__).parent.parent / "templates" / "spec.md"
 
@@ -34,6 +34,8 @@ def main() -> None:
     ap.add_argument("--microservicio", action="append", default=[])
     ap.add_argument("--prd")
     ap.add_argument("--candidata", help="la F-n de '## Features candidatas' del PRD que origina la feature")
+    ap.add_argument("--requiere", action="append", default=[],
+                    help="vertical slice del que depende (p.ej. F-1 o #1; repetible)")
     ap.add_argument("--acceptance", action="append", default=[])
     a = ap.parse_args()
 
@@ -49,6 +51,7 @@ def main() -> None:
         sys.exit("[!!] --prd solo puede ser docs/prd/PRD-master.md: es el unico cuerpo que sella "
                  "producto.py aprobar. Una candidata F-n no es otro archivo; su historia la cuenta el spec.")
     linea = None
+    deps_prd: list[str] = []
     if a.candidata:
         if not re.fullmatch(r"F-\d+", a.candidata):
             sys.exit(f"[!!] --candidata {a.candidata!r}: usa el id del PRD, por ejemplo F-1")
@@ -58,6 +61,9 @@ def main() -> None:
         linea = producto.candidata(texto, a.candidata)
         if linea is None:
             sys.exit(f"[!!] {a.candidata} no esta en '## Features candidatas' de {prd}")
+        deps_prd = producto.candidatas_dependencias(
+            producto.seccion(texto, "Features candidatas") or ""
+        ).get(a.candidata, [])
         otras = [x for x in data["features"]
                  if x.get("prd_candidata") == a.candidata and x.get("status") != "superseded"]
         if otras:
@@ -65,6 +71,12 @@ def main() -> None:
                   + ": esta feature sera otra parte de la misma candidata")
 
     fid = max([int(f["id"]) for f in data["features"]] or [0]) + 1
+    reqs = requiere_declarados({"requiere": [*deps_prd, *a.requiere]})
+    for r in reqs:
+        if not re.fullmatch(r"(?:#\d+|F-\d+)", r):
+            sys.exit(f"[!!] --requiere {r!r} invalido: usa F-n (candidata del PRD) o #<id> (feature del backlog)")
+        if r == f"#{fid}" or (a.candidata and r == a.candidata):
+            sys.exit(f"[!!] la feature #{fid} ({a.candidata or a.name}) no puede depender de si misma ({r})")
     f = {"id": fid, "name": a.name, "kind": a.kind,
          "microservicios": a.microservicio, "acceptance": a.acceptance,
          "status": "todo", "created_at": now_iso()}
@@ -72,6 +84,8 @@ def main() -> None:
         f["prd"] = prd
     if a.candidata:
         f["prd_candidata"] = a.candidata
+    if reqs:
+        f["requiere"] = reqs
     data["features"].append(f)
     save_backlog(p, data)
 
@@ -85,6 +99,8 @@ def main() -> None:
     bitacora(p, f"add #{fid} '{a.name}' ({a.kind})"
              + (f" candidata {a.candidata}" if a.candidata else ""))
     print(f"[ok] feature #{fid} agregada")
+    if reqs:
+        print(f"[i]  requiere: {', '.join(reqs)}")
     print(f"[ok] spec en draft: {sp}")
     try:
         import gate

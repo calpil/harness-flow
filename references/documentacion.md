@@ -66,18 +66,24 @@ Secciones, en este orden, y lo que `aprobar` exige de cada una:
 | `## Como funciona hoy y como va a funcionar` | el flujo dibujado dos veces, reusando lo que existe | contenido |
 | `## Los datos` | disparador, entidades y tablas tocadas, interruptor, candado | contenido |
 | `## Pseudo-codigo: el acuerdo` | que lo dispara, que lo frena, que promete; en palabras | contenido |
-| `## Features candidatas` | una linea por candidata: `- F-n: nombre: resultado (cumple O1)` | al menos una `F-n` |
+| `## Features candidatas` | una linea por candidata vertical: `- F-n: nombre: resultado (cumple O1; requiere: F-m)` | al menos una `F-n`, sin dependencias inexistentes ni ciclos |
 
 `Despues:`/`Después:`, `**Antes:**` en negrita y la etiqueta sola con el parrafo
 debajo valen igual. Un titulo `##` con tilde o mayusculas es la misma seccion
 (`## Pseudo-código` cuenta como `## Pseudo-codigo`). Un bloque cercado con lenguaje (` ```go `, ` ```sql `,
 ` ```ts `...) en cualquier parte es codigo final y se niega; ` ``` ` pelado o
 ` ```text ` es pseudo-codigo y pasa. El validador mide estructura, no calidad:
-que la historia convenza lo decide el usuario en el ritual.
+que la historia convenza lo decide el usuario en el ritual. Si una `F-n` declara
+`requiere: F-m`, el validador comprueba que `F-m` exista, que no dependa de si
+misma y que no haya ciclos entre candidatas; ademas emite avisos `[!]` si detecta
+cortes por capa horizontal o historias del sistema/desarrollador (ver
+`references/vertical-slice.md`).
 
 - SDD: Contexto, Componentes, Datos e integraciones, Decisiones, Riesgos, cada
-  una con contenido, y al menos una decision con nombre (`- D1: ...`). Cada
-  `D-n` nombra la opcion descartada (`Descartada: cache, porque ...`;
+  una con contenido, y al menos una decision con nombre (`- D1: ...`). Prioriza
+  las **4 decisiones costosas de cambiar** (persistencia/esquema, contratos entre
+  servicios/API, permisos/auth, concurrencia/idempotencia) y aplica YAGNI al
+  resto. Cada `D-n` nombra la opcion descartada (`Descartada: cache, porque ...`;
   `Descartado:` vale igual, con o sin tilde). Sin eso `aprobar` se niega: una
   decision sin alternativa no es una decision. El spec de cada feature cita
   las que aplica. El flujo, los datos y el pseudo-codigo de cada cambio ya

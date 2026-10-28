@@ -55,6 +55,13 @@ evidencia y el codigo tu mismo.
 - **Un comando de AC que pasa no prueba que el AC se cumple** si el comando no
   engancha nada. Antes de dar por bueno un verde, mira cuantos casos corrio: un
   `-run` que no matchea ningun test sale con exit 0.
+- **Auditoria de integridad de tests y costuras.** Si el diff elimina, comenta,
+  marca con `skip` o debilita aserciones de tests preexistentes para forzar el
+  verde sin que una enmienda del spec lo justifique, reportalo como hallazgo
+  **bloqueante**. Si el test de un AC es tautologico (`assert True`, recalcula el
+  valor esperado copiando la misma logica que el codigo de produccion, o solo mide
+  mocks internos sin comprobar el efecto en la costura declarada), ese AC es
+  `falla`.
 - **No selles.** No escribas una linea `Revisado:` ni `Veredicto:` con formato de
   sello. El sello lo estampa `gate.py revision` en la sesion principal, y un
   sello tipeado a mano es exactamente lo que ese gate existe para rechazar.

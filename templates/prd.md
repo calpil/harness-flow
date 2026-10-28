@@ -93,7 +93,18 @@ Despues:
 ## Features candidatas
 
 <!-- Una linea por candidata, en orden de prioridad, con el formato exacto
-       - F-1: <nombre>: <resultado observable para el usuario> (cumple O1)
+       - F-1: <nombre>: <resultado observable punta a punta para el usuario> (cumple O1)
+       - F-2: <nombre>: <resultado observable> (cumple O1; requiere: F-1)
+     Reglas de Vertical Slice (/backlog de hola-ai):
+       - No inventes requisitos: si falta algo, pregunta (una pregunta a la vez, con respuesta sugerida).
+       - F-1 es un walking skeleton: flujo minimo real punta a punta (sin mocks).
+       - Cortar por comportamiento observable del usuario (UI/API -> logica -> datos
+         -> tests), NUNCA por capa horizontal ("crear esquema DB", "hacer endpoints",
+         "armar UI") ni como historia del desarrollador/sistema.
+       - Pocas candidatas: 10-15 maximo, una linea por historia, sin estimaciones ni detalles tecnicos.
+       - Si un cambio requiere refactor amplio o migracion, usar expand-contract
+         (agregar -> migrar -> eliminar el camino viejo) para no romper la app.
+       - Declara bloqueos con (requiere: F-1, F-2) solo cuando una historia no tiene sentido sin otra.
      Cada una entra al backlog con
        add.py --name "<nombre>" --prd docs/prd/PRD-master.md
      y recibe su spec con AC en el rol leader. -->

@@ -33,9 +33,15 @@ cambiarlos, este rol no corre: pasa a `/harness-flow:spec`.
 
 ## 1. Contexto antes de escribir
 
-Para el PRD, la fuente es lo que cuente el usuario: pregunta problema,
-usuarios, objetivos y que queda fuera antes de inventar nada. Para el SDD,
-cruza el arbol real en vez de suponerlo:
+Para el PRD, la fuente es lo que cuente el usuario (estilo `/backlog` de `hola-ai`):
+- **No inventes requisitos**: si algo no esta claro o ves un hueco, pregunta
+  **una pregunta a la vez, con tu respuesta sugerida**.
+- Si es un proyecto o modulo nuevo, pregunta **solo si aplica** alguna de las
+  **4 decisiones caras de cambiar** (solo pregunta, no las disenes si no aplican):
+  (1) multi-tenant o multi-organizacion, (2) modelo de permisos o roles,
+  (3) operacion offline o sincronizacion, (4) multi-idioma o multi-moneda.
+
+Para el SDD, cruza el arbol real en vez de suponerlo:
 
 ```bash
 eval "$(python3 "${CLAUDE_PLUGIN_ROOT}/scripts/entorno.py" --shell)" && "$PY" "$H/contexto.py" estado
@@ -68,12 +74,20 @@ lo toca. Rellenalo con las tools de archivo.
   una funcionalidad, 3-8; un producto grande sigue siendo un solo PRD maestro.
   Cada candidata es una linea, no otro archivo.
 - PRD: `## Features candidatas` lleva una linea por candidata con el formato
-  exacto `- F-1: <nombre>: <resultado observable> (cumple O1)`. Es lo que
-  despues entra al backlog. `--prd` solo acepta `docs/prd/PRD-master.md`.
-- SDD: cada decision con nombre (`- D1: ...`) y la alternativa descartada
-  (`Descartada: cache, porque ...`). Sin una `D-n`, o con una `D-n` que no
-  descarte nada, `aprobar` se niega, porque el spec de cada feature cita las
-  que aplica. Si hay migraciones numeradas, di contra que rama se reserva el
+  exacto `- F-1: <nombre>: <resultado observable> (cumple O1; requiere: F-m)`.
+  Es lo que despues entra al backlog. `--prd` solo acepta
+  `docs/prd/PRD-master.md`. Corta cada `F-n` como **rebanada vertical** de
+  comportamiento observable por el usuario (`F-1` = *walking skeleton* punta a
+  punta sin mocks; usa *expand–contract* para refactors amplios), NUNCA por capa
+  horizontal ni como historia del sistema/desarrollador. Declara dependencias
+  con `requiere: F-m` para fijar la frontera ejecutable (`aprobar` valida que
+  existan y no formen ciclos).
+- SDD: prioriza las **4 decisiones costosas de cambiar** (persistencia/esquema,
+  contratos entre servicios/API, permisos/auth, concurrencia/idempotencia) y
+  aplica YAGNI al resto. Cada decision con nombre (`- D1: ...`) y la alternativa
+  descartada (`Descartada: cache, porque ...`). Sin una `D-n`, o con una `D-n`
+  que no descarte nada, `aprobar` se niega, porque el spec de cada feature cita
+  las que aplica. Si hay migraciones numeradas, di contra que rama se reserva el
   numero.
 
 ## 3. Ritual de aprobacion

@@ -13,14 +13,21 @@ Estado: draft
 
 <!-- Que sistema existe hoy y que restricciones hereda: stack, repos,
      datos, despliegue. Cruzalo con `contexto.py estado` y `hub.py impacto`
-     en vez de suponerlo. -->
+     en vez de suponerlo. Pregunta solo si aplica alguna de las 4 decisiones
+     caras de cambiar despues (no las disenes si no aplican):
+       1. Multi-tenant o multi-organizacion
+       2. Modelo de permisos o roles
+       3. Operacion offline o sincronizacion
+       4. Multi-idioma o multi-moneda -->
 
 ## Componentes
 
 <!-- Microservicios / repos con la responsabilidad de cada uno, sus
      fronteras y los contratos entre ellos (API, eventos, tablas). El flujo,
      los datos y el pseudo-codigo de cada cambio ya estan en el PRD: aqui va
-     lo que el PRD no fija, la arquitectura que los sostiene. -->
+     lo que el PRD no fija, la arquitectura que los sostiene.
+     Diseno simple (YAGNI): no agregues capas, repositorios, factories ni
+     abstracciones "por si acaso" para un futuro hipotetico. -->
 
 ## Datos e integraciones
 

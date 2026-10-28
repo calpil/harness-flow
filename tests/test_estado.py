@@ -126,6 +126,27 @@ class EstadoTests(unittest.TestCase):
         self.assertIn("add.py --name", out)
         self.assertNotIn("estado desconocido", out)
 
+    def test_frontera_prioriza_feature_sin_bloqueos_y_reporta_cuando_todas_estan_bloqueadas(self):
+        out = self.panorama([
+            {"id": 1, "name": "Depende de 2", "status": "todo", "requiere": [2]},
+            {"id": 2, "name": "Walking skeleton", "status": "todo"},
+        ])
+        self.assertIn("#1 [todo] Depende de 2", out)
+        self.assertIn("bloqueada por #2 (todo)", out)
+        self.assertIn("arranca la #2: worktree.py start --feature 2", out)
+
+        out_desbloqueada = self.panorama([
+            {"id": 1, "name": "Depende de 2", "status": "todo", "requiere": [2]},
+            {"id": 2, "name": "Walking skeleton", "status": "done"},
+        ])
+        self.assertIn("dependencias ok", out_desbloqueada)
+        self.assertIn("arranca la #1: worktree.py start --feature 1", out_desbloqueada)
+
+        out_todas_bloq = self.panorama([
+            {"id": 1, "name": "Bloqueada A", "status": "todo", "requiere": ["F-9"]},
+        ])
+        self.assertIn("la #1 esta bloqueada por F-9 (sin feature): cierra primero su dependencia", out_todas_bloq)
+
 
 if __name__ == "__main__":
     unittest.main()

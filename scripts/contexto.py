@@ -25,9 +25,10 @@ import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from comun import (SERVICE_RE, ac_comandos, get_feature, grafos_config,  # noqa: E402
-                   graph_path, impl_path, load_backlog, now_iso, paths,
-                   raices_grafo, review_path, spec_ac_lineas, spec_acs,
+from comun import (SERVICE_RE, ac_comandos, ac_costuras, bloqueos_feature,  # noqa: E402
+                   get_feature, grafos_config, graph_path, impl_path,
+                   load_backlog, now_iso, paths, raices_grafo,
+                   requiere_declarados, review_path, spec_ac_lineas, spec_acs,
                    spec_path)
 from comun import micros_declarados as _micros_declarados  # noqa: E402
 
@@ -1029,12 +1030,18 @@ def cmd_brief(args) -> None:
     stext = sp.read_text(encoding="utf-8") if sp.exists() else ""
     acs = spec_acs(stext)
     cmds = ac_comandos(stext)
+    costuras = ac_costuras(stext)
     micros = _micros_declarados(f)
 
     L: list[str] = []
     L.append(f"== BRIEF #{f['id']} {f.get('name')} ({proyecto}) ==")
     L.append(f"estado: {f.get('status')} · rama: {f.get('branch') or '-'} · "
              f"worktree: {f.get('worktree') or '(sin worktree)'}")
+    reqs = requiere_declarados(f)
+    if reqs:
+        bloq = bloqueos_feature(data, f)
+        estado_dep = f"[!] bloqueada por {', '.join(bloq)}" if bloq else "ok (todas cerradas)"
+        L.append(f"dependencias: {', '.join(reqs)} -> {estado_dep}")
     if not e["fresco"]:
         L.append(f"[!] contexto VENCIDO ({', '.join(e['vencidas'])}): lo de abajo "
                  "puede no reflejar el arbol actual. Corre contexto.py refrescar.")
@@ -1047,6 +1054,8 @@ def cmd_brief(args) -> None:
     lineas_ac = spec_ac_lineas(stext)
     for ac in acs:
         L.append(f"  {lineas_ac.get(ac, ac)[:200]}")
+        if ac in costuras:
+            L.append(f"      costura: {costuras[ac]}")
         if ac in cmds:
             L.append(f"      comando: {cmds[ac]}")
 
