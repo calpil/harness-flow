@@ -179,8 +179,24 @@ en las sesiones EN USO cuyo servidor MCP perdio su socket hacia el daemon (en `l
 descriptor de datos, fd >= 3, dice `->(none)`; uno sano apunta a un peer). Se comprobo
 tumbando a la fuerza un daemon de prueba aislado: el servidor sigue vivo y falla en su
 siguiente consulta. **No se arregla desde fuera**: esa sesion tiene que reconectar el
-MCP (en Claude Code, `/mcp`) o reiniciarse; matar su servidor solo adelanta el fallo.
-Verificado en macOS; donde `lsof` no muestre `(none)` no detecta nada y no avisa de mas.
+MCP (en Claude Code, `/mcp` y Reconnect) o reiniciarse; matar su servidor solo adelanta el
+fallo. Verificado en macOS; donde `lsof` no muestre `(none)` no detecta nada y no avisa de mas.
+
+Lo que se probo para recuperarlas sin tocar la sesion (2026-10-29, con un daemon aislado) y
+**no sirve**: (1) con un daemon nuevo YA disponible cuando llega la peticion, el servidor
+cortado no reconecta: se cierra igual; (2) ninguna senal ayuda: SIGHUP lo mata y las demas
+no hacen nada. Claude Code tampoco lo cubre: segun su documentacion (resumen de la pagina,
+no el texto literal) un servidor MCP stdio que termina solo se reinicia a mano desde
+`/mcp` -> Reconnect (o `/mcp reconnect all`, v2.1.284+); no hay comando de CLI, hook ni
+variable para relanzarlo, y el reintento automatico es solo para servidores remotos
+(HTTP/SSE). El Agent SDK tiene `reconnectMcpServer()`, pero solo sirve si el codigo
+controla la sesion. En `claude -p` los servidores stdio se relanzan solos en la siguiente
+llamada. Lo unico que `limpiar-cbm` puede hacer es decir **que terminal es cada sesion**:
+cada fila de sesion EN USO trae la carpeta de su agente (`en ~/WebstormProjects/ADR`), y
+`--reiniciar-daemon` la muestra tambien en la lista de sesiones que perderan cbm antes de
+actuar. Un servidor intermedio que relance el hijo al cortarse seria la unica forma de que
+no se repita, pero exige cambiar la configuracion MCP de cada agente y no es un patron
+documentado: no esta instalado.
 
 **Daemon vivo pero sin socket (visto el 2026-10-29).** Es la causa de un
 "30 s sin aceptar cliente" que **no mejora esperando**. El proceso del daemon sigue

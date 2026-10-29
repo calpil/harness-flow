@@ -127,6 +127,28 @@ def enlaces_cortados(pids: list[int]) -> set[int]:
     return cortados
 
 
+def cwds_de(pids: list[int]) -> dict[int, str]:
+    """Carpeta de trabajo de cada proceso (con `~` por el home): es lo que dice a que
+    terminal/proyecto pertenece una sesion cortada. Vacio donde lsof no responde; es
+    solo una etiqueta, nunca se decide nada con esto."""
+    if not pids:
+        return {}
+    try:
+        r = subprocess.run(["lsof", "-a", "-d", "cwd", "-Fpn", "-p", ",".join(map(str, pids))],
+                           capture_output=True, text=True, timeout=20)
+    except (OSError, subprocess.TimeoutExpired):
+        return {}
+    home = str(Path.home())
+    out, pid = {}, None
+    for ln in r.stdout.splitlines():
+        if ln.startswith("p") and ln[1:].isdigit():
+            pid = int(ln[1:])
+        elif ln.startswith("n") and pid is not None:
+            ruta = ln[1:]
+            out[pid] = "~" + ruta[len(home):] if ruta == home or ruta.startswith(home + "/") else ruta
+    return out
+
+
 def rutas_socket(pid: int) -> list[str]:
     """Rutas en disco de los sockets unix que tiene abiertos un proceso. Vacio si
     lsof no responde: sin dato no se afirma nada."""
@@ -244,7 +266,7 @@ def matar(p: dict, *, kill=os.kill, vivo=_vivo, comando=_comando, dormir=time.sl
 
 
 def limpiar(*, matar_huerfanos=True, enlaces=enlaces_cortados,
-            sin_socket=daemon_sin_socket, **inyectado) -> int:
+            sin_socket=daemon_sin_socket, cwds=cwds_de, **inyectado) -> int:
     """Imprime el estado de cada proceso cbm y, salvo --solo-avisar, quita lo huerfano."""
     if ES_WINDOWS:
         print("[i]  limpiar-cbm usa `ps`: no esta soportado en Windows.")
@@ -253,6 +275,9 @@ def limpiar(*, matar_huerfanos=True, enlaces=enlaces_cortados,
     filas = clasificar(procesos, todos, protegidos(todos))
     vivas = [p["pid"] for p in filas if p["rol"] == "sesion" and p["estado"] == "EN USO"]
     cortadas = enlaces(vivas)
+    # el padre de una sesion es el agente (claude, agy...): su carpeta dice que terminal es
+    donde = cwds([p["ppid"] for p in filas if p["rol"] == "sesion" and p["estado"] == "EN USO"
+                  and p["ppid"] not in (0, 1)])
     print("== procesos de codebase-memory-mcp ==")
     if not filas:
         print("   (ninguno)")
@@ -263,8 +288,9 @@ def limpiar(*, matar_huerfanos=True, enlaces=enlaces_cortados,
             accion = " -> " + matar(p, **inyectado)
             fallos += "NO SE PUDO" in accion
         corte = "  | enlace al daemon CORTADO" if p["pid"] in cortadas else ""
+        en = f" en {donde[p['ppid']]}" if p["rol"] == "sesion" and p["ppid"] in donde else ""
         print(f"   {p['estado']:<8} pid={p['pid']:<6} {p['rol']:<7} {p['rss_mb']:>6.0f}MB "
-              f"{p['etime']:>11}  {p['motivo']}{corte}{accion}")
+              f"{p['etime']:>11}  {p['motivo']}{en}{corte}{accion}")
     huerfanos = [p for p in filas if p["estado"] == "HUERFANO"]
     if not huerfanos:
         print("[ok] ninguno es huerfano: nada que matar.")
@@ -273,8 +299,10 @@ def limpiar(*, matar_huerfanos=True, enlaces=enlaces_cortados,
     if cortadas:
         print(f"[!]  {len(cortadas)} sesion(es) con el enlace a cbm cortado: su proxima consulta "
               "cbm falla y su servidor MCP se cierra.\n"
-              "     Siguen EN USO y no se matan: reconecta el MCP desde tu agente (en Claude Code "
-              "`/mcp`) o reinicia la sesion.")
+              "     Siguen EN USO y no se matan. No se recuperan desde fuera (verificado: ni con un "
+              "daemon nuevo ni con senales); en cada terminal indicada arriba:\n"
+              "     Claude Code -> `/mcp` y Reconnect; Hermes, agy y demas agentes -> reiniciar "
+              "la sesion.")
     huerfano_socket = sin_socket(procesos)
     if huerfano_socket:
         print(f"[!]  el daemon cbm (pid {', '.join(map(str, huerfano_socket))}) esta vivo pero su "
@@ -315,7 +343,7 @@ def _verificar_cliente(*, correr=None) -> tuple[bool, str]:
 
 def reiniciar_daemon(*, solo_avisar=False, leer=leer_procesos, detectar=daemon_sin_socket,
                      enlaces=enlaces_cortados, verificar=_verificar_cliente,
-                     dormir=time.sleep, **inyectado) -> int:
+                     cwds=cwds_de, dormir=time.sleep, **inyectado) -> int:
     """Termina el daemon cbm SOLO si su socket desaparecio, y comprueba que un cliente
     nuevo conecta despues.
 
@@ -356,10 +384,11 @@ def reiniciar_daemon(*, solo_avisar=False, leer=leer_procesos, detectar=daemon_s
     if conectadas:
         print(f"   Al reiniciarlo, {len(conectadas)} sesion(es) conectada(s) pierden cbm hasta "
               "reconectar el MCP (`/mcp` en Claude Code) o reiniciarse:")
+        donde = cwds([p["ppid"] for p in conectadas])
         for p in conectadas:
             padre = todos.get(p["ppid"], (0, "?"))[1].split()[0:1]
             print(f"     pid={p['pid']}  padre: {os.path.basename(padre[0]) if padre else '?'} "
-                  f"(pid {p['ppid']})")
+                  f"(pid {p['ppid']})" + (f" en {donde[p['ppid']]}" if p["ppid"] in donde else ""))
     for p in hijos:
         print(f"   worker de indexado del daemon: pid={p['pid']} (se corta con el)")
     if solo_avisar:
