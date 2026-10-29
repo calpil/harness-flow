@@ -140,6 +140,7 @@ agente resuelve a su manera:
 | indexa | sella HEAD (solo si el arbol estaba limpio) | `indexadas` |
 | daemon ocupado/arrancando/parandose | 3 intentos con espera 5 s, 15 s; si sigue, **PENDIENTE** | `pendientes` (no es fallo) |
 | ya fallo una raiz por esto | las demas quedan pendientes sin llamarlo (5 raices no pagan 5 esperas) | `pendientes` |
+| daemon **vivo pero sin socket** | pendiente al instante, sin llamarlo ni esperar; **no se arregla solo** | `pendientes` (`causa: daemon_sin_socket`) |
 | build distinto, ruta no indexable, binario ausente | un solo intento, fallo visible | `fallos` |
 | error que no reconoce | un solo intento, fallo visible (no se difiere lo que no se entiende) | `fallos` |
 
@@ -151,7 +152,9 @@ dependen de cbm. `contexto.py cbm` (comando explicito) si sale con 1 mientras ha
 pendientes, y `--forzar` reindexa aunque HEAD no haya cambiado.
 
 **Un agente que ve "cbm pendiente" no hace nada.** No reintenta en bucle y, sobre
-todo, **no mata el daemon ni sus procesos a mano**. Lo que se verifico: `daemon stop`
+todo, **no mata el daemon ni sus procesos a mano**. La unica excepcion es el aviso de
+"daemon vivo sin socket" (siguiente seccion): ahi el agente avisa a la persona usuaria y
+solo con su aprobacion corre `limpiar-cbm --reiniciar-daemon`. Lo que se verifico: `daemon stop`
 ordenado se NIEGA mientras haya sesiones MCP conectadas ("NOT stopped -- N committed
 client(s) still use it"), asi que no es el riesgo; el riesgo es matar el proceso
 (`kill`, `pkill`): el daemon es de todas las sesiones, eso cancela el indexado en
@@ -165,7 +168,7 @@ proceso cbm como `EN USO` o `HUERFANO` y mata solo los huerfanos. Huerfano es lo
 unico que se prueba: su padre murio y el sistema lo reasigno al init. Un servidor
 MCP cuya sesion sigue viva es `EN USO` aunque este inactivo o tenga el enlace con el
 daemon roto: no hay forma de saber si esa sesion lo va a necesitar, y matarlo la deja
-con cbm caido. El daemon tampoco se toca nunca. Seguridad: nunca mata a este mismo
+con cbm caido. El daemon tampoco se toca nunca, salvo el caso probado de abajo. Seguridad: nunca mata a este mismo
 comando ni a sus ancestros, vuelve a leer el comando justo antes del `kill` (si el
 pid ya es otro programa, no lo toca) y usa SIGTERM antes de SIGKILL. Tambien borra los
 `*.db.stage.*` del cache (~100 MB cada uno) con mas de 1 h, pero solo si no hay
@@ -179,11 +182,43 @@ siguiente consulta. **No se arregla desde fuera**: esa sesion tiene que reconect
 MCP (en Claude Code, `/mcp`) o reiniciarse; matar su servidor solo adelanta el fallo.
 Verificado en macOS; donde `lsof` no muestre `(none)` no detecta nada y no avisa de mas.
 
-**Cuando el daemon no atiende, el arnes deja evidencia.** El disparador de los
-"30 s sin aceptar cliente" no se pudo reproducir (ni con un cierre real de 5 raices
-ni con sondas concurrentes), asi que al quedar una raiz pendiente se guarda una foto
-barata, sin tocar el daemon: carga, swap, procesos cbm por rol, sesiones cortadas y
-cuantos reindexados del watcher hay en la cola del log. Sale en `estado`/el cierre
+**Daemon vivo pero sin socket (visto el 2026-10-29).** Es la causa de un
+"30 s sin aceptar cliente" que **no mejora esperando**. El proceso del daemon sigue
+vivo y sostiene el lock, pero sus archivos `.sock`, `.anc` y `.sock.identity` ya no
+existen en el directorio de coordinacion (`/private/tmp/cbm-daemon-<uid>/`; uno sano
+los tiene). Sintomas, todos a la vez: `daemon status` dice `not running` (el hook de
+augmentation avisa "no CBM daemon is running"), todo cliente nuevo falla tras 30 s con
+`CBM daemon is active or starting but could not accept this client within 30000 ms`
+(el mismo texto que un daemon ocupado) y el servidor MCP de una sesion nueva da
+`CONNECT_TIMEOUT`. No se recupera solo: `daemon stop` no lo alcanza y ningun otro
+daemon puede arrancar porque el lock es suyo; las sesiones que ya estaban conectadas
+conservan su enlace abierto, las nuevas no pueden conectar. El arnes lo detecta antes de llamar al daemon (el
+proceso tiene sockets unix abiertos y NINGUNA de sus rutas existe; sin datos de `lsof`
+no acusa), deja la raiz pendiente en 0,1 s en vez de gastar 3 intentos de 30 s, y dice
+el remedio. Se reevalua en cada refresco (es una lectura de `lsof`, no hay que enfriar).
+
+`contexto.py limpiar-cbm --reiniciar-daemon [--solo-avisar]` es lo unico que toca el
+daemon: **solo si esta probado sin socket** (lo confirma dos veces con 1 s de pausa; un
+daemon que conserva su socket se rechaza y se remite a `daemon stop`). Antes de matar
+lista las sesiones conectadas que perderan cbm hasta `/mcp` (las ya cortadas no), termina
+al daemon y a sus workers (SIGTERM, luego SIGKILL; nunca sesiones) y comprueba que un
+cliente nuevo conecta (`cli list_projects`). No usa `daemon start`: deja un daemon
+**permanente**; el primer cliente levanta uno efimero. `--solo-avisar` solo muestra a
+quien afectaria. Cuando reiniciar lo decide la persona usuaria, no el agente.
+
+Que lo causa **no esta establecido**. Descartado: que un cliente que da timeout contra
+un daemon ocupado borre los sockets (se congelo un daemon de prueba aislado con SIGSTOP,
+un cliente espero 30 s y fallo con otro mensaje -- `endpoint is held by pid N ... likely
+dead` --, y al reanudarlo el daemon respondio y conservaba sus archivos), y el limpiador
+de `/tmp` de macOS (sockets mas viejos de `/tmp` sobreviven). Si reaparece, el
+`Al fallar:` del pendiente y `diagnosticos` en `.cbm_estado.json` guardan el momento.
+
+**Cuando el daemon no atiende, el arnes deja evidencia.** Un "30 s sin aceptar
+cliente" tiene mas de una causa (ocupado, o vivo sin socket) y el texto del cliente es
+el mismo; los disparadores de la saturacion no se pudieron reproducir (ni con un cierre
+real de 5 raices ni con sondas concurrentes). Al quedar una raiz pendiente se guarda una
+foto barata, sin tocar el daemon: carga, swap, procesos cbm por rol, sesiones cortadas,
+pids de daemons sin socket y cuantos reindexados del watcher hay en la cola del log. Sale en `estado`/el cierre
 como `Al fallar: ...` y las ultimas 20 quedan en `diagnosticos` de
 `graphify-out/.cbm_estado.json`. Si el aviso reaparece, esos datos dicen si fue carga,
 memoria, churn del watcher o sesiones cortadas, en vez de adivinar.

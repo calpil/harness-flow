@@ -290,7 +290,10 @@ Si el cierre dice "cbm pendiente" (el daemon compartido no atendio), no es un fa
 requiere accion: el arnes lo reintenta solo. No lo reintentes a mano ni mates el daemon ni
 procesos cbm a mano (`kill`, `pkill`): dejas sin cbm a las sesiones de los demas agentes. Para
 procesos cbm sobrantes: `$PY "$H/contexto.py" limpiar-cbm` (avisa cuales estan en uso, cuales
-sesiones tienen el enlace cortado y mata solo los huerfanos).
+sesiones tienen el enlace cortado y mata solo los huerfanos). Excepcion: si el aviso dice
+"daemon vivo pero sin socket", eso NO se arregla solo; avisa a la persona usuaria y, con su
+aprobacion, `$PY "$H/contexto.py" limpiar-cbm --reiniciar-daemon` (`--solo-avisar` muestra a
+quien afecta). Nunca lo corras por tu cuenta: corta cbm en las sesiones conectadas.
 Detalles de refresco, cobertura y fallos: [`references/contexto.md`](references/contexto.md)
 y [`references/hub.md`](references/hub.md).
 

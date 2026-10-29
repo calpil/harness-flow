@@ -183,6 +183,7 @@ class LimpiarTests(unittest.TestCase):
     def _correr(self, procesos, **kw):
         muertos = []
         salida = io.StringIO()
+        kw.setdefault("sin_socket", lambda procs: [])    # nunca lsof real
         inyectado = dict(kill=lambda pid, sig: muertos.append(pid),
                          vivo=lambda pid: pid not in muertos,
                          comando=lambda pid: next(p["cmd"] for p in procesos if p["pid"] == pid),
@@ -255,7 +256,8 @@ class LimpiarTests(unittest.TestCase):
                 mock.patch.object(cp, "protegidos", return_value={60}), \
                 contextlib.redirect_stdout(io.StringIO()):
             rc = cp.limpiar(kill=lambda *a: None, vivo=lambda pid: True,
-                            comando=lambda pid: p["cmd"], dormir=lambda s: None)
+                            comando=lambda pid: p["cmd"], dormir=lambda s: None,
+                            sin_socket=lambda procs: [])
         self.assertEqual(rc, 1)
 
     def test_avisa_las_sesiones_con_enlace_cortado_y_no_las_mata(self):
@@ -277,12 +279,195 @@ class LimpiarTests(unittest.TestCase):
                      enlaces=lambda pids: pedidos.append(list(pids)) or set())
         self.assertEqual(pedidos, [[900]])
 
+    def test_avisa_del_daemon_sin_socket_y_el_remedio_sin_tocarlo(self):
+        procs = [proc(900, 200), proc(930, 1, "--cbm-daemon-internal")]
+        rc, muertos, out = self._correr(procs, sin_socket=lambda ps: [930])
+        self.assertEqual(muertos, [])                       # solo avisa; `limpiar` no lo mata
+        self.assertIn("pid 930", out)
+        self.assertIn("socket ya no existe", out)
+        self.assertIn("--reiniciar-daemon", out)
+
+    def test_sin_daemon_huerfano_no_hay_aviso_de_socket(self):
+        rc, muertos, out = self._correr([proc(930, 1, "--cbm-daemon-internal")])
+        self.assertNotIn("socket", out)
+
     def test_windows_no_hace_nada(self):
         with mock.patch.object(cp, "ES_WINDOWS", True), \
                 mock.patch.object(cp, "leer_procesos") as m, \
                 contextlib.redirect_stdout(io.StringIO()):
             self.assertEqual(cp.limpiar(), 0)
         m.assert_not_called()
+
+
+LSOF_U = """COMMAND     PID USER   FD   TYPE             DEVICE  SIZE/OFF                NODE NAME
+codebase- 100 alan   13u  unix 0xc1abef8fbee286d4       0t0                     /private/tmp/cbm-daemon-501/cbm-c888acc3ae367a1e.anc
+codebase- 100 alan   15u  unix 0x8ffeaa0504eae237       0t0                     /private/tmp/cbm dir/cbm-c888acc3ae367a1e.sock
+codebase- 100 alan   17u  unix 0x2be527e4765a3168       0t0                     ->0x27b25a6db4996416
+codebase- 100 alan   18u  unix 0x2be527e4765a3169       0t0                     ->(none)
+codebase- 100 alan   19u  unix 0x2be527e4765a316a       0t0                     @abstracto
+codebase- 100 alan    3w   REG                1,18   1045179            13222094 /Users/alan/.cache/x/cbm-daemon.log
+"""
+
+
+class RutasSocketTests(unittest.TestCase):
+    def _lsof(self, salida):
+        return mock.patch.object(cp.subprocess, "run", return_value=mock.Mock(stdout=salida))
+
+    def test_solo_cuentan_los_sockets_con_ruta_en_disco_aunque_tenga_espacios(self):
+        with self._lsof(LSOF_U) as m:
+            r = cp.rutas_socket(100)
+        self.assertEqual(r, ["/private/tmp/cbm-daemon-501/cbm-c888acc3ae367a1e.anc",
+                             "/private/tmp/cbm dir/cbm-c888acc3ae367a1e.sock"])
+        self.assertEqual(m.call_args[0][0][:5], ["lsof", "-nP", "-U", "-a", "-p"])
+
+    def test_si_lsof_falla_no_hay_dato(self):
+        with mock.patch.object(cp.subprocess, "run", side_effect=OSError("sin lsof")):
+            self.assertEqual(cp.rutas_socket(100), [])
+        with mock.patch.object(cp.subprocess, "run",
+                               side_effect=cp.subprocess.TimeoutExpired("lsof", 20)):
+            self.assertEqual(cp.rutas_socket(100), [])
+
+
+class DaemonSinSocketTests(unittest.TestCase):
+    D = proc(100, 1, "--cbm-daemon-internal")
+
+    def _det(self, procesos, rutas, existentes=()):
+        return cp.daemon_sin_socket(procesos, rutas=lambda pid: rutas.get(pid, []),
+                                    existe=lambda r: r in existentes)
+
+    def test_acusa_al_daemon_cuando_ninguna_de_sus_rutas_existe(self):
+        self.assertEqual(self._det([self.D], {100: ["/t/a.anc", "/t/a.sock"]}), [100])
+
+    def test_un_daemon_sano_no_se_acusa(self):
+        self.assertEqual(self._det([self.D], {100: ["/t/a.anc"]}, existentes={"/t/a.anc"}), [])
+
+    def test_basta_una_ruta_viva_para_no_acusar(self):
+        rutas = {100: ["/t/a.anc", "/t/a.sock"]}
+        self.assertEqual(self._det([self.D], rutas, existentes={"/t/a.sock"}), [])
+
+    def test_sin_rutas_no_se_afirma_nada(self):
+        # lsof sin dato, o un daemon que aun no abrio su socket
+        self.assertEqual(self._det([self.D], {}), [])
+
+    def test_solo_mira_daemons(self):
+        consultados = []
+
+        def rutas(pid):
+            consultados.append(pid)
+            return ["/t/no-existe"]
+        out = cp.daemon_sin_socket([proc(900, 200), proc(931, 100, "cli --index-worker x"), self.D],
+                                   rutas=rutas, existe=lambda r: False)
+        self.assertEqual((out, consultados), ([100], [100]))
+
+
+class ReiniciarDaemonTests(unittest.TestCase):
+    """Es lo unico que toca el daemon: solo si esta probado huerfano de socket, avisando
+    a quien afecta y comprobando despues que un cliente nuevo conecta."""
+    D = proc(930, 1, "--cbm-daemon-internal", etime="06-11:23:50")
+    W = proc(931, 930, "cli --index-worker x")
+    S_CONECTADA = proc(900, 200)
+    S_CORTADA = proc(902, 300)
+    S_HUERFANA = proc(903, 1)
+
+    def setUp(self):
+        for patcher in (mock.patch.object(cp, "ES_WINDOWS", False),):
+            patcher.start()
+            self.addCleanup(patcher.stop)
+
+    def _correr(self, procesos, detectar=lambda ps: [930], verificar=lambda: (True, "3.0 s"),
+                muertos=None, vivo=None, **kw):
+        muertos = [] if muertos is None else muertos
+        salida = io.StringIO()
+        with contextlib.redirect_stdout(salida):
+            rc = cp.reiniciar_daemon(
+                leer=lambda: (procesos, TODOS), detectar=detectar, verificar=verificar,
+                enlaces=lambda pids: {902} & set(pids), dormir=lambda s: None,
+                kill=lambda pid, sig: muertos.append(pid),
+                vivo=vivo or (lambda pid: pid not in muertos),
+                comando=lambda pid: next(p["cmd"] for p in procesos if p["pid"] == pid), **kw)
+        return rc, muertos, salida.getvalue()
+
+    def test_termina_el_daemon_y_sus_workers_y_nada_mas(self):
+        procs = [self.D, self.W, self.S_CONECTADA, self.S_CORTADA]
+        rc, muertos, out = self._correr(procs)
+        self.assertEqual(rc, 0)
+        self.assertEqual(muertos, [930, 931])        # sesiones jamas
+        self.assertIn("un cliente nuevo ya conecta", out)
+
+    def test_avisa_a_las_sesiones_conectadas_y_no_a_las_ya_cortadas(self):
+        rc, muertos, out = self._correr([self.D, self.S_CONECTADA, self.S_CORTADA, self.S_HUERFANA])
+        self.assertIn("1 sesion(es) conectada(s) pierden cbm", out)
+        self.assertIn("pid=900", out)
+        self.assertNotIn("pid=902", out)             # ya estaba cortada
+        self.assertNotIn("pid=903", out)             # sin padre vivo: nadie la usa
+        self.assertIn("/mcp", out)
+
+    def test_solo_avisar_no_mata_nada_ni_verifica(self):
+        rc, muertos, out = self._correr([self.D, self.W, self.S_CONECTADA], solo_avisar=True,
+                                        verificar=lambda: self.fail("no debe verificar"))
+        self.assertEqual((rc, muertos), (0, []))
+        self.assertIn("pid=900", out)
+        self.assertIn("--solo-avisar: no se mato nada", out)
+
+    def test_un_daemon_que_conserva_su_socket_no_se_toca(self):
+        rc, muertos, out = self._correr([self.D, self.S_CONECTADA], detectar=lambda ps: [])
+        self.assertEqual((rc, muertos), (0, []))
+        self.assertIn("conserva su socket", out)
+        self.assertIn("daemon stop", out)
+
+    def test_si_al_confirmar_ya_tiene_socket_no_se_toca(self):
+        lecturas = iter([[930], []])                 # se estaba parando un instante
+        rc, muertos, out = self._correr([self.D], detectar=lambda ps: next(lecturas))
+        self.assertEqual(muertos, [])
+        self.assertIn("conserva su socket", out)
+
+    def test_la_confirmacion_espera_antes_de_volver_a_mirar(self):
+        eventos = []
+
+        def detectar(ps):
+            eventos.append("mira")
+            return [930]
+        with contextlib.redirect_stdout(io.StringIO()):
+            cp.reiniciar_daemon(
+                solo_avisar=True, leer=lambda: ([self.D], TODOS), detectar=detectar,
+                enlaces=lambda pids: set(), dormir=lambda s: eventos.append(f"espera {s}"))
+        self.assertEqual(eventos, ["mira", "espera 1", "mira"])
+
+    def test_sin_daemon_no_hay_nada_que_reiniciar(self):
+        rc, muertos, out = self._correr([self.S_CONECTADA])
+        self.assertEqual((rc, muertos), (0, []))
+        self.assertIn("no hay daemon", out)
+
+    def test_si_no_se_puede_terminar_sale_con_1_y_no_verifica(self):
+        rc, muertos, out = self._correr(
+            [self.D], vivo=lambda pid: True, verificar=lambda: self.fail("no debe verificar"))
+        self.assertEqual(rc, 1)
+        self.assertIn("NO SE PUDO MATAR", out)
+
+    def test_si_un_cliente_nuevo_aun_no_conecta_sale_con_1(self):
+        rc, muertos, out = self._correr([self.D], verificar=lambda: (False, "could not accept"))
+        self.assertEqual((rc, muertos), (1, [930]))
+        self.assertIn("aun no conecta: could not accept", out)
+
+    def test_windows_no_hace_nada(self):
+        with mock.patch.object(cp, "ES_WINDOWS", True), \
+                contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(cp.reiniciar_daemon(leer=lambda: self.fail("no debe leer")), 1)
+
+    def test_la_verificacion_pide_un_cliente_real_y_no_arranca_ningun_daemon(self):
+        with mock.patch.object(cp.subprocess, "run",
+                               return_value=mock.Mock(returncode=0, stdout="", stderr="")) as m:
+            ok, detalle = cp._verificar_cliente()
+        self.assertTrue(ok)
+        cmd = m.call_args[0][0]
+        self.assertEqual(cmd[1:], ["cli", "--quiet", "list_projects"])
+        self.assertNotIn("daemon", cmd)              # `daemon start` deja uno permanente
+        with mock.patch.object(cp.subprocess, "run", return_value=mock.Mock(
+                returncode=1, stdout="", stderr="could not accept this client")):
+            self.assertEqual(cp._verificar_cliente(), (False, "could not accept this client"))
+        with mock.patch.object(cp.subprocess, "run",
+                               side_effect=cp.subprocess.TimeoutExpired("cbm", 60)):
+            self.assertFalse(cp._verificar_cliente()[0])
 
 
 class LeerProcesosTests(unittest.TestCase):

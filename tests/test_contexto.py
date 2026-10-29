@@ -586,6 +586,14 @@ if __name__ == "__main__":
     unittest.main()
 
 
+def setUpModule():
+    """Ninguna prueba de este modulo mira los procesos reales: la maquina puede tener
+    un daemon cbm huerfano y `ps`/`lsof` no son parte de lo que se prueba aqui."""
+    p = mock.patch.object(contexto, "_cbm_daemon_sin_socket", return_value=[])
+    p.start()
+    unittest.addModuleCleanup(p.stop)
+
+
 class CbmIndexarTests(unittest.TestCase):
     """codebase-memory-mcp complementa a graphify: indexa cada raiz declarada."""
 
@@ -720,7 +728,11 @@ class _CbmBase(unittest.TestCase):
         self.sleep = m
         self.foto = {"at": "2026-10-22T20:00:00Z", "procesos": {"sesion": 9},
                      "sesiones_cortadas": 9, "carga": [2.5, 2.0, 1.8], "swap_usado_mb": 4443}
-        diag = mock.patch.object(contexto, "_cbm_diagnostico", return_value=dict(self.foto))
+        # como la real: lo que ya midio el llamador (sin_socket) viaja en la foto
+        diag = mock.patch.object(
+            contexto, "_cbm_diagnostico",
+            side_effect=lambda sin_socket=None: {
+                **self.foto, **({contexto.CAUSA_SIN_SOCKET: list(sin_socket)} if sin_socket else {})})
         diag.start()
         self.addCleanup(diag.stop)
         self.root = Path(self.tmp.name) / "front"
@@ -932,6 +944,94 @@ class CbmResilienciaTests(_CbmBase):
         self.assertEqual(contexto._cbm_estado(self.p).get("diagnosticos", []), [])
 
 
+class CbmDaemonSinSocketTests(_CbmBase):
+    """El daemon vive pero su socket desaparecio: ningun cliente conecta y reintentar
+    solo gasta 30 s por intento. Se detecta antes de llamarlo y se dice el remedio."""
+
+    def _sin_socket(self, pids=(4242,)):
+        m = mock.patch.object(contexto, "_cbm_daemon_sin_socket", return_value=list(pids))
+        m.start()
+        self.addCleanup(m.stop)
+
+    def test_no_llama_al_daemon_ni_espera_y_queda_pendiente_con_la_causa(self):
+        a, b = self._repo("a"), self._repo("b")
+        self._declarar(a, b)
+        self._sin_socket()
+        parte, llamadas = self._correr(self._indexa)
+        self.assertEqual(llamadas, [])                       # ni un intento de 30 s
+        self.sleep.assert_not_called()
+        self.assertEqual(parte["fallos"], [])
+        self.assertEqual(set(parte["cbm"]["pendientes"]), {"a", "b"})
+        for v in parte["cbm"]["pendientes"].values():
+            self.assertEqual(v["causa"], contexto.CAUSA_SIN_SOCKET)
+            self.assertIn("4242", v["motivo"])
+            self.assertEqual(v["diagnostico"][contexto.CAUSA_SIN_SOCKET], [4242])
+        self.assertIn("--reiniciar-daemon", parte["cbm"]["accion"])
+        self.assertNotIn("se reintenta solo", parte["cbm"]["accion"])
+
+    def test_el_aviso_dice_que_no_se_arregla_solo_y_que_no_lo_reinicie_el_agente(self):
+        a = self._repo("a")
+        self._declarar(a)
+        self._sin_socket()
+        parte, _ = self._correr(self._indexa)
+        texto = "\n".join(contexto.lineas_cbm_pendiente(parte["cbm"]["pendientes"]))
+        self.assertIn("pid 4242", texto)
+        self.assertIn("NO se arregla solo", texto)
+        self.assertIn("persona usuaria", texto)
+        self.assertIn("limpiar-cbm --reiniciar-daemon", texto)
+        self.assertNotIn("El arnes lo reintenta solo", texto)
+
+    def test_sin_el_problema_el_aviso_y_el_flujo_no_cambian(self):
+        a = self._repo("a")
+        self._declarar(a)
+        parte, llamadas = self._correr(self._cae)            # ocupado, no sin socket
+        self.assertEqual([t for t, _ in llamadas].count("index_repository"), 3)
+        for v in parte["cbm"]["pendientes"].values():
+            self.assertNotIn("causa", v)
+        texto = "\n".join(contexto.lineas_cbm_pendiente(parte["cbm"]["pendientes"]))
+        self.assertIn("El arnes lo reintenta solo", texto)
+        self.assertNotIn("reiniciar-daemon", texto)
+
+    def test_si_falla_tras_reintentar_y_el_daemon_resulta_sin_socket_se_dice_igual(self):
+        a = self._repo("a")
+        self._declarar(a)
+        # el chequeo previo no lo vio (el socket se perdio durante los intentos)...
+        with mock.patch.object(contexto, "_cbm_diagnostico",
+                               return_value={**self.foto, contexto.CAUSA_SIN_SOCKET: [77]}):
+            parte, llamadas = self._correr(self._cae)
+        self.assertEqual([t for t, _ in llamadas].count("index_repository"), 3)
+        v = next(iter(parte["cbm"]["pendientes"].values()))
+        self.assertEqual(v["causa"], contexto.CAUSA_SIN_SOCKET)
+        self.assertIn("--reiniciar-daemon", parte["cbm"]["accion"])
+
+    def test_el_enfriamiento_no_frena_este_caso_y_en_cuanto_lo_reinician_indexa(self):
+        a = self._repo("a")
+        self._declarar(a)
+        self._sin_socket()
+        self._correr(self._indexa)
+        salida = io.StringIO()
+        with mock.patch.object(contexto, "_cbm_cli") as m, contextlib.redirect_stdout(salida):
+            contexto._drenar_cbm(self.p)                      # recien fallo, pero re-mira
+        m.assert_not_called()                                 # sigue sin socket: no lo llama
+        self.assertNotIn("en espera", salida.getvalue())
+
+        contexto._cbm_daemon_sin_socket.return_value = []     # lo reiniciaron
+        with mock.patch.object(contexto, "_cbm_cli", return_value=(0, self.OK)) as m:
+            with contextlib.redirect_stdout(io.StringIO()):
+                contexto._drenar_cbm(self.p)
+        self.assertEqual(m.call_count, 1)                     # sin esperar los 10 min
+        self.assertEqual(contexto._cbm_estado(self.p)["pendientes"], {})
+
+    def test_sin_nada_que_indexar_no_mira_los_procesos(self):
+        a = self._repo("a")
+        self._declarar(a)
+        self._correr(self._indexa)                            # indexa y sella HEAD
+        with mock.patch.object(contexto, "_cbm_daemon_sin_socket") as m:
+            parte, llamadas = self._correr(self._indexa)      # al dia: no hay plan
+        m.assert_not_called()
+        self.assertEqual(parte["cbm"]["al_dia"], ["a"])
+
+
 class CbmDiagnosticoTests(unittest.TestCase):
     """La foto es telemetria: barata, sin tocar el daemon y sin tumbar el refresco."""
 
@@ -985,6 +1085,30 @@ class CbmDiagnosticoTests(unittest.TestCase):
             d = contexto._cbm_diagnostico()
         self.assertNotIn("log_64KB", d)
         self.assertEqual(d["sesiones_cortadas"], 0)
+
+    def test_marca_el_daemon_sin_socket_y_no_lo_inventa(self):
+        procs = self._procs() + [{"pid": 4, "rol": "daemon", "rss_mb": 2.0, "ppid": 1}]
+        with mock.patch.object(self.cp, "leer_procesos", return_value=(procs, {})), \
+                mock.patch.object(self.cp, "enlaces_cortados", return_value=set()), \
+                mock.patch.object(self.cp, "daemon_sin_socket", return_value=[4]) as det, \
+                mock.patch.object(contexto.sys, "platform", "linux"):
+            d = contexto._cbm_diagnostico()
+        self.assertEqual(d[contexto.CAUSA_SIN_SOCKET], [4])
+        det.assert_called_once()
+        with mock.patch.object(self.cp, "leer_procesos", return_value=(procs, {})), \
+                mock.patch.object(self.cp, "enlaces_cortados", return_value=set()), \
+                mock.patch.object(self.cp, "daemon_sin_socket", return_value=[]), \
+                mock.patch.object(contexto.sys, "platform", "linux"):
+            self.assertNotIn(contexto.CAUSA_SIN_SOCKET, contexto._cbm_diagnostico())
+
+    def test_si_ya_se_midio_no_vuelve_a_mirar_los_sockets(self):
+        with mock.patch.object(self.cp, "leer_procesos", return_value=(self._procs(), {})), \
+                mock.patch.object(self.cp, "enlaces_cortados", return_value=set()), \
+                mock.patch.object(self.cp, "daemon_sin_socket") as det, \
+                mock.patch.object(contexto.sys, "platform", "linux"):
+            d = contexto._cbm_diagnostico([9])
+        det.assert_not_called()
+        self.assertEqual(d[contexto.CAUSA_SIN_SOCKET], [9])
 
 
 def _salida(dirs, truncado=False):
