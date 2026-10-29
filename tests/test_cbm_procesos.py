@@ -10,6 +10,7 @@ from __future__ import annotations
 import contextlib
 import io
 import os
+import re
 import signal
 import sys
 import tempfile
@@ -184,6 +185,7 @@ class LimpiarTests(unittest.TestCase):
         muertos = []
         salida = io.StringIO()
         kw.setdefault("sin_socket", lambda procs: [])    # nunca lsof real
+        kw.setdefault("cwds", lambda pids: {})
         inyectado = dict(kill=lambda pid, sig: muertos.append(pid),
                          vivo=lambda pid: pid not in muertos,
                          comando=lambda pid: next(p["cmd"] for p in procesos if p["pid"] == pid),
@@ -257,7 +259,7 @@ class LimpiarTests(unittest.TestCase):
                 contextlib.redirect_stdout(io.StringIO()):
             rc = cp.limpiar(kill=lambda *a: None, vivo=lambda pid: True,
                             comando=lambda pid: p["cmd"], dormir=lambda s: None,
-                            sin_socket=lambda procs: [])
+                            sin_socket=lambda procs: [], cwds=lambda pids: {})
         self.assertEqual(rc, 1)
 
     def test_avisa_las_sesiones_con_enlace_cortado_y_no_las_mata(self):
@@ -268,6 +270,30 @@ class LimpiarTests(unittest.TestCase):
         self.assertEqual([("CORTADO" in l) for l in filas], [True, False])   # solo la 900
         self.assertIn("1 sesion(es) con el enlace a cbm cortado", out)
         self.assertIn("/mcp", out)
+
+    def test_cada_sesion_en_uso_dice_en_que_carpeta_vive_su_agente(self):
+        # 200 y 300 son los agentes (padres) de las sesiones 900 y 902
+        pedidos = []
+        rc, muertos, out = self._correr(
+            [proc(900, 200), proc(902, 300), proc(930, 1, "--cbm-daemon-internal")],
+            cwds=lambda pids: pedidos.append(sorted(pids)) or {200: "~/WebstormProjects/ADR",
+                                                               300: "~/GolandProjects/Online-Invoice"})
+        filas = {re.search(r"pid=\d+", l).group(): l for l in out.splitlines() if "pid=" in l}
+        self.assertIn("en ~/WebstormProjects/ADR", filas["pid=900"])
+        self.assertIn("en ~/GolandProjects/Online-Invoice", filas["pid=902"])
+        self.assertNotIn(" en ~", filas["pid=930"])           # el daemon no es una sesion
+        self.assertEqual(pedidos, [[200, 300]])               # una sola consulta, solo agentes
+
+    def test_el_aviso_de_cortadas_dice_que_hacer_en_cada_terminal(self):
+        rc, muertos, out = self._correr([proc(900, 200)], enlaces=lambda pids: {900})
+        self.assertIn("No se recuperan desde fuera", out)
+        self.assertIn("`/mcp` y Reconnect", out)
+        self.assertIn("reiniciar la sesion", out)
+
+    def test_si_no_se_conoce_la_carpeta_la_fila_sigue_igual(self):
+        rc, muertos, out = self._correr([proc(900, 200)], cwds=lambda pids: {})
+        fila = next(l for l in out.splitlines() if "pid=900" in l)
+        self.assertNotIn(" en ", fila.split("padre vivo:")[1])
 
     def test_sin_enlaces_cortados_no_hay_aviso(self):
         rc, muertos, out = self._correr([proc(900, 200)], enlaces=lambda pids: set())
@@ -363,6 +389,39 @@ class HuellaRuntimeTests(unittest.TestCase):
         self.assertEqual(h, {"dir": "/no/existe"})
 
 
+class CwdsDeTests(unittest.TestCase):
+    def _lsof(self, salida):
+        return mock.patch.object(cp.subprocess, "run", return_value=mock.Mock(stdout=salida))
+
+    def test_parsea_la_salida_de_lsof_y_acorta_el_home(self):
+        home = str(Path.home())
+        salida = (f"p200\nfcwd\nn{home}/WebstormProjects/ADR\n"
+                  "p300\nfcwd\nn/private/tmp/otra carpeta\n"
+                  f"p400\nfcwd\nn{home}\n")
+        with self._lsof(salida) as m:
+            r = cp.cwds_de([200, 300, 400])
+        self.assertEqual(r, {200: "~/WebstormProjects/ADR", 300: "/private/tmp/otra carpeta",
+                             400: "~"})
+        self.assertEqual(m.call_args[0][0][-2:], ["-p", "200,300,400"])
+
+    def test_no_confunde_un_home_con_prefijo_parecido(self):
+        home = str(Path.home())
+        with self._lsof(f"p1\nfcwd\nn{home}-otro/x\n"):
+            self.assertEqual(cp.cwds_de([1]), {1: f"{home}-otro/x"})
+
+    def test_sin_pids_no_ejecuta_lsof(self):
+        with mock.patch.object(cp.subprocess, "run") as m:
+            self.assertEqual(cp.cwds_de([]), {})
+        m.assert_not_called()
+
+    def test_si_lsof_falla_no_hay_etiqueta(self):
+        with mock.patch.object(cp.subprocess, "run", side_effect=OSError("sin lsof")):
+            self.assertEqual(cp.cwds_de([1]), {})
+        with mock.patch.object(cp.subprocess, "run",
+                               side_effect=cp.subprocess.TimeoutExpired("lsof", 20)):
+            self.assertEqual(cp.cwds_de([1]), {})
+
+
 class DaemonSinSocketTests(unittest.TestCase):
     D = proc(100, 1, "--cbm-daemon-internal")
 
@@ -410,13 +469,14 @@ class ReiniciarDaemonTests(unittest.TestCase):
             self.addCleanup(patcher.stop)
 
     def _correr(self, procesos, detectar=lambda ps: [930], verificar=lambda: (True, "3.0 s"),
-                muertos=None, vivo=None, **kw):
+                muertos=None, vivo=None, cwds=None, **kw):
         muertos = [] if muertos is None else muertos
         salida = io.StringIO()
         with contextlib.redirect_stdout(salida):
             rc = cp.reiniciar_daemon(
                 leer=lambda: (procesos, TODOS), detectar=detectar, verificar=verificar,
                 enlaces=lambda pids: {902} & set(pids), dormir=lambda s: None,
+                cwds=cwds or (lambda pids: {}),
                 kill=lambda pid, sig: muertos.append(pid),
                 vivo=vivo or (lambda pid: pid not in muertos),
                 comando=lambda pid: next(p["cmd"] for p in procesos if p["pid"] == pid), **kw)
@@ -436,6 +496,12 @@ class ReiniciarDaemonTests(unittest.TestCase):
         self.assertNotIn("pid=902", out)             # ya estaba cortada
         self.assertNotIn("pid=903", out)             # sin padre vivo: nadie la usa
         self.assertIn("/mcp", out)
+
+    def test_las_sesiones_afectadas_se_listan_con_su_carpeta(self):
+        rc, muertos, out = self._correr(
+            [self.D, self.S_CONECTADA], solo_avisar=True,
+            cwds=lambda pids: {200: "~/WebstormProjects/ADR"} if 200 in pids else {})
+        self.assertIn("pid=900  padre: claude (pid 200) en ~/WebstormProjects/ADR", out)
 
     def test_solo_avisar_no_mata_nada_ni_verifica(self):
         rc, muertos, out = self._correr([self.D, self.W, self.S_CONECTADA], solo_avisar=True,
