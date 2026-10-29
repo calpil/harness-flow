@@ -143,6 +143,33 @@ def rutas_socket(pid: int) -> list[str]:
     return rutas
 
 
+def huella_runtime(pid: int, *, rutas=rutas_socket, max_entradas: int = 40) -> dict:
+    """Foto del directorio de coordinacion de un daemon: cuando cambio por ultima vez y
+    que hay dentro (nombre, inodo, mtime).
+
+    Es la evidencia de CUANDO se perdieron los sockets: borrar una entrada actualiza el
+    mtime del directorio, y un archivo recreado trae un inodo distinto al que el daemon
+    sigue sosteniendo. Hubo que reconstruirla a mano la primera vez; ahora queda guardada
+    cuando aparece el estado. Telemetria: cualquier fallo devuelve lo que se alcanzo.
+    """
+    try:
+        carpeta = os.path.dirname(rutas(pid)[0])
+    except IndexError:
+        return {}
+    iso = lambda t: time.strftime("%Y-%m-%dT%H:%M:%S%z", time.localtime(t))
+    out: dict = {"dir": carpeta}
+    try:
+        out["dir_mtime"] = iso(os.stat(carpeta).st_mtime)
+        entradas = []
+        for e in sorted(os.scandir(carpeta), key=lambda x: x.name)[:max_entradas]:
+            st = e.stat(follow_symlinks=False)
+            entradas.append({"n": e.name, "ino": st.st_ino, "mtime": iso(st.st_mtime)})
+        out["entradas"] = entradas
+    except OSError:
+        pass
+    return out
+
+
 def daemon_sin_socket(procesos: list[dict], *, rutas=rutas_socket,
                       existe=os.path.exists) -> list[int]:
     """Pids de daemons vivos cuyo socket ya no existe en disco.
@@ -274,8 +301,11 @@ def _verificar_cliente(*, correr=None) -> tuple[bool, str]:
     Lo arranca el propio cliente (efimero); aqui no se levanta ningun daemon."""
     t = time.time()
     try:
-        r = (correr or subprocess.run)([EXE, "cli", "--quiet", "list_projects"], capture_output=True,
-                   text=True, timeout=60)
+        # Sin argumentos el cli LEE su JSON de stdin: heredar un stdin abierto (un agente
+        # en segundo plano, un pipe) lo deja esperando un EOF que nunca llega.
+        r = (correr or subprocess.run)([EXE, "cli", "--quiet", "list_projects"],
+                                       stdin=subprocess.DEVNULL, capture_output=True,
+                                       text=True, timeout=60)
     except (OSError, subprocess.TimeoutExpired) as exc:
         return False, str(exc)[:200]
     if r.returncode == 0:

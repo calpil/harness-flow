@@ -1,11 +1,15 @@
 """El panorama cuenta el backlog real sin convertir pendientes en cierres."""
+import contextlib
+import io
 import json
+import os
 from pathlib import Path
 import re
 import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "estado.py"
 
@@ -31,6 +35,28 @@ class EstadoTests(unittest.TestCase):
         self.assertEqual(self.backlog.read_bytes(), antes, "el panorama no debe reescribir estados")
         self.assertEqual(resultado.stderr, "")
         return resultado.stdout
+
+    def test_avisa_del_daemon_cbm_sin_socket_al_arrancar_la_sesion(self):
+        """El aviso sale en el panorama de arranque aunque ningun cierre haya quedado
+        pendiente: lo que se mide en ese momento, no lo guardado."""
+        sys.path.insert(0, str(SCRIPT.parent))
+        import contexto
+        import estado
+        self.backlog.write_text(json.dumps({
+            "project": "prueba", "rules": {"require_docs_al_dia": False}, "features": [],
+        }) + "\n", encoding="utf-8")
+        antes = os.getcwd()
+        os.chdir(self.root)
+        self.addCleanup(os.chdir, antes)
+        salida = io.StringIO()
+        with mock.patch.object(contexto, "_cbm_daemon_sin_socket", return_value=[4242]), \
+                mock.patch.object(contexto.shutil, "which", return_value="/x"), \
+                mock.patch.dict(os.environ, {"HARNESS_SIN_CBM": ""}), \
+                contextlib.redirect_stdout(salida):
+            estado.main()
+        self.assertIn("El daemon cbm (pid 4242) esta vivo pero su socket ya no existe",
+                      salida.getvalue())
+        self.assertIn("limpiar-cbm --reiniciar-daemon", salida.getvalue())
 
     def test_pending_se_cuenta_y_se_lista_como_abierta(self):
         out = self.panorama([

@@ -1032,6 +1032,65 @@ class CbmDaemonSinSocketTests(_CbmBase):
         self.assertEqual(parte["cbm"]["al_dia"], ["a"])
 
 
+class CbmDaemonSinSocketEstadoTests(_CbmBase):
+    """Al arrancar la sesion (estado) se ve el daemon sin socket aunque ningun cierre
+    haya quedado pendiente; y lo medido AHORA manda sobre un pendiente viejo."""
+
+    def _sin_socket(self, pids):
+        m = mock.patch.object(contexto, "_cbm_daemon_sin_socket", return_value=list(pids))
+        m.start()
+        self.addCleanup(m.stop)
+
+    def test_estado_lo_expone_sin_necesidad_de_un_pendiente(self):
+        self._sin_socket([4242])
+        e = contexto.estado_contexto(self.p)
+        self.assertEqual(e["cbm_daemon_sin_socket"], [4242])
+        self.assertEqual(e["cbm_pendientes"], {})
+        self.assertFalse(e["vencidas"] and "cbm" in e["vencidas"])   # no vence el contexto
+
+    def test_apagado_o_sin_binario_no_mira_los_procesos(self):
+        with mock.patch.object(contexto, "_cbm_daemon_sin_socket") as m:
+            with mock.patch.dict(os.environ, {"HARNESS_SIN_CBM": "1"}):
+                self.assertEqual(contexto.estado_contexto(self.p)["cbm_daemon_sin_socket"], [])
+            with mock.patch.object(contexto.shutil, "which", return_value=None):
+                self.assertEqual(contexto.estado_contexto(self.p)["cbm_daemon_sin_socket"], [])
+        m.assert_not_called()
+
+    def test_aviso_sin_pendientes_usa_el_formato_de_alerta(self):
+        lineas = contexto.lineas_cbm_pendiente({}, [4242])
+        self.assertTrue(lineas[0].startswith("[!]  El daemon cbm (pid 4242)"))
+        self.assertIn("limpiar-cbm --reiniciar-daemon", "\n".join(lineas))
+        self.assertNotIn("cbm pendiente", "\n".join(lineas))
+
+    def test_lo_medido_ahora_manda_sobre_un_pendiente_viejo(self):
+        a = self._repo("a")
+        self._declarar(a)
+        self._sin_socket([4242])
+        parte, _ = self._correr(self._indexa)                 # deja un pendiente con la causa
+        pend = parte["cbm"]["pendientes"]
+        self.assertIn("pid 4242", "\n".join(contexto.lineas_cbm_pendiente(pend)))   # cierre: la foto
+        # ya lo reiniciaron: el estado en vivo dice que no hay daemon sin socket
+        texto = "\n".join(contexto.lineas_cbm_pendiente(pend, []))
+        self.assertNotIn("NO se arregla solo", texto)         # la historia (motivo) queda, la orden no
+        self.assertNotIn("reiniciar-daemon", texto)
+        self.assertIn("El arnes lo reintenta solo", texto)
+        # y si el daemon NUEVO se quedo sin socket, manda el pid nuevo
+        self.assertIn("pid 9", "\n".join(contexto.lineas_cbm_pendiente(pend, [9])))
+
+    def test_sin_nada_no_dice_nada(self):
+        self.assertEqual(contexto.lineas_cbm_pendiente({}, []), [])
+        self.assertEqual(contexto.lineas_cbm_pendiente({}), [])
+
+    def test_cmd_estado_imprime_el_aviso(self):
+        self._sin_socket([4242])
+        salida = io.StringIO()
+        with mock.patch.object(contexto, "paths", return_value=self.p), \
+                contextlib.redirect_stdout(salida):
+            contexto.cmd_estado(mock.Mock(json=False))
+        self.assertIn("El daemon cbm (pid 4242) esta vivo pero su socket ya no existe",
+                      salida.getvalue())
+
+
 class CbmDiagnosticoTests(unittest.TestCase):
     """La foto es telemetria: barata, sin tocar el daemon y sin tumbar el refresco."""
 
@@ -1100,6 +1159,33 @@ class CbmDiagnosticoTests(unittest.TestCase):
                 mock.patch.object(self.cp, "daemon_sin_socket", return_value=[]), \
                 mock.patch.object(contexto.sys, "platform", "linux"):
             self.assertNotIn(contexto.CAUSA_SIN_SOCKET, contexto._cbm_diagnostico())
+
+    def test_con_daemon_sin_socket_guarda_la_huella_del_directorio(self):
+        procs = self._procs() + [{"pid": 4, "rol": "daemon", "rss_mb": 2.0, "ppid": 1,
+                                  "etime": "06-11:23:50"}]
+        huella = {"dir": "/private/tmp/cbm-daemon-501", "dir_mtime": "2026-10-28T00:49:24-0300",
+                  "entradas": [{"n": "x.lifetime.lock", "ino": 71637393, "mtime": "2026-10-28T00:49:24-0300"}]}
+        with mock.patch.object(self.cp, "leer_procesos", return_value=(procs, {})), \
+                mock.patch.object(self.cp, "enlaces_cortados", return_value=set()), \
+                mock.patch.object(self.cp, "huella_runtime", return_value=huella) as h, \
+                mock.patch.object(contexto.sys, "platform", "linux"):
+            d = contexto._cbm_diagnostico([4])
+        h.assert_called_once_with(4)
+        self.assertEqual(d["runtime_dir"], huella)
+        self.assertEqual(d["daemon_desde"], "06-11:23:50")
+        resumen = contexto._resumen_diagnostico(d)
+        self.assertIn("carpeta del daemon cambio por ultima vez 2026-10-28T00:49:24", resumen)
+        self.assertIn("vivo desde hace 06-11:23:50", resumen)
+
+    def test_sin_el_problema_no_se_guarda_huella(self):
+        with mock.patch.object(self.cp, "leer_procesos", return_value=(self._procs(), {})), \
+                mock.patch.object(self.cp, "enlaces_cortados", return_value=set()), \
+                mock.patch.object(self.cp, "daemon_sin_socket", return_value=[]), \
+                mock.patch.object(self.cp, "huella_runtime") as h, \
+                mock.patch.object(contexto.sys, "platform", "linux"):
+            d = contexto._cbm_diagnostico()
+        h.assert_not_called()
+        self.assertNotIn("runtime_dir", d)
 
     def test_si_ya_se_midio_no_vuelve_a_mirar_los_sockets(self):
         with mock.patch.object(self.cp, "leer_procesos", return_value=(self._procs(), {})), \

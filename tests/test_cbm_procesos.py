@@ -328,6 +328,41 @@ class RutasSocketTests(unittest.TestCase):
             self.assertEqual(cp.rutas_socket(100), [])
 
 
+class HuellaRuntimeTests(unittest.TestCase):
+    """La evidencia de CUANDO se perdio el socket: mtime del directorio e inodos."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.dir = Path(self.tmp.name)
+
+    def test_lista_entradas_con_inodo_y_mtime_y_la_fecha_del_directorio(self):
+        a = self.dir / "cbm-x.lifetime.lock"
+        a.write_text("")
+        t = time.mktime((2026, 10, 28, 0, 49, 24, 0, 0, -1))
+        os.utime(a, (t, t))
+        os.utime(self.dir, (t, t))
+        h = cp.huella_runtime(100, rutas=lambda pid: [str(self.dir / "cbm-x.anc")])
+        self.assertEqual(h["dir"], str(self.dir))
+        self.assertTrue(h["dir_mtime"].startswith("2026-10-28T00:49:24"))
+        (e,) = h["entradas"]
+        self.assertEqual((e["n"], e["ino"]), ("cbm-x.lifetime.lock", a.stat().st_ino))
+        self.assertTrue(e["mtime"].startswith("2026-10-28T00:49:24"))
+
+    def test_entradas_ordenadas_y_acotadas(self):
+        for n in ("c", "a", "b"):
+            (self.dir / n).write_text("")
+        h = cp.huella_runtime(100, rutas=lambda pid: [str(self.dir / "x.sock")], max_entradas=2)
+        self.assertEqual([e["n"] for e in h["entradas"]], ["a", "b"])
+
+    def test_sin_rutas_no_hay_huella(self):
+        self.assertEqual(cp.huella_runtime(100, rutas=lambda pid: []), {})
+
+    def test_si_el_directorio_no_existe_devuelve_lo_que_alcanzo(self):
+        h = cp.huella_runtime(100, rutas=lambda pid: ["/no/existe/x.sock"])
+        self.assertEqual(h, {"dir": "/no/existe"})
+
+
 class DaemonSinSocketTests(unittest.TestCase):
     D = proc(100, 1, "--cbm-daemon-internal")
 
@@ -462,6 +497,8 @@ class ReiniciarDaemonTests(unittest.TestCase):
         cmd = m.call_args[0][0]
         self.assertEqual(cmd[1:], ["cli", "--quiet", "list_projects"])
         self.assertNotIn("daemon", cmd)              # `daemon start` deja uno permanente
+        # sin argumentos el cli lee stdin: un stdin heredado lo cuelga (medido)
+        self.assertIs(m.call_args.kwargs["stdin"], cp.subprocess.DEVNULL)
         with mock.patch.object(cp.subprocess, "run", return_value=mock.Mock(
                 returncode=1, stdout="", stderr="could not accept this client")):
             self.assertEqual(cp._verificar_cliente(), (False, "could not accept this client"))
