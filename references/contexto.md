@@ -195,23 +195,53 @@ daemon puede arrancar porque el lock es suyo; las sesiones que ya estaban conect
 conservan su enlace abierto, las nuevas no pueden conectar. El arnes lo detecta antes de llamar al daemon (el
 proceso tiene sockets unix abiertos y NINGUNA de sus rutas existe; sin datos de `lsof`
 no acusa), deja la raiz pendiente en 0,1 s en vez de gastar 3 intentos de 30 s, y dice
-el remedio. Se reevalua en cada refresco (es una lectura de `lsof`, no hay que enfriar).
+el remedio. Se reevalua en cada refresco (es una lectura de `lsof`, no hay que enfriar), y
+`estado`/`contexto.py estado` lo dicen **al arrancar la sesion** aunque ningun cierre haya
+quedado pendiente: lo medido en ese momento manda sobre un pendiente viejo.
 
 `contexto.py limpiar-cbm --reiniciar-daemon [--solo-avisar]` es lo unico que toca el
 daemon: **solo si esta probado sin socket** (lo confirma dos veces con 1 s de pausa; un
 daemon que conserva su socket se rechaza y se remite a `daemon stop`). Antes de matar
 lista las sesiones conectadas que perderan cbm hasta `/mcp` (las ya cortadas no), termina
 al daemon y a sus workers (SIGTERM, luego SIGKILL; nunca sesiones) y comprueba que un
-cliente nuevo conecta (`cli list_projects`). No usa `daemon start`: deja un daemon
+cliente nuevo conecta (`cli list_projects`, con stdin cerrado: **sin argumentos el `cli` lee
+su JSON de stdin** y con un stdin heredado y abierto espera para siempre; con el JSON como
+argumento, que es como lo llama el cierre, no pasa). No usa `daemon start`: deja un daemon
 **permanente**; el primer cliente levanta uno efimero. `--solo-avisar` solo muestra a
 quien afectaria. Cuando reiniciar lo decide la persona usuaria, no el agente.
 
-Que lo causa **no esta establecido**. Descartado: que un cliente que da timeout contra
-un daemon ocupado borre los sockets (se congelo un daemon de prueba aislado con SIGSTOP,
-un cliente espero 30 s y fallo con otro mensaje -- `endpoint is held by pid N ... likely
-dead` --, y al reanudarlo el daemon respondio y conservaba sus archivos), y el limpiador
-de `/tmp` de macOS (sockets mas viejos de `/tmp` sobreviven). Si reaparece, el
-`Al fallar:` del pendiente y `diagnosticos` en `.cbm_estado.json` guardan el momento.
+**Que borro el socket: no esta establecido, y se probo mucho.** Lo que SI se sabe de
+la unica vez que se vio (2026-10-29): el daemon era efimero (`--cbm-daemon-internal`) y
+arranco el 23-oct; sesiones que se conectaron el 27-oct por la tarde si lo lograron, asi
+que el socket existia entonces. A las **00:49:24 del 28-oct** alguien **recreo**
+`lifetime.lock` (inodo nuevo, mientras el daemon seguia sosteniendo el viejo) y los
+`.sock`/`.anc`/`.sock.identity` desaparecieron: un proceso trato al daemon como muerto y
+limpio su carpeta. El equipo estaba despierto y en uso; el binario no cambio (solo hay una
+copia, sin tocar desde el 1-oct) y el log del daemon no registra nada de eso.
+
+Descartado con pruebas contra un daemon de prueba aislado (`CBM_CACHE_DIR` y
+`CBM_RUNTIME_DIR` propios, sin tocar el real):
+
+| Hipotesis | Prueba | Resultado |
+|---|---|---|
+| un cliente que da timeout borra los sockets | daemon congelado con SIGSTOP + `cli` | espera 30 s, falla con `endpoint is held by pid N ... likely dead`; archivos intactos; al reanudar responde |
+| el hook `hook-augment` (corre en cada Bash/Grep/Read) | idem, con comandos de busqueda reales | ni borra ni recrea nada (los inodos no cambian); congelado el daemon imprime "no CBM daemon is running" |
+| saturacion real del socket | cola de conexiones llena (rechaza en la 32), clientes y hook | el `cli` da `active or starting but could not accept this client within 30000 ms` (el mismo texto que un socket perdido); archivos intactos |
+| un `daemon stop` improvisado por un agente | sesion MCP conectada + `daemon stop` | se niega (`NOT stopped -- 1 committed client(s)`) y no toca nada |
+| carrera de apagado de un daemon efimero | 40 rondas x 4 clientes con jitter, ~100 arranques/paradas | no reproducido (el detector nuevo vigilaba cada ronda) |
+| el limpiador de `/tmp` de macOS | sockets de `/tmp` mas viejos siguen ahi | descartado |
+
+Dos hallazgos laterales, ambos reales: (1) un arranque concurrente en un cache nuevo puede
+fallar con `CBM daemon failed to start: reservation_validation failed` (2 de 4 clientes en
+la primera ronda; despues, nunca): es transitorio y otra cosa que el socket perdido; (2) el
+texto `could not accept this client` **no distingue** daemon saturado de socket perdido, por
+eso el arnes mira los procesos en vez de fiarse del mensaje.
+
+Como la causa no se reproduce, el arnes cubre el ESTADO: lo detecta, lo dice al arrancar la
+sesion y en el cierre, lo repara con `--reiniciar-daemon`, y la proxima vez deja la **huella
+forense** que aqui hubo que reconstruir a mano (`runtime_dir` en `.cbm_estado.json` y en el
+`Al fallar:`): fecha del ultimo cambio de la carpeta del daemon e inodo/mtime de cada
+archivo. Con eso, un nuevo caso dice a que hora se perdio y quien recreo `lifetime.lock`.
 
 **Cuando el daemon no atiende, el arnes deja evidencia.** Un "30 s sin aceptar
 cliente" tiene mas de una causa (ocupado, o vivo sin socket) y el texto del cliente es

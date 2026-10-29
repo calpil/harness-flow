@@ -97,6 +97,12 @@ def estado_contexto(p: dict) -> dict:
         # Lectura de un archivo local: estado no llama al daemon. No entra en
         # 'vencidas': el brief y el vault no dependen de cbm.
         "cbm_pendientes": _cbm_pendientes(p),
+        # Estado en vivo (no lo guardado): un daemon sin socket se ve al arrancar la
+        # sesion aunque ningun cierre haya quedado pendiente todavia. Una lectura de
+        # `ps` y `lsof`; vacio si cbm esta apagado o no esta instalado.
+        "cbm_daemon_sin_socket": (_cbm_daemon_sin_socket()
+                                  if not _cbm_desactivado() and shutil.which("codebase-memory-mcp")
+                                  else []),
     }
     for r in raices:
         g = r["path"] / "graphify-out" / "graph.json"
@@ -146,7 +152,7 @@ def cmd_estado(args) -> None:
         edad_c = "ausente" if not c["existe"] else f"{c['edad_h']:.1f}h"
         print(f"   combinado: {edad_c}  {c['path']}")
     print(f"   vault: {_estado_vault(e)}")
-    for linea in lineas_cbm_pendiente(e["cbm_pendientes"]):
+    for linea in lineas_cbm_pendiente(e["cbm_pendientes"], e["cbm_daemon_sin_socket"]):
         print("  " + linea)
     if e["fresco"]:
         print("   [ok] contexto fresco")
@@ -434,6 +440,7 @@ def _cbm_diagnostico(sin_socket: list[int] | None = None) -> dict:
     Es telemetria: cualquier fallo al medir se omite.
     """
     d: dict = {"at": now_iso()}
+    cbm: list = []
     try:
         d["carga"] = [round(x, 1) for x in os.getloadavg()]
     except (OSError, AttributeError):
@@ -460,6 +467,12 @@ def _cbm_diagnostico(sin_socket: list[int] | None = None) -> dict:
         pass
     if sin_socket:
         d[CAUSA_SIN_SOCKET] = list(sin_socket)
+        try:
+            import cbm_procesos
+            d["runtime_dir"] = cbm_procesos.huella_runtime(sin_socket[0])
+            d["daemon_desde"] = next((p.get("etime") for p in cbm if p["pid"] == sin_socket[0]), None)
+        except (OSError, subprocess.SubprocessError, ValueError):
+            pass
     if sys.platform == "darwin":
         try:
             r = subprocess.run(["sysctl", "-n", "vm.swapusage"], capture_output=True,
@@ -483,25 +496,37 @@ def _resumen_diagnostico(d: dict) -> str:
         partes.append(f"swap {d['swap_usado_mb']} MB")
     if d.get("log_64KB"):
         partes.append(f"{d['log_64KB'].get('watcher.changed', 0)} reindexados del watcher en el log reciente")
+    rt = d.get("runtime_dir") or {}
+    if rt.get("dir_mtime"):
+        partes.append(f"carpeta del daemon cambio por ultima vez {rt['dir_mtime']}"
+                      + (f", daemon vivo desde hace {d['daemon_desde']}" if d.get("daemon_desde") else ""))
     return ", ".join(partes)
 
 
-def lineas_cbm_pendiente(pendientes: dict) -> list[str]:
-    """Texto para quien lee el cierre: que paso, que NO hacer y cuando se resuelve."""
-    if not pendientes:
+def lineas_cbm_pendiente(pendientes: dict, sin_socket: list[int] | None = None) -> list[str]:
+    """Texto para quien lee el cierre: que paso, que NO hacer y cuando se resuelve.
+
+    `sin_socket` son los daemons sin socket medidos AHORA (estado/arranque). Con None
+    (el cierre) se usa lo que dejo la foto del fallo; con una lista, esa lista manda:
+    si ya reiniciaron el daemon, un pendiente viejo no puede seguir acusandolo.
+    """
+    if sin_socket is None:
+        sin_socket = sorted({pid for v in (pendientes or {}).values()
+                             for pid in (v.get("diagnostico") or {}).get(CAUSA_SIN_SOCKET, [])})
+    if not pendientes and not sin_socket:
         return []
     cuales = ", ".join(f"{n} ({(v.get('motivo') or '?')[:110]})"
                        for n, v in pendientes.items())
-    sin_socket = sorted({pid for v in pendientes.values()
-                         for pid in (v.get("diagnostico") or {}).get(CAUSA_SIN_SOCKET, [])})
     if sin_socket:
-        return [f"[i]  cbm pendiente (el cierre no depende de el): {cuales}.",
-                f"     El daemon cbm (pid {', '.join(map(str, sin_socket))}) esta vivo pero su socket "
-                "ya no existe: ningun cliente nuevo puede conectar y esto NO se arregla solo.",
-                "     Reintentar no sirve. Avisa a la persona usuaria: reiniciarlo corta cbm en las "
-                "sesiones conectadas hasta `/mcp`, asi que no lo hagas por tu cuenta.",
-                "     Con su aprobacion: `contexto.py limpiar-cbm --reiniciar-daemon` (`--solo-avisar` "
-                "muestra a quien afecta). El pendiente se reintenta solo despues."]
+        pids = ", ".join(map(str, sorted(sin_socket)))
+        cab = ([f"[i]  cbm pendiente (el cierre no depende de el): {cuales}."] if pendientes else [])
+        return cab + [
+            f"{'     ' if cab else '[!]  '}El daemon cbm (pid {pids}) esta vivo pero su socket "
+            "ya no existe: ningun cliente nuevo puede conectar y esto NO se arregla solo.",
+            "     Reintentar no sirve. Avisa a la persona usuaria: reiniciarlo corta cbm en las "
+            "sesiones conectadas hasta `/mcp`, asi que no lo hagas por tu cuenta.",
+            "     Con su aprobacion: `contexto.py limpiar-cbm --reiniciar-daemon` (`--solo-avisar` "
+            "muestra a quien afecta). El pendiente se reintenta solo despues."] + _lineas_diagnostico(pendientes)
     return [f"[i]  cbm pendiente (el cierre no depende de el): {cuales}.",
             "     El arnes lo reintenta solo en el proximo `worktree start` o cierre."
             " No lo reintentes a mano",
