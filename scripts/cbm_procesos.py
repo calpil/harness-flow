@@ -2,6 +2,7 @@
 """Procesos de codebase-memory-mcp: cuales estan en uso y cuales son huerfanos.
 
   contexto.py limpiar-cbm [--solo-avisar]
+  contexto.py limpiar-cbm --reiniciar-daemon [--solo-avisar]
 
 Por que existe: cada sesion de agente lanza su propio servidor MCP de cbm, el
 daemon lanza workers de indexado y el cierre del arnes lanza `cli`. Si una sesion
@@ -9,7 +10,14 @@ muere mal o el daemon se para a la fuerza, quedan procesos sin padre y archivos
 `.db.stage.*` de ~100 MB. Esto mata SOLO lo que se puede probar huerfano. Un
 proceso cuya sesion sigue viva se reporta EN USO y no se toca, aunque su enlace
 con el daemon este roto: eso lo decide quien tiene la sesion abierta. El daemon
-tampoco se toca nunca (pararlo corta indexados y las sesiones de los demas).
+tampoco se toca nunca (pararlo corta indexados y las sesiones de los demas),
+con una sola excepcion que se prueba: el daemon HUERFANO DE SOCKET.
+
+Daemon huerfano de socket: el proceso sigue vivo y sostiene el lock, pero su
+socket ya no existe en disco. Ningun cliente nuevo puede conectarse (esperan 30 s y
+fallan con "could not accept this client", el mismo texto que un daemon saturado),
+`daemon stop` no lo alcanza y ningun otro daemon puede arrancar porque el lock es
+suyo: no se arregla solo. `--reiniciar-daemon` lo termina, y solo a ese.
 """
 from __future__ import annotations
 
@@ -119,6 +127,42 @@ def enlaces_cortados(pids: list[int]) -> set[int]:
     return cortados
 
 
+def rutas_socket(pid: int) -> list[str]:
+    """Rutas en disco de los sockets unix que tiene abiertos un proceso. Vacio si
+    lsof no responde: sin dato no se afirma nada."""
+    try:
+        r = subprocess.run(["lsof", "-nP", "-U", "-a", "-p", str(pid)],
+                           capture_output=True, text=True, timeout=20)
+    except (OSError, subprocess.TimeoutExpired):
+        return []
+    rutas = []
+    for ln in r.stdout.splitlines()[1:]:
+        m = re.search(r"\sunix\s.*?\s(/\S.*)$", ln)   # el NODE vacio mueve las columnas: se ancla en la ruta
+        if m:
+            rutas.append(m.group(1).strip())
+    return rutas
+
+
+def daemon_sin_socket(procesos: list[dict], *, rutas=rutas_socket,
+                      existe=os.path.exists) -> list[int]:
+    """Pids de daemons vivos cuyo socket ya no existe en disco.
+
+    Un daemon sano deja sus sockets (`.sock`, `.anc`) en el directorio de
+    coordinacion. Aqui se pide que NINGUNA de las rutas que tiene abiertas exista:
+    si queda una, o si lsof no da rutas, no se acusa (la direccion segura, porque lo
+    que sigue de esto es terminar el proceso). Verificado en macOS contra un daemon
+    sano de prueba y contra el huerfano real.
+    """
+    out = []
+    for p in procesos:
+        if p["rol"] != "daemon":
+            continue
+        propias = rutas(p["pid"])
+        if propias and not any(existe(r) for r in propias):
+            out.append(p["pid"])
+    return out
+
+
 def cache_dir() -> Path:
     return Path(os.environ.get("CBM_CACHE_DIR") or Path.home() / ".cache" / "codebase-memory-mcp")
 
@@ -172,7 +216,8 @@ def matar(p: dict, *, kill=os.kill, vivo=_vivo, comando=_comando, dormir=time.sl
     return "matado (SIGKILL)" if not vivo(p["pid"]) else "NO SE PUDO MATAR"
 
 
-def limpiar(*, matar_huerfanos=True, enlaces=enlaces_cortados, **inyectado) -> int:
+def limpiar(*, matar_huerfanos=True, enlaces=enlaces_cortados,
+            sin_socket=daemon_sin_socket, **inyectado) -> int:
     """Imprime el estado de cada proceso cbm y, salvo --solo-avisar, quita lo huerfano."""
     if ES_WINDOWS:
         print("[i]  limpiar-cbm usa `ps`: no esta soportado en Windows.")
@@ -203,6 +248,12 @@ def limpiar(*, matar_huerfanos=True, enlaces=enlaces_cortados, **inyectado) -> i
               "cbm falla y su servidor MCP se cierra.\n"
               "     Siguen EN USO y no se matan: reconecta el MCP desde tu agente (en Claude Code "
               "`/mcp`) o reinicia la sesion.")
+    huerfano_socket = sin_socket(procesos)
+    if huerfano_socket:
+        print(f"[!]  el daemon cbm (pid {', '.join(map(str, huerfano_socket))}) esta vivo pero su "
+              "socket ya no existe: ningun cliente nuevo puede conectar y no se arregla solo.\n"
+              "     Reinicialo con `contexto.py limpiar-cbm --reiniciar-daemon` (las sesiones "
+              "conectadas pierden cbm hasta reconectar con `/mcp`).")
     restos = stage_abandonado(procesos)
     for f in restos:
         mb = f.stat().st_size / 1048576
@@ -216,3 +267,87 @@ def limpiar(*, matar_huerfanos=True, enlaces=enlaces_cortados, **inyectado) -> i
             estado = "se borraria"
         print(f"   RESTO    {f.name}  {mb:.0f}MB  ({estado})")
     return 1 if fallos else 0
+
+
+def _verificar_cliente(*, correr=None) -> tuple[bool, str]:
+    """Un cliente nuevo tiene que conectar: es la prueba de que el reinicio sirvio.
+    Lo arranca el propio cliente (efimero); aqui no se levanta ningun daemon."""
+    t = time.time()
+    try:
+        r = (correr or subprocess.run)([EXE, "cli", "--quiet", "list_projects"], capture_output=True,
+                   text=True, timeout=60)
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return False, str(exc)[:200]
+    if r.returncode == 0:
+        return True, f"{time.time() - t:.1f} s"
+    return False, ((r.stderr or r.stdout).strip()[-200:] or f"exit {r.returncode}")
+
+
+def reiniciar_daemon(*, solo_avisar=False, leer=leer_procesos, detectar=daemon_sin_socket,
+                     enlaces=enlaces_cortados, verificar=_verificar_cliente,
+                     dormir=time.sleep, **inyectado) -> int:
+    """Termina el daemon cbm SOLO si su socket desaparecio, y comprueba que un cliente
+    nuevo conecta despues.
+
+    Es la unica vez que el arnes toca el daemon: un daemon que conserva su socket es
+    de todas las sesiones y se rechaza. Antes de actuar avisa que sesiones perderan
+    cbm. No arranca ningun daemon (`daemon start` deja uno permanente): el primer
+    cliente levanta uno efimero.
+    """
+    if ES_WINDOWS:
+        print("[i]  limpiar-cbm usa `ps`: no esta soportado en Windows.")
+        return 1
+    procesos, todos = leer()
+    daemons = [p for p in procesos if p["rol"] == "daemon"]
+    if not daemons:
+        print("[ok] no hay daemon cbm vivo: el proximo cliente arranca uno solo; nada que reiniciar.")
+        return 0
+    huerfanos = detectar(procesos)
+    if huerfanos:
+        dormir(1)  # un daemon que se esta parando tambien pierde el socket un instante
+        huerfanos = [x for x in huerfanos if x in detectar(procesos)]
+    if not huerfanos:
+        pids = ", ".join(str(p["pid"]) for p in daemons)
+        print(f"[ok] el daemon cbm (pid {pids}) conserva su socket: no esta huerfano, no se "
+              "toca. Es de todas las sesiones; si de verdad hay que pararlo, hazlo con orden: "
+              "`codebase-memory-mcp daemon stop`.")
+        return 0
+
+    victimas = [p for p in daemons if p["pid"] in huerfanos]
+    hijos = [p for p in procesos if p["rol"] == "worker" and p["ppid"] in huerfanos]
+    sesiones = [p for p in procesos if p["rol"] == "sesion"]
+    cortadas = enlaces([p["pid"] for p in sesiones if p["ppid"] not in (0, 1)])
+    conectadas = [p for p in sesiones if p["ppid"] not in (0, 1) and p["pid"] not in cortadas]
+
+    print("== daemon cbm sin socket ==")
+    for p in victimas:
+        print(f"   pid={p['pid']}  vivo desde {p['etime']}, pero su socket ya no existe: ningun "
+              "cliente nuevo puede conectar y `daemon stop` no lo alcanza")
+    if conectadas:
+        print(f"   Al reiniciarlo, {len(conectadas)} sesion(es) conectada(s) pierden cbm hasta "
+              "reconectar el MCP (`/mcp` en Claude Code) o reiniciarse:")
+        for p in conectadas:
+            padre = todos.get(p["ppid"], (0, "?"))[1].split()[0:1]
+            print(f"     pid={p['pid']}  padre: {os.path.basename(padre[0]) if padre else '?'} "
+                  f"(pid {p['ppid']})")
+    for p in hijos:
+        print(f"   worker de indexado del daemon: pid={p['pid']} (se corta con el)")
+    if solo_avisar:
+        print("[i]  --solo-avisar: no se mato nada. Sin esa opcion, `--reiniciar-daemon` lo termina.")
+        return 0
+
+    fallos = 0
+    for p in victimas + hijos:
+        r = matar(p, dormir=dormir, **inyectado)
+        fallos += "NO SE PUDO" in r
+        print(f"   {p['rol']:<7} pid={p['pid']} -> {r}")
+    if fallos:
+        print("[!]  no se pudo terminar el daemon: no se verifica nada mas.")
+        return 1
+    ok, detalle = verificar()
+    if not ok:
+        print(f"[!]  el daemon se termino pero un cliente nuevo aun no conecta: {detalle}")
+        return 1
+    print(f"[ok] un cliente nuevo ya conecta ({detalle}). Las sesiones listadas arriba "
+          "reconectan con `/mcp`; los cierres pendientes se reintentan solos.")
+    return 0

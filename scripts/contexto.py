@@ -286,6 +286,9 @@ CBM_TRANSITORIO = ("could not accept this client", "connection capacity",
                    "timeout:")
 
 
+CAUSA_SIN_SOCKET = "daemon_sin_socket"   # el proceso vive pero su socket ya no existe
+
+
 def _env_num(nombre: str, defecto: float) -> float:
     try:
         return float(os.environ.get(nombre, "").strip() or defecto)
@@ -410,12 +413,25 @@ def _cbm_en_enfriamiento(pendiente: dict | None) -> bool:
     return (time.time() - float(pendiente.get("ts") or 0)) < tope
 
 
-def _cbm_diagnostico() -> dict:
+def _cbm_daemon_sin_socket() -> list[int]:
+    """Pids de daemons cbm vivos sin socket: ningun cliente puede conectar, pero el
+    proceso sostiene el lock, asi que tampoco arranca otro. Reintentar solo gasta 30 s
+    por intento. Una lectura de `ps` y de `lsof`; nunca toca el daemon."""
+    try:
+        import cbm_procesos
+        if cbm_procesos.ES_WINDOWS:
+            return []
+        return cbm_procesos.daemon_sin_socket(cbm_procesos.leer_procesos()[0])
+    except (OSError, subprocess.SubprocessError, ValueError):
+        return []
+
+
+def _cbm_diagnostico(sin_socket: list[int] | None = None) -> dict:
     """Foto barata de la maquina cuando cbm no atiende. No toca el daemon.
 
-    El disparador del "no acepta clientes" no se pudo reproducir con un cierre
-    aislado ni con sondas concurrentes; esto deja datos en vez de hipotesis para
-    la proxima vez. Es telemetria: cualquier fallo al medir se omite.
+    Deja datos en vez de hipotesis: el "no acepta clientes" tiene mas de una causa
+    (daemon ocupado, o vivo pero sin socket) y el texto del cliente es el mismo.
+    Es telemetria: cualquier fallo al medir se omite.
     """
     d: dict = {"at": now_iso()}
     try:
@@ -432,6 +448,7 @@ def _cbm_diagnostico() -> dict:
         d["rss_cbm_mb"] = round(sum(p["rss_mb"] for p in cbm))
         d["sesiones_cortadas"] = len(cbm_procesos.enlaces_cortados(
             [p["pid"] for p in cbm if p["rol"] == "sesion"]))
+        sin_socket = cbm_procesos.daemon_sin_socket(cbm) if sin_socket is None else sin_socket
         log = cbm_procesos.cache_dir() / "logs" / "cbm-daemon.log"
         with open(log, "rb") as fh:  # solo la cola: el log crece sin limite
             fh.seek(0, os.SEEK_END)
@@ -441,6 +458,8 @@ def _cbm_diagnostico() -> dict:
                          for m in ("watcher.changed", "daemon.start", "ui.unavailable")}
     except (OSError, subprocess.SubprocessError, ValueError):
         pass
+    if sin_socket:
+        d[CAUSA_SIN_SOCKET] = list(sin_socket)
     if sys.platform == "darwin":
         try:
             r = subprocess.run(["sysctl", "-n", "vm.swapusage"], capture_output=True,
@@ -473,6 +492,16 @@ def lineas_cbm_pendiente(pendientes: dict) -> list[str]:
         return []
     cuales = ", ".join(f"{n} ({(v.get('motivo') or '?')[:110]})"
                        for n, v in pendientes.items())
+    sin_socket = sorted({pid for v in pendientes.values()
+                         for pid in (v.get("diagnostico") or {}).get(CAUSA_SIN_SOCKET, [])})
+    if sin_socket:
+        return [f"[i]  cbm pendiente (el cierre no depende de el): {cuales}.",
+                f"     El daemon cbm (pid {', '.join(map(str, sin_socket))}) esta vivo pero su socket "
+                "ya no existe: ningun cliente nuevo puede conectar y esto NO se arregla solo.",
+                "     Reintentar no sirve. Avisa a la persona usuaria: reiniciarlo corta cbm en las "
+                "sesiones conectadas hasta `/mcp`, asi que no lo hagas por tu cuenta.",
+                "     Con su aprobacion: `contexto.py limpiar-cbm --reiniciar-daemon` (`--solo-avisar` "
+                "muestra a quien afecta). El pendiente se reintenta solo despues."]
     return [f"[i]  cbm pendiente (el cierre no depende de el): {cuales}.",
             "     El arnes lo reintenta solo en el proximo `worktree start` o cierre."
             " No lo reintentes a mano",
@@ -545,7 +574,10 @@ def cbm_indexar(p: dict, parte: dict, verboso: bool, *, forzar=False,
                       "sin llamar al daemon)")
             continue
         previo = estado["pendientes"].get(clave)
-        if respetar_enfriamiento and _cbm_en_enfriamiento(previo):
+        # Con el daemon sin socket no hay nada que enfriar: re-mirar es una lectura de
+        # lsof, y en cuanto lo reinicien el siguiente refresco ya indexa.
+        if (respetar_enfriamiento and _cbm_en_enfriamiento(previo)
+                and (previo or {}).get("causa") != CAUSA_SIN_SOCKET):
             cbm["pendientes"][nombre] = previo
             if verboso:
                 print(f"   cbm index {nombre}: pendiente, en espera antes de reintentar")
@@ -553,7 +585,12 @@ def cbm_indexar(p: dict, parte: dict, verboso: bool, *, forzar=False,
         plan.append((r, raiz, clave, huella))
 
     if plan:
-        circuito_abierto = False
+        sin_socket = _cbm_daemon_sin_socket()
+        circuito_abierto = bool(sin_socket)
+        motivo_circuito = ("daemon no disponible (sin llamarlo de nuevo)" if not sin_socket else
+                           f"daemon cbm (pid {', '.join(map(str, sin_socket))}) vivo pero sin "
+                           "socket: ningun cliente puede conectar")
+        diag = None
         for r, raiz, clave, huella in plan:
             nombre = r["nombre"]
             previo = estado["pendientes"].get(clave) or {}
@@ -563,7 +600,7 @@ def cbm_indexar(p: dict, parte: dict, verboso: bool, *, forzar=False,
             nueva = clave not in estado["indexado"]
             if circuito_abierto:
                 ok, clase, usados = False, "transitorio", 0
-                err = "daemon no disponible (sin llamarlo de nuevo)"
+                err = motivo_circuito
             else:
                 ok, err, clase, usados, salida = _cbm_indexar_raiz(raiz, intentos)
             if ok:
@@ -584,8 +621,8 @@ def cbm_indexar(p: dict, parte: dict, verboso: bool, *, forzar=False,
                     "head": huella[0] if estable else None}
                 resultado = "completo (primera vez)" if nueva else "incremental"
             elif clase == "transitorio":
-                if not circuito_abierto:
-                    diag = _cbm_diagnostico()
+                if diag is None:
+                    diag = _cbm_diagnostico(sin_socket or None)
                     previas = estado.get("diagnosticos") or []
                     estado["diagnosticos"] = (previas + [{"raiz": nombre, "motivo": err, **diag}])[-20:]
                 circuito_abierto = True
@@ -593,9 +630,13 @@ def cbm_indexar(p: dict, parte: dict, verboso: bool, *, forzar=False,
                         "desde": previo.get("desde") or now_iso(),
                         "intentos": int(previo.get("intentos") or 0) + usados,
                         "diagnostico": diag}
+                if diag.get(CAUSA_SIN_SOCKET):
+                    pend["causa"] = CAUSA_SIN_SOCKET
                 estado["pendientes"][clave] = pend
                 cbm["pendientes"][nombre] = pend
-                resultado = f"PENDIENTE ({usados} intento(s); se reintenta solo)"
+                resultado = (f"PENDIENTE ({usados} intento(s); se reintenta solo)"
+                             if not pend.get("causa") else
+                             "PENDIENTE (daemon vivo sin socket: no se arregla solo, ver abajo)")
             else:
                 estado["pendientes"].pop(clave, None)
                 parte["fallos"].append(f"cbm index {nombre}: {err}")
@@ -604,9 +645,15 @@ def cbm_indexar(p: dict, parte: dict, verboso: bool, *, forzar=False,
                 print(f"   cbm index {nombre}: {resultado}")
     _cbm_guardar(p, estado)
     if cbm["pendientes"]:
-        cbm["accion"] = ("pendiente: se reintenta solo en el proximo worktree start o "
-                         "cierre; no lo reintentes a mano ni toques el daemon "
-                         "(daemon stop / kill)")
+        if any((v.get("diagnostico") or {}).get(CAUSA_SIN_SOCKET)
+               for v in cbm["pendientes"].values()):
+            cbm["accion"] = ("el daemon cbm esta vivo sin socket y no se arregla solo: avisa a la "
+                             "persona usuaria y, con su aprobacion, "
+                             "`contexto.py limpiar-cbm --reiniciar-daemon`")
+        else:
+            cbm["accion"] = ("pendiente: se reintenta solo en el proximo worktree start o "
+                             "cierre; no lo reintentes a mano ni toques el daemon "
+                             "(daemon stop / kill)")
 
 
 def _drenar_cbm(p: dict) -> None:
@@ -778,6 +825,8 @@ def cmd_cbm(args) -> None:
 
 def cmd_limpiar_cbm(args) -> None:
     import cbm_procesos
+    if args.reiniciar_daemon:
+        sys.exit(cbm_procesos.reiniciar_daemon(solo_avisar=args.solo_avisar))
     sys.exit(cbm_procesos.limpiar(matar_huerfanos=not args.solo_avisar))
 
 
@@ -1148,6 +1197,10 @@ def main() -> None:
     s = sub.add_parser("limpiar-cbm", help="avisa que procesos cbm estan en uso y mata "
                                            "solo los huerfanos")
     s.add_argument("--solo-avisar", action="store_true", dest="solo_avisar")
+    s.add_argument("--reiniciar-daemon", action="store_true", dest="reiniciar_daemon",
+                   help="termina el daemon cbm SOLO si su socket desaparecio (vivo pero "
+                        "inalcanzable) y comprueba que un cliente nuevo conecta; con "
+                        "--solo-avisar dice a quien afectaria")
     s.set_defaults(fn=cmd_limpiar_cbm)
     s = sub.add_parser("brief"); s.add_argument("--feature", required=True)
     s.add_argument("--max-lineas", type=int, default=90, dest="max_lineas")
