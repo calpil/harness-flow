@@ -688,8 +688,12 @@ def git(args: list[str], cwd: Path) -> tuple[int, str]:
         # LC_ALL=C: el codigo compara mensajes de git ("already exists"). Con
         # git localizado (gettext en Linux) esas ramas nunca disparaban.
         env = dict(os.environ, LC_ALL="C", LANGUAGE="")
+        # errors="replace": un diff puede traer archivos que no son UTF-8 (un
+        # CSV en latin-1). Sin esto la decodificacion lanzaba y el revisor se
+        # quedaba sin diff; con reemplazo solo ese byte sale como U+FFFD.
         r = subprocess.run(["git", *args], cwd=str(cwd), capture_output=True,
-                           text=True, timeout=60, env=env)
+                           text=True, encoding="utf-8", errors="replace",
+                           timeout=60, env=env)
         if r.returncode != 0:
             return r.returncode, (r.stdout + r.stderr).strip()
         # Los consumidores parsean status, ramas y SHAs. Una advertencia en

@@ -81,6 +81,18 @@ class GitDiagnosticsTests(unittest.TestCase):
         self.assertIn("CONFLICT: fixture", output)
         self.assertIn("merge failed", output)
 
+    def test_diff_con_bytes_que_no_son_utf8_no_se_pierde(self):
+        # Un archivo en latin-1 (0xf3 = «ó») en el diff de una feature tumbaba la
+        # decodificacion: git() devolvia error y el revisor quedaba sin diff.
+        self.raw("checkout", "-q", "feature/fixture")
+        (self.repo / "latin1.csv").write_bytes(b"comuna;region\nConcepci\xf3n;Biob\xedo\n")
+        self.raw("add", "latin1.csv")
+        self.raw("commit", "-qm", "csv en latin-1")
+        code, output = comun.git(["diff", self.source, "HEAD"], self.repo)
+        self.assertEqual(code, 0)
+        self.assertIn("latin1.csv", output)
+        self.assertIn("Concepci�n", output)
+
 
 if __name__ == "__main__":
     unittest.main()
