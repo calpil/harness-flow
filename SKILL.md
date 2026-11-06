@@ -175,10 +175,10 @@ El review NO lo haces tú mismo. Un revisor que recuerda haber escrito el códig
    - Claude Code: la tool `Agent` con `subagent_type: harness-flow:revisor`, pegando la salida en el prompt.
      Ese subagente viene en la propia skill (`agents/revisor.md`); sin el, `general-purpose` sirve igual.
    - GPT/Codex: `codex exec` o el revisor/subagente disponible, pegando el briefing; si no hay aislamiento real, decláralo.
-   - AGY / Gemini: `invoke_subagent` con `TypeName: "self"` (o un subagente definido con `define_subagent` y `enable_write_tools: true`), `Model: "inherit"` y `Workspace: "inherit"`, pegando el briefing entero más "sigue el cuerpo de `<skill>/agents/revisor.md`; ignora su frontmatter". NO uses `TypeName: "research"`: es de solo lectura y no puede correr los comandos de los AC ni escribir `docs/review-<id>.md`.
-   - Grok: `spawn_subagent`. En `prompt`, el briefing entero mas "sigue el cuerpo de `<skill>/agents/revisor.md`; ignora su frontmatter". `isolation: none` (el acta queda en el worktree de la feature; `worktree` la escribiria en un worktree de Grok). No pases `resume_from`: hereda el historial. No uses `codex exec` ni `delegate_task`. Detalle en [`references/grok.md`](references/grok.md).
+   - AGY / Gemini: `invoke_subagent` con `TypeName: "self"` (o un subagente definido con `define_subagent` y `EnableWriteTools: true`), `Model: "inherit"` y `Workspace: "inherit"`, pegando el briefing entero más "sigue el cuerpo de `<skill>/agents/revisor.md`; ignora su frontmatter". NO uses `TypeName: "research"`: es de solo lectura y no puede correr los comandos de los AC ni escribir `docs/review-<id>.md`.
+   - Grok: `spawn_subagent` con `isolation: none` y el briefing entero en `prompt`, más "sigue el cuerpo de `<skill>/agents/revisor.md`; ignora su frontmatter". `background` devuelve un id al instante: espera con `get_command_or_subagent_output` antes de leer el acta o sellar. `revision.py` y `gate.py revision` corren en el mismo cwd; de ahí `find_root()` saca `docs/review-<id>.md`. Un `isolation: worktree` o un `cwd` distinto deja el acta fuera del gate. Sin `resume_from`, sin effort en la tool, sin `codex exec` ni `delegate_task`. Procedimiento en [`references/grok.md`](references/grok.md).
    NO uses un fork de la sesión como revisor: hereda tu historial y con él el sesgo que el aislamiento evita.
-3. Cuando vuelva, LEE tú `docs/review-<id>.md`. El veredicto del subagente es un autoinforme: verifica que cada fila cite `archivo:linea` real antes de sellar.
+3. Cuando el subagente haya terminado, LEE tú `docs/review-<id>.md`. El veredicto del subagente es un autoinforme: verifica que cada fila cite `archivo:linea` real antes de sellar.
 4. Sella:
    `$PY "$H/gate.py" revision --feature <id> --veredicto approved|changes_requested|blocked`
    El script estampa `Revisado: ...` con la firma entera (veredicto · fecha ISO · autor ·
@@ -322,6 +322,7 @@ La skill es portable, pero la instalación, el shell y el revisor dependen del
 host. Usa la referencia correspondiente antes de ejecutar comandos específicos:
 [`references/openai.md`](references/openai.md),
 [`references/claude.md`](references/claude.md),
+[`references/modelos.md`](references/modelos.md) (sección Gemini / AGY),
 [`references/grok.md`](references/grok.md) y
 [`references/kimi.md`](references/kimi.md).
 
@@ -373,7 +374,7 @@ Esa referencia también describe cómo ejecutar la suite y evaluar las regresion
 | Necesitas | Hermes | Claude Code | GPT/Codex | AGY / Gemini | Grok | Kimi Code |
 | --- | --- | --- | --- | --- | --- | --- |
 | Implementer | sesion (`--pair`) o `claude -p --agent` | `Agent` (`harness-flow:implementer`) o sesion (`--pair`) | sesion (`--pair` o autonomo) | sesion (`--pair`) o `invoke_subagent` (`self`) | sesion (`--pair` o autonomo) | sesion (`--pair` o autonomo) |
-| Revisor | `claude -p --agent` o `delegate_task` | `Agent` | `codex exec` o subagente | `invoke_subagent` (`self`) | `spawn_subagent` | `Agent` o `kimi -p` |
+| Revisor | `claude -p --agent` o `delegate_task` | `Agent` | `codex exec` o subagente | `invoke_subagent` (`self`) | `spawn_subagent` y espera el id | `Agent` o `kimi -p` |
 | Crear lección | `skill_manage` | `leccion.py donde` | `leccion.py donde` | `leccion.py donde` | `leccion.py donde` | `leccion.py donde` |
 | Guía del host | [`modelos.md`](references/modelos.md) | [`claude.md`](references/claude.md) | [`openai.md`](references/openai.md) | [`modelos.md`](references/modelos.md) / [`hosts.md`](references/hosts.md) | [`grok.md`](references/grok.md) | [`kimi.md`](references/kimi.md) |
 
@@ -397,6 +398,6 @@ Python. Si no hay revisor aislado, puedes revisar localmente con
 | [`references/claude.md`](references/claude.md) | Claude Code: plugin, comandos, Windows, raices de lecciones |
 | [`references/modelos.md`](references/modelos.md) | modelo por proveedor y rol; seleccion de effort para OpenAI, Claude 5.5 y Gemini 4 Argon (AGY y Hermes) |
 | [`references/openai.md`](references/openai.md) | GPT/Codex: instalacion, deteccion y raices |
-| [`references/grok.md`](references/grok.md) | Grok: host, revisor con `spawn_subagent`, lecciones en `~/.grok/skills`, vault |
+| [`references/grok.md`](references/grok.md) | Grok: host, `spawn_subagent` y espera del revisor, lecciones en `~/.grok/skills`, vault |
 | [`references/kimi.md`](references/kimi.md) | Kimi Code: host, plugin, revisor y lecciones |
 | [`references/documentacion.md`](references/documentacion.md) | rol producto (PRD inicial / SDD de arquitectura), su sello y como se sincronizan |

@@ -296,7 +296,7 @@ Antigravity o `gemini-4-argon` en Hermes), todos los roles usan Argon en nivel
 - **Instalacion global**: AGY descubre `.agents/skills/` solo dentro del arbol
   del proyecto (subiendo hasta `.git`). Para que `harness-flow` este disponible
   en cualquier workspace de la maquina, enlazala en `~/.gemini/config/skills/harness-flow`
-  (ademas de `~/.agents/skills/harness-flow` para Gemini CLI, Codex y Grok).
+  (AGY tambien descubre `~/.gemini/skills/`; ademas de `~/.agents/skills/harness-flow` para Gemini CLI, Codex y Grok).
 - **Modelo y effort**: se fijan en `~/.gemini/antigravity-cli/settings.json`
   (`"model": "Gemini 4 Argon (High)"`) o en el selector de la sesion. La regla de
   `invoke_subagent` en AGY exige pasar siempre `Model: "inherit"` salvo pedido
@@ -307,10 +307,10 @@ Antigravity o `gemini-4-argon` en Hermes), todos los roles usan Argon en nivel
   completa de `revision.py --feature <id> --briefing` mas la instruccion de
   seguir el cuerpo de `<skill>/agents/revisor.md` ignorando su frontmatter.
   **No uses `TypeName: "research"`**: en AGY el subagente `research` es de solo
-  lectura (carece de `run_command` y `write_to_file`), asi que no puede ejecutar
+  lectura (carece de `run_command` y `write_file`/`write_to_file`), asi que no puede ejecutar
   los comandos de verificacion de los AC ni escribir `docs/review-<id>.md`.
   Alternativa: registrar un subagente para la conversacion con
-  `define_subagent(name="revisor", enable_write_tools=True, ...)` usando el
+  `define_subagent(Name="revisor", EnableWriteTools=True, ...)` usando el
   cuerpo de `agents/revisor.md` y lanzarlo con `invoke_subagent`.
 - **Shell**: cada `run_command` (salvo terminal persistente) abre un subproceso
   nuevo; pega siempre el `eval` de `entorno.py --shell` en la misma llamada.
@@ -340,6 +340,6 @@ Para mantener baja latencia entre micro-pasos sin perder rigor:
 | **OpenAI (Codex / Hermes)** | `gpt-6-astra` o `gpt-6.1-sol` en la sesion | `medium` por defecto para ciclos agiles; `high` si el paso resuelve concurrencia o migracion |
 | **Claude 5.5 (Claude Code / Hermes)** | Sesion en `claude-opus-5-5` o `claude-sonnet-5-5` | `high` (o `medium` si el usuario prioriza velocidad en pasos triviales; `xhigh` ante riesgo concreto) |
 | **Gemini 4 Argon (AGY / Hermes)** | `gemini-4-argon` en la sesion principal | `high` (`Gemini 4 Argon (High)`) |
-| **Grok** | Modelo activo de la sesion en Grok | `medium` / `high` en la sesion; el Rol 3 (Revisor) sigue corriendo aislado con `spawn_subagent` |
+| **Grok** | Modelo activo de la sesion | El de la sesion: `spawn_subagent` no acepta effort. Espera del revisor en [grok.md](grok.md) |
 | **Kimi Code** | Modelo activo de la sesion en Kimi | Sesion principal; el Rol 3 sigue corriendo en el subagente `revisor` |
 

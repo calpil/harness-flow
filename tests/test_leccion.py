@@ -110,18 +110,25 @@ class RaicesTests(Base):
         self.assertIn("personal-gpt", leccion.buscar("tdd").read_text(encoding="utf-8"))
 
     def test_gemini_usa_gemini_config_skills_y_repo(self):
+        import subprocess
         personal = self.home / ".gemini" / "config" / "skills"
+        personal_cli = self.home / ".gemini" / "skills"
         repo = Path(self.tmp.name) / "repo"
+        repo.mkdir()
+        subprocess.run(["git", "init"], cwd=repo, check=True, capture_output=True)
         repo_skills = repo / ".gemini" / "skills"
         self.skill(personal, "tdd", "personal-gemini")
+        self.skill(personal_cli, "cli-skill", "personal-gemini-cli")
         self.skill(repo_skills, "repo-only", "repo-gemini")
         os.environ["HARNESS_HOST"] = "gemini"
         os.chdir(repo)
         raices = [r.resolve() for r in leccion.skills_roots()]
         self.assertEqual(raices[0], repo_skills.resolve())
         self.assertIn(personal.resolve(), raices)
+        self.assertIn(personal_cli.resolve(), raices)
         self.assertIn("repo-gemini", leccion.buscar("repo-only").read_text(encoding="utf-8"))
         self.assertIn("personal-gemini", leccion.buscar("tdd").read_text(encoding="utf-8"))
+        self.assertIn("personal-gemini-cli", leccion.buscar("cli-skill").read_text(encoding="utf-8"))
 
     def test_gpt_no_escanea_agents_por_arriba_del_repo_root(self):
         import subprocess

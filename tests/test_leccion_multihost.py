@@ -92,10 +92,24 @@ class MultiHostTests(unittest.TestCase):
         d = self.casa / ".gemini" / "config" / "skills" / "solo-en-gemini"
         d.mkdir(parents=True, exist_ok=True)
         (d / "SKILL.md").write_text(SKILL % "solo-en-gemini", encoding="utf-8")
+        d_cli = self.casa / ".gemini" / "skills" / "solo-en-gemini-cli"
+        d_cli.mkdir(parents=True, exist_ok=True)
+        (d_cli / "SKILL.md").write_text(SKILL % "solo-en-gemini-cli", encoding="utf-8")
+        repo = self.casa / "mi-repo"
+        repo.mkdir()
+        subprocess.run(["git", "init", "-q", "."], cwd=repo, check=True)
         for host in ("hermes", "claude", "gpt", "gemini", "grok"):
-            with self.subTest(host=host):
-                r = self.existe("solo-en-gemini", host)
-                self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+            for nombre in ("solo-en-gemini", "solo-en-gemini-cli"):
+                with self.subTest(host=host, nombre=nombre):
+                    env = dict(os.environ, HOME=str(self.casa), HARNESS_HOST=host)
+                    for k in ("HARNESS_SKILLS_DIR", "HERMES_SKILLS_DIR", "HERMES_HOME",
+                              "CLAUDE_CONFIG_DIR", "CLAUDECODE", "CODEX_HOME", "KIMI_CODE_HOME",
+                              "ANTIGRAVITY_AGENT", "GROK_AGENT", "GROK_SESSION_ID"):
+                        env.pop(k, None)
+                    r = subprocess.run(
+                        [sys.executable, str(SCRIPTS / "leccion.py"), "existe", nombre],
+                        capture_output=True, text=True, env=env, cwd=str(repo))
+                    self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
 
     def test_inexistente_sigue_bloqueando_en_todos_los_hosts(self):
         for host in ("hermes", "claude", "gpt", "gemini", "grok"):

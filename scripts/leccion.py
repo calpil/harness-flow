@@ -4,7 +4,7 @@
 Una leccion es una skill por CLASE de trabajo (nunca por id de feature). Asi
 viaja contigo entre proyectos y el agente la carga sola cuando aplica, en vez
 de quedarse enterrada en el docs/ de un repo. Funciona con Hermes, Claude
-Code, GPT/Codex, Grok y Kimi Code: la raiz de skills se detecta segun el host.
+Code, GPT/Codex, Gemini/AGY, Grok y Kimi Code: la raiz de skills se detecta segun el host.
 
   leccion.py list                skills disponibles (candidatas a leccion)
   leccion.py ver <clase>         imprime la skill
@@ -14,7 +14,7 @@ Code, GPT/Codex, Grok y Kimi Code: la raiz de skills se detecta segun el host.
   leccion.py espejar <clase>     mueve la leccion de Claude a Hermes y deja un enlace
 
 El AGENTE escribe y patchea las lecciones con la herramienta de su host
-(skill_manage en Hermes; escribiendo el SKILL.md en Claude Code, GPT y Grok),
+(skill_manage en Hermes; escribiendo el SKILL.md en Claude Code, GPT, Gemini/AGY, Grok y Kimi Code),
 no este script. HARNESS_SKILLS_DIR fuerza una raiz unica si la deteccion no aplica.
 """
 from __future__ import annotations
@@ -184,7 +184,7 @@ def _raices_kimi() -> list[Path]:
 
 
 def _raices_gemini() -> list[Path]:
-    """Gemini / AGY: .gemini/skills y .agents/skills de repo, luego personal ~/.gemini/config/skills y ~/.agents/skills."""
+    """Gemini / AGY: .gemini/skills y .agents/skills de repo, luego personal ~/.gemini/config/skills, ~/.gemini/skills y ~/.agents/skills."""
     raices: list[Path] = []
     try:
         cwd = Path.cwd()
@@ -201,6 +201,7 @@ def _raices_gemini() -> list[Path]:
     except OSError:
         pass
     raices.append(_casa() / ".gemini" / "config" / "skills")
+    raices.append(_casa() / ".gemini" / "skills")
     raices.append(_casa() / ".agents" / "skills")
     return raices
 
@@ -219,7 +220,7 @@ def _raices_otros_agentes() -> list[Path]:
     No se usan para CREAR: eso sigue la precedencia del host detectado.
     """
     casa = _casa()
-    raices = [casa / ".gemini" / "config" / "skills"]
+    raices = [casa / ".gemini" / "config" / "skills", casa / ".gemini" / "skills"]
     for var, defecto in (("CODEX_HOME", casa / ".codex"),
                          ("KIMI_CODE_HOME", casa / ".kimi-code")):
         base = os.environ.get(var)

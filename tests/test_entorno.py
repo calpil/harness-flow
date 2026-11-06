@@ -394,11 +394,13 @@ class EntornoTests(unittest.TestCase):
                     self.assertEqual(entorno.host_agente(), "gpt")
 
     def test_gemini_skills_dir_detecta_host_gemini(self):
-        script = self.home / ".gemini/config/skills/harness-flow/scripts/entorno.py"
-        script.parent.mkdir(parents=True)
-        script.touch()
-        with mock.patch.object(entorno, "__file__", str(script)):
-            self.assertEqual(entorno.host_agente(), "gemini")
+        for rel in (".gemini/config/skills/harness-flow/scripts/entorno.py",
+                    ".gemini/skills/harness-flow/scripts/entorno.py"):
+            script = self.home / rel
+            script.parent.mkdir(parents=True, exist_ok=True)
+            script.touch()
+            with self.subTest(rel=rel), mock.patch.object(entorno, "__file__", str(script)):
+                self.assertEqual(entorno.host_agente(), "gemini")
 
     def test_host_explicito_gemini_y_agy(self):
         os.environ["HARNESS_HOST"] = "gemini"

@@ -143,5 +143,5 @@ Cuando toda la lista de tests está en verde:
 | **Hermes** | Sesión en `gpt-6-astra` (`medium`/`high`), `claude-opus-5-5` (`xhigh`) o `gemini-4-argon` (`high`) | Sesión interactiva de Hermes ejecutando 1 ciclo por turno | `claude -p --agent harness-flow:implementer` o perfil del rol | `claude -p --agent harness-flow:revisor` o `delegate_task` con briefing |
 | **GPT / Codex** | `gpt-6-astra` (`medium`/`high`) | Sesión interactiva de Codex en el worktree | Sesión o `codex exec` (`gpt-6.1-sol`, `xhigh`) | `codex exec` / subagente aislado con briefing |
 | **AGY / Gemini** | Sesión en `Gemini 4 Argon (High)` | Sesión principal de AGY pausando tras cada micro-mensaje | `invoke_subagent` (`TypeName: "self"`, `Model: "inherit"`) | `invoke_subagent` (`TypeName: "self"`, `Model: "inherit"`, `Workspace: "inherit"`) |
-| **Grok** | Sesión principal de Grok | Sesión principal de Grok en el worktree | Sesión o `spawn_subagent` | `spawn_subagent` (`isolation: none`, sin `resume_from`) |
+| **Grok** | Sesión principal de Grok | Sesión principal de Grok en el worktree | Sesión principal en el worktree | `spawn_subagent` y espera el id ([grok.md](grok.md)) |
 | **Kimi Code** | `/harness-flow:producto`, `/harness-flow:spec` | `/harness-flow:implementar <id> --pair` en la sesión | `Agent(implementer)` | `/harness-flow:review <id>` → `Agent(revisor)` o `kimi -p` |

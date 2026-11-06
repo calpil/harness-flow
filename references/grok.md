@@ -52,32 +52,48 @@ GPT. `psycopg` solo hace falta para el Memory Hub.
 
 ## Revisor
 
-La herramienta es `spawn_subagent`. Aislamiento de contexto: el hijo no ve el
-historial de quien implemento. No hace falta un proceso `grok -p` anidado.
+La herramienta es `spawn_subagent`. El hijo arranca sin el historial de quien
+implemento. No hace falta un proceso `grok -p` anidado.
 
-1. Briefing, en la misma llamada que el `eval`:
+1. Briefing, en la misma llamada que el `eval`, desde el cwd donde despues
+   correras el gate:
 
 ```bash
 eval "$(python3 <skill>/scripts/entorno.py --shell)" && "$PY" "$H/revision.py" --feature <id> --briefing
 ```
 
+`find_root()` sube desde ese cwd hasta el primer `harness/feature_list.json`.
+El acta es `<esa raiz>/docs/review-<id>.md`. El codigo que hay que citar es el
+arbol que el briefing nombra (el worktree de la feature). No cambies de
+directorio entre este comando, la espera y `gate.py revision`: el gate vuelve
+a resolver la raiz desde su cwd.
+
 2. Lanza el hijo con ese texto entero en `prompt`, mas una linea: seguir el
-   cuerpo de `<skill>/agents/revisor.md` e ignorar su frontmatter. Ese bloque
-   (`model: opus`, `tools: Read, Grep, Glob, Bash, Write`) es de Claude Code y
-   de Kimi. En Grok las herramientas son las de la sesion (`read_file`, `grep`,
-   `run_terminal_command`, `search_replace`).
+   cuerpo de `<skill>/agents/revisor.md` e ignorar su frontmatter (`model`,
+   `effort`, `tools`: son de Claude Code y de Kimi). En Grok escribe el acta
+   con las herramientas de la sesion: `read_file`, `grep`,
+   `run_terminal_command`, `search_replace` y `write`.
 3. `description`: una etiqueta corta, por ejemplo `Revisa feature <id>`.
-4. `isolation: none`. `worktree` escribe `docs/review-<id>.md` en un worktree
-   de Grok, y `gate.py revision` lee el de la feature.
-5. No pases `resume_from`. Continua la transcripcion del hijo anterior y con
+4. `isolation: none`. Comparte el cwd del paso 1. `cwd` solo para repetir
+   ese mismo directorio; es excluyente con `isolation: worktree`. Un worktree
+   de Grok, o un `cwd` en el worktree de la feature mientras el gate corre en
+   otra raiz, deja el acta donde `gate.py revision` no la lee.
+5. Deja `background` en `true`. La llamada devuelve un id y el hijo sigue.
+   Antes de abrir el acta o de sellar, espera con
+   `get_command_or_subagent_output` y ese id en `task_ids`. Un review pasa de
+   10 minutos: pon `timeout_ms` largo (tope 3600000) y, si sigue en curso,
+   espera otra vez. `background: false` corta la espera a los 10 minutos y el
+   hijo continua; para saber que termino sigue haciendo falta
+   `get_command_or_subagent_output`.
+6. No pases `resume_from`. Continua la transcripcion del hijo anterior y con
    ella el sesgo que el aislamiento evita.
-6. No uses `codex exec`, `delegate_task` ni la tool `Agent` de Claude. El host
-   `grok` no es `gpt` ni `hermes`. `--agent` y `--agents` no lanzan este revisor:
+7. `spawn_subagent` no acepta modelo ni effort: el hijo usa los de la sesion.
+   No uses `codex exec`, `delegate_task` ni la tool `Agent` de Claude.
    `--agent` cambia el agente de toda la sesion y `--agents` solo existe en
    `grok -p`.
 
-Cuando vuelva, lee `docs/review-<id>.md` y sella con `gate.py revision`, igual
-que en los otros hosts. Si `spawn_subagent` no esta, revisa tu con
+Con el hijo terminado, lee `docs/review-<id>.md` desde el mismo cwd y sella
+con `gate.py revision`. Si `spawn_subagent` no esta, revisa tu con
 `revision.py --feature <id>` y dilo: el rigor baja.
 
 ## Lecciones

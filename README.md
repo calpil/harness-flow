@@ -1,7 +1,7 @@
 # harness-flow
 
 Skill para [Hermes Agent](https://hermes-agent.nousresearch.com),
-[Claude Code](https://code.claude.com), OpenAI GPT/Codex y Grok que implementa un proceso de desarrollo
+[Claude Code](https://code.claude.com), OpenAI GPT/Codex, AGY/Gemini, Grok y Kimi Code que implementa un proceso de desarrollo
 spec-driven para proyectos multi-repo, con gates ejecutables.
 
 Es el puerto del arnés Rust `harness_process` a un agente: **sin binario, sin
@@ -9,7 +9,7 @@ instalador por proyecto, sin compilar por sistema operativo**. El proceso vive e
 esta skill; los gates son scripts Python que devuelven exit≠0 cuando algo falta.
 
 Los scripts son stdlib puro (salvo `psycopg` para el hub Postgres) y detectan el
-host solos; lo único que cambia entre Hermes, Claude Code, GPT/Codex y Grok son las herramientas
+host solos; lo único que cambia entre Hermes, Claude Code, GPT/Codex, AGY/Gemini, Grok y Kimi Code son las herramientas
 del agente para lanzar el subagente revisor y escribir lecciones.
 
 ## Qué hace
@@ -191,7 +191,9 @@ propio en `~/.harness-flow/venv` en vez de tocar el python del sistema):
 python3 ~/.hermes/skills/software-development/harness-flow/scripts/entorno.py --instalar-deps
 # Claude Code
 python3 ~/.claude/skills/harness-flow/scripts/entorno.py --instalar-deps
-# GPT/Codex
+# AGY / Gemini
+python3 ~/.gemini/config/skills/harness-flow/scripts/entorno.py --instalar-deps
+# GPT/Codex / Gemini CLI / Grok
 python3 ~/.agents/skills/harness-flow/scripts/entorno.py --instalar-deps
 ```
 
@@ -243,7 +245,7 @@ eval "$(python3 <skill>/scripts/entorno.py --shell)"
 python <skill>\scripts\entorno.py --powershell | Invoke-Expression
 ```
 
-En Codex, Claude Code y Grok repite la inicializacion y el comando en la misma
+En Codex, Claude Code, AGY/Gemini y Grok repite la inicializacion y el comando en la misma
 llamada de terminal: las variables no sobreviven a llamadas independientes.
 En Codex agrega `--host codex` a `entorno.py`, incluso al usar el clone de
 Hermes. Ejemplo completo en [`references/openai.md`](references/openai.md).

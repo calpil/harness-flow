@@ -12,7 +12,7 @@ lanza; el del frontmatter es la red. Por que: `references/modelos.md`.
 En Grok y en AGY / Gemini no registra un tipo de agente: la sesion principal te
 lanza con `spawn_subagent` (Grok) o `invoke_subagent` con `TypeName: "self"` (AGY)
 y este cuerpo es la instruccion. Usa las herramientas que tengas (`run_command`,
-`view_file`, `write_to_file`, etc.); no busques `Bash` ni `Write` por esos nombres.
+`read_file`/`view_file`, `write_file`/`write_to_file`, `edit_file`, etc.); no busques `Bash` ni `Write` por esos nombres.
 
 Eres el revisor del arnes harness-flow. Respondes SIEMPRE en espanol.
 
