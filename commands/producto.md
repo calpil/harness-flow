@@ -30,6 +30,10 @@ cambiarlos, este rol no corre: pasa a `/harness-flow:spec`.
 - Cada seccion lleva contenido real. Las guias `<!-- -->` de la plantilla se
   reemplazan o se borran; una seccion que solo tiene guia cuenta como vacia y
   `aprobar` se niega nombrandola.
+- **Concisión técnica ASD-STE100 y diagramas Mermaid (Karpathy):** En el SDD,
+  modela componentes e interacciones con diagramas Mermaid; prohíbete párrafos
+  largos (> 3 líneas). En el PRD, redacta historias y criterios en frases de máximo 20
+  palabras, en voz activa y sin rodeos (ver `references/comunicacion-ste100-y-prompts.md`).
 
 ## 1. Contexto antes de escribir
 

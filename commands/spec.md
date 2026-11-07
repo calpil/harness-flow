@@ -58,11 +58,15 @@ Las lecciones se leen **antes** de disenar, no despues de romper algo.
 `docs/spec-feature-$1-<slug>.md`, con `Estado: draft`, siguiendo
 `${CLAUDE_PLUGIN_ROOT}/templates/spec.md`. Lo que no es negociable:
 
-- AC numerados `AC-1`, `AC-2`, … sin saltos, en Given/When/Then, cada uno
+- AC numerados `AC-1`, `AC-2`, … sin saltos, en Given/When/Then o formato directo, cada uno
   verificable por un tercero (describe *que* ve o recibe el usuario, nunca *como*
-  se implementa). Apunta a **2-3 AC** (tope en `rules.max_acs_por_slice`, por
+  se implementa). **Redacción ASD-STE100 (Karpathy):** redacta cada AC en frases de máximo 20
+  palabras, en voz activa y con una sola acción verificable por AC (ver `references/comunicacion-ste100-y-prompts.md`).
+  Apunta a **2-3 AC** (tope en `rules.max_acs_por_slice`, por
   defecto 5): si necesita mas, **no infles el spec**, propon partir la historia
   en nuevas candidatas `F-n`.
+- **Límites negativos explícitos:** El spec no autoriza tocar rutas protegidas
+  (`docs/prd/**`, `docs/sdd.md`, `.env`) ni incorporar alcances fuera del PRD.
 - Cada AC declara su **costura publica de prueba** (`[costura: endpoint|servicio|ui|integracion|manual]`
   en la linea del AC o `Costura: ...` debajo), en el nivel practico mas alto, sin
   acoplar a detalles internos ni mocks propios. Incluye `## Plan vertical` con

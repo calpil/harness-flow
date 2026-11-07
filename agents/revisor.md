@@ -74,6 +74,9 @@ evidencia y el codigo tu mismo.
   Context7 o documentación oficial; la introducción de paquetes con vulnerabilidades
   de severidad alta/crítica o APIs obsoletas DEBE ser clasificada como hallazgo
   **bloqueante** o **mayor**.
+- **Concisión técnica ASD-STE100 (Estándar Karpathy):**
+  - Redacta cada observación y hallazgo en **frases de máximo 20 palabras**, en voz activa y citando `archivo:línea`.
+  - Prohibido emitir sugerencias cosméticas de estilo o párrafos decorativos: si no viola un AC, la seguridad o la arquitectura, no es un hallazgo. Ver [`references/comunicacion-ste100-y-prompts.md`](references/comunicacion-ste100-y-prompts.md).
 - **No selles.** No escribas una linea `Revisado:` ni `Veredicto:` con formato de
   sello. El sello lo estampa `gate.py revision` en la sesion principal, y un
   sello tipeado a mano es exactamente lo que ese gate existe para rechazar.

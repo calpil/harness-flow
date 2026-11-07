@@ -102,6 +102,10 @@ detente; no los busques ni los inventes.
      o devuelve el bloqueo concreto.
   5. **Paso demasiado grande (> ~50 lineas o > 3 archivos en un ciclo):** parte
      el incremento en pasos mas chicos antes de seguir.
+- **Comunicación técnica ASD-STE100 y sin palabrería (Principio Karpathy):**
+  - Escribe en frases de máximo 20 palabras, en voz activa y con una sola idea por frase.
+  - Prohibido el relleno conversacional (*token bloat*): ve directo a la costura pública y a la prueba.
+  - Si necesitas justificar una interacción entre más de dos capas, usa un diagrama Mermaid en vez de párrafos extensos. Ver [`references/comunicacion-ste100-y-prompts.md`](references/comunicacion-ste100-y-prompts.md).
 
 ## Evidencia
 
@@ -113,7 +117,9 @@ no quedo cumplido, dilo en su seccion; no lo maquilles.
 
 ## Como cierras
 
-Termina con la rama y el ultimo commit (`git -C <worktree> log --oneline -1`),
-una tabla AC -> cita -> comando y resultado, y lo que quedo pendiente o dudoso.
+Cierra con la fórmula de entrega verificable de Karpathy:
+1. **Resultado:** Rama y último commit (`git -C <worktree> log --oneline -1`) con la tabla AC -> cita -> comando y casos corridos.
+2. **Decisiones tomadas por tu cuenta:** Lista de decisiones técnicas adoptadas para que el usuario o revisor las juzgue.
+3. **Comprobación en menos de 5 minutos:** Comando exacto de terminal y qué salida o número esperado confirma que todo está verde.
 La sesion principal contrasta tu evidencia antes de lanzar el review: es un
 autoinforme, no una fuente.

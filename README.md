@@ -57,6 +57,7 @@ Las lecciones aprendidas son memoria del usuario, no del agente donde se descubr
 - **Context7 & Documentación Oficial (`stack.py auditar`)**: Conexión con el servidor MCP de Context7 (`https://mcp.context7.com/mcp`) y enlaces oficiales para garantizar que toda implementación use versiones vigentes, APIs no obsoletas y ejecute escáneres de seguridad contra vulnerabilidades (CVEs con `govulncheck`, `npm audit`, etc.). Ver [`references/context7-documentacion-oficial.md`](references/context7-documentacion-oficial.md).
 - **Modo Pair Interactivo Automático**: Al detectar un stack normativo, la implementación activa automáticamente el modo Pair (Driver = IA, Navigator = humano), avanzando en ciclos TDD con micro-reportes.
 - **Protocolo de Preguntas de Formulario**: La IA interviene con formularios estructurados (`ask_question` en Gemini/AGY o formulario interactivo en otros hosts) **únicamente cuando es indispensable**: decisiones de diseño no previstas, paradas de TDD tras 2 fallos consecutivos sin verde, aprobación de lista de tests y confirmación de gates.
+- **Principios de Karpathy y Norma Aeroespacial ASD-STE100**: Incorpora comunicación de alta densidad sin sobre-restricción (*over-constraining*), frases de máximo 20 palabras en voz activa, diagramas Mermaid obligatorios en SDD, criterios AC-n atómicos y micro-reportes telegráficos de pantalla de instrumentos en Pair Mode. Ver [`references/comunicacion-ste100-y-prompts.md`](references/comunicacion-ste100-y-prompts.md) y [`docs/principios-karpathy-ste100-harness-flow.md`](docs/principios-karpathy-ste100-harness-flow.md).
 
 ---
 
@@ -241,12 +242,14 @@ harness-flow/
 │   └── python-dataproduct/           <- Python data product / FastAPI / Polars, 4 rules, 11 skills
 ├── templates/                        <- Plantillas oficiales de spec, prd, sdd y enmiendas
 ├── docs/
-│   └── explicacion-y-diagnostico.md  <- Informe de auditoría exhaustiva y estado de salud
+│   ├── explicacion-y-diagnostico.md  <- Informe de auditoría exhaustiva y estado de salud
+│   └── principios-karpathy-ste100-harness-flow.md <- Principios de Karpathy y norma ASD-STE100 en el arnés
 ├── references/                       <- Documentación especializada por host y subsistema
 │   ├── hosts.md, modelos.md, vertical-slice.md, contexto.md, lecciones-del-arnes.md
 │   ├── multirepo.md, claude.md, openai.md, grok.md, kimi.md, entorno.md
 │   ├── hub.md, obsidian.md, atlassian.md, documentacion.md
-│   └── context7-documentacion-oficial.md <- Context7 MCP, documentación oficial y seguridad
+│   ├── context7-documentacion-oficial.md <- Context7 MCP, documentación oficial y seguridad
+│   └── comunicacion-ste100-y-prompts.md <- Principios Karpathy, norma ASD-STE100 y micro-reportes
 └── tests/                            <- Suite exhaustiva de tests unitarios y de regresión
 ```
 

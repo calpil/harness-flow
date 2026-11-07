@@ -18,13 +18,15 @@ SDD: `docs/sdd.md` · decisiones que aplica: <D-n del SDD, o ninguna>
 
 ## Criterios de aceptacion
 
-Cada AC es verificable por un tercero en Given/When/Then y declara su costura
+Cada AC es verificable por un tercero en Given/When/Then o formato directo y declara su costura
 publica de prueba (`[costura: endpoint|servicio|ui|integracion|manual]`).
+Regla ASD-STE100 (Karpathy): redacta cada AC en frases de máximo 20 palabras, en voz activa,
+con una sola acción verificable y sin sinónimos ambiguos (ver `references/comunicacion-ste100-y-prompts.md`).
 Apunta a 2-5 AC por vertical slice; si necesita mas de 5, considera dividir la
 feature en slices verticales mas chicos antes de aprobar.
 
-- AC-1 [costura: endpoint]: dado <estado>, cuando <accion>, entonces <resultado observable>. `verificar: pytest tests/test_x.py -q`
-- AC-2 [costura: servicio]: dado <estado>, cuando <accion>, entonces <resultado observable>.
+- AC-1 [costura: endpoint]: El endpoint rechaza credenciales inválidas. Devuelve HTTP 401 con RFC 7807. `verificar: pytest tests/test_auth.py -q`
+- AC-2 [costura: servicio]: El servicio descuenta stock al confirmar pago. Devuelve orden confirmada.
   Comando: `npm test -- checkout`
 - AC-3 [costura: manual]: <sin comando: lo verifica el reviewer a mano>
 

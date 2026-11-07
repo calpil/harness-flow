@@ -9,8 +9,8 @@ effort: xhigh
 
 Implementa la feature `$1`. 
 
-**Activación Automática de Modo Pair en Stacks Tecnológicos (Angular / Golang):**
-Si el brief (`contexto.py brief`) detecta un stack tecnológico normativo (ej. Golang Hexagonal o Angular Product), o si el usuario pasa `--pair` o pide modo pair, **el modo Pair interactivo se activa de forma automática**. En este modo no se delega a ciegas a un subagente sin visibilidad: tú ejecutas como **Driver** en el worktree y el usuario actúa como **Navigator**.
+**Activación Automática de Modo Pair en Stacks Tecnológicos (Angular / Golang / .NET / Stacks Normativos):**
+Si el brief (`contexto.py brief`) detecta un stack tecnológico normativo (ej. Golang Hexagonal, Angular Product, .NET Hexagonal), o si el usuario pasa `--pair` o pide modo pair, **el modo Pair interactivo se activa de forma automática**. En este modo no se delega a ciegas a un subagente sin visibilidad: tú ejecutas como **Driver** en el worktree y el usuario actúa como **Navigator**.
 
 **Protocolo de Intervención con Preguntas de Formulario:**
 El agente ejecuta los ciclos TDD verticalmente (`1 test -> Red -> código mínimo -> Green -> Refactor en verde`) emitiendo su micro-reporte continuo. **Solo interviene consultando al usuario con preguntas interactivas de formulario (`ask_question` en Gemini/AGY, o formulario estructurado de opciones en otros LLMs) cuando sea REALMENTE NECESARIO:**
@@ -116,11 +116,12 @@ Si los argumentos incluyen `--pair` (o el usuario pidio modo pair, estilo `/pair
    - Escribe 1 test -> correlo y muestra que falla (**Red**) -> escribe el
      **codigo minimo** (con el valor esperado del AC, nunca calculado con la misma
      logica del codigo) -> corre los tests y muestra que pasan (**Green**).
-   - Por defecto haz **1 paso y detente** con este micro-mensaje:
-     `✅ Pasa "<nombre del test>". <que hice en una linea> (<archivo:linea>)` /
-     `Decision tomada: <criterio aplicado, si hubo>` /
-     `¿Cambiamos algo o seguimos con "<siguiente test>"?`
-   - Si el usuario dice `"haz N"` / `"avanza N"`, ejecuta `N` ciclos completos uno
+   - Por defecto haz **1 paso y detente** con este micro-mensaje bajo norma ASD-STE100 (ver `references/comunicacion-ste100-y-prompts.md`):
+     `✅ Pasa: "<nombre del test>"`
+     `⚙️ Decisión: <decisión técnica adoptada en <= 20 palabras>`
+     `🔍 Comprobación: <comando exacto y duración/resultado en < 5 min>`
+     `❓ ¿Cambiamos algo o seguimos con "<siguiente test>"?`
+   - Si el usuario dice `"haz N"` / `"avanza N"` con verbos agrupados (ej. `"haz 3: codifica, compila y testea los siguientes 3"`), ejecuta `N` ciclos completos uno
      tras otro (nunca `N` tests juntos y luego el codigo) mostrando **primero los
      tests y despues el codigo**.
 3. **Detente de inmediato (incluso a mitad de un lote de `N`) ante las 5 paradas:**

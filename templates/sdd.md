@@ -26,6 +26,9 @@ Estado: draft
      fronteras y los contratos entre ellos (API, eventos, tablas). El flujo,
      los datos y el pseudo-codigo de cada cambio ya estan en el PRD: aqui va
      lo que el PRD no fija, la arquitectura que los sostiene.
+     Regla ASD-STE100 (Karpathy): modela la arquitectura y dependencias con
+     diagramas Mermaid obligatorios (`flowchart` o `sequenceDiagram`); prohibida
+     la prosa larga explicativa (> 3 líneas).
      Diseno simple (YAGNI): no agregues capas, repositorios, factories ni
      abstracciones "por si acaso" para un futuro hipotetico. -->
 
@@ -40,8 +43,9 @@ Estado: draft
      decision sin alternativa no es una decision, es una descripcion. El nombre
      es para que el spec de cada feature la cite ("decisiones que aplica: D2").
      Sin `Descartada:` (o `Descartado:`) con texto, aprobar se niega.
-       - D1: clave de idempotencia en base de datos. Descartada: cache, porque
-         no sobrevive un reinicio. -->
+     Formato STE100 recomendado (terna de 3 frases activas):
+       - D1: Clave de idempotencia en base de datos. Descartada: cache distribuido,
+         porque no sobrevive a un reinicio. Consecuencia: requiere índice único en PostgreSQL. -->
 
 ## Riesgos
 
