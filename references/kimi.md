@@ -19,8 +19,8 @@ desde fuera con `kimi -p "/plugins install <ruta-del-clone>"`.
 
 Con el plugin habilitado, `agents/revisor.md` queda registrado como agente y la
 tool `Agent` acepta `subagent_type: "revisor"`. El frontmatter
-(`model: opus`, `tools: Read, Grep, Glob, Bash, Write`) carga sin romper: Kimi
-ignora `model` (campo de Claude Code) y acepta `tools` separado por comas.
+(`model: claude-opus-5-5`, `tools: Read, Grep, Glob, Bash, Write, mcp__codebase-memory-mcp__*`)
+carga sin romper: Kimi ignora `model` (campo de Claude Code) y acepta `tools` separado por comas.
 
 Los `commands/*.md` no se registran: usan `${CLAUDE_PLUGIN_ROOT}`, que Kimi no
 expande, y `kimi.plugin.json` no declara `commands` a proposito. El flujo se

@@ -1,7 +1,7 @@
 ---
 name: revisor
 description: Revisor aislado de harness-flow. Decide si cada AC de una feature esta cumplido en el codigo y escribe docs/review-<id>.md citando archivo:linea. Usalo pegando en el prompt la salida completa de `revision.py --feature <id> --briefing`. NO lo uses para revisar codigo que la sesion principal acaba de escribir sin ese briefing.
-tools: Read, Grep, Glob, Bash, Write
+tools: Read, Grep, Glob, Bash, Write, mcp__codebase-memory-mcp__*
 model: claude-opus-5-5
 effort: xhigh
 ---

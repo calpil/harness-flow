@@ -95,7 +95,15 @@ class ComponentesTests(unittest.TestCase):
         """Solo lee y escribe su acta; arreglar lo que revisa lo invalida como revisor."""
         tools = [t.strip() for t in frontmatter(RAIZ / "agents" / "revisor.md").get("tools", "").split(",")]
         self.assertIn("Read", tools)
+        self.assertIn("mcp__codebase-memory-mcp__*", tools)
         self.assertNotIn("Edit", tools)
+
+    def test_settings_claude_incluye_permisos_de_venv_y_eval(self):
+        """Sin ~/.harness-flow/venv/bin/python y eval en allow, cada comando pide permiso."""
+        cfg = json.loads((RAIZ / ".claude" / "settings.json").read_text(encoding="utf-8"))
+        allow = cfg.get("permissions", {}).get("allow", [])
+        self.assertIn("Bash(~/.harness-flow/venv/bin/python:*)", allow)
+        self.assertIn('Bash(eval "$(python3:*)', allow)
 
     def test_el_comando_de_review_apunta_al_agente_real(self):
         """Si el agente se renombra, este comando delega a un subagent_type inexistente."""

@@ -40,6 +40,19 @@ class PostmergeRetiradoTests(unittest.TestCase):
         r = self.correr()
         self.assertIn("postmerge_medido.py", r.stdout + r.stderr)
 
+    def test_main_y_correr_importados_tambien_salen_con_2(self):
+        sys.path.insert(0, str(ROOT / "scripts"))
+        try:
+            import postmerge
+            with self.assertRaises(SystemExit) as cm_main:
+                postmerge.main()
+            self.assertEqual(cm_main.exception.code, 2)
+            with self.assertRaises(SystemExit) as cm_correr:
+                postmerge.correr(".", "true")
+            self.assertEqual(cm_correr.exception.code, 2)
+        finally:
+            sys.path.pop(0)
+
 
 if __name__ == "__main__":
     unittest.main()
