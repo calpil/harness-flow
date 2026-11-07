@@ -274,12 +274,33 @@ A partir del análisis de las obras fundamentales de diseño orientado a objetos
 
 ---
 
-## 10. Estado de Verificación y Métricas de Calidad
+## 10. Hito 8: Auto-Normalización Automática (Nivel 1) y Feature #0 Prioritaria (Nivel 2)
 
-* **Batería de Pruebas Automatizadas**: 18 tests dedicados de stacks en `tests/test_stack.py` y 145 tests de flujo core ejecutados pasando al 100%:
+Se diseñó e integró en el ciclo de arranque y ejecución de Harness Flow el mecanismo de **detección temprana, auto-normalización de entorno y priorización arquitectónica obligatoria**:
+
+### Mecanismos Implementados:
+1. **Auto-Normalización de Entorno (Nivel 1)**:
+   * Al ejecutar [`scripts/estado.py`](file:///Users/alan/.hermes/skills/software-development/harness-flow/scripts/estado.py) o comandos de inicio, el arnés detecta el stack y verifica si faltan reglas (`.claude/rules/`), skills (`.claude/skills/`, `.agents/skills/`), `AGENTS.md` o `scripts/check-architecture.py`.
+   * Si faltan, los instala automáticamente de inmediato mediante [`stack.auto_normalizar_y_asegurar_cumplimiento`](file:///Users/alan/.hermes/skills/software-development/harness-flow/scripts/stack.py), dejando el repositorio 100% listo para los agentes sin requerir intervención manual.
+2. **Priorización de Normalización del Código Fuente (Nivel 2 - Feature #0)**:
+   * Si el verificador de arquitectura AST/regex (`check-architecture.py`) detecta violaciones en el código existente:
+     * El arnés crea automáticamente la **Feature #0 (`F-0: normalizacion-arquitectura-<stack>`)** al inicio del backlog (`feature_list.json`).
+     * Todas las demás features abiertas (`F-1`, `F-2`, etc.) quedan automáticamente bloqueadas exigiendo `requiere: [0]`.
+     * Se genera automáticamente el spec formal de refactorización (`docs/spec-feature-0-*.md`) con ACs que exigen que `check-architecture.py` finalice con 0 errores y sin regresiones en tests.
+3. **Bloqueo Determinístico en Gates**:
+   * [`scripts/gate.py approve-spec`](file:///Users/alan/.hermes/skills/software-development/harness-flow/scripts/gate.py) y [`scripts/worktree.py start`](file:///Users/alan/.hermes/skills/software-development/harness-flow/scripts/worktree.py) impiden aprobar o iniciar ramas de features de negocio ($n \neq 0$) mientras la Feature #0 no esté en estado `done`.
+   * En [`scripts/estado.py`](file:///Users/alan/.hermes/skills/software-development/harness-flow/scripts/estado.py), se despliega un banner prominente de advertencia indicando que la Feature #0 es la única tarea permitida.
+4. **Saneamiento de Dependencias con ID Cero**:
+   * En [`scripts/comun.py`](file:///Users/alan/.hermes/skills/software-development/harness-flow/scripts/comun.py), se corrigió la evaluación de falsedad de `item or ""` para soportar enteros `0` en `requiere_declarados` y `bloqueos_feature`.
+
+---
+
+## 11. Estado de Verificación y Métricas de Calidad
+
+* **Batería de Pruebas Automatizadas**: 20 tests dedicados de stacks en `tests/test_stack.py` y 86 tests de flujo core ejecutados pasando al 100%:
   ```bash
-  PYTHONPATH=scripts:tests python -m unittest tests/test_stack.py tests/test_prd_sdd_flujo.py tests/test_producto.py tests/test_spec_acs.py tests/test_review_rondas.py tests/test_auditoria_tres.py tests/test_documentacion.py
-  # Ran 145 tests in 15.598s - OK
+  PYTHONPATH=scripts:tests python -m unittest tests/test_stack.py tests/test_estado.py tests/test_spec_acs.py tests/test_review_rondas.py tests/test_auditoria_tres.py tests/test_documentacion.py
+  # Ran 86 tests in 5.248s - OK
   ```
 * **Validación de Habilidades de Agentes**: 100% de las habilidades validadas en todos los stacks con `validate-agent-skills.mjs`.
 * **Verificación de Arquitectura en las 8 Plantillas Reales de CALPIL**:

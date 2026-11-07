@@ -12,7 +12,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from comun import (bitacora, get_feature, git, load_backlog, now_iso, paths,  # noqa: E402
+from comun import (bitacora, bloqueos_feature, get_feature, git, load_backlog, now_iso, paths,  # noqa: E402
                    save_backlog, slugify)
 
 ABIERTOS = ("in_progress", "blocked", "review")
@@ -68,6 +68,19 @@ def cmd_start(args) -> None:
     data = load_backlog(p)
     f = get_feature(data, args.feature)
     fid, slug = f["id"], slugify(f.get("name", ""))
+
+    f0 = next((x for x in data.get("features", []) if str(x.get("id")) == "0"), None)
+    if f0 and f0.get("status") != "done" and str(fid) != "0":
+        sys.exit(f"[!!] require_stack_normativo: la Feature #0 ({f0.get('name')}) esta en estado '{f0.get('status')}'.\n"
+                 f"     No puedes arrancar features de negocio antes de normalizar el codigo existente.\n"
+                 f"     Ejecuta primero: worktree.py start --feature 0")
+
+    bloq = bloqueos_feature(data, f)
+    if bloq:
+        sys.exit(f"[!!] la feature #{fid} tiene dependencias sin cerrar:\n"
+                 + "".join(f"     - {b}\n" for b in bloq) +
+                 "     Cierra primero sus dependencias antes de arrancar.")
+
     rama = ("bugfix/" if f.get("kind") == "bug" else "feature/") + f"{fid}-{slug}"
 
     if args.sin_worktree:

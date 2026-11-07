@@ -27,8 +27,9 @@ flowchart TD
     H5["<b>Hito 5: Filosofía Ousterhout (Stanford)</b><br/>Deep Modules, anti-classitis, inversión 10-20% y Design It Twice"]
     H6["<b>Hito 6: Auditoría Integral 8 Stacks</b><br/>Verificadores AST/regex para todos los stacks; 8/8 plantillas CALPIL COMPLIANT"]
     H7["<b>Hito 7: Patrones GoF & Fowler Refactoring</b><br/>GoF por capa hexagonal, regla de Dos Sombreros (Beck/Fowler) y 24 Code Smells"]
+    H8["<b>Hito 8: Auto-Normalización y Feature #0</b><br/>Auto-instala Nivel 1 (reglas/skills) y crea F-0 prioritaria bloqueando features de negocio si hay violaciones"]
 
-    H1 --> H2 --> H3 --> H4 --> H5 --> H6 --> H7
+    H1 --> H2 --> H3 --> H4 --> H5 --> H6 --> H7 --> H8
 ```
 
 ---

@@ -50,14 +50,18 @@ def main() -> None:
         print(f"   [!] no se pudo evaluar el contexto: {exc}")
     print(f"   vault: {vault}")
     print(f"   jira:  {'configurado' if p['atlassian'].exists() else 'sin binding'}")
+    norm_info = None
     try:
         import stack
+        norm_info = stack.auto_normalizar_y_asegurar_cumplimiento(p["root"], data)
+        for act in norm_info.get("nivel_1_acciones", []):
+            print(f"   {act}")
         st_detectados = stack.detectar_todos_los_destinos(p["root"])
         st_calpil = [s for s in st_detectados if s["stack"] != "generico"]
         if st_calpil:
             partes_st = [f"{s['name']} en {Path(s['path']).name} (confianza {s['confidence']}%)" for s in st_calpil]
             print("   stacks: " + ", ".join(partes_st))
-    except Exception:
+    except Exception as exc:
         pass
     faltan_docs: list[str] = []
     try:
@@ -89,6 +93,16 @@ def main() -> None:
     for f in desconocidas:
         print(f"   [!] #{f['id']} [{f.get('status')}] {f.get('name')}: "
               "estado desconocido; revisa status en feature_list.json")
+
+    f0_obj = next((x for x in data.get("features", []) if str(x.get("id")) == "0"), None)
+    if f0_obj and f0_obj.get("status") != "done":
+        print("   " + "=" * 68)
+        print("   [!] PRIORIDAD ARQUITECTONICA: Feature #0 requerida antes de nuevas features.")
+        print(f"       El codigo base contiene violaciones que deben normalizarse primero.")
+        print(f"       -> #{f0_obj['id']}: {f0_obj.get('name')} [{f0_obj.get('status')}]")
+        print("       -> Siguiente paso: gate.py approve-spec --feature 0 --yes")
+        print("          y resolver violaciones con TDD en worktree.py start --feature 0")
+        print("   " + "=" * 68)
 
     # require_docs_al_dia: sin esos documentos approve-spec se niega, asi que el
     # rol producto va antes que cualquier spec nuevo.

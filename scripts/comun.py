@@ -158,7 +158,8 @@ def requiere_declarados(f: dict) -> list[str]:
         crudo = [str(crudo)]
     out: list[str] = []
     for item in crudo:
-        for trozo in re.split(r"[,;\s]+", str(item or "").strip()):
+        val_str = "" if item is None else str(item).strip()
+        for trozo in re.split(r"[,;\s]+", val_str):
             trozo = trozo.strip()
             if not trozo or trozo.lower() in ("ninguna", "ninguno", "none", "n/a", "-"):
                 continue

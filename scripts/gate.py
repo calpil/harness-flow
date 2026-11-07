@@ -414,6 +414,16 @@ def cmd_approve_spec(args) -> None:
                  f"     gate.py enmienda --feature {f['id']} --propuesta docs/<propuesta>.md --yes")
     text = sp.read_text(encoding="utf-8")
     acs = _acs_sellables(text)
+
+    # require_stack_normativo: la Feature #0 de normalización arquitectónica debe cerrarse antes de features de negocio
+    f0 = next((x for x in data.get("features", []) if str(x.get("id")) == "0"), None)
+    if f0 and f0.get("status") != "done" and str(f.get("id")) != "0":
+        sys.exit(f"[!!] require_stack_normativo: la Feature #0 ({f0.get('name')}) esta en estado '{f0.get('status')}'.\n"
+                 f"     El codigo existente contiene violaciones arquitectonicas que deben normalizarse primero.\n"
+                 f"     1. gate.py approve-spec --feature 0 --yes\n"
+                 f"     2. worktree.py start --feature 0 (resuelve las violaciones con TDD)\n"
+                 f"     3. gate.py close --feature 0")
+
     pendientes = _docs_pendientes(p, data, f)
     if pendientes:
         sys.exit(f"[!!] require_docs_al_dia: el spec de #{f['id']} no se sella sin el PRD/SDD del proyecto:\n"

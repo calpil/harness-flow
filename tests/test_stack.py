@@ -311,6 +311,89 @@ class TestStackManager(unittest.TestCase):
         self.assertTrue((rust_repo / "src" / "application").exists())
         self.assertTrue((rust_repo / "src" / "infrastructure").exists())
 
+    def test_auto_normalizar_nivel_1(self):
+        mock_repo = self.tmpdir / "auto-norm-repo"
+        mock_repo.mkdir()
+        (mock_repo / "go.mod").write_text("module example.com/autonorm\n", encoding="utf-8")
+
+        res = stack.auto_normalizar_y_asegurar_cumplimiento(mock_repo, auto_normalizar_nivel_1=True)
+        self.assertGreater(len(res["nivel_1_acciones"]), 0)
+        self.assertTrue((mock_repo / ".claude" / "rules" / "architecture.md").exists())
+        self.assertTrue((mock_repo / ".claude" / "skills" / "add-feature" / "SKILL.md").exists())
+        self.assertTrue((mock_repo / "AGENTS.md").exists())
+
+    def test_auto_normalizar_nivel_2_crea_f0_y_bloquea(self):
+        project_root = self.tmpdir / "proj-with-violations"
+        project_root.mkdir()
+        harness_dir = project_root / "harness"
+        harness_dir.mkdir()
+        docs_dir = project_root / "docs"
+        docs_dir.mkdir()
+
+        # Crear repo dotnet con violaciones de arquitectura en src
+        (project_root / "App.sln").write_text("Microsoft Visual Studio Solution File", encoding="utf-8")
+        domain_dir = project_root / "src" / "App.Domain"
+        domain_dir.mkdir(parents=True)
+        (domain_dir / "App.Domain.csproj").write_text(
+            '<Project Sdk="Microsoft.NET.Sdk">\n<ItemGroup><PackageReference Include="Dapper" Version="2.0" /></ItemGroup>\n</Project>',
+            encoding="utf-8"
+        )
+        (domain_dir / "Entity.cs").write_text('using Dapper;\npublic class Entity {}', encoding="utf-8")
+
+        backlog_data = {
+            "project": "proj-with-violations",
+            "rules": {"require_spec_approved": True},
+            "features": [
+                {"id": 1, "name": "feat-checkout", "status": "todo"}
+            ]
+        }
+        (harness_dir / "feature_list.json").write_text(json.dumps(backlog_data), encoding="utf-8")
+
+        res = stack.auto_normalizar_y_asegurar_cumplimiento(project_root, backlog_data)
+        self.assertTrue(res["f0_creada"])
+        self.assertEqual(res["f0_id"], 0)
+        self.assertTrue(res["bloqueos_activados"])
+        self.assertGreater(len(res["nivel_2_violaciones"]), 0)
+
+        # Verificar que F0 se insertó al inicio del backlog
+        features = backlog_data["features"]
+        self.assertEqual(features[0]["id"], 0)
+        self.assertEqual(features[0]["status"], "todo")
+        self.assertIn("normalizacion-arquitectura", features[0]["name"])
+
+        # Verificar que F1 quedó bloqueada requiriendo 0
+        self.assertIn(0, features[1]["requiere"])
+
+        # Verificar que se generó el spec de F0
+        spec_f0 = docs_dir / "spec-feature-0-normalizacion-arquitectura-dotnet-hexagonal.md"
+        self.assertTrue(spec_f0.exists())
+        self.assertIn("AC-1 [costura: integracion]", spec_f0.read_text(encoding="utf-8"))
+
+        # Preparar spec de F1 para probar gate
+        (docs_dir / "spec-feature-1-feat-checkout.md").write_text("# Spec 1\n\n- AC-1: Given When Then\n", encoding="utf-8")
+
+        import os
+        import gate
+        import worktree
+        import argparse
+
+        cwd_prev = os.getcwd()
+        os.chdir(project_root)
+        try:
+            # Probar bloqueo en gate.py approve-spec
+            args_approve = argparse.Namespace(feature="1", yes=True, por="test")
+            with self.assertRaises(SystemExit) as cm:
+                gate.cmd_approve_spec(args_approve)
+            self.assertIn("require_stack_normativo", str(cm.exception))
+
+            # Probar bloqueo en worktree.py start
+            args_start = argparse.Namespace(feature="1", sin_worktree=True, base="main")
+            with self.assertRaises(SystemExit) as cm_wt:
+                worktree.cmd_start(args_start)
+            self.assertIn("require_stack_normativo", str(cm_wt.exception))
+        finally:
+            os.chdir(cwd_prev)
+
 
 if __name__ == "__main__":
     unittest.main()

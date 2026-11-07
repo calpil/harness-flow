@@ -914,6 +914,158 @@ async fn health_handler() -> Json<Value> {
 
 
 # ---------------------------------------------------------------------------
+# 6. Auto-Normalización Nivel 1 y Creación de Feature #0 para Nivel 2
+# ---------------------------------------------------------------------------
+
+def auto_normalizar_y_asegurar_cumplimiento(
+    repo_root: Path,
+    data: dict | None = None,
+    auto_normalizar_nivel_1: bool = True
+) -> dict[str, Any]:
+    """Auto-normaliza Nivel 1 (reglas/skills) y crea Feature #0 prioritaria para Nivel 2 (arquitectura)."""
+    repo_root = repo_root.resolve()
+    destinos = detectar_todos_los_destinos(repo_root)
+    st_calpil = [d for d in destinos if d["stack"] != "generico"]
+
+    resultado: dict[str, Any] = {
+        "destinos": len(st_calpil),
+        "nivel_1_acciones": [],
+        "nivel_2_violaciones": [],
+        "f0_creada": False,
+        "f0_id": None,
+        "bloqueos_activados": False,
+    }
+
+    if not st_calpil:
+        return resultado
+
+    p_paths = None
+    try:
+        from comun import paths as get_paths, load_backlog, save_backlog, now_iso, bitacora
+        p_paths = get_paths(repo_root)
+        if data is None and p_paths["backlog"].exists():
+            data = load_backlog(p_paths)
+    except Exception:
+        p_paths = None
+
+    for d in st_calpil:
+        target_path = Path(d["path"])
+        stack_id = d["stack"]
+        diag = verificar_cumplimiento(target_path, stack_id)
+
+        # -------------------------------------------------------------
+        # Nivel 1: Entorno y Metadatos (.claude/rules, skills, AGENTS.md)
+        # -------------------------------------------------------------
+        if not diag["rules_ok"] or not diag["skills_ok"] or not diag["multi_llm_ready"]:
+            if auto_normalizar_nivel_1:
+                norm_res = normalizar_repositorio(target_path, stack_id, dry_run=False)
+                acciones = norm_res.get("actions_taken", [])
+                msg = f"Auto-normalizado Nivel 1 en {target_path.name} ({d['name']}): {len(acciones)} elementos instalados."
+                resultado["nivel_1_acciones"].append(msg)
+                # Re-verificar tras normalizar
+                diag = verificar_cumplimiento(target_path, stack_id)
+
+        # -------------------------------------------------------------
+        # Nivel 2: Código Fuente / Arquitectura (check-architecture.py)
+        # -------------------------------------------------------------
+        if not diag["architecture_ok"] and diag["architecture_errors"]:
+            resultado["nivel_2_violaciones"].extend([
+                f"{target_path.name} [{stack_id}]: {err}" for err in diag["architecture_errors"]
+            ])
+
+            if data is not None and p_paths is not None:
+                feats = data.get("features", [])
+                f0 = next((x for x in feats if str(x.get("id")) == "0"), None)
+
+                if f0 is None:
+                    manifest = cargar_manifest(stack_id)
+                    test_runner = manifest.get("runners", {}).get("test", "npm test" if any(k in stack_id for k in ("angular", "nextjs", "nest")) else "go test ./...")
+                    rel_checker = f"stacks/{stack_id}/scripts/check-architecture.py"
+                    try:
+                        rel_target = str(target_path.relative_to(p_paths["root"])) if target_path != p_paths["root"] else "."
+                    except Exception:
+                        rel_target = "."
+
+                    f0 = {
+                        "id": 0,
+                        "name": f"normalizacion-arquitectura-{stack_id}",
+                        "description": f"Normalización y alineación arquitectónica de {d['name']} ({len(diag['architecture_errors'])} violaciones detectadas por check-architecture.py)",
+                        "status": "todo",
+                        "kind": "refactor",
+                        "created_at": now_iso(),
+                        "stack": stack_id,
+                        "is_architecture_norm": True
+                    }
+                    feats.insert(0, f0)
+                    resultado["f0_creada"] = True
+                    resultado["f0_id"] = 0
+
+                    # Bloquear todas las demás features abiertas para que requieran #0
+                    for other in feats:
+                        if str(other.get("id")) != "0" and other.get("status") not in ("done", "superseded"):
+                            reqs = other.get("requiere") or []
+                            if isinstance(reqs, (str, int)):
+                                reqs = [reqs]
+                            if 0 not in reqs and "#0" not in reqs:
+                                reqs.append(0)
+                                other["requiere"] = reqs
+                    resultado["bloqueos_activados"] = True
+
+                    save_backlog(p_paths, data)
+                    bitacora(p_paths, f"creada Feature #0 de normalización arquitectónica obligatoria para {d['name']}")
+
+                    # Crear spec para Feature #0
+                    spec_file = p_paths["docs"] / f"spec-feature-0-normalizacion-arquitectura-{stack_id}.md"
+                    if not spec_file.exists():
+                        lista_errs = "\n".join(f"- {err}" for err in diag["architecture_errors"][:15])
+                        spec_content = f"""# Spec - Feature #0: normalizacion-arquitectura-{stack_id}
+
+Estado: draft
+
+## Contexto
+
+Normalización arquitectónica obligatoria para el stack {manifest.get('name', stack_id)} en `{target_path.name}`.
+El verificador de arquitectura detectó {len(diag['architecture_errors'])} violaciones estructurales en el código existente.
+Esta feature es un prerrequisito obligatorio antes de implementar cualquier feature de negocio.
+
+Violaciones detectadas por el arnés:
+{lista_errs}
+
+## Criterios de aceptacion
+
+- AC-1 [costura: integracion]: El verificador check-architecture.py finaliza con exit code 0 y cero violaciones.
+  Comando: `python3 {rel_checker} --repo {rel_target}`
+- AC-2 [costura: test]: La suite de pruebas del proyecto ejecuta sin regresiones respecto a la base.
+  Comando: `{test_runner}`
+
+## Plan vertical
+
+- Paso 1: Identificar módulos y archivos con violaciones de arquitectura reportadas por check-architecture.py.
+- Paso 2: Extraer capas canónicas (domain, application, infrastructure/ports) desacoplando dependencias indebidas.
+- Paso 3: Re-ejecutar check-architecture.py y la suite de tests hasta lograr verde integral con cero regresiones.
+
+## Fuera de alcance
+
+Nuevas funcionalidades de negocio. Esta feature es estrictamente refactorización y alineación arquitectónica.
+"""
+                        spec_file.write_text(spec_content, encoding="utf-8")
+                else:
+                    if f0.get("status") != "done":
+                        for other in feats:
+                            if str(other.get("id")) != "0" and other.get("status") not in ("done", "superseded"):
+                                reqs = other.get("requiere") or []
+                                if isinstance(reqs, (str, int)):
+                                    reqs = [reqs]
+                                if 0 not in reqs and "#0" not in reqs:
+                                    reqs.append(0)
+                                    other["requiere"] = reqs
+                        resultado["bloqueos_activados"] = True
+                        resultado["f0_id"] = 0
+
+    return resultado
+
+
+# ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 

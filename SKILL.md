@@ -296,6 +296,8 @@ Harness Flow integra un motor declarativo y extensible de detección y gobierno 
 | `$PY "$H/stack.py" auditar [--repo <r>]` | Audita versiones vigentes, fuentes Context7/Oficiales y escáner de seguridad (CVEs) |
 | `$PY "$H/stack.py" stacks` | Lista los stacks tecnológicos soportados |
 
+**Auto-Normalización Temprana y Prioridad Arquitectónica (Feature #0):** Al arrancar la sesión (`estado.py`), el arnés evalúa automáticamente el repositorio: si faltan reglas modulares o skills, las auto-instala inmediatamente (Nivel 1). Si el código fuente tiene violaciones arquitectónicas reportadas por `check-architecture.py` (Nivel 2), crea automáticamente la **Feature #0** en el backlog y bloquea todas las features de negocio (`requiere: [0]`) en `approve-spec` y `worktree.py start` hasta que el código quede normalizado.
+
 ### Actualización Continua y Seguridad: Context7 y Documentación Oficial
 Para garantizar que toda implementación use versiones actualizadas, APIs no deprecadas y esté protegida contra vulnerabilidades:
 - **Context7 MCP (`https://mcp.context7.com/mcp`):** consulta en tiempo real documentación versionada de librerías (`resolve-library-id`, `query-docs` o `"use context7"`).
