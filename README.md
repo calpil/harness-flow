@@ -50,7 +50,7 @@ Las lecciones aprendidas son memoria del usuario, no del agente donde se descubr
 
 ### 7. Gobernanza de Stacks Tecnológicos, Context7 y Modo Pair Automático (`stack.py`)
 - **Detección Dinámica y Extensible de Stacks**: Motor declarativo (`stacks/<stack-id>/manifest.json`) que escanea y clasifica cualquier repositorio o microservicio según archivos base (`files_any`/`files_all`), extensiones, dependencias de `package.json`, coincidencia de contenido (`content_matches`), indicadores estructurales (`strong_indicators`) y reglas de descarte (`anti_indicators`).
-  - Catálogo activo: **Golang Hexagonal** (`golang-hexagonal`), **Angular Product** (`angular-product`), **.NET Hexagonal** (`dotnet-hexagonal`), **Next.js Product** (`nextjs-product`), **Spring Boot Hexagonal** (`springboot-hexagonal`), **NestJS Hexagonal** (`nestjs-hexagonal`), y **Python Data Product** (`python-dataproduct`).
+  - Catálogo activo: **Golang Hexagonal** (`golang-hexagonal`), **Angular Product** (`angular-product`), **.NET Hexagonal** (`dotnet-hexagonal`), **Rust Hexagonal** (`rust-hexagonal`), **Next.js Product** (`nextjs-product`), **Spring Boot Hexagonal** (`springboot-hexagonal`), **NestJS Hexagonal** (`nestjs-hexagonal`), y **Python Data Product** (`python-dataproduct`).
   - Extensible: cualquier nuevo stack se soporta simplemente creando `stacks/<nuevo-stack>/manifest.json` sin tocar código Python.
 - **Verificación Normativa y Refactorización Guiada**: Audita cumplimiento de reglas (`.claude/rules/`), skills (`.claude/skills/`, `.agents/skills/`), contratos multi-LLM (`AGENTS.md`) y límites de arquitectura en caliente (`check-architecture.py`). Si un repositorio no cumple, genera planes de refactorización vertical (*Expand-Contract*) y scaffolding automático del esqueleto canónico (`stack.py refactorizar --scaffold`).
 - **Normalización Multi-LLM**: Provee paridad completa instalando rules y skills en los formatos de Claude Code, Codex, Gemini/AGY, Hermes, Grok y Kimi Code.
@@ -58,6 +58,8 @@ Las lecciones aprendidas son memoria del usuario, no del agente donde se descubr
 - **Modo Pair Interactivo Automático**: Al detectar un stack normativo, la implementación activa automáticamente el modo Pair (Driver = IA, Navigator = humano), avanzando en ciclos TDD con micro-reportes.
 - **Protocolo de Preguntas de Formulario**: La IA interviene con formularios estructurados (`ask_question` en Gemini/AGY o formulario interactivo en otros hosts) **únicamente cuando es indispensable**: decisiones de diseño no previstas, paradas de TDD tras 2 fallos consecutivos sin verde, aprobación de lista de tests y confirmación de gates.
 - **Principios de Karpathy y Norma Aeroespacial ASD-STE100**: Incorpora comunicación de alta densidad sin sobre-restricción (*over-constraining*), frases de máximo 20 palabras en voz activa, diagramas Mermaid obligatorios en SDD, criterios AC-n atómicos y micro-reportes telegráficos de pantalla de instrumentos en Pair Mode. Ver [`references/comunicacion-ste100-y-prompts.md`](references/comunicacion-ste100-y-prompts.md) y [`docs/principios-karpathy-ste100-harness-flow.md`](docs/principios-karpathy-ste100-harness-flow.md).
+- **Filosofía de Diseño de Software de John Ousterhout**: Adopta el combate sistemático de la complejidad (*A Philosophy of Software Design*): módulos profundos (*Deep Modules*) con interfaces compactas, erradicación de la sobre-fragmentación (*classitis* y micro-funciones de 3 líneas de Clean Code), ocultamiento de información (*information hiding*), absorción de la dificultad técnica hacia abajo (*pull complexity downwards*), diseño de dos alternativas por decisión (*design it twice*) y definición de errores fuera de la existencia. Ver [`references/filosofia-diseno-ousterhout.md`](references/filosofia-diseno-ousterhout.md).
+- **Patrones de Datos Confiables y Escalables (DDIA - Martin Kleppmann)**: Prevención de *dual-write* mediante Transactional Outbox atómico en la misma TX ACID, control de concurrencia optimista (OCC) con columna `version`, mutaciones de red con `Idempotency-Key` y evolución de esquemas sin downtime (*Expand-Contract*). Ver [`references/patrones-datos-ddia.md`](references/patrones-datos-ddia.md).
 
 ---
 
@@ -236,20 +238,24 @@ harness-flow/
 │   ├── golang-hexagonal/             <- Arquitectura hexagonal Go, 4 rules, 9 skills, check-architecture.py
 │   ├── angular-product/              <- Angular 17+ zoneless, 6 rules, 31 skills, check-architecture.mjs
 │   ├── dotnet-hexagonal/             <- Clean Architecture C# 13/.NET 10, 4 rules, 9 skills, check-architecture.py
-│   ├── nextjs-product/               <- Next.js App Router, 6 rules, 37 skills
-│   ├── springboot-hexagonal/         <- Spring Boot 3 Java hexagonal, 4 rules, 15 skills
-│   ├── nestjs-hexagonal/             <- NestJS TypeScript hexagonal, 4 rules, 14 skills
-│   └── python-dataproduct/           <- Python data product / FastAPI / Polars, 4 rules, 11 skills
+│   ├── rust-hexagonal/               <- Clean Architecture Rust (Axum/SQLx), 4 rules, 9 skills, check-architecture.py
+│   ├── nextjs-product/               <- Next.js App Router, 6 rules, 37 skills, check-architecture.py
+│   ├── springboot-hexagonal/         <- Spring Boot 3 Java hexagonal, 4 rules, 15 skills, check-architecture.py
+│   ├── nestjs-hexagonal/             <- NestJS TypeScript hexagonal, 4 rules, 14 skills, check-architecture.py
+│   └── python-dataproduct/           <- Python data product / FastAPI / Polars, 4 rules, 11 skills, check-architecture.py
 ├── templates/                        <- Plantillas oficiales de spec, prd, sdd y enmiendas
 ├── docs/
 │   ├── explicacion-y-diagnostico.md  <- Informe de auditoría exhaustiva y estado de salud
-│   └── principios-karpathy-ste100-harness-flow.md <- Principios de Karpathy y norma ASD-STE100 en el arnés
+│   ├── principios-karpathy-ste100-harness-flow.md <- Principios de Karpathy y norma ASD-STE100 en el arnés
+│   └── memoria-tecnica-implementaciones.md <- Memoria técnica exhaustiva de todas las capacidades y 8 stacks
 ├── references/                       <- Documentación especializada por host y subsistema
 │   ├── hosts.md, modelos.md, vertical-slice.md, contexto.md, lecciones-del-arnes.md
 │   ├── multirepo.md, claude.md, openai.md, grok.md, kimi.md, entorno.md
 │   ├── hub.md, obsidian.md, atlassian.md, documentacion.md
 │   ├── context7-documentacion-oficial.md <- Context7 MCP, documentación oficial y seguridad
-│   └── comunicacion-ste100-y-prompts.md <- Principios Karpathy, norma ASD-STE100 y micro-reportes
+│   ├── comunicacion-ste100-y-prompts.md <- Principios Karpathy, norma ASD-STE100 y micro-reportes
+│   ├── patrones-datos-ddia.md        <- Patrones DDIA: Transactional Outbox, Idempotencia y OCC
+│   └── filosofia-diseno-ousterhout.md <- Filosofía de diseño Ousterhout: Deep Modules y anti-classitis
 └── tests/                            <- Suite exhaustiva de tests unitarios y de regresión
 ```
 

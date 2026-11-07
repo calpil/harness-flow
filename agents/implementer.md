@@ -87,6 +87,11 @@ detente; no los busques ni los inventes.
     - Capa `application/`: ports y Signals para estado; PROHIBIDO importar `ui/` o `data-access/`.
     - Capa `ui/`: componentes standalone, control flow `@if`/`@for`, sin acceso directo a `data-access/`.
     - Verificación obligatoria con `node scripts/check-architecture.mjs` o `python3 scripts/check-architecture.py`.
+- **Filosofía de Diseño Ousterhout (ver `references/filosofia-diseno-ousterhout.md`):**
+  - **Inversión Estratégica (10-20% en Refactor):** En cada ciclo TDD, no avances al siguiente AC sin simplificar la interfaz, eliminar código muerto y extraer duplicación.
+  - **Anti-Classitis y Módulos Profundos:** PROHIBIDO desmenuzar funciones cohesivas en micro-métodos artificiales de 3 a 5 líneas por dogma de Clean Code. Se prefieren funciones profundas y cohesivas (30 a 80 líneas) que encapsulen el flujo completo.
+  - **Definir Errores Fuera de la Existencia:** Modela casos límite ordinarios (colecciones vacías, borrado idempotente) como flujos normales de negocio sin lanzar excepciones técnicas innecesarias.
+  - **Comentarios de Abstracción Superior:** Documenta contratos, invariantes e intenciones (*what/why*); PROHIBIDO parafrasear la sintaxis del código (*how*).
 - **Actualización con Context7 y Documentación Oficial:**
   Antes de escribir código o agregar dependencias externas, consulta Context7 (herramientas MCP `resolve-library-id`/`query-docs` o sufijo `'use context7'`) o la documentación oficial mediante búsqueda para verificar sintaxis vigente, APIs no deprecadas y patrones idiomáticos actuales. Corre el escáner de vulnerabilidades del stack (`govulncheck`, `npm audit`, etc.) para asegurar cero vulnerabilidades de severidad crítica/alta.
 - **Las 5 paradas inmediatas (estilo `/pair` de `hola-ai`):**

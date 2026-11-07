@@ -278,6 +278,7 @@ Harness Flow integra un motor declarativo y extensible de detección y gobierno 
 - **Golang Hexagonal (`golang-hexagonal`)**: dominio Go puro en `internal/*/domain/**` (sin frameworks/SQL), puertos de entrada/salida en `application/`, adaptadores Chi HTTP (RFC 7807) y persistencia `pgx`/in-memory, composition root en `cmd/server/main.go`, tests deterministas sin `time.Sleep` (`go test -race`).
 - **Angular Product (`angular-product`)**: feature-oriented layered (`src/app/features/<feat>/(domain|application|ui|data-access)`), dominio TypeScript puro sin dependencias de `@angular`/RxJS, Signals para reactividad, componentes standalone, composition root en `app.routes.ts` y linter de límites (`check-architecture.py` / `check-architecture.mjs`).
 - **.NET Hexagonal (`dotnet-hexagonal`)**: C# 13 / .NET 10 (LTS) con Clean Architecture multi-proyecto (`Domain` puro en BCL sin dependencias externas, `Application` con puertos in/out, `Infrastructure` con Dapper/ADO.NET y `Npgsql`, `WebApi` con MVC Controllers, ProblemDetails RFC 7807 y `Program.cs` como Composition Root, y tests deterministas con xUnit y `WebApplicationFactory`).
+- **Rust Hexagonal (`rust-hexagonal`)**: Rust (edición 2021/2024) con Clean Architecture multi-crate o modular (`crates/domain` puro sin dependencias de red/SQLx, `crates/application` con puertos in/out y casos de uso, `crates/infrastructure` con SQLx PostgreSQL y repositorios en memoria, `crates/api` con handlers Axum, ProblemDetails RFC 7807 y `src/main.rs` como Composition Root, y tests deterministas sin `thread::sleep`).
 - **Next.js Product (`nextjs-product`)**: Next.js 15+ / React 19 con Server Components por defecto, aislamiento `server-only` y App Router.
 - **Spring Boot Hexagonal (`springboot-hexagonal`)**: Java 21 / Spring Boot 3.4 con dominio puro sin dependencias de Spring/JPA y ArchUnit.
 - **NestJS Hexagonal (`nestjs-hexagonal`)**: TypeScript / NestJS modular con Prisma ORM y puertos desacoplados.
@@ -301,6 +302,10 @@ Para garantizar que toda implementación use versiones actualizadas, APIs no dep
 - **Documentación Oficial y Seguridad:** verificación de breaking changes y escaneo obligatorio con `govulncheck`, `npm audit`, `pip-audit`. Detalles completos en [`references/context7-documentacion-oficial.md`](references/context7-documentacion-oficial.md).
 
 Al trabajar en repositorios con stack CALPIL detectado, **el Modo Pair interactivo se activa automáticamente**. La IA avanza como Driver y **solo interviene con preguntas interactivas de formulario** (`ask_question` en AGY/Gemini o formulario Markdown en otros hosts) ante decisiones de diseño no previstas, ambigüedades de refactorización, tras dos intentos fallidos sin verde en TDD, o para aprobación de la lista de tests y gates.
+
+### Filosofía de Diseño de Ousterhout y Patrones de Datos DDIA
+- **A Philosophy of Software Design (John Ousterhout):** diseño guiado por módulos profundos (*Deep Modules*), erradicación de la sobre-fragmentación artificial (*classitis* y micro-funciones de 3 líneas), ocultamiento de información, absorción de complejidad técnica hacia abajo (*pull complexity downwards*), decisiones contrastadas (*design it twice*) y definición de errores fuera de la existencia. Ver [`references/filosofia-diseno-ousterhout.md`](references/filosofia-diseno-ousterhout.md).
+- **Patrones de Datos Confiables (Martin Kleppmann - DDIA):** prevención de dual-write con Transactional Outbox atómico, Optimistic Concurrency Control (OCC) con versionado, Idempotency-Key en mutaciones y migraciones Expand-Contract. Ver [`references/patrones-datos-ddia.md`](references/patrones-datos-ddia.md).
 
 ## Contexto y memoria del proyecto
 
@@ -433,4 +438,6 @@ Python. Si no hay revisor aislado, puedes revisar localmente con
 | [`references/kimi.md`](references/kimi.md) | Kimi Code: host, plugin, revisor y lecciones |
 | [`references/context7-documentacion-oficial.md`](references/context7-documentacion-oficial.md) | consultar Context7 MCP / docs oficiales para mantener stacks actualizados y auditar seguridad/CVEs |
 | [`references/comunicacion-ste100-y-prompts.md`](references/comunicacion-ste100-y-prompts.md) | principios de Karpathy, estándar aeroespacial ASD-STE100, prompts de alta densidad y micro-reportes |
+| [`references/patrones-datos-ddia.md`](references/patrones-datos-ddia.md) | patrones de datos DDIA (Transactional Outbox, Idempotency-Key, OCC, prevención de Dual-Write) |
+| [`references/filosofia-diseno-ousterhout.md`](references/filosofia-diseno-ousterhout.md) | filosofía de diseño de software de John Ousterhout (Deep Modules, anti-classitis, Design It Twice) |
 | [`references/documentacion.md`](references/documentacion.md) | rol producto (PRD inicial / SDD de arquitectura), su sello y como se sincronizan |

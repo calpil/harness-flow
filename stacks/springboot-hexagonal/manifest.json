@@ -40,11 +40,12 @@
     "skills": [
       "add-api-endpoint",
       "add-feature",
-      "add-persistence",
       "adr",
       "architecture-review",
+      "changelog",
       "debug-targeted",
       "dependency-review",
+      "documentation-maintenance",
       "liquibase-migration",
       "maven-upgrade",
       "observability-operations",

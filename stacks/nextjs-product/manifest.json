@@ -49,7 +49,7 @@
       "authentication-sso",
       "auto-git-commit",
       "bff-contract",
-      "changelog",
+      "add-api-endpoint",
       "code-quality-auditor",
       "container-build",
       "data-access-change",

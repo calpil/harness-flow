@@ -505,6 +505,16 @@ def auditar_seguridad_y_versiones(repo: Path, stack_id: str | None = None) -> di
                     if det_parts < min_parts:
                         warnings.append(f"Versión de .NET en {csproj.name} (net{detected_ver}) es inferior a la mínima recomendada (net{min_version})")
                     break
+        elif stack_id == "rust-hexagonal":
+            cargo_files = [p for p in repo.glob("**/Cargo.toml") if "target" not in p.parts]
+            for cargo_toml in cargo_files:
+                text = cargo_toml.read_text(encoding="utf-8", errors="ignore")
+                m = re.search(r'edition\s*=\s*["\']([0-9]+)["\']', text)
+                if m:
+                    detected_edition = m.group(1)
+                    if int(detected_edition) < int(min_version):
+                        warnings.append(f"Edición de Rust en {cargo_toml.relative_to(repo)} ({detected_edition}) es inferior a la mínima recomendada ({min_version})")
+                    break
 
     return {
         "stack": stack_id,
@@ -660,6 +670,59 @@ def generar_plan_refactor(repo: Path, stack_id: str | None = None) -> dict[str, 
                     "description": "Reemplazar Thread.Sleep con FakeClock o sincronización asíncrona determinista."
                 })
 
+    elif stack_id == "rust-hexagonal":
+        main_files = [p for p in repo.glob("**/main.rs") if "target" not in p.parts and ".git" not in p.parts]
+        if not main_files:
+            steps.append({
+                "step": 1,
+                "title": "Crear Composition Root canónico (src/main.rs o crates/api/src/main.rs)",
+                "action": "scaffold",
+                "target": "src/main.rs",
+                "description": "Centralizar arranque del runtime Tokio, router Axum, middlewares RFC 7807 e inyección de adaptadores."
+            })
+        has_domain = any("domain" in p.name.lower() for p in repo.glob("crates/*")) or any("domain" in p.name.lower() for p in repo.glob("src/*")) or any("domain" in p.name.lower() for p in repo.glob("*"))
+        if not has_domain:
+            steps.append({
+                "step": 2,
+                "title": "Separar capas hexagonales (domain, application, infrastructure, api)",
+                "action": "reorganize",
+                "target": "src/(domain|application|infrastructure) o crates/*",
+                "description": "Aislar entidades en Domain (Rust puro), use cases y puertos en Application, SQLx en Infrastructure y handlers en API."
+            })
+        for err in diag.get("architecture_errors", []):
+            if "Domain no permite dependencia" in err or "Domain no debe" in err:
+                steps.append({
+                    "step": len(steps) + 1,
+                    "title": "Desacoplar dependencias impuras en capa Domain",
+                    "action": "refactor_domain",
+                    "target": err.split(":")[0],
+                    "description": f"Extraer transporte HTTP (Axum) o base de datos (SQLx) a adaptadores de infraestructura: {err}"
+                })
+            elif "Application no debe" in err:
+                steps.append({
+                    "step": len(steps) + 1,
+                    "title": "Invertir dependencia en Application mediante traits (DIP)",
+                    "action": "invert_dependency",
+                    "target": err.split(":")[0],
+                    "description": f"Application debe depender de traits (out_ports) y no de adaptadores concretos de infraestructura: {err}"
+                })
+            elif "Infrastructure no debe acoplarse a transporte" in err:
+                steps.append({
+                    "step": len(steps) + 1,
+                    "title": "Desacoplar transporte HTTP de Infrastructure",
+                    "action": "isolate_transport",
+                    "target": err.split(":")[0],
+                    "description": f"Mover handlers y tipos de transporte HTTP a la capa API: {err}"
+                })
+            elif "sleep" in err.lower():
+                steps.append({
+                    "step": len(steps) + 1,
+                    "title": "Eliminar llamadas a sleep arbitrario en pruebas",
+                    "action": "fix_test_determinism",
+                    "target": err.split(":")[0],
+                    "description": "Reemplazar thread::sleep o tokio::time::sleep en tests con mock clock o sincronización determinista."
+                })
+
     return {
         "needed": True,
         "stack": stack_id,
@@ -787,6 +850,65 @@ app.MapControllers();
 app.Run();
 """, encoding="utf-8")
             creados.append(str(program_cs.relative_to(repo)))
+
+    elif stack_id == "rust-hexagonal":
+        carpetas = [
+            repo / "src" / "domain",
+            repo / "src" / "application",
+            repo / "src" / "infrastructure",
+            repo / "tests",
+        ]
+        for c in carpetas:
+            if not c.exists():
+                c.mkdir(parents=True, exist_ok=True)
+                creados.append(str(c.relative_to(repo)))
+
+        cargo_toml = repo / "Cargo.toml"
+        if not cargo_toml.exists():
+            cargo_toml.write_text("""[package]
+name = "calpil_rust_service"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+axum = "0.8"
+tokio = { version = "1.40", features = ["full"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tower-http = { version = "0.6", features = ["cors", "trace"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+[dev-dependencies]
+tower = { version = "0.5", features = ["util"] }
+http-body-util = "0.1"
+""", encoding="utf-8")
+            creados.append(str(cargo_toml.relative_to(repo)))
+
+        main_rs = repo / "src" / "main.rs"
+        existing_main = [p for p in repo.glob("**/main.rs") if "target" not in p.parts and ".git" not in p.parts]
+        if not main_rs.exists() and not existing_main:
+            main_rs.write_text("""use axum::{routing::get, Json, Router};
+use serde_json::{json, Value};
+use std::net::SocketAddr;
+
+#[tokio::main]
+async fn main() {
+    tracing_subscriber::fmt::init();
+
+    let app = Router::new()
+        .route("/health", get(health_handler));
+
+    let addr = SocketAddr::from(([0, 0, 0, 0], 8080));
+    let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
+    axum::serve(listener, app).await.unwrap();
+}
+
+async fn health_handler() -> Json<Value> {
+    Json(json!({ "status": "ok" }))
+}
+""", encoding="utf-8")
+            creados.append(str(main_rs.relative_to(repo)))
 
     return creados
 

@@ -74,6 +74,15 @@ evidencia y el codigo tu mismo.
   Context7 o documentación oficial; la introducción de paquetes con vulnerabilidades
   de severidad alta/crítica o APIs obsoletas DEBE ser clasificada como hallazgo
   **bloqueante** o **mayor**.
+- **Auditoria de patrones de datos y fiabilidad distribuida (DDIA):**
+  - Detecta y clasifica como **bloqueante** o **mayor** el anti-patrón de **Dual-Write**: persistir en base de datos y acto seguido invocar un broker de eventos (RabbitMQ/Kafka) o API externa fuera de un Transactional Outbox (misma transacción ACID).
+  - Detecta actualizaciones concurrentes sin Optimistic Concurrency Control (OCC): si una entidad mutable se actualiza sin validar `version = version + 1`, clasifícalo como hallazgo **mayor**.
+  - Detecta mutaciones expuestas a la red sin soporte de idempotencia (`Idempotency-Key`) cuando el spec lo exige. Ver [`references/patrones-datos-ddia.md`](references/patrones-datos-ddia.md).
+- **Auditoría de Filosofía de Diseño Ousterhout (ver `references/filosofia-diseno-ousterhout.md`):**
+  - Detecta y clasifica como **mayor** la presencia de métodos *pass-through* (métodos que solo reenvían argumentos a otra capa con firma idéntica sin aportar lógica ni abstracción).
+  - Detecta *Information Leakage* (fuga de esquemas de BD, queries o detalles de infraestructura hacia el dominio o clientes externos).
+  - Detecta sobre-fragmentación artificial (*classitis* o micro-funciones innecesarias que elevan la carga cognitiva y dispersan el flujo).
+  - Audita la calidad de comentarios: reporta como **menor** comentarios que parafraseen la sintaxis del código (*how*) y exige documentación de invariantes (*what/why*).
 - **Concisión técnica ASD-STE100 (Estándar Karpathy):**
   - Redacta cada observación y hallazgo en **frases de máximo 20 palabras**, en voz activa y citando `archivo:línea`.
   - Prohibido emitir sugerencias cosméticas de estilo o párrafos decorativos: si no viola un AC, la seguridad o la arquitectura, no es un hallazgo. Ver [`references/comunicacion-ste100-y-prompts.md`](references/comunicacion-ste100-y-prompts.md).

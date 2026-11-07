@@ -22,6 +22,10 @@ Cada AC es verificable por un tercero en Given/When/Then o formato directo y dec
 publica de prueba (`[costura: endpoint|servicio|ui|integracion|manual]`).
 Regla ASD-STE100 (Karpathy): redacta cada AC en frases de máximo 20 palabras, en voz activa,
 con una sola acción verificable y sin sinónimos ambiguos (ver `references/comunicacion-ste100-y-prompts.md`).
+Filosofía Ousterhout (ver `references/filosofia-diseno-ousterhout.md`): la costura pública debe
+probar la interfaz del módulo profundo (Deep Module), no micro-métodos internos. Define errores
+fuera de la existencia: casos límite normales (listas vacías, borrado idempotente) se modelan
+como respuestas ordinarias de negocio, no como excepciones técnicas.
 Apunta a 2-5 AC por vertical slice; si necesita mas de 5, considera dividir la
 feature en slices verticales mas chicos antes de aprobar.
 

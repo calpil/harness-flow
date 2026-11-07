@@ -29,18 +29,33 @@ Estado: draft
      Regla ASD-STE100 (Karpathy): modela la arquitectura y dependencias con
      diagramas Mermaid obligatorios (`flowchart` o `sequenceDiagram`); prohibida
      la prosa larga explicativa (> 3 líneas).
+     Filosofía Ousterhout (ver `references/filosofia-diseno-ousterhout.md`): diseña
+     interfaces y puertos profundos (contratos minimalistas con implementación rica internamente);
+     prohibida la sobre-fragmentación (*classitis*) y capas con métodos *pass-through*.
      Diseno simple (YAGNI): no agregues capas, repositorios, factories ni
      abstracciones "por si acaso" para un futuro hipotetico. -->
 
 ## Datos e integraciones
 
 <!-- Esquemas, migraciones, colas y sistemas externos. Si hay migraciones
-     numeradas, decir aqui contra que rama se reserva el numero. -->
+     numeradas, decir aqui contra que rama se reserva el numero.
+     Pull Complexity Downwards (Ousterhout): la persistencia y adaptadores absorben
+     la complejidad técnica (Outbox, OCC, Idempotencia); el llamador ve una API limpia y atómica.
+     Patrones de Datos DDIA (Martin Kleppmann - ver `references/patrones-datos-ddia.md`):
+       1. Perfil de datos: clasifica la carga (OLTP interactivo vs OLAP analítico vs Streaming).
+       2. Motor de persistencia: justifica B-Tree (relacional estándar) vs LSM-Tree vs In-Memory.
+       3. Prevención de Dual-Write: si el servicio persiste entidades y notifica eventos,
+          especifica el Transactional Outbox (tabla outbox local en la misma TX ACID)
+          en lugar de llamadas separadas a colas o APIs externas.
+       4. Control de concurrencia: define Optimistic Concurrency Control (OCC) con columna `version`
+          para prevenir Lost Updates sin bloqueos pesados de tabla.
+       5. Evolución de esquemas: migraciones sin downtime bajo el patrón Expand-Contract. -->
 
 ## Decisiones
 
-<!-- Cada decision con nombre, la alternativa descartada y el porque. Una
-     decision sin alternativa no es una decision, es una descripcion. El nombre
+<!-- Principio "Design It Twice" (John Ousterhout): toda decisión D-n debe contrastar
+     al menos dos alternativas de diseño radicalmente diferentes. Una decisión sin alternativa
+     descartada no es una decisión, es una descripción. El nombre
      es para que el spec de cada feature la cite ("decisiones que aplica: D2").
      Sin `Descartada:` (o `Descartado:`) con texto, aprobar se niega.
      Formato STE100 recomendado (terna de 3 frases activas):

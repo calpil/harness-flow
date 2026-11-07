@@ -1,0 +1,130 @@
+{
+  "id": "rust-hexagonal",
+  "name": "CALPIL Rust Hexagonal Architecture Stack",
+  "version": "1.0.0",
+  "language": "rust",
+  "framework": "axum",
+  "architecture": "hexagonal",
+  "description": "Stack backend Rust (edición 2021/2024) con arquitectura hexagonal / Clean Architecture (Domain puro en crates/domain o src/domain sin frameworks ni SQLx, Application ports/use-cases, Infrastructure con SQLx y adaptadores en memoria, API con Axum y ProblemDetails RFC 7807, Composition Root en src/main.rs).",
+  "detection": {
+    "files_any": [
+      "Cargo.toml",
+      "Cargo.lock"
+    ],
+    "extensions": [
+      ".rs",
+      ".toml"
+    ],
+    "strong_indicators": [
+      "crates/domain",
+      "crates/application",
+      "crates/infrastructure",
+      "crates/api",
+      "src/domain",
+      "src/application",
+      "src/infrastructure",
+      "src/main.rs"
+    ],
+    "dependencies": [
+      "axum",
+      "tokio",
+      "sqlx"
+    ],
+    "content_matches": {
+      "Cargo.toml": [
+        "axum",
+        "sqlx"
+      ]
+    },
+    "anti_indicators": [
+      "go.mod",
+      "package.json",
+      "*.csproj",
+      "pom.xml"
+    ]
+  },
+  "normative": {
+    "rules": [
+      "architecture.md",
+      "dependencies.md",
+      "security.md",
+      "testing.md"
+    ],
+    "skills": [
+      "add-api-endpoint",
+      "add-feature",
+      "add-persistence",
+      "architecture-review",
+      "debug-targeted",
+      "dependency-review",
+      "prepare-release",
+      "security-review",
+      "write-tests"
+    ],
+    "architecture_constraints": {
+      "domain_purity": {
+        "path_pattern": "(crates|src)/domain/**",
+        "forbidden_imports": [
+          "axum",
+          "sqlx",
+          "tokio::net",
+          "hyper",
+          "diesel",
+          "reqwest",
+          "tower"
+        ],
+        "rationale": "La capa Domain debe ser Rust puro sin dependencias de transporte (axum, hyper), persistencia (sqlx, diesel) ni I/O asíncrono externo."
+      },
+      "application_isolation": {
+        "path_pattern": "(crates|src)/application/**",
+        "forbidden_imports": [
+          "infrastructure",
+          "api",
+          "axum"
+        ],
+        "rationale": "La capa Application solo depende de Domain y define sus propios puertos (traits), sin acoplarse a infraestructura ni transporte HTTP."
+      },
+      "composition_root": {
+        "required_entrypoint": "main.rs",
+        "rationale": "src/main.rs (en crates/api o raíz) es el Composition Root único donde se leen variables de entorno, se instancian adaptadores y se cablea el servidor Axum."
+      },
+      "security_headers_and_errors": {
+        "problem_details_rfc": "RFC 7807 (application/problem+json)",
+        "security_headers": [
+          "X-Content-Type-Options",
+          "X-Frame-Options",
+          "X-XSS-Protection"
+        ],
+        "correlation_id": "X-Correlation-ID"
+      },
+      "testing_standards": {
+        "forbidden_calls": [
+          "std::thread::sleep",
+          "tokio::time::sleep"
+        ],
+        "inmemory_repository_pattern": true
+      }
+    }
+  },
+  "runners": {
+    "test_command": "cargo test",
+    "skills_validator": "node stacks/rust-hexagonal/scripts/validate-agent-skills.mjs"
+  },
+  "documentation": {
+    "official_docs": "https://doc.rust-lang.org/",
+    "security_advisories": "https://rustsec.org/advisories/",
+    "context7": {
+      "library_id": "/tokio-rs/axum",
+      "ecosystem": "crates.io",
+      "suggested_queries": [
+        "Axum router handlers state extractor",
+        "SQLx query_as postgres pool transactions",
+        "Tokio graceful shutdown signal"
+      ]
+    }
+  },
+  "security_audit": {
+    "command": "cargo audit",
+    "minimum_version": "2021"
+  }
+}

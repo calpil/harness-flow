@@ -48,6 +48,7 @@ Los modelos de lenguaje (LLMs) tienen fechas de corte de entrenamiento fijas (*k
 | **`golang-hexagonal`** | `/golang/go`, `/go-chi/chi` | [go.dev/doc](https://go.dev/doc/) | `govulncheck ./...` | Go 1.23+ (recomendado 1.24+) |
 | **`angular-product`** | `/angular/angular` | [angular.dev](https://angular.dev) | `npm audit --audit-level=high` | Angular 19+ |
 | **`dotnet-hexagonal`** | `/dotnet/runtime` | [learn.microsoft.com/dotnet](https://learn.microsoft.com/en-us/dotnet/) | `dotnet list package --vulnerable` | .NET 8.0 LTS / .NET 10.0+ |
+| **`rust-hexagonal`** | `/tokio-rs/axum`, `/rust-lang/rust` | [doc.rust-lang.org](https://doc.rust-lang.org/) | `cargo audit` | Rust 2021+ (recomendado 2024) |
 | **`nextjs-product`** | `/vercel/next.js` | [nextjs.org/docs](https://nextjs.org/docs) | `npm audit --audit-level=high` | Next.js 15+ / React 19 |
 | **`springboot-hexagonal`** | `/spring-projects/spring-boot` | [docs.spring.io](https://docs.spring.io/spring-boot/) | `./mvnw org.owasp:dependency-check-maven:check` | Java 21 LTS / Spring Boot 3.4+ |
 | **`nestjs-hexagonal`** | `/nestjs/nest` | [docs.nestjs.com](https://docs.nestjs.com) | `npm audit --audit-level=high` | NestJS 10+ |
