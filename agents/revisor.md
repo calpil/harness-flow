@@ -62,6 +62,18 @@ evidencia y el codigo tu mismo.
   valor esperado copiando la misma logica que el codigo de produccion, o solo mide
   mocks internos sin comprobar el efecto en la costura declarada), ese AC es
   `falla`.
+- **Auditoria de limites de arquitectura del stack.** Si el briefing indica un stack
+  normativo (Golang Hexagonal o Angular Product), verifica rigurosamente los limites
+  de capas en el diff. Cualquier infraccion (ej. domain Go importando frameworks/SQL,
+  domain Angular importando `@angular`, application Go importando adapters, UI Angular
+  importando `data-access` directo, o tests deterministas usando `time.Sleep`) DEBE
+  ser clasificada como hallazgo **bloqueante** o **mayor**.
+- **Auditoria de versiones y seguridad (Context7 / Oficial).** Verifica que el diff no
+  introduzca dependencias desactualizadas con vulnerabilidades conocidas (CVEs) ni
+  utilice APIs marcadas como `@deprecated`. Contrasta librerías o APIs nuevas contra
+  Context7 o documentación oficial; la introducción de paquetes con vulnerabilidades
+  de severidad alta/crítica o APIs obsoletas DEBE ser clasificada como hallazgo
+  **bloqueante** o **mayor**.
 - **No selles.** No escribas una linea `Revisado:` ni `Veredicto:` con formato de
   sello. El sello lo estampa `gate.py revision` en la sesion principal, y un
   sello tipeado a mano es exactamente lo que ese gate existe para rechazar.

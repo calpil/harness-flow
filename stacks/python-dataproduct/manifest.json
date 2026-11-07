@@ -1,0 +1,62 @@
+{
+  "id": "python-dataproduct",
+  "name": "CALPIL Python Data Product Stack",
+  "version": "1.0.0",
+  "language": "python",
+  "framework": "fastapi",
+  "architecture": "hexagonal-dataproduct",
+  "description": "Stack de datos e ingestión en Python 3.14 con FastAPI, Polars/Pydantic, adaptadores de origen/destino y testing determinista con pytest.",
+  "detection": {
+    "files_any": [
+      "pyproject.toml",
+      "requirements.txt"
+    ],
+    "extensions": [
+      ".py"
+    ],
+    "content_matches": {
+      "pyproject.toml": ["fastapi", "polars", "pydantic"],
+      "requirements.txt": ["fastapi", "polars"]
+    },
+    "strong_indicators": [
+      "src/**/domain",
+      "src/**/adapters",
+      "src/**/transformations",
+      "src/**/ports"
+    ],
+    "anti_indicators": [
+      "go.mod",
+      "pom.xml",
+      "angular.json"
+    ]
+  },
+  "normative": {
+    "rules": [
+      "architecture.md",
+      "dependencies.md",
+      "security.md",
+      "testing.md"
+    ],
+    "skills": [
+      "add-api-endpoint",
+      "add-feature",
+      "add-output-adapter",
+      "add-source-adapter",
+      "add-transformation",
+      "add-validation",
+      "architecture-review",
+      "debug-targeted",
+      "dependency-review",
+      "security-review",
+      "write-tests"
+    ],
+    "architecture_constraints": {
+      "transformation_isolation": "Transformaciones desacopladas del framework de transporte (FastAPI) y persistencia.",
+      "adapters_isolation": "Adaptadores de entrada (source) y salida (output) implementan puertos de datos.",
+      "typing_and_validation": "Modelos fuertemente tipados con Pydantic v2 y validaciones con Polars."
+    }
+  },
+  "runners": {
+    "test_command": "pytest -q"
+  }
+}

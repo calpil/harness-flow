@@ -1,0 +1,89 @@
+{
+  "id": "nextjs-product",
+  "name": "CALPIL Next.js Product Stack",
+  "version": "1.0.0",
+  "language": "typescript",
+  "framework": "nextjs",
+  "architecture": "feature-oriented-rsc",
+  "description": "Stack frontend Next.js 15+ / React 19 con Server Components por defecto, aislamiento server-only, App Router y pruebas Vitest/Playwright.",
+  "detection": {
+    "files_any": [
+      "next.config.js",
+      "next.config.mjs",
+      "next.config.ts"
+    ],
+    "package_deps": [
+      "next",
+      "react"
+    ],
+    "content_matches": {
+      "package.json": ["\"next\":"]
+    },
+    "strong_indicators": [
+      "src/app",
+      "src/components",
+      "src/features"
+    ],
+    "anti_indicators": [
+      "angular.json"
+    ]
+  },
+  "normative": {
+    "rules": [
+      "architecture.md",
+      "dependencies.md",
+      "documentation.md",
+      "releases.md",
+      "security.md",
+      "testing.md"
+    ],
+    "skills": [
+      "accessibility-review",
+      "add-feature",
+      "add-page-route",
+      "add-ui-component",
+      "agent-change-review",
+      "api-contract-testing",
+      "architecture-review",
+      "async-state-management",
+      "authentication-sso",
+      "auto-git-commit",
+      "bff-contract",
+      "changelog",
+      "code-quality-auditor",
+      "container-build",
+      "data-access-change",
+      "debug-targeted",
+      "dependency-review",
+      "design-system-integration",
+      "domain-modeling",
+      "error-handling",
+      "feature-flag-rollout",
+      "form-validation",
+      "local-node-runtime",
+      "localization",
+      "observability-review",
+      "performance-review",
+      "pipeline-hygiene",
+      "prepare-release",
+      "readme-evolution",
+      "routing-navigation",
+      "runtime-configuration",
+      "secure-dependency-lifecycle",
+      "security-review",
+      "semantic-versioning",
+      "server-client-boundary",
+      "ui-quality-review",
+      "write-tests"
+    ],
+    "architecture_constraints": {
+      "server_components_by_default": "Server Components por defecto; directiva 'use client' solo donde se requiera interactividad.",
+      "server_only_isolation": "Módulos de acceso a datos o secretos deben aislarse con import 'server-only'.",
+      "composition_root": "src/app (App Router)"
+    }
+  },
+  "runners": {
+    "test_command": "npm test",
+    "skills_validator": "node scripts/validate-agent-skills.mjs"
+  }
+}

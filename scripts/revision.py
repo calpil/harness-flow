@@ -223,6 +223,34 @@ Reglas:
 - Audita la integridad de los tests en el diff: si se borro, salto (skip) o debilito un test existente para forzar el verde, o si el test es tautologico (recalcula el valor esperado con la misma logica del codigo en vez de contrastar contra el AC en la costura publica), reportalo como hallazgo mayor/bloqueante.
 - No modifiques codigo. Solo lees y escribes {rp.name}.
 """)
+    # Normativa del stack tecnologico (CALPIL)
+    try:
+        import stack
+        target_path = wt if wt else p["root"]
+        det_st = stack.detectar_stack_directorio(target_path)
+        if det_st["stack"] != "generico":
+            manifest = stack.cargar_manifest(det_st["stack"])
+            constraints = manifest.get("normative", {}).get("architecture_constraints", {})
+            print(f"Normativa de Arquitectura del Stack ({manifest['name']}):\n"
+                  f"- Stack detectado: {det_st['stack']} (confianza: {det_st['confidence']}%)\n"
+                  "- Reglas arquitectonicas obligatorias que DEBES auditar en el diff:")
+            for ck, cv in constraints.items():
+                if isinstance(cv, dict):
+                    print(f"  * {ck}: {cv.get('rationale', '')}")
+                else:
+                    print(f"  * {ck}: {cv}")
+            print("- AUDITORIA OBLIGATORIA: Cualquier violacion a los limites de capas del stack\n"
+                  "  (ej. domain Go importando transporte/sql/frameworks, domain Angular importando @angular,\n"
+                  "  o bypass de puertos) DEBE clasificarse como hallazgo BLOQUEANTE o MAYOR.")
+            doc_cfg = manifest.get("documentation", {})
+            sec_cfg = manifest.get("security_audit", {})
+            context7_cfg = doc_cfg.get("context7", {})
+            lib_id = context7_cfg.get("library_id", "")
+            print("- AUDITORIA DE VERSIONES Y SEGURIDAD: Verifica que no se introduzcan librerias\n"
+                  f"  con CVEs conocidos o APIs deprecadas. Valida con Context7 (lib: '{lib_id}') o\n"
+                  f"  documentacion oficial ({doc_cfg.get('official_docs', '')}).\n")
+    except Exception:
+        pass
     # Solo un sello del gate cuenta como ronda cerrada: un 'Veredicto propuesto'
     # tipeado por un revisor anterior no lo es.
     anterior = sello_revision(rp.read_text(encoding="utf-8")) if rp.exists() else None

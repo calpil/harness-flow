@@ -1,0 +1,67 @@
+{
+  "id": "springboot-hexagonal",
+  "name": "CALPIL Spring Boot Hexagonal Stack",
+  "version": "1.0.0",
+  "language": "java",
+  "framework": "springboot",
+  "architecture": "hexagonal",
+  "description": "Stack backend Java 21 / Spring Boot 3.4 con arquitectura hexagonal estricta (domain sin Spring/JPA, ports en application, adapters aislados, ArchUnit).",
+  "detection": {
+    "files_any": [
+      "pom.xml",
+      "build.gradle",
+      "build.gradle.kts"
+    ],
+    "extensions": [
+      ".java"
+    ],
+    "content_matches": {
+      "pom.xml": ["spring-boot", "org.springframework.boot"],
+      "build.gradle": ["org.springframework.boot"]
+    },
+    "strong_indicators": [
+      "src/main/java",
+      "src/test/java",
+      "src/main/resources/application.yml",
+      "src/main/resources/application.properties"
+    ],
+    "anti_indicators": [
+      "go.mod",
+      "angular.json"
+    ]
+  },
+  "normative": {
+    "rules": [
+      "architecture.md",
+      "dependencies.md",
+      "security.md",
+      "testing.md"
+    ],
+    "skills": [
+      "add-api-endpoint",
+      "add-feature",
+      "add-persistence",
+      "adr",
+      "architecture-review",
+      "debug-targeted",
+      "dependency-review",
+      "liquibase-migration",
+      "maven-upgrade",
+      "observability-operations",
+      "prepare-release",
+      "security-review",
+      "springboot",
+      "write-tests"
+    ],
+    "architecture_constraints": {
+      "domain_purity": "domain/** sin anotaciones ni dependencias de Spring, JPA, Jackson o Cloud; Java puro.",
+      "application_ports": "application/** orquesta casos de uso e interactúa exclusivamente mediante puertos.",
+      "adapter_isolation": "adapter/in (REST controllers) y adapter/out (repositorios JPA, clientes HTTP) desacoplados.",
+      "archunit_verification": "Reglas de arquitectura verificadas mediante tests de ArchUnit."
+    }
+  },
+  "runners": {
+    "test_command": "./mvnw test",
+    "verify_arch": "./mvnw test -Dtest=*ArchitectureTest"
+  }
+}

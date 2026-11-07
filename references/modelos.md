@@ -344,16 +344,26 @@ Antigravity o `gemini-4-argon` en Hermes), todos los roles usan Argon en nivel
 ## Modo Pair interactivo (`--pair`: Driver = IA, Navigator = Humano)
 
 Cuando el Rol 2 (Implementer) se ejecuta en **modo Pair interactivo** (`--pair`,
-ver `references/vertical-slice.md`), la implementacion corre en la **sesion
-principal** en vez de un subagente batch, para pausar en cada ciclo
-(`1 test -> Red -> codigo minimo -> Green`) y esperar la direccion del usuario.
+ver `references/vertical-slice.md`), o cuando se detecta un **stack tecnológico normativo**
+(Golang Hexagonal o Angular Product mediante `stack.py detectar`), el modo Pair interactivo
+**se activa de forma automática**. La implementación corre en la **sesión principal**
+en vez de un subagente batch sin visibilidad, para pausar en cada ciclo
+(`1 test -> Red -> codigo minimo -> Green`) y esperar la dirección del usuario.
 Para mantener baja latencia entre micro-pasos sin perder rigor:
 
-| Proveedor / Host | Modelo en `--pair` | Effort recomendado en `--pair` |
-| --- | --- | --- |
-| **OpenAI (Codex / Hermes)** | `gpt-6-astra` o `gpt-6.1-sol` en la sesion | `medium` por defecto para ciclos agiles; `high` si el paso resuelve concurrencia o migracion |
-| **Claude 5.5 (Claude Code / Hermes)** | Sesion en `claude-opus-5-5` o `claude-sonnet-5-5` | `high` (o `medium` si el usuario prioriza velocidad en pasos triviales; `xhigh` ante riesgo concreto) |
-| **Gemini 4 Argon (AGY / Hermes)** | `gemini-4-argon` en la sesion principal | `high` (`Gemini 4 Argon (High)`) |
-| **Grok** | Modelo activo de la sesion | El de la sesion: `spawn_subagent` no acepta effort. Espera del revisor en [grok.md](grok.md) |
-| **Kimi Code** | Modelo activo de la sesion en Kimi | Sesion principal; el Rol 3 sigue corriendo en el subagente `revisor` |
+| Proveedor / Host | Modelo en `--pair` | Effort recomendado en `--pair` | Mecanismo de Preguntas de Formulario |
+| --- | --- | --- | --- |
+| **OpenAI (Codex / Hermes)** | `gpt-6-astra` o `gpt-6.1-sol` en la sesion | `medium` por defecto; `high` si el paso resuelve concurrencia o migracion | Formulario estructurado Markdown (`[A]`, `[B]`, `[C]`) con opción recomendada |
+| **Claude 5.5 (Claude Code / Hermes)** | Sesion en `claude-opus-5-5` o `claude-sonnet-5-5` | `high` (o `medium` si se prioriza velocidad; `xhigh` ante riesgo concreto) | Preguntas interactivas estructuradas con opciones claras |
+| **Gemini 4 Argon (AGY / Hermes)** | `gemini-4-argon` en la sesion principal | `high` (`Gemini 4 Argon (High)`) | Herramienta nativa `ask_question` con preguntas y opciones |
+| **Grok** | Modelo activo de la sesion | El de la sesion: `spawn_subagent` no acepta effort. Espera del revisor en [grok.md](grok.md) | Opciones estructuradas en Markdown |
+| **Kimi Code** | Modelo activo de la sesion en Kimi | Sesion principal; el Rol 3 sigue corriendo en el subagente `revisor` | Formulario Markdown con opciones |
+
+### Protocolo de Intervención por Formulario
+El agente Driver NO interrumpe al usuario por detalles menores de código o sintaxis.
+Solo despliega el formulario interactivo cuando:
+1. Se requiere una decisión de arquitectura o diseño no definida en el SDD/Spec (ej. tipo de persistencia, contrato de error, nombres de endpoints).
+2. Se detecta una discrepancia normativa con `stack.py verificar` que requiera plan de refactorización o normalización.
+3. Se activa la Parada 4 de Pair (2 intentos fallidos consecutivos sin alcanzar verde).
+4. Aprobación de la lista de tests antes de empezar, o confirmación de gates formales (`approve-spec`, `enmienda`, `cierre`).
 

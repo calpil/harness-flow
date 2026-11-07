@@ -1,0 +1,107 @@
+{
+  "id": "angular-product",
+  "name": "CALPIL Angular Product Stack",
+  "version": "1.0.0",
+  "language": "typescript",
+  "framework": "angular",
+  "architecture": "feature-oriented-layered",
+  "description": "Stack frontend Angular 19+ feature-oriented layered (domain TS puro sin @angular/rxjs, application con ports y Signals, ui standalone, data-access desacoplado, testing con Vitest y check-architecture).",
+  "detection": {
+    "files_any": ["angular.json"],
+    "package_deps": ["@angular/core", "@angular/common"],
+    "strong_indicators": [
+      "src/app/features",
+      "src/app/core",
+      "src/app/shared",
+      "src/app/app.routes.ts",
+      "src/app/app.config.ts"
+    ]
+  },
+  "normative": {
+    "rules": [
+      "architecture.md",
+      "dependencies.md",
+      "documentation.md",
+      "releases.md",
+      "security.md",
+      "testing.md"
+    ],
+    "skills": [
+      "accessibility-review",
+      "add-feature",
+      "add-ui-component",
+      "agent-change-review",
+      "api-contract-testing",
+      "architecture-review",
+      "async-state-management",
+      "authentication-sso",
+      "bff-contract",
+      "changelog",
+      "container-build",
+      "data-access-change",
+      "debug-targeted",
+      "dependency-review",
+      "design-system-integration",
+      "domain-modeling",
+      "error-handling",
+      "feature-flag-rollout",
+      "form-validation",
+      "localization",
+      "observability-review",
+      "performance-review",
+      "pipeline-hygiene",
+      "prepare-release",
+      "readme-evolution",
+      "routing-navigation",
+      "runtime-configuration",
+      "secure-dependency-lifecycle",
+      "security-review",
+      "ui-quality-review",
+      "write-tests"
+    ],
+    "architecture_constraints": {
+      "domain_purity": {
+        "path_pattern": "src/app/features/*/domain/**",
+        "forbidden_imports": [
+          "@angular/",
+          "rxjs",
+          "@core/",
+          "@shared/",
+          "@env/",
+          "@calpil-ds/"
+        ],
+        "rationale": "domain/** debe ser TypeScript puro; sin frameworks, reactividad externa ni dependencias de UI/core."
+      },
+      "layer_boundaries": {
+        "application": "No permite importar ui/** ni data-access/**",
+        "ui": "No permite importar data-access/** directamente (solo via application ports)",
+        "data_access": "No permite importar ui/**",
+        "cross_feature": "Prohibido acceso directo a otra feature sin pasar por contratos públicos"
+      },
+      "state_management": "Signals para estado reactivo de feature; sin estado global innecesario.",
+      "composition_root": "src/app/app.routes.ts"
+    }
+  },
+  "runners": {
+    "test_command": "npm test",
+    "arch_command": "node scripts/check-architecture.mjs",
+    "skills_validator": "node stacks/angular-product/scripts/validate-agent-skills.mjs"
+  },
+  "documentation": {
+    "official_docs": "https://angular.dev",
+    "security_advisories": "https://github.com/angular/angular/security/advisories",
+    "context7": {
+      "library_id": "/angular/angular",
+      "ecosystem": "npm",
+      "suggested_queries": [
+        "Angular Signals state management and effects",
+        "Angular Control Flow syntax @if @for",
+        "Standalone components and providers"
+      ]
+    }
+  },
+  "security_audit": {
+    "command": "npm audit --audit-level=high",
+    "minimum_version": "19.0.0"
+  }
+}

@@ -48,6 +48,16 @@ Las lecciones aprendidas son memoria del usuario, no del agente donde se descubr
 ### 6. Sincronización Remota con Atlassian (`atlassian.py`)
 - Si existe `harness/atlassian.json`, sincroniza issues en Jira, subtasks por AC y páginas vivas en Confluence con el spec, la evidencia y el review formal al invocar `gate.py close --publicar-atlassian`.
 
+### 7. Gobernanza de Stacks Tecnológicos, Context7 y Modo Pair Automático (`stack.py`)
+- **Detección Dinámica y Extensible de Stacks**: Motor declarativo (`stacks/<stack-id>/manifest.json`) que escanea y clasifica cualquier repositorio o microservicio según archivos base (`files_any`/`files_all`), extensiones, dependencias de `package.json`, coincidencia de contenido (`content_matches`), indicadores estructurales (`strong_indicators`) y reglas de descarte (`anti_indicators`).
+  - Catálogo activo: **Golang Hexagonal** (`golang-hexagonal`), **Angular Product** (`angular-product`), **Next.js Product** (`nextjs-product`), **Spring Boot Hexagonal** (`springboot-hexagonal`), **NestJS Hexagonal** (`nestjs-hexagonal`), y **Python Data Product** (`python-dataproduct`).
+  - Extensible: cualquier nuevo stack se soporta simplemente creando `stacks/<nuevo-stack>/manifest.json` sin tocar código Python.
+- **Verificación Normativa y Refactorización Guiada**: Audita cumplimiento de reglas (`.claude/rules/`), skills (`.claude/skills/`, `.agents/skills/`), contratos multi-LLM (`AGENTS.md`) y límites de arquitectura en caliente (`check-architecture.py`). Si un repositorio no cumple, genera planes de refactorización vertical (*Expand-Contract*) y scaffolding automático del esqueleto canónico (`stack.py refactorizar --scaffold`).
+- **Normalización Multi-LLM**: Provee paridad completa instalando rules y skills en los formatos de Claude Code, Codex, Gemini/AGY, Hermes, Grok y Kimi Code.
+- **Context7 & Documentación Oficial (`stack.py auditar`)**: Conexión con el servidor MCP de Context7 (`https://mcp.context7.com/mcp`) y enlaces oficiales para garantizar que toda implementación use versiones vigentes, APIs no obsoletas y ejecute escáneres de seguridad contra vulnerabilidades (CVEs con `govulncheck`, `npm audit`, etc.). Ver [`references/context7-documentacion-oficial.md`](references/context7-documentacion-oficial.md).
+- **Modo Pair Interactivo Automático**: Al detectar un stack normativo, la implementación activa automáticamente el modo Pair (Driver = IA, Navigator = humano), avanzando en ciclos TDD con micro-reportes.
+- **Protocolo de Preguntas de Formulario**: La IA interviene con formularios estructurados (`ask_question` en Gemini/AGY o formulario interactivo en otros hosts) **únicamente cuando es indispensable**: decisiones de diseño no previstas, paradas de TDD tras 2 fallos consecutivos sin verde, aprobación de lista de tests y confirmación de gates.
+
 ---
 
 ## Políticas de Modelos y Reasoning Effort
@@ -216,10 +226,18 @@ harness-flow/
 │   ├── postmerge.py                  <- Stub neutralizado (aborto con exit 2 hacia runner medido)
 │   ├── cbm_procesos.py               <- Telemetría forense y gestión de procesos CBM
 │   ├── contexto.py                   <- Cálculo de frescura del grafo y generación de briefs
+│   ├── stack.py                      <- Detección, verificación, normalización, refactorización y auditoría de stacks
 │   ├── leccion.py                    <- Memoria procedural cruzada entre agentes de la máquina
 │   ├── hub.py                        <- Integración con Memory Hub Postgres
 │   ├── vault.py                      <- Generación del vault de Obsidian en docs/vault/
 │   └── atlassian.py                  <- Sincronización con Jira y Confluence
+├── stacks/                           <- Stacks tecnológicos declarativos (manifests, rules, skills, checkers)
+│   ├── golang-hexagonal/             <- Arquitectura hexagonal Go, 4 rules, 9 skills, check-architecture.py
+│   ├── angular-product/              <- Angular 17+ zoneless, 6 rules, 31 skills, check-architecture.mjs
+│   ├── nextjs-product/               <- Next.js App Router, 6 rules, 37 skills
+│   ├── springboot-hexagonal/         <- Spring Boot 3 Java hexagonal, 4 rules, 15 skills
+│   ├── nestjs-hexagonal/             <- NestJS TypeScript hexagonal, 4 rules, 14 skills
+│   └── python-dataproduct/           <- Python data product / FastAPI / Polars, 4 rules, 11 skills
 ├── templates/                        <- Plantillas oficiales de spec, prd, sdd y enmiendas
 ├── docs/
 │   └── explicacion-y-diagnostico.md  <- Informe de auditoría exhaustiva y estado de salud
@@ -227,6 +245,7 @@ harness-flow/
 │   ├── hosts.md, modelos.md, vertical-slice.md, contexto.md, lecciones-del-arnes.md
 │   ├── multirepo.md, claude.md, openai.md, grok.md, kimi.md, entorno.md
 │   ├── hub.md, obsidian.md, atlassian.md, documentacion.md
+│   └── context7-documentacion-oficial.md <- Context7 MCP, documentación oficial y seguridad
 └── tests/                            <- Suite exhaustiva de tests unitarios y de regresión
 ```
 
@@ -240,6 +259,7 @@ El arnés se valida de forma continua mediante suites de tests unitarios en Pyth
 - Runners post-merge medidos (`test_measured_runner_go.py`, `test_terraform_runner.py`, `test_postmerge.py`).
 - Detección de host y compatibilidad multi-host (`test_entorno.py`, `test_leccion_multihost.py`, `test_plugin_claude.py`).
 - Monitor forense de procesos (`test_cbm_procesos.py`).
+- Motor de stacks tecnológicos, normalización y Context7 (`test_stack.py`).
 
 Para ejecutar las pruebas del arnés:
 ```bash

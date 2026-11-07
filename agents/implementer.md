@@ -75,6 +75,20 @@ detente; no los busques ni los inventes.
   (**Green**); (3) refactoriza solo en verde (**Refactor**), separando los
   commits funcionales (`feat:`/`fix:`) de los commits de refactor puro
   (`refactor:`).
+- **Cumplimiento estricto de la normativa del stack tecnológico:**
+  Si el brief indica un stack normativo (ej. Golang Hexagonal o Angular Product):
+  - **Golang Hexagonal:**
+    - Capa `domain/` (`internal/*/domain/**`): Go estándar puro. PROHIBIDO importar `net/http`, `chi`, `pgx`, `sql`, frameworks.
+    - Capa `application/`: solo depende de domain y puertos propios (`ports/in.go`, `ports/out.go`). Nunca importa adaptadores.
+    - Adaptadores: HTTP handlers con Chi y DTOs mapeados a RFC 7807 (`application/problem+json`). Persistencia implementa puertos `out`.
+    - Tests deterministas: con `t.Parallel()`, in-memory fakes y PROHIBIDO `time.Sleep`. Ejecutar con `go test -race`.
+  - **Angular Product:**
+    - Capa `domain/`: TypeScript puro sin `@angular/`, `rxjs`, `@core/`, `@shared/`, `@env/`, `@calpil-ds/`.
+    - Capa `application/`: ports y Signals para estado; PROHIBIDO importar `ui/` o `data-access/`.
+    - Capa `ui/`: componentes standalone, control flow `@if`/`@for`, sin acceso directo a `data-access/`.
+    - Verificación obligatoria con `node scripts/check-architecture.mjs` o `python3 scripts/check-architecture.py`.
+- **Actualización con Context7 y Documentación Oficial:**
+  Antes de escribir código o agregar dependencias externas, consulta Context7 (herramientas MCP `resolve-library-id`/`query-docs` o sufijo `'use context7'`) o la documentación oficial mediante búsqueda para verificar sintaxis vigente, APIs no deprecadas y patrones idiomáticos actuales. Corre el escáner de vulnerabilidades del stack (`govulncheck`, `npm audit`, etc.) para asegurar cero vulnerabilidades de severidad crítica/alta.
 - **Las 5 paradas inmediatas (estilo `/pair` de `hola-ai`):**
   1. **Decision de diseno fuera del plan/spec:** si necesitas decidir algo que el
      spec/SDD no fija, detente y devuelve la pregunta.

@@ -50,6 +50,15 @@ def main() -> None:
         print(f"   [!] no se pudo evaluar el contexto: {exc}")
     print(f"   vault: {vault}")
     print(f"   jira:  {'configurado' if p['atlassian'].exists() else 'sin binding'}")
+    try:
+        import stack
+        st_detectados = stack.detectar_todos_los_destinos(p["root"])
+        st_calpil = [s for s in st_detectados if s["stack"] != "generico"]
+        if st_calpil:
+            partes_st = [f"{s['name']} en {Path(s['path']).name} (confianza {s['confidence']}%)" for s in st_calpil]
+            print("   stacks: " + ", ".join(partes_st))
+    except Exception:
+        pass
     faltan_docs: list[str] = []
     try:
         import producto

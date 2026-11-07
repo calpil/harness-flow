@@ -1140,6 +1140,33 @@ def cmd_brief(args) -> None:
     L.append("rutas protegidas (NO editar): " +
              ", ".join(data["rules"].get("rutas_protegidas", [])))
 
+    # Deteccion de stack y normativa tecnologica (CALPIL)
+    try:
+        import stack
+        target_dir = p["root"]
+        if f.get("worktree") and (p["root"] / f["worktree"]).exists():
+            target_dir = p["root"] / f["worktree"]
+        elif micros:
+            for m in micros:
+                cand = p["root"] / m.split("/")[-1]
+                if cand.exists():
+                    target_dir = cand
+                    break
+        det_stack = stack.detectar_stack_directorio(target_dir)
+        if det_stack["stack"] != "generico":
+            L.append("")
+            L.append(f"stack detectado: {det_stack['name']} ({det_stack['stack']}, confianza {det_stack['confidence']}%)")
+            L.append("modo pair interactivo: ACTIVADO AUTOMÁTICAMENTE por normativa de stack")
+            manifest_st = stack.cargar_manifest(det_stack["stack"])
+            st_rules = manifest_st.get("normative", {}).get("rules", [])
+            st_skills = manifest_st.get("normative", {}).get("skills", [])
+            if st_rules:
+                L.append("reglas del stack: " + ", ".join(st_rules))
+            if st_skills:
+                L.append("skills del stack: " + ", ".join(st_skills[:6]) + ("..." if len(st_skills) > 6 else ""))
+    except Exception:
+        pass
+
     # Lo que el PRD/SDD dice de esta feature; el revisor no lo recibe por la
     # misma razon que no recibe los relacionados.
     if getattr(args, "con_producto", True):

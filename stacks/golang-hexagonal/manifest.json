@@ -1,0 +1,99 @@
+{
+  "id": "golang-hexagonal",
+  "name": "CALPIL Golang Hexagonal Architecture Stack",
+  "version": "1.0.0",
+  "language": "golang",
+  "architecture": "hexagonal",
+  "description": "Stack backend Go con arquitectura hexagonal estricta (domain puro, application ports/services, adapter in/out con Chi y pgx/inmemory, composition root en cmd/server/main.go).",
+  "detection": {
+    "files_any": ["go.mod"],
+    "extensions": [".go"],
+    "strong_indicators": [
+      "cmd/server/main.go",
+      "internal/*/domain",
+      "internal/*/application",
+      "internal/*/adapter"
+    ],
+    "dependencies": [
+      "github.com/go-chi/chi",
+      "github.com/jackc/pgx"
+    ]
+  },
+  "normative": {
+    "rules": [
+      "architecture.md",
+      "dependencies.md",
+      "security.md",
+      "testing.md"
+    ],
+    "skills": [
+      "add-api-endpoint",
+      "add-feature",
+      "add-persistence",
+      "architecture-review",
+      "debug-targeted",
+      "dependency-review",
+      "prepare-release",
+      "security-review",
+      "write-tests"
+    ],
+    "architecture_constraints": {
+      "domain_purity": {
+        "path_pattern": "internal/*/domain/**",
+        "forbidden_imports": [
+          "net/http",
+          "github.com/go-chi/chi",
+          "github.com/go-chi/chi/v5",
+          "github.com/jackc/pgx",
+          "github.com/jackc/pgx/v5",
+          "database/sql"
+        ],
+        "rationale": "La capa domain debe ser Go puro sin transporte, persistencia ni frameworks."
+      },
+      "application_isolation": {
+        "path_pattern": "internal/*/application/**",
+        "forbidden_imports": [
+          "internal/*/adapter"
+        ],
+        "rationale": "La capa application solo depende de domain y de sus propios puertos."
+      },
+      "composition_root": {
+        "required_entrypoint": "cmd/server/main.go",
+        "rationale": "cmd/server/main.go es el único punto autorizado para instanciar y cablear adapters con use cases."
+      },
+      "security_headers_and_errors": {
+        "problem_details_rfc": "RFC 7807 (application/problem+json)",
+        "security_headers": ["X-Content-Type-Options", "X-Frame-Options", "X-XSS-Protection"],
+        "correlation_id": "X-Correlation-ID"
+      },
+      "testing_standards": {
+        "forbidden_calls": ["time.Sleep"],
+        "required_flags": ["-race"],
+        "inmemory_repository_pattern": true
+      }
+    }
+  },
+  "runners": {
+    "test_command": "go test -tags integration -count=1 -json ./...",
+    "race_command": "go test -race ./...",
+    "skills_validator": "node stacks/golang-hexagonal/scripts/validate-agent-skills.mjs"
+  },
+  "documentation": {
+    "official_docs": "https://go.dev/doc/",
+    "security_advisories": "https://pkg.go.dev/vuln/",
+    "context7": {
+      "library_id": "/golang/go",
+      "ecosystem": "go",
+      "suggested_queries": [
+        "Go net/http routing and middleware",
+        "Chi router v5 standard idioms",
+        "pgx connection pooling and security"
+      ]
+    }
+  },
+  "security_audit": {
+    "command": "govulncheck ./...",
+    "fallback_command": "go list -m all",
+    "minimum_version": "1.23.0"
+  }
+}

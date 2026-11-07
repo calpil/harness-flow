@@ -7,14 +7,25 @@ effort: xhigh
 
 # harness-flow: implementar (rol implementer)
 
-Implementa la feature `$1`. Por defecto **el codigo no lo escribes tu**: lo
-escribe el subagente `harness-flow:implementer` (Sonnet 5.5, effort por tarea,
-ver `${CLAUDE_PLUGIN_ROOT}/references/modelos.md`), mientras tu orquestas y
-contrastas su evidencia. Si el usuario pasa `--pair` (o pide **modo Pair**),
-ejecutas el bucle **TDD vertical interactivo** en esta sesion (Driver = IA,
-Navigator = humano), avanzando **1 ciclo** (`1 test -> Red -> codigo minimo ->
-Green`) por turno y pausando con el micro-reporte (ver
-`${CLAUDE_PLUGIN_ROOT}/references/vertical-slice.md`).
+Implementa la feature `$1`. 
+
+**Activación Automática de Modo Pair en Stacks Tecnológicos (Angular / Golang):**
+Si el brief (`contexto.py brief`) detecta un stack tecnológico normativo (ej. Golang Hexagonal o Angular Product), o si el usuario pasa `--pair` o pide modo pair, **el modo Pair interactivo se activa de forma automática**. En este modo no se delega a ciegas a un subagente sin visibilidad: tú ejecutas como **Driver** en el worktree y el usuario actúa como **Navigator**.
+
+**Protocolo de Intervención con Preguntas de Formulario:**
+El agente ejecuta los ciclos TDD verticalmente (`1 test -> Red -> código mínimo -> Green -> Refactor en verde`) emitiendo su micro-reporte continuo. **Solo interviene consultando al usuario con preguntas interactivas de formulario (`ask_question` en Gemini/AGY, o formulario estructurado de opciones en otros LLMs) cuando sea REALMENTE NECESARIO:**
+1. **Decisión de arquitectura o diseño no prevista:** cuando el spec o SDD no especifica detalles críticos (ej. elección de adaptador, contrato de endpoints, nombres de eventos de dominio).
+2. **Refactorización o normalización de stack:** ante decisiones de reestructuración o cambios en interfaces públicas.
+3. **Las 5 paradas de `/pair`:**
+   - (a) Decisión fuera del plan/spec.
+   - (b) Detección de alcance no solicitado (YAGNI).
+   - (c) Conflicto con tests existentes (prohibido debilitarlos).
+   - (d) **Dos intentos sin llegar a verde** (detenerse y pedir guía o revertir al último verde).
+   - (e) Paso que supera ~50 líneas o 3 archivos.
+4. **Aprobación de la Lista de Tests y Costuras:** antes de empezar el primer ciclo.
+5. **Aprobación de commits y cierre:** confirmando mensaje de commit o gates.
+
+Para repositorios genéricos sin stack normativo detectado y sin `--pair`, se utiliza el subagente delegado tradicional `harness-flow:implementer` (ver sección 5a).
 
 > **Shell.** Cada llamada Bash abre un shell nuevo: `$PY` y `$H` no sobreviven,
 > asi que el bootstrap va pegado a cada comando, siempre. Los bloques de abajo

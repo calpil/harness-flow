@@ -145,3 +145,28 @@ Cuando toda la lista de tests está en verde:
 | **AGY / Gemini** | Sesión en `Gemini 4 Argon (High)` | Sesión principal de AGY pausando tras cada micro-mensaje | `invoke_subagent` (`TypeName: "self"`, `Model: "inherit"`) | `invoke_subagent` (`TypeName: "self"`, `Model: "inherit"`, `Workspace: "inherit"`) |
 | **Grok** | Sesión principal de Grok | Sesión principal de Grok en el worktree | Sesión principal en el worktree | `spawn_subagent` y espera el id ([grok.md](grok.md)) |
 | **Kimi Code** | `/harness-flow:producto`, `/harness-flow:spec` | `/harness-flow:implementar <id> --pair` en la sesión | `Agent(implementer)` | `/harness-flow:review <id>` → `Agent(revisor)` o `kimi -p` |
+
+---
+
+## 6. Activación Automática de Modo Pair en Stacks CALPIL y Protocolo de Preguntas de Formulario
+
+### Activación Automática
+Cuando el proyecto o microservicio pertenece a un stack tecnológico normativo de CALPIL (`golang-hexagonal` o `angular-product`), detectado mediante `stack.py detectar`:
+- **El Modo Pair interactivo se activa de forma automática**, sin requerir la bandera `--pair` manual ni configuración adicional.
+- La IA asume el rol de **Driver** (escribe los tests acoplados a costuras públicas y el código mínimo) y el usuario humano asume el rol de **Navigator** (supervisa la dirección, acuerdos de diseño y aprobación).
+
+### Protocolo de Intervención Humana con Preguntas de Formulario
+Para no degradar la velocidad del desarrollo ni saturar al usuario con micro-preguntas irrelevantes, el agente avanza de forma autónoma en el ciclo TDD (`1 test -> Red -> código mínimo -> Green -> Refactor en verde`), emitiendo su micro-reporte en el chat.
+
+**El agente DEBE formular preguntas interactivas estructuradas de formulario ÚNICAMENTE en las siguientes situaciones:**
+
+1. **Uso de Herramientas según el Host:**
+   - **En AGY / Gemini:** Invoca la herramienta `ask_question` con opciones claras y recomendación explícita `(Recommended)`.
+   - **En Claude Code, GPT/Codex, Grok, Kimi, Hermes:** Presenta un formulario estructurado en Markdown con opciones unívocas `[A]`, `[B]`, `[C]`, destacando `(Recomendada)`.
+
+2. **Condiciones Estrictas de Intervención Humana:**
+   - **Decisión de Diseño o Arquitectura no prevista:** el plan o spec omite un detalle crítico (ej. seleccionar entre persistencia PostgreSQL vs memoria, nombres de endpoints públicos, estrategias de particionado).
+   - **Normalización o Refactorización:** cuando `stack.py verificar` detecta infracciones de arquitectura y se requiere elegir entre scaffolding automatizado o refactor progresivo mediante *Expand-Contract*.
+   - **Alarma de Dos Intentos sin Verde (Parada 4):** tras dos intentos fallidos en el mismo test, detenerse inmediatamente y preguntar al usuario con opciones: `[A] Revertir al último verde`, `[B] Ajustar aserción según spec`, `[C] Explorar enfoque alternativo`.
+   - **Aprobación de Lista de Tests y Costuras:** presentación previa de los tests a implementar antes de escribir código.
+   - **Aprobación de Gates y Commits:** confirmación explícita para sellar spec (`approve-spec --yes`), enmienda (`enmienda --yes`) o cierre (`close`).

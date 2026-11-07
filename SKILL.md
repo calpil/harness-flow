@@ -161,8 +161,9 @@ Con evidencia, review o verify encima, `approve-spec` se niega a re-sellar un sp
 3. Antes de editar, orientate con `codebase-memory-mcp` (`search_graph`, `trace_path`, `detect_changes`) en vez de leer a ciegas. Indexa la raiz, no tu worktree: confirma leyendo el archivo.
 4. **Bucle TDD vertical (prohibido el TDD horizontal)**: avanza **un test a la vez** (`1 test en la costura publica -> Red -> codigo minimo -> Green -> Refactor en verde`), con el valor esperado tomado del AC (nunca calculado con la misma logica que el codigo) y separando los commits funcionales de los de refactor puro. Detente de inmediato ante cualquiera de las **5 paradas de `/pair`**: (a) decision de diseno no prevista en el plan/spec, (b) alcance no pedido (YAGNI), (c) cambiar/saltar/borrar un test para que pase, (d) **dos intentos** sin llegar a verde (revierte al ultimo verde), (e) paso que supera **~50 lineas o 3 archivos** (propon partirlo).
 5. **Dos modos de ejecucion** (detalle en [`references/vertical-slice.md`](references/vertical-slice.md)):
-   - **Subagente delegado (por defecto)**: en Claude Code `/harness-flow:implementar <id>` delega en `harness-flow:implementer` (`agents/implementer.md`) y contrasta su evidencia; en Hermes con Claude Code usa `claude -p --agent harness-flow:implementer`, y con OpenAI/Gemini usa el rol segun [`references/modelos.md`](references/modelos.md).
-   - **Modo Pair interactivo (`--pair` = `/pair` de `hola-ai`, Driver = IA, Navigator = humano)**: corre en la sesion principal (`/harness-flow:implementar <id> --pair` o pidiendo modo pair en cualquier host). Primero propone la **lista de tests** (solo nombres, donde se prueba cada uno y cuales son verificacion manual) y espera el OK del usuario; luego ejecuta **1 paso** (`1 test -> Red -> codigo minimo -> Green`) y **pausa** con el micro-mensaje (`✅ Pasa "<test>"... Decision tomada:... ¿Cambiamos algo o seguimos con "<siguiente>"?`), o ejecuta `N` ciclos si el usuario dice `"haz N"` (mostrando primero los tests y luego el codigo). En `--pair` sugiere el mensaje de commit cuando hay una unidad logica en verde y espera el OK del usuario.
+   - **Activación Automática en Stacks CALPIL (Golang / Angular)**: si el brief (`contexto.py brief`) detecta un stack tecnológico normativo (Golang Hexagonal o Angular Product), **el modo Pair interactivo se activa de forma automática** (sin requerir `--pair`). La IA ejecuta en la sesión principal como **Driver** (TDD vertical: `1 test -> Red -> código mínimo -> Green -> Refactor en verde`), emitiendo su micro-reporte, y el usuario actúa como **Navigator**. La IA **interviene con preguntas de formulario interactivas** (`ask_question` en AGY/Gemini o formulario estructurado en otros hosts) **SOLO cuando sea realmente necesario** (decisiones de diseño no previstas, 2 intentos fallidos sin verde en TDD, aprobación de la lista de tests, y refactorizaciones o gates).
+   - **Subagente delegado (por defecto en repos genéricos)**: en Claude Code `/harness-flow:implementar <id>` delega en `harness-flow:implementer` (`agents/implementer.md`) y contrasta su evidencia; en Hermes con Claude Code usa `claude -p --agent harness-flow:implementer`, y con OpenAI/Gemini usa el rol segun [`references/modelos.md`](references/modelos.md).
+   - **Modo Pair interactivo explícito (`--pair` = `/pair` de `hola-ai`)**: corre en la sesión principal (`/harness-flow:implementar <id> --pair` o pidiendo modo pair en cualquier host). Propone la **lista de tests** (solo nombres, costuras) y espera el OK; luego ejecuta ciclos pausando con el micro-mensaje o ejecuta `N` ciclos si el usuario dice `"haz N"`. En `--pair` sugiere el mensaje de commit cuando hay una unidad lógica en verde y espera el OK.
 6. Escribe evidencia en `docs/impl-<id>.md`: una fila por AC-n citando `archivo:linea`. Commitea en la rama de la feature: el review diffea `base..HEAD`.
 
 ### 3. Reviewer — subagente aislado, veredicto sellado
@@ -270,6 +271,35 @@ del tail, no el del gate.
 Reglas en `harness/feature_list.json` → `rules`: `require_spec_approved`, `require_review`, `require_leccion`, `require_verify_green`, `require_docs_al_dia` (documentos que `approve-spec` exige; un valor que no entiende hace fallar `check`, no la apaga).
 
 **Rutas protegidas**: `docs/prd/**`, `docs/sdd.md`, `docs/constitution.md`, `.env`. Son del USUARIO. Ningún agente las reescribe a mano — `documentacion.py sync` solo actualiza el bloque generado `harness-flow:features`, y `gate.py check` reporta violaciones fuera de ese contrato. La otra via, la unica que cambia el cuerpo manual del PRD o del SDD, es el sello de `producto.py aprobar --yes` (`documentos.prd|sdd`): el usuario aprobo ESE cuerpo en el chat y vale hasta que lo commitea. Sin repo git no hay commit que medir: el sello es la unica prueba para approve-spec, y check ademas acepta los bytes que un registro multi-repo ya fijo. Un cuerpo a mano y sin registrar no cuenta hasta `aprobar --yes`. Un backlog anterior conserva su lista: si no trae `docs/sdd.md`, `check` lo avisa.
+
+## Stacks Tecnológicos de CALPIL y Extensibilidad Multi-Stack
+
+Harness Flow integra un motor declarativo y extensible de detección y gobierno de stacks tecnológicos (`stacks/<stack-id>/manifest.json`). Reconoce automáticamente la arquitectura y convenciones de cada repositorio o microservicio:
+- **Golang Hexagonal (`golang-hexagonal`)**: dominio Go puro en `internal/*/domain/**` (sin frameworks/SQL), puertos de entrada/salida en `application/`, adaptadores Chi HTTP (RFC 7807) y persistencia `pgx`/in-memory, composition root en `cmd/server/main.go`, tests deterministas sin `time.Sleep` (`go test -race`).
+- **Angular Product (`angular-product`)**: feature-oriented layered (`src/app/features/<feat>/(domain|application|ui|data-access)`), dominio TypeScript puro sin dependencias de `@angular`/RxJS, Signals para reactividad, componentes standalone, composition root en `app.routes.ts` y linter de límites (`check-architecture.py` / `check-architecture.mjs`).
+- **Next.js Product (`nextjs-product`)**: Next.js 15+ / React 19 con Server Components por defecto, aislamiento `server-only` y App Router.
+- **Spring Boot Hexagonal (`springboot-hexagonal`)**: Java 21 / Spring Boot 3.4 con dominio puro sin dependencias de Spring/JPA y ArchUnit.
+- **NestJS Hexagonal (`nestjs-hexagonal`)**: TypeScript / NestJS modular con Prisma ORM y puertos desacoplados.
+- **Python Data Product (`python-dataproduct`)**: Python 3.14 con FastAPI, Polars/Pydantic y adaptadores de origen/destino.
+- **Stacks Futuros**: cualquier nuevo stack se agrega simplemente creando una carpeta `stacks/<nuevo-stack>/manifest.json` con su bloque `"detection"` (indicadores de archivos, extensiones, dependencias y anti-indicadores); el motor lo detectará y normalizará de forma automática sin tocar código Python.
+
+### Comandos de Stacks
+
+| Comando | Función |
+| --- | --- |
+| `$PY "$H/stack.py" detectar [--repo <r>]` | Detecta el stack de la raíz o microservicios con confianza e indicadores |
+| `$PY "$H/stack.py" verificar [--repo <r>]` | Audita cumplimiento normativo (Rules, Skills, Arquitectura y Testing) |
+| `$PY "$H/stack.py" normalizar [--repo <r>]` | Instala/sincroniza rules, skills operativas, `AGENTS.md` y checkers de arquitectura |
+| `$PY "$H/stack.py" refactorizar [--repo <r>] [--scaffold]` | Planifica refactorización (*Expand-Contract*) y genera esqueleto canónico faltante |
+| `$PY "$H/stack.py" auditar [--repo <r>]` | Audita versiones vigentes, fuentes Context7/Oficiales y escáner de seguridad (CVEs) |
+| `$PY "$H/stack.py" stacks` | Lista los stacks tecnológicos soportados |
+
+### Actualización Continua y Seguridad: Context7 y Documentación Oficial
+Para garantizar que toda implementación use versiones actualizadas, APIs no deprecadas y esté protegida contra vulnerabilidades:
+- **Context7 MCP (`https://mcp.context7.com/mcp`):** consulta en tiempo real documentación versionada de librerías (`resolve-library-id`, `query-docs` o `"use context7"`).
+- **Documentación Oficial y Seguridad:** verificación de breaking changes y escaneo obligatorio con `govulncheck`, `npm audit`, `pip-audit`. Detalles completos en [`references/context7-documentacion-oficial.md`](references/context7-documentacion-oficial.md).
+
+Al trabajar en repositorios con stack CALPIL detectado, **el Modo Pair interactivo se activa automáticamente**. La IA avanza como Driver y **solo interviene con preguntas interactivas de formulario** (`ask_question` en AGY/Gemini o formulario Markdown en otros hosts) ante decisiones de diseño no previstas, ambigüedades de refactorización, tras dos intentos fallidos sin verde en TDD, o para aprobación de la lista de tests y gates.
 
 ## Contexto y memoria del proyecto
 
@@ -400,4 +430,5 @@ Python. Si no hay revisor aislado, puedes revisar localmente con
 | [`references/openai.md`](references/openai.md) | GPT/Codex: instalacion, deteccion y raices |
 | [`references/grok.md`](references/grok.md) | Grok: host, `spawn_subagent` y espera del revisor, lecciones en `~/.grok/skills`, vault |
 | [`references/kimi.md`](references/kimi.md) | Kimi Code: host, plugin, revisor y lecciones |
+| [`references/context7-documentacion-oficial.md`](references/context7-documentacion-oficial.md) | consultar Context7 MCP / docs oficiales para mantener stacks actualizados y auditar seguridad/CVEs |
 | [`references/documentacion.md`](references/documentacion.md) | rol producto (PRD inicial / SDD de arquitectura), su sello y como se sincronizan |

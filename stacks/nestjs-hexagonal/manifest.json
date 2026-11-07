@@ -1,0 +1,62 @@
+{
+  "id": "nestjs-hexagonal",
+  "name": "CALPIL NestJS Hexagonal Stack",
+  "version": "1.0.0",
+  "language": "typescript",
+  "framework": "nestjs",
+  "architecture": "hexagonal",
+  "description": "Stack backend NestJS / TypeScript con arquitectura hexagonal, Prisma ORM, separación de puertos/adaptadores y Swagger OpenAPI.",
+  "detection": {
+    "files_any": [
+      "nest-cli.json"
+    ],
+    "package_deps": [
+      "@nestjs/core",
+      "@nestjs/common"
+    ],
+    "content_matches": {
+      "package.json": ["@nestjs/core"]
+    },
+    "strong_indicators": [
+      "src/domain",
+      "src/application",
+      "src/infrastructure",
+      "src/adapter",
+      "prisma/schema.prisma"
+    ],
+    "anti_indicators": [
+      "angular.json",
+      "next.config.js",
+      "next.config.mjs"
+    ]
+  },
+  "normative": {
+    "rules": [
+      "architecture.md",
+      "dependencies.md",
+      "security.md",
+      "testing.md"
+    ],
+    "skills": [
+      "add-api-endpoint",
+      "add-feature",
+      "add-persistence",
+      "architecture-review",
+      "debug-targeted",
+      "dependency-review",
+      "prepare-release",
+      "prisma-migrate",
+      "security-review",
+      "swagger-contract",
+      "write-tests"
+    ],
+    "architecture_constraints": {
+      "direction_of_dependencies": "adapter/in -> application -> domain; adapter/out -> application/ports/out.",
+      "domain_purity": "domain/** sin dependencias de @nestjs ni persistencia directa.",
+      "composition_root": "Nest Modules en la capa externa cablean puertos con adapters."
+    }
+  },
+  "runners": {
+    "test_command": "npm test"
+  }
+}
