@@ -43,10 +43,12 @@ flowchart TD
 Los documentos de `docs/` complementan y fundamentan las guías operativas que los agentes cargan en tiempo de ejecución:
 
 * [`references/ingenieria-software-gergely-orosz.md`](../references/ingenieria-software-gergely-orosz.md): Ingeniería de software pragmática (Gergely Orosz), estándar Design Docs / RFCs, entrega predecible y revisiones sin nitpicking.
+* [`references/code-complete-mcconnell.md`](../references/code-complete-mcconnell.md): *Code Complete* (Steve McConnell). Lectura cerrada, partes I a VII: construcción, calidad, integración y oficio. El layout lo pone el formateador. El comentario dice el porqué.
 * [`references/microservicios-sam-newman.md`](../references/microservicios-sam-newman.md): Principios de microservicios y sistemas distribuidos (Sam Newman), Database per Service, resiliencia y contratos.
 * [`references/ai-engineering-chip-huyen.md`](../references/ai-engineering-chip-huyen.md): Arquitectura de AI Engineering (Chip Huyen), pipeline de 5 capas, Structured Outputs y mitigación de sesgos en AI-as-a-Judge.
 * [`references/algoritmos-y-estructuras-clrs.md`](../references/algoritmos-y-estructuras-clrs.md): Fundamentos de algoritmos y estructuras de datos (CLRS), análisis asintótico, ordenación topológica y prevención de anti-patrones.
 * [`references/patrones-gof-y-refactoring.md`](../references/patrones-gof-y-refactoring.md): Matriz de patrones GoF por capa hexagonal, regla de los dos sombreros y catálogo de 24 *Code Smells*.
+* [`references/design-patterns-gof.md`](../references/design-patterns-gof.md): *Design Patterns* (Gamma, Helm, Johnson, Vlissides). Capítulo 1 cerrado: cuándo un patrón entra en cada fase. El catálogo no se repite. Capítulos 2 a 6 pendientes en el mismo archivo.
 * [`references/filosofia-diseno-ousterhout.md`](../references/filosofia-diseno-ousterhout.md): Guía de diseño de software de John Ousterhout (*Deep Modules*, combate a la *classitis*, *Design It Twice*).
 * [`references/patrones-datos-ddia.md`](../references/patrones-datos-ddia.md): Patrones de datos distribuidos basados en Martin Kleppmann (Transactional Outbox, OCC, Idempotencia).
 * [`references/comunicacion-ste100-y-prompts.md`](../references/comunicacion-ste100-y-prompts.md): Norma de redacción técnica ASD-STE100 y optimización de prompts de Karpathy.

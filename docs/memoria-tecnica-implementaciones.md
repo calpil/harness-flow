@@ -420,12 +420,35 @@ A partir del análisis del libro *The Software Engineer's Guidebook* (2023) y la
 
 ---
 
-## 15. Estado de Verificación y Métricas de Calidad
+## 15. Hito 13: Construcción de Software, Formato y Estrategia de Errores (Steve McConnell - *Code Complete*)
 
-* **Batería de Pruebas Automatizadas**: 20 tests dedicados de stacks en `tests/test_stack.py` y 86 tests de flujo core ejecutados pasando al 100%:
+A partir del tratado canónico *Code Complete, Second Edition* (Microsoft Press, 2004) de Steve McConnell, se integraron en Harness Flow las 7 partes del ciclo de construcción de software, el gobierno del layout mediante formateadores automáticos, la estrategia arquitectónica de errores y la programación defensiva sin burocracia de gates vacíos.
+
+### Documentación y Referencias:
+* [`references/code-complete-mcconnell.md`](file:///Users/alan/.hermes/skills/software-development/harness-flow/references/code-complete-mcconnell.md): Tratado normativo que cubre las siete partes de *Code Complete* adaptadas a los roles y flujos del arnés (prerrequisitos, diseño de clases y rutinas, datos y control, calidad y pruebas, integración y oficio).
+
+### Principios y Mecanismos Integrados:
+1. **El Formateador del Stack como Único Dueño del Layout**:
+   * En [`references/code-complete-mcconnell.md`](file:///Users/alan/.hermes/skills/software-development/harness-flow/references/code-complete-mcconnell.md), [`SKILL.md`](file:///Users/alan/.hermes/skills/software-development/harness-flow/SKILL.md) y [`agents/revisor.md`](file:///Users/alan/.hermes/skills/software-development/harness-flow/agents/revisor.md): El formateador automático del stack (`gofmt`, `prettier`, `rustfmt`, `dotnet format`, etc.) es el dueño absoluto de indentación, llaves, espacios y ancho de columna. Prohibición estricta de debates cosméticos en el code review.
+2. **Estrategia de Errores del Sistema (Corrección vs Robustez)**:
+   * En [`templates/sdd.md`](file:///Users/alan/.hermes/skills/software-development/harness-flow/templates/sdd.md) (sección `## Componentes`): Incorporación de la directriz STE100 para definir la filosofía de fallos por subsistema:
+     * *Corrección estricta*: Abortar, hacer rollback y fallar explícitamente en módulos de transacciones, dinero, folios y seguridad (prohibido inventar datos o disimular fallas).
+     * *Robustez*: Degradar con fallbacks neutros e inocuos (listas vacías, caché previo) en subsistemas no críticos (UI, feeds, recomendaciones).
+3. **La Barricada Defensiva y Protocolo Observable**:
+   * En [`templates/sdd.md`](file:///Users/alan/.hermes/skills/software-development/harness-flow/templates/sdd.md) y [`agents/revisor.md`](file:///Users/alan/.hermes/skills/software-development/harness-flow/agents/revisor.md): Validación y conversión de datos sucios exclusivamente en los adaptadores/puertos de entrada; el interior asume datos limpios. Estandarización de errores públicos (ej. RFC 7807 `ProblemDetails` o tipos `DomainError`), prohibiendo la fuga de excepciones crudas de infraestructura.
+4. **Checklist Semántico de Datos y Control (Partes III y IV)**:
+   * Variables de un único propósito, ámbito y vida cortos, nombres descriptivos del dominio sin notación húngara obsoleta, tipos exactos (evitar flotantes en cuentas contables), camino feliz en el `if`, bucles con parada comprobada y tablas de decisión frente a escaleras de `if/else`.
+5. **Auditoría Automatizada en el Revisor Aislado**:
+   * En [`agents/revisor.md`](file:///Users/alan/.hermes/skills/software-development/harness-flow/agents/revisor.md): Detección y bloqueo como hallazgo mayor de errores silenciados (*swallowed errors* / `catch` vacíos), ruptura de la barricada defensiva e invención de datos ficticios en dominios de corrección.
+
+---
+
+## 16. Estado de Verificación y Métricas de Calidad
+
+* **Batería de Pruebas Automatizadas**: 280 tests de flujo core, producto, stack, gates, auditoría y documentación ejecutados pasando al 100%:
   ```bash
-  PYTHONPATH=scripts:tests python -m unittest tests/test_stack.py tests/test_estado.py tests/test_spec_acs.py tests/test_review_rondas.py tests/test_auditoria_tres.py tests/test_documentacion.py
-  # Ran 86 tests in 5.248s - OK
+  PYTHONPATH=scripts:tests python3 -m unittest tests/test_producto.py tests/test_stack.py tests/test_estado.py tests/test_spec_acs.py tests/test_review_rondas.py tests/test_auditoria_tres.py tests/test_documentacion.py tests/test_clrs_algoritmos.py tests/test_prd_sdd_flujo.py tests/test_contexto.py tests/test_enmienda.py
+  # Ran 280 tests in 22.478s - OK
   ```
 * **Validación de Habilidades de Agentes**: 100% de las habilidades validadas en todos los stacks con `validate-agent-skills.mjs`.
 * **Verificación de Arquitectura en las 8 Plantillas Reales de CALPIL**:

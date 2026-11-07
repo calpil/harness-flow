@@ -49,6 +49,10 @@ Estado: draft
        - Modela fronteras alineadas a Bounded Contexts y capacidades de negocio; prioriza Monolito Modular si no hay necesidad de distribución.
        - Trazabilidad distribuida: propaga Correlation IDs (`X-Correlation-ID` o W3C `traceparent`) en toda llamada HTTP o evento.
        - Resiliencia distribuida: especifica Circuit Breakers, Bulkheads y Timeouts agresivos en clientes remotos.
+     Estrategia de Errores y Barricada Defensiva (Steve McConnell - ver `references/code-complete-mcconnell.md`):
+       - Declara la filosofía por subsistema: Corrección estricta (abortar, rollback y fallo explícito en transacciones, dinero, folios, seguridad; prohibido inventar datos) vs Robustez (tolerar fallos con fallbacks neutros e inocuos en UI, feeds, analítica).
+       - Diseña la Barricada en puertos/adaptadores: valida y convierte la entrada externa sucia al entrar; el interior asume datos limpios y usa aserciones solo para bugs internos de desarrollo.
+       - Protocolo observable: estandariza el error de salida hacia clientes (ej. RFC 7807 ProblemDetails o tipos DomainError de dominio; prohibido filtrar excepciones crudas de infraestructura).
      Diseño simple (YAGNI & Anti-Speculative Generality): no agregues capas, repositorios, factories ni
      abstracciones "por si acaso" para un futuro hipotético. Todo patrón debe justificarse por necesidad real. -->
 

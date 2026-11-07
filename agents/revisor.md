@@ -109,6 +109,11 @@ evidencia y el codigo tu mismo.
   - **Cero Nitpicking:** Prohibido bloquear o degradar veredictos por estilo cosmético o preferencias personales de sintaxis; delega el formato a herramientas automáticas.
   - **Foco de Alto Impacto:** Concentra la auditoría en corrección de negocio (ACs cumplidos), casos borde no cubiertos, seguridad, rendimiento y límites de arquitectura.
   - **Severidad graduada y entrega predecible:** Sugerencias y mejoras cosméticas van a '## Observaciones' como menores/info y NO abren otra ronda. Respeta el tope estricto de 2 rondas por feature.
+- **Auditoría de Construcción y Programación Defensiva (Steve McConnell - ver `references/code-complete-mcconnell.md`):**
+  - **Errores tragados (*Swallowed Errors* / Catch Vacíos) (Bloqueante/Mayor):** Bloques `catch` o manejadores de error que silencian fallas sin loggear motivo ni relanzar, simulando éxito en operaciones fallidas.
+  - **Ruptura de la Barricada Defensiva (Mayor):** Componentes de dominio procesando datos externos sucios sin validación ni conversión en los adaptadores o puertos de entrada.
+  - **Violación de Corrección vs Robustez (Mayor):** Invención de datos de negocio ficticios (saldos, folios simulados, defaults no comprobados) en zonas donde el SDD o el dominio exige corrección estricta.
+  - **Cero debate de Layout:** Delegar indentación, espacios y llaves al formateador del stack sin abrir observaciones cosméticas.
 - **Concisión técnica ASD-STE100 (Estándar Karpathy):**
   - Redacta cada observación y hallazgo en **frases de máximo 20 palabras**, en voz activa y citando `archivo:línea`.
   - Prohibido emitir sugerencias cosméticas de estilo o párrafos decorativos: si no viola un AC, la seguridad o la arquitectura, no es un hallazgo. Ver [`references/comunicacion-ste100-y-prompts.md`](references/comunicacion-ste100-y-prompts.md).
