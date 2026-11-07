@@ -31,8 +31,9 @@ flowchart TD
     H9["<b>Hito 9: Algoritmos y Estructuras CLRS</b><br/>Complejidad asintótica, DAG de features (DFS 3-color/Kahn) y prevención de N+1 y O(N^2)"]
     H10["<b>Hito 10: AI Engineering (Chip Huyen)</b><br/>Pipeline 5 capas, Structured Outputs, Golden Datasets, Bounded Reflection y AI-as-a-Judge"]
     H11["<b>Hito 11: Microservicios y Sistemas Distribuidos (Sam Newman)</b><br/>Database per Service, Monolith-First, comunicación síncrona/EDA bajo YAGNI, resiliencia y Expand-Contract"]
+    H12["<b>Hito 12: Ingeniería Pragmática y Design Docs (Gergely Orosz)</b><br/>Estándar RFC/Design Docs, entrega predecible de 1-3 días, code reviews sin nitpicking y blameless post-mortems"]
 
-    H1 --> H2 --> H3 --> H4 --> H5 --> H6 --> H7 --> H8 --> H9 --> H10 --> H11
+    H1 --> H2 --> H3 --> H4 --> H5 --> H6 --> H7 --> H8 --> H9 --> H10 --> H11 --> H12
 ```
 
 ---
@@ -41,6 +42,7 @@ flowchart TD
 
 Los documentos de `docs/` complementan y fundamentan las guías operativas que los agentes cargan en tiempo de ejecución:
 
+* [`references/ingenieria-software-gergely-orosz.md`](../references/ingenieria-software-gergely-orosz.md): Ingeniería de software pragmática (Gergely Orosz), estándar Design Docs / RFCs, entrega predecible y revisiones sin nitpicking.
 * [`references/microservicios-sam-newman.md`](../references/microservicios-sam-newman.md): Principios de microservicios y sistemas distribuidos (Sam Newman), Database per Service, resiliencia y contratos.
 * [`references/ai-engineering-chip-huyen.md`](../references/ai-engineering-chip-huyen.md): Arquitectura de AI Engineering (Chip Huyen), pipeline de 5 capas, Structured Outputs y mitigación de sesgos en AI-as-a-Judge.
 * [`references/algoritmos-y-estructuras-clrs.md`](../references/algoritmos-y-estructuras-clrs.md): Fundamentos de algoritmos y estructuras de datos (CLRS), análisis asintótico, ordenación topológica y prevención de anti-patrones.

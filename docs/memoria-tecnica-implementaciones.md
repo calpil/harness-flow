@@ -393,7 +393,34 @@ A partir del análisis del tratado canónico *Building Microservices: Designing 
 
 ---
 
-## 14. Estado de Verificación y Métricas de Calidad
+## 14. Hito 12: Ingeniería de Software Pragmática y Design Docs (Gergely Orosz)
+
+A partir del análisis del libro *The Software Engineer's Guidebook* (2023) y las publicaciones de *The Pragmatic Engineer* de Gergely Orosz, analizados por BettaTech (*"La habilidad más importante de un Ingeniero no es programar"*), se formalizaron los principios de ingeniería de software madura, entrega predecible y revisiones de código de alto impacto en Harness Flow.
+
+### Documentación y Referencias:
+* [`references/ingenieria-software-gergely-orosz.md`](file:///Users/alan/.hermes/skills/software-development/harness-flow/references/ingenieria-software-gergely-orosz.md): Tratado normativo de madurez técnica, estándar de Design Docs / RFCs, entrega predecible en incrementos de 1 a 3 días, disciplina de code review sin nitpicking y gestión de deuda técnica.
+
+### Principios y Mecanismos Integrados:
+1. **Estándar de Design Docs (RFCs de Big Tech) en PRD y SDD**:
+   * En [`templates/prd.md`](file:///Users/alan/.hermes/skills/software-development/harness-flow/templates/prd.md) y [`templates/sdd.md`](file:///Users/alan/.hermes/skills/software-development/harness-flow/templates/sdd.md):
+     * Formalización de Objetivos (Goals) asociados a métricas observables de negocio o experiencia.
+     * Definición taxativa de No-Objetivos (Non-Goals) para neutralizar el *scope creep*.
+     * Inclusión obligatoria de *Alternatives Considered* (Alternativas Evaluadas y Descartadas) en las decisiones técnicas $D-n$.
+2. **Entrega Predecible (*Predictable Delivery*) en Rebanadas de 1 a 3 Días**:
+   * En [`templates/prd.md`](file:///Users/alan/.hermes/skills/software-development/harness-flow/templates/prd.md) y [`references/vertical-slice.md`](file:///Users/alan/.hermes/skills/software-development/harness-flow/references/vertical-slice.md): Toda candidata `F-n` se acota a un incremento entregable en máximo 3 días con un *Walking Skeleton* (`F-1`) que valida la integración completa desde el día uno.
+3. **Gestión Pragmática de Deuda Técnica (Regla del Boy Scout)**:
+   * En [`agents/implementer.md`](file:///Users/alan/.hermes/skills/software-development/harness-flow/agents/implementer.md): Sustitución del mito de los "sprints de refactorización" por el pago continuo y gradual de la deuda técnica (inversión estratégica del 10%-20% en cada ciclo TDD).
+4. **Disciplina de Code Review Pragmático (Sin Nitpicking)**:
+   * En [`agents/revisor.md`](file:///Users/alan/.hermes/skills/software-development/harness-flow/agents/revisor.md) y [`scripts/revision.py`](file:///Users/alan/.hermes/skills/software-development/harness-flow/scripts/revision.py):
+     * Prohibición del *nitpicking* cosmético de formato y estilo (delegado a linters automáticos).
+     * Enfoque estricto en corrección de negocio (ACs), límites de arquitectura, seguridad, casos borde y rendimiento.
+     * Severidad graduada (Bloqueante vs Menor) y respeto estricto del límite de 2 rondas por feature para evitar fricción y parálisis.
+5. **Cultura de Post-Mortems Sin Culpa (*Blameless Post-Mortems*)**:
+   * Institucionalización de lecciones aprendidas mediante [`scripts/leccion.py`](file:///Users/alan/.hermes/skills/software-development/harness-flow/scripts/leccion.py) y [`references/lecciones-del-arnes.md`](file:///Users/alan/.hermes/skills/software-development/harness-flow/references/lecciones-del-arnes.md) para blindar el sistema ante fallos recurrentes.
+
+---
+
+## 15. Estado de Verificación y Métricas de Calidad
 
 * **Batería de Pruebas Automatizadas**: 20 tests dedicados de stacks en `tests/test_stack.py` y 86 tests de flujo core ejecutados pasando al 100%:
   ```bash

@@ -58,6 +58,9 @@ Despues:
        - O1: toda venta cerrada recibe su llamada en menos de 5 segundos
        - O2: reversible: interruptor por cliente, se apaga en 1 clic
        - NO1: no vende ni reagenda nada, solo agradece
+     Estándar RFC / Design Docs (Gergely Orosz - ver `references/ingenieria-software-gergely-orosz.md`):
+       - Los Objetivos (Goals) deben asociarse a métricas observables de negocio o experiencia.
+       - Los No-Objetivos (Non-Goals) delimitan taxativamente el alcance para erradicar el *scope creep*.
      Componentes de Inteligencia Artificial / LLM (Chip Huyen - ver `references/ai-engineering-chip-huyen.md`):
        - Prohibidos requisitos vagos como "el agente responde de forma inteligente".
        - Define Contratos de Incertidumbre y SLAs cuantificables (ej. "clasificación con >= 95% de precisión; fallback determinista si confianza < 0.85").
@@ -114,6 +117,7 @@ Despues:
        - Declara bloqueos con (requiere: F-1, F-2) solo cuando una historia no tiene sentido sin otra.
        - Para features de negocio con IA o predicción (Chip Huyen - ver `references/ai-engineering-chip-huyen.md`):
          corta verticalmente por activo o caso de uso (ej. F-1: Walking skeleton bombas con baseline y JSON Schema; F-2: Pozos de agua; F-3: Ascensores; F-4: Feedback técnico Human-in-the-Loop), NUNCA por tareas de ML horizontales ("entrenar modelo", "hacer EDA").
+       - Entrega predecible (Gergely Orosz): cada candidata F-n debe representar un incremento acotado de 1 a 3 días de trabajo; si supera ese horizonte, divídela en slices verticales más pequeños.
      Cada una entra al backlog con
        add.py --name "<nombre>" --prd docs/prd/PRD-master.md
      y recibe su spec con AC en el rol leader. -->

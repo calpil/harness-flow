@@ -227,6 +227,7 @@ Reglas:
 - Audita algoritmos y estructuras de datos (CLRS): detecta y clasifica como BLOQUEANTE consultas N+1 (queries de base de datos o HTTP en bucles sin batching), como MAYOR búsquedas lineales anidadas O(N^2) sobre colecciones no indexadas y concatenación iterativa de strings en bucles sin buffers contiguos (StringBuilder).
 - Audita ingeniería de IA y modelos fundacionales (Chip Huyen): detecta y clasifica como BLOQUEANTE llamadas a APIs de LLMs sin timeouts ni reintentos resilientes (backoff + jitter), o loops agénticos/de auto-corrección sin límite estricto de <= 2 iteraciones; clasifica como MAYOR el parsing de texto libre en lugar de Structured Outputs (JSON Schema / Tool Calling) y la concatenación directa de inputs de usuario en prompts sin delimitadores semánticos.
 - Audita arquitectura de microservicios (Sam Newman): detecta y clasifica como BLOQUEANTE acceso a bases de datos de otros servicios (violación de Database per Service), llamadas remotas sin timeouts ni circuit breakers, y breaking changes sin versión ni Expand-Contract; clasifica como MAYOR la omisión de correlation IDs (X-Correlation-ID o traceparent) en llamadas remotas o eventos.
+- Aplica Code Review pragmático (Gergely Orosz): cero nitpicking de formato o estilo cosmético; enfoca la auditoría en corrección de negocio (ACs cumplidos), casos borde, seguridad y arquitectura; sugerencias van a '## Observaciones' y NO abren otra ronda.
 - No modifiques codigo. Solo lees y escribes {rp.name}.
 """)
     # Normativa del stack tecnologico (CALPIL)

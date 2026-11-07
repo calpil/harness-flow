@@ -81,6 +81,8 @@ Estado: draft
      o de estructuras de datos (CLRS), incluye la complejidad asintótica en el trade-off (ej. O(1) vs O(N)).
      Para componentes de IA (Chip Huyen), incluye el trade-off de modelos (Model Routing: costo vs latencia vs inteligencia), o RAG vs Fine-tuning.
      Para arquitectura de servicios (Sam Newman), documenta el trade-off de Monolito vs Microservicios, y Síncrono (REST/gRPC) vs Asíncrono (EDA/colas).
+     Estándar RFC / Design Docs (Gergely Orosz - ver `references/ingenieria-software-gergely-orosz.md`):
+       - Toda decisión técnica relevante se formaliza aquí como un ADR conciso. Si se asume deuda técnica deliberada (atajo temporal), documéntala con su justificación y plan de pago.
      Una decisión sin alternativa descartada no es una decisión, es una descripción. El nombre
      es para que el spec de cada feature la cite ("decisiones que aplica: D2").
      Sin `Descartada:` (o `Descartado:`) con texto, aprobar se niega.
