@@ -78,6 +78,12 @@ pasa ademas el `effort` que eligio para esa tarea, y ese le gana al del
 frontmatter. La tabla por rol, la banda de seleccion y lo que quedo comprobado
 estan en [`modelos.md`](modelos.md).
 
+**Modo Pair interactivo (`--pair`)**: `/harness-flow:implementar <id> --pair`
+no lanza al subagente `implementer`: la sesión principal de Claude actúa
+directamente como Driver y el humano como Navigator en el worktree, acordando la
+lista de tests, avanzando un test a la vez (`Red -> Green -> Refactor`) y
+pausando tras cada micro-paso según [`vertical-slice.md`](vertical-slice.md).
+
 ## `$PY` y `$H` no sobreviven entre llamadas Bash
 
 Esta es la diferencia operativa real con Hermes. En Claude Code **cada llamada a

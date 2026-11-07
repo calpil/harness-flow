@@ -54,13 +54,13 @@ Las lecciones aprendidas son memoria del usuario, no del agente donde se descubr
 
 El arnés gestiona el modelo y el esfuerzo cognitivo según el proveedor del agente (ver detalles en [`references/modelos.md`](references/modelos.md)):
 
-| Host / Proveedor | Rol 0 (Producto) y Rol 1 (Leader) | Rol 2 (Implementer) | Rol 3 (Reviewer Aislado) | Rol 4 (Cierre) |
-| :--- | :--- | :--- | :--- | :--- |
-| **Claude 5.5** (Claude Code / Hermes) | `claude-opus-5-5` (`xhigh`) | `claude-sonnet-5-5` (`high` / `xhigh`) | `claude-opus-5-5` (`xhigh` / `high` seg.) | `claude-opus-5-5` (`xhigh`) |
-| **OpenAI GPT-6** (Codex / Hermes) | `gpt-6-astra` (`medium` / `high`) | `gpt-6-astra` (`medium` / `high`) | `gpt-6-astra` (`high`) | `gpt-6-astra` (`medium`) |
-| **Gemini 4 Argon** (AGY / Hermes) | `gemini-4-argon` (`high`) | `gemini-4-argon` (`high`) | `gemini-4-argon` (`high`, subagente `self`) | `gemini-4-argon` (`high`) |
-| **Grok** | Modelo de sesión | Sesión (`--pair` o autónomo) | Subagente `spawn_subagent` (espera id) | Gates locales |
-| **Kimi Code** | Sesión principal | Sesión (`--pair` o autónomo) | Subagente `Agent` (`subagent_type: revisor`) | Gates locales |
+| Host / Proveedor | Rol 0 (Producto) y Rol 1 (Leader) | Rol 2 (Implementer) | Rol 3 (Reviewer Aislado) | Rol 4 (Cierre) | Estado / Rutinas |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Claude 5.5** (Claude Code / Hermes) | `claude-opus-5-5` (`xhigh`) | `claude-sonnet-5-5` (`high` / `xhigh`) | `claude-opus-5-5` (`xhigh` / `high` seg.) | `claude-opus-5-5` (`xhigh`) | `claude-haiku-5-5` (`medium`) |
+| **OpenAI GPT-6** (Codex / Hermes) | `gpt-6-astra` (`medium` / `high`) | `gpt-6-astra` o `gpt-6.1-sol` (`medium` / `high`) | `gpt-6.1-sol` (`xhigh` / `high` seg.) | `gpt-6-luna` (`medium`) | `gpt-6-luna` (`low` / `medium`) |
+| **Gemini 4 Argon** (AGY / Hermes) | `gemini-4-argon` (`high`) | `gemini-4-argon` (`high` / `medium` pair) | `gemini-4-argon` (`high`, subagente `self`) | `gemini-4-argon` (`medium`) | `gemini-4-argon` o Flash (`medium`) |
+| **Grok** | Modelo de sesión | Sesión (`--pair` o autónomo) | Subagente `spawn_subagent` (espera id) | Gates locales | Gates locales |
+| **Kimi Code** | Sesión principal | Sesión (`--pair` o autónomo) | Subagente `Agent` (`subagent_type: revisor`) | Gates locales | Gates locales |
 
 ---
 

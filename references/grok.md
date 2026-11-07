@@ -50,6 +50,25 @@ exporta `H` ya resuelto y `HARNESS_HOST=grok`.
 El interprete es el venv neutro `~/.harness-flow/venv`, el mismo de Claude y de
 GPT. `psycopg` solo hace falta para el Memory Hub.
 
+## Implementer y Modo Pair (--pair)
+
+En Grok el Rol 2 se divide según la modalidad:
+
+1. **Modo Pair interactivo (`--pair`)**: corre en la **sesión principal de Grok**
+   (Driver = Grok, Navigator = humano). **NUNCA uses `spawn_subagent` aquí**:
+   el subagente rompería la interactividad del Navigator. Grok utiliza
+   `run_terminal_command`, `write` y `search_replace` directamente en el worktree
+   de la feature (`worktree.py start --feature <id>`), acuerda la lista de tests
+   antes de empezar, ejecuta `1 test -> Red -> código mínimo -> Green`, y pausa
+   con el micro-mensaje del Navigator (`✅ Pasa "<test>"... ¿Seguimos?`). Respeta
+   las 5 paradas XP de `references/vertical-slice.md`.
+2. **Modo Delegado (autónomo)**: Grok ejecuta la implementación en el worktree
+   hasta dejar la unidad en verde y el acta `docs/impl-<id>.md`.
+
+Una vez concluida la implementación y commiteado el trabajo en la rama de la
+feature, se pasa al Rol 3 (Revisor), donde **ahí sí** es obligatorio el subagente
+amnésico vía `spawn_subagent`.
+
 ## Revisor
 
 La herramienta es `spawn_subagent`. El hijo arranca sin el historial de quien

@@ -17,10 +17,12 @@ Kimi Code (2.x) descubre este `SKILL.md` como skill de usuario o de proyecto:
 del CLI (`kimi plugins` responde "unknown command"). Tambien se puede lanzar
 desde fuera con `kimi -p "/plugins install <ruta-del-clone>"`.
 
-Con el plugin habilitado, `agents/revisor.md` queda registrado como agente y la
-tool `Agent` acepta `subagent_type: "revisor"`. El frontmatter
+Con el plugin habilitado, `agents/revisor.md` y `agents/implementer.md` quedan
+registrados como agentes y la tool `Agent` acepta `subagent_type: "revisor"` e
+`implementer`. El frontmatter de `revisor.md`
 (`model: claude-opus-5-5`, `tools: Read, Grep, Glob, Bash, Write, mcp__codebase-memory-mcp__*`)
-carga sin romper: Kimi ignora `model` (campo de Claude Code) y acepta `tools` separado por comas.
+y de `implementer.md` cargan sin romper: Kimi ignora `model` (campo de Claude Code)
+y acepta `tools` separado por comas.
 
 Los `commands/*.md` no se registran: usan `${CLAUDE_PLUGIN_ROOT}`, que Kimi no
 expande, y `kimi.plugin.json` no declara `commands` a proposito. El flujo se
@@ -51,6 +53,24 @@ python3 <skill>/scripts/entorno.py --host kimi --shell
 
 El interprete es el venv neutro `~/.harness-flow/venv`, el mismo de Claude y de
 GPT. `psycopg` solo hace falta para el Memory Hub.
+
+## Implementer y Modo Pair (--pair)
+
+En Kimi Code hay dos caminos para implementar:
+
+1. **Modo Pair interactivo (`--pair`)**: corre en la **sesión principal de Kimi**
+   (Driver = Kimi, Navigator = humano). No uses subagentes aquí: Kimi interactúa
+   en el TUI sobre el worktree de la feature, acuerda la lista de tests antes de
+   tocar código, y avanza `1 test -> Red -> código mínimo -> Green`, pausando en
+   cada micro-ciclo con el micro-mensaje (`✅ Pasa "<test>"... ¿Seguimos?`) y
+   respetando las 5 paradas XP de `references/vertical-slice.md`.
+2. **Modo Delegado (autónomo)**: con el plugin instalado, usa la tool `Agent` con
+   `subagent_type: "implementer"`, pasando el prompt con el spec, el worktree y la
+   salida de `contexto.py brief`. Sin plugin, puedes correr la sesión delegada con
+   `kimi -p --agent-file <skill>/agents/implementer.md`.
+
+Al terminar la implementación (en pair o delegada) y registrar `docs/impl-<id>.md`,
+pasa al Rol 3 (Revisor aislado) con amnesia limpia.
 
 ## Revisor
 

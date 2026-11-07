@@ -76,6 +76,25 @@ migracion, concurrencia o requisitos contradictorios. La skill decide y anuncia
 el motivo. Criterios y forma de aplicar el nivel en Codex y Hermes:
 [`modelos.md`](modelos.md), seccion "OpenAI en Codex y Hermes".
 
+## Implementer y Modo Pair (--pair)
+
+En OpenAI (Codex CLI y ChatGPT):
+
+1. **Modo Pair interactivo (`--pair`)**: corre en la **sesión interactiva principal**
+   (Driver = Codex, Navigator = humano). No utilices subagentes desatendidos
+   ni `codex exec` aquí: la sesión de Codex opera directamente sobre el worktree
+   (`worktree.py start --feature <id>`), propone la lista de tests antes de editar
+   código, y ejecuta el bucle `1 test -> Red -> código mínimo -> Green`, pausando
+   tras cada micro-ciclo con el mensaje de consulta al Navigator. Usa `gpt-6-astra`
+   o `gpt-6.1-sol` con `medium` effort para mantener respuestas ágiles sin pausas
+   largas de razonamiento.
+2. **Modo Delegado (autónomo)**: si se implementa de forma desatendida, corre en
+   el worktree con `--sandbox workspace-write` hasta dejar la evidencia en
+   `docs/impl-<id>.md`.
+
+Al completar los tests y el commit en la rama de la feature, pasa al Rol 3
+(Revisor independiente) con contexto limpio y amnesia deliberada.
+
 ## Raices de lecciones
 
 Hay que separar dos cosas: donde NACE una leccion y donde se la BUSCA.

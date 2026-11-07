@@ -12,21 +12,22 @@ Leader segun la tarea; no necesita confirmacion para elegir entre `medium` y
 | Coordinador | `gpt-6.1-sol` | `xhigh` |
 | 0 Producto: PRD/SDD | `gpt-6-astra` | Automatico: `medium` o `high` |
 | 1 Leader: spec y AC | `gpt-6-astra` | Automatico: `medium` o `high` |
-| 2 Implementer | `gpt-6.1-sol` | `xhigh` |
-| 3 Revisor independiente | `gpt-6.1-sol` | `xhigh` |
-| 4 Cierre rutinario | Gates Python y `gpt-6-luna` para interpretar resultados | `xhigh` |
-| Estado, contexto y documentacion rutinaria | `gpt-6-luna` | `xhigh` |
+| 2 Implementer | `gpt-6-astra` o `gpt-6.1-sol` | Automatico: `medium` o `high` (`xhigh` ante riesgo critico) |
+| 3 Revisor independiente | `gpt-6.1-sol` | `xhigh` (ronda 1) / `high` (seguimiento) |
+| 4 Cierre rutinario | Gates Python y `gpt-6-luna` | `medium` o `low` |
+| Estado, contexto y documentacion rutinaria | `gpt-6-luna` | `low` o `medium` |
 
-### Seleccion automatica para Producto y Leader
+### Seleccion automatica para Producto, Leader, Implementer y Revisor
 
 Elige por el trabajo real de **cada rol**, a partir de la peticion, el brief,
 el impacto y las lecciones ya disponibles. No hace falta una auditoria nueva
 para seleccionar el nivel.
 
-- **`medium`, por defecto:** requisitos claros, patrones conocidos y cambios
-  cuyo alcance y criterios de aceptacion pueden definirse sin resolver riesgos
-  de los siguientes grupos.
-- **`high` cuando haya un riesgo concreto que ese rol deba analizar:**
+- **`medium`, por defecto:** para Producto, Leader e Implementer cuando los
+  requisitos y patrones son conocidos, sin riesgos de arquitectura entre repos,
+  concurrencia ni migraciones irreversibles. En Implementer, `medium` mantiene
+  la agilidad del ciclo TDD sin quemar presupuesto excesivo de razonamiento.
+- **`high` cuando haya un riesgo concreto que ese rol deba resolver:**
   - Arquitectura entre varios repos con cambios coordinados de contratos,
     compatibilidad o secuencia de despliegue.
   - Migraciones de datos con riesgo de perdida, irreversibilidad, backfill o
@@ -34,6 +35,17 @@ para seleccionar el nivel.
   - Concurrencia que exige decidir sobre consistencia, transacciones, locks,
     idempotencia, carreras o reintentos.
   - Requisitos contradictorios que exigen comparar alternativas y sus efectos.
+  - En Revisor: para la **segunda ronda (seguimiento)** donde sólo se
+    verifican los AC y los hallazgos bloqueantes o mayores ya subsanados.
+- **`xhigh` reservado para:**
+  - **Revisor en primera ronda:** auditoría inicial profunda y exhaustiva de
+    todos los AC y de la integridad de los tests.
+  - **Implementer ante riesgos críticos:** problemas complejos de consistencia
+    distribuida, transacciones críticas o riesgo directo de pérdida de datos.
+- **`low` o `medium` para tareas rutinarias:** Cierre rutinario, `estado.py`,
+  contexto y sincronización de documentación. Los cálculos, conteos y validaciones
+  los resuelven determinísticamente los scripts Python; no requieren reasoning
+  extendido.
 
 Mencionar varios repos, una migracion o concurrencia no basta: identifica la
 decision y su riesgo. Un PRD conocido puede usar `medium` aunque el SDD necesite
@@ -110,8 +122,9 @@ acepta esfuerzo.
 | 4 Cierre | `claude-opus-5-5` | `commands/cierre.md` | Merge irreversible y lectura de rojos; pocos tokens, no se ahorra ahi |
 | Estado | `claude-haiku-5-5` | `commands/estado.md` | Lee y cuenta al arrancar, con el contexto aun corto |
 
-Los tres aceptan `low` a `max`. Opus 5.5 y Haiku 5.5 arrancan en `medium` si
-nadie fija el nivel: el `xhigh` va explicito en cada frontmatter.
+Los tres aceptan `low` a `max`. En Producto, Leader, Revisor y Cierre va `xhigh` como
+red de seguridad en sus frontmatters; en `estado.md` se fija `medium` sobre Haiku 5.5
+para dar un arranque instantáneo sin esperas de reasoning innecesarias.
 
 ### Seleccion automatica: implementer y revisor
 
@@ -287,9 +300,10 @@ Antigravity o `gemini-4-argon` en Hermes), todos los roles usan Argon en nivel
 | --- | --- | --- | --- | --- |
 | 0 Producto: PRD/SDD | `gemini-4-argon` | `high` | Sesion principal (`Gemini 4 Argon (High)`) | Sesion o `--provider gemini -m gemini-4-argon` |
 | 1 Leader: spec y AC | `gemini-4-argon` | `high` | Sesion principal | Sesion |
-| 2 Implementer | `gemini-4-argon` | `high` | Sesion principal o `invoke_subagent` (`TypeName: "self"`, `Model: "inherit"`) | Sesion o `delegate_task` |
+| 2 Implementer | `gemini-4-argon` | `high` (o `medium` en `--pair`) | Sesion principal o `invoke_subagent` (`TypeName: "self"`, `Model: "inherit"`) | Sesion o `delegate_task` |
 | 3 Revisor independiente | `gemini-4-argon` | `high` | `invoke_subagent` (`TypeName: "self"`, `Model: "inherit"`, `Workspace: "inherit"`) | `delegate_task` con el briefing en `context` |
-| 4 Cierre y Estado | `gemini-4-argon` | `high` | Gates Python + sesion principal | Gates Python + sesion principal |
+| 4 Cierre | `gemini-4-argon` | `medium` | Gates Python + sesion principal | Gates Python + sesion principal |
+| Estado y rutinas | `gemini-4-argon` o Flash | `low` o `medium` | Gates Python + sesion principal | Gates Python + sesion principal |
 
 ### En AGY / Antigravity (`agy`)
 
