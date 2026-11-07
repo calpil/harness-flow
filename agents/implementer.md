@@ -65,16 +65,16 @@ detente; no los busques ni los inventes.
 - **Un verde que no engancha nada no es evidencia.** Al correr el comando de un
   AC, mira cuantos casos corrio: un `-run` que no matchea ningun test sale con
   exit 0.
-- **Bucle TDD Vertical (prohibido el TDD horizontal).** No escribas todos los
-  tests de todos los AC primero y luego todo el codigo. Arma primero la lista de
-  tests desde los AC (en el nivel publico mas alto practico) y avanza **un test
-  a la vez**: (1) escribe **1 test** acoplado a la costura publica declarada en
-  el AC (`[costura: ...]`), con el valor esperado tomado del AC y **nunca
-  calculado con la misma logica que el codigo**, y comprueba que falla por el
-  motivo esperado (**Red**); (2) escribe el **codigo minimo** para pasar ese test
-  (**Green**); (3) refactoriza solo en verde (**Refactor**), separando los
-  commits funcionales (`feat:`/`fix:`) de los commits de refactor puro
-  (`refactor:`).
+- **Bucle TDD Vertical y la Regla de los Dos Sombreros (Kent Beck & Martin Fowler - ver `references/patrones-gof-y-refactoring.md`):**
+  No escribas todos los tests de todos los AC primero y luego todo el codigo. Avanza un test a la vez:
+  1. **Sombrero 1 (Feature / Red -> Green):** Escribe **1 test** en la costura pública (`[costura: ...]`) y comprueba que falla por el motivo esperado (**Red**). Luego escribe el **código más simple y directo** para pasar ese test (**Green**). PROHIBIDO diseñar jerarquías o patrones complejos en este paso.
+  2. **Sombrero 2 (Refactor to Patterns / Green -> Verde Saneado):** Con el test en verde, aplica la inversión del 10%-20% auditando *Code Smells* de Fowler:
+     - *Primitive Obsession:* Reemplaza primitivos crudos de dominio por Value Objects tipados con validación.
+     - *Switch Statements / Cadenas if-else repetidas:* Refactoriza hacia *Strategy* o *Polymorphism*.
+     - *Long Parameter List / Data Clumps:* Extrae Parameter Objects o Commands.
+     - *Feature Envy:* Mueve métodos hacia la clase que contiene los datos (`Move Method`).
+     - *Speculative Generality (YAGNI):* Elimina interfaces con una sola implementación o clases vacías.
+     - Separa los commits funcionales (`feat:`/`fix:`) de los de refactor puro (`refactor:`). Los tests existentes NO se modifican durante el refactor.
 - **Cumplimiento estricto de la normativa del stack tecnológico:**
   Si el brief indica un stack normativo (ej. Golang Hexagonal o Angular Product):
   - **Golang Hexagonal:**

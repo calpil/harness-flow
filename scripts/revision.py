@@ -223,6 +223,7 @@ Reglas:
 - Audita la integridad de los tests en el diff: si se borro, salto (skip) o debilito un test existente para forzar el verde, o si el test es tautologico (recalcula el valor esperado con la misma logica del codigo en vez de contrastar contra el AC en la costura publica), reportalo como hallazgo mayor/bloqueante.
 - Audita patrones de datos y fiabilidad distribuida (DDIA): detecta y clasifica como BLOQUEANTE o MAYOR el anti-patron de doble escritura (Dual-Write: guardar en BD y luego llamar a broker o API externa fuera de un Transactional Outbox atómico en la misma TX), updates concurrentes sin control optimista (OCC con version) o mutaciones de red no idempotentes.
 - Audita la filosofía de diseño (Ousterhout): detecta y clasifica como MAYOR métodos pass-through que solo reenvían llamadas sin abstraer, fuga de información entre capas (Information Leakage) o sobre-fragmentación artificial (classitis).
+- Audita Code Smells y patrones GoF (Martin Fowler & GoF): detecta y clasifica como MAYOR la obsesión con primitivos en entidades core (Primitive Obsession: IDs o importes como strings/ints sin Value Objects), acoplamiento disperso (Shotgun Surgery), envidia de atributos ajenos (Feature Envy), abstracciones prematuras no pedidas por los AC (Speculative Generality) o intermediarios vacíos (Middle Man).
 - No modifiques codigo. Solo lees y escribes {rp.name}.
 """)
     # Normativa del stack tecnologico (CALPIL)

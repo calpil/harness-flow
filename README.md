@@ -60,6 +60,7 @@ Las lecciones aprendidas son memoria del usuario, no del agente donde se descubr
 - **Principios de Karpathy y Norma Aeroespacial ASD-STE100**: Incorpora comunicación de alta densidad sin sobre-restricción (*over-constraining*), frases de máximo 20 palabras en voz activa, diagramas Mermaid obligatorios en SDD, criterios AC-n atómicos y micro-reportes telegráficos de pantalla de instrumentos en Pair Mode. Ver [`references/comunicacion-ste100-y-prompts.md`](references/comunicacion-ste100-y-prompts.md) y [`docs/principios-karpathy-ste100-harness-flow.md`](docs/principios-karpathy-ste100-harness-flow.md).
 - **Filosofía de Diseño de Software de John Ousterhout**: Adopta el combate sistemático de la complejidad (*A Philosophy of Software Design*): módulos profundos (*Deep Modules*) con interfaces compactas, erradicación de la sobre-fragmentación (*classitis* y micro-funciones de 3 líneas de Clean Code), ocultamiento de información (*information hiding*), absorción de la dificultad técnica hacia abajo (*pull complexity downwards*), diseño de dos alternativas por decisión (*design it twice*) y definición de errores fuera de la existencia. Ver [`references/filosofia-diseno-ousterhout.md`](references/filosofia-diseno-ousterhout.md).
 - **Patrones de Datos Confiables y Escalables (DDIA - Martin Kleppmann)**: Prevención de *dual-write* mediante Transactional Outbox atómico en la misma TX ACID, control de concurrencia optimista (OCC) con columna `version`, mutaciones de red con `Idempotency-Key` y evolución de esquemas sin downtime (*Expand-Contract*). Ver [`references/patrones-datos-ddia.md`](references/patrones-datos-ddia.md).
+- **Patrones GoF y Refactorización Disciplinada (Martin Fowler & Gang of Four)**: Integra los 23 patrones clásicos de GoF en capas de Arquitectura Hexagonal (Adapter en puertos, Strategy/State en dominio, Decorator/Proxy en cross-cutting, Factory en Composition Root), combinados con la regla de los "Dos Sombreros" de Kent Beck (feature vs refactor) y el saneamiento sistemático de los 24 *Code Smells* de Fowler (*Primitive Obsession*, *Shotgun Surgery*, *Feature Envy*, *Speculative Generality*, *Middle Man*). Ver [`references/patrones-gof-y-refactoring.md`](references/patrones-gof-y-refactoring.md).
 
 ---
 
@@ -255,7 +256,8 @@ harness-flow/
 │   ├── context7-documentacion-oficial.md <- Context7 MCP, documentación oficial y seguridad
 │   ├── comunicacion-ste100-y-prompts.md <- Principios Karpathy, norma ASD-STE100 y micro-reportes
 │   ├── patrones-datos-ddia.md        <- Patrones DDIA: Transactional Outbox, Idempotencia y OCC
-│   └── filosofia-diseno-ousterhout.md <- Filosofía de diseño Ousterhout: Deep Modules y anti-classitis
+│   ├── filosofia-diseno-ousterhout.md <- Filosofía de diseño Ousterhout: Deep Modules y anti-classitis
+│   └── patrones-gof-y-refactoring.md <- Patrones GoF, regla de dos sombreros y catálogo Code Smells
 └── tests/                            <- Suite exhaustiva de tests unitarios y de regresión
 ```
 

@@ -440,4 +440,5 @@ Python. Si no hay revisor aislado, puedes revisar localmente con
 | [`references/comunicacion-ste100-y-prompts.md`](references/comunicacion-ste100-y-prompts.md) | principios de Karpathy, estándar aeroespacial ASD-STE100, prompts de alta densidad y micro-reportes |
 | [`references/patrones-datos-ddia.md`](references/patrones-datos-ddia.md) | patrones de datos DDIA (Transactional Outbox, Idempotency-Key, OCC, prevención de Dual-Write) |
 | [`references/filosofia-diseno-ousterhout.md`](references/filosofia-diseno-ousterhout.md) | filosofía de diseño de software de John Ousterhout (Deep Modules, anti-classitis, Design It Twice) |
+| [`references/patrones-gof-y-refactoring.md`](references/patrones-gof-y-refactoring.md) | patrones GoF en arquitectura hexagonal, regla de los dos sombreros de Beck/Fowler y catálogo de Code Smells |
 | [`references/documentacion.md`](references/documentacion.md) | rol producto (PRD inicial / SDD de arquitectura), su sello y como se sincronizan |

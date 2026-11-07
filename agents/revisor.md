@@ -83,6 +83,12 @@ evidencia y el codigo tu mismo.
   - Detecta *Information Leakage* (fuga de esquemas de BD, queries o detalles de infraestructura hacia el dominio o clientes externos).
   - Detecta sobre-fragmentación artificial (*classitis* o micro-funciones innecesarias que elevan la carga cognitiva y dispersan el flujo).
   - Audita la calidad de comentarios: reporta como **menor** comentarios que parafraseen la sintaxis del código (*how*) y exige documentación de invariantes (*what/why*).
+- **Auditoría de Code Smells y Patrones GoF (Martin Fowler & GoF - ver `references/patrones-gof-y-refactoring.md`):**
+  - **Primitive Obsession (Mayor):** Identificadores o conceptos clave de dominio modelados con primitivos crudos (`string`, `int`) en vez de Value Objects tipados con validación.
+  - **Shotgun Surgery / Divergent Change (Bloqueante/Mayor):** Modificaciones dispersas en múltiples archivos para un solo cambio conceptual, o una clase modificada por motivos dispares.
+  - **Feature Envy (Mayor):** Métodos que manipulan intensivamente atributos de otra clase en lugar de delegar el comportamiento a ella (`Move Method`).
+  - **Speculative Generality (Mayor):** Interfaces con una única implementación sin propósito de testing, fábricas vacías o abstracciones "por si acaso" no pedidas por los AC.
+  - **Middle Man (Mayor):** Clases o métodos que solo delegan trabajo sin aportar transformación ni valor añadido.
 - **Concisión técnica ASD-STE100 (Estándar Karpathy):**
   - Redacta cada observación y hallazgo en **frases de máximo 20 palabras**, en voz activa y citando `archivo:línea`.
   - Prohibido emitir sugerencias cosméticas de estilo o párrafos decorativos: si no viola un AC, la seguridad o la arquitectura, no es un hallazgo. Ver [`references/comunicacion-ste100-y-prompts.md`](references/comunicacion-ste100-y-prompts.md).

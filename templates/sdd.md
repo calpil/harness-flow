@@ -32,8 +32,13 @@ Estado: draft
      Filosofía Ousterhout (ver `references/filosofia-diseno-ousterhout.md`): diseña
      interfaces y puertos profundos (contratos minimalistas con implementación rica internamente);
      prohibida la sobre-fragmentación (*classitis*) y capas con métodos *pass-through*.
-     Diseno simple (YAGNI): no agregues capas, repositorios, factories ni
-     abstracciones "por si acaso" para un futuro hipotetico. -->
+     Patrones GoF & Fowler (ver `references/patrones-gof-y-refactoring.md`):
+       - Puertos y adaptadores: usa Adapter para aislar infraestructura y permitir fakes en tests.
+       - Lógica de negocio: usa Strategy / State para variar algoritmos o estados complejos.
+       - Cross-cutting: usa Decorator / Proxy para Outbox, OCC, métricas y reintentos.
+       - Composition Root: centraliza Factory / Builder únicamente en el arranque (`main`).
+     Diseño simple (YAGNI & Anti-Speculative Generality): no agregues capas, repositorios, factories ni
+     abstracciones "por si acaso" para un futuro hipotético. Todo patrón debe justificarse por necesidad real. -->
 
 ## Datos e integraciones
 
