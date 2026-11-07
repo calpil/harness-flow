@@ -1,331 +1,252 @@
 # harness-flow
 
-Skill para [Hermes Agent](https://hermes-agent.nousresearch.com),
-[Claude Code](https://code.claude.com), OpenAI GPT/Codex, AGY/Gemini, Grok y Kimi Code que implementa un proceso de desarrollo
-spec-driven para proyectos multi-repo, con gates ejecutables.
+Framework de desarrollo guiado por especificación (*spec-driven development*) con **gates ejecutables determinísticos** para proyectos monorepo y multi-repo, diseñado para agentes de inteligencia artificial: [Hermes Agent](https://hermes-agent.nousresearch.com), [Claude Code](https://code.claude.com), OpenAI GPT/Codex, Google Antigravity (AGY) / Gemini CLI, Grok y Kimi Code.
 
-Es el puerto del arnés Rust `harness_process` a un agente: **sin binario, sin
-instalador por proyecto, sin compilar por sistema operativo**. El proceso vive en
-esta skill; los gates son scripts Python que devuelven exit≠0 cuando algo falta.
+Es el puerto directo del arnés original en Rust (`harness_process`) a un entorno nativo de agentes: **sin binarios que compilar por sistema operativo, sin instaladores por proyecto y con dependencias mínimas** (Python estándar, más `psycopg` opcional para el grafo Postgres compartido).
 
-Los scripts son stdlib puro (salvo `psycopg` para el hub Postgres) y detectan el
-host solos; lo único que cambia entre Hermes, Claude Code, GPT/Codex, AGY/Gemini, Grok y Kimi Code son las herramientas
-del agente para lanzar el subagente revisor y escribir lecciones.
+Los scripts detectan automáticamente el host y el sistema operativo (macOS, Linux y Windows). Lo único que se adapta entre agentes son los mecanismos de lanzamiento del subagente revisor y las rutas de memoria procedural.
 
-## Qué hace
+---
 
-- **Flujo en cuatro roles**: producto redacta el PRD inicial / SDD de arquitectura
-  (solo al arrancar o cuando cambian), leader escribe el spec, implementer deja
-  evidencia por criterio de aceptación, reviewer sella un veredicto. En ese orden.
-- **Gates reales**: no puedes implementar sin spec aprobado por el usuario, ni
-  cerrar sin evidencia que cite `archivo:linea` por cada AC, ni sellar un review
-  que no responda por todos los AC. Los scripts se niegan con exit≠0.
-- **Memory Hub Postgres**: grafo multi-repo compartido entre máquinas
-  (`graph_nodes` / `graph_edges`). Responde "¿quién se rompe si toco esto?".
-- **Vault Obsidian**: notas en `docs/vault/` generadas desde los documentos del
-  proceso, versionadas con el repo; se abre `docs/` como vault. Es un panel para
-  ti: ningun rol lo lee. Los nodos del grafo son opt-in (`vault.py build
-  --con-grafo`): una nota por nodo ahoga el vault en cada refresco.
-- **PRD inicial / SDD de arquitectura**: `producto.py borrador` redacta en
-  `docs/borrador-<doc>.md` (sin proteger) y `producto.py aprobar --yes`, solo con
-  el SÍ del usuario, copia el cuerpo a su destino y lo sella; `gate.py check`
-  reconoce el sello. Ningún agente escribe `docs/prd/**` ni `docs/sdd.md` a mano.
-  El PRD sigue la anatomía historia → objetivos → flujo → datos → pseudo-código,
-  y `aprobar` se niega si trae código final.
-- **PRD/SDD en todo el flujo**: con `require_docs_al_dia`, `approve-spec` no
-  sella una feature sin ellos. Cada feature lleva su candidata `F-n` del PRD
-  (`add.py --candidata`), el brief del leader trae sus objetivos y las decisiones
-  del SDD, el spec los cita (`cumple: O1`, `decisiones que aplica: D2`) y, si el
-  documento cambia después de aprobar un spec, `estado`, `check` y `close` lo avisan.
-- **PRD / SDD generados**: `documentacion.py sync` crea o actualiza
-  `docs/prd/PRD-master.md` y `docs/sdd.md` desde las features cerradas,
-  preservando el contenido manual fuera del bloque generado.
-- **Jira / Confluence**: opcional, apagado si no hay binding. `atlassian.py push`
-  crea/actualiza la issue Jira, subtasks por AC y una pagina Confluence con
-  PRD/SDD, spec, evidencia y review; `gate.py close --publicar-atlassian` lo dispara al
-  cerrar.
+## Qué hace (Capacidades Implementadas)
 
-## Instalación
+### 1. Flujo Estricto en 4+1 Roles & TDD Vertical
+Prohíbe el desarrollo horizontal por capas y las promesas sin verificar en el chat. Cada historia se implementa como un incremento observable de punta a punta (*Vertical Slice*):
 
-No hay instalador ni binario: la skill es un clone de git dentro del directorio
-de skills de tu agente, que lo escanea y la carga por su `SKILL.md`.
+- **Rol 0: Producto (`producto.py`)**: Redacta borradores en `docs/borrador-prd.md` y `docs/borrador-sdd.md`. Aplica el cuestionario de las **4 decisiones costosas de cambiar** (multi-tenant, roles/permisos, offline/sync, multi-idioma/moneda), descompone el backlog en 10–15 candidatas verticales `F-n` con un *walking skeleton* inicial (`F-1`), y ejecuta el ritual de aprobación explícita `--yes` que sella `docs/prd/PRD-master.md` y `docs/sdd.md` como rutas protegidas.
+- **Rol 1: Leader (`gate.py approve-spec`, `templates/spec.md`)**: Toma una candidata `F-n` y redacta el spec con 2 a 3 Criterios de Aceptación (AC) en formato Given/When/Then. Declara obligatoriamente la **costura pública de prueba** (`[costura: endpoint|servicio|ui|integracion|manual]`). Si el spec debe cambiar tras haber iniciado trabajo, exige una **enmienda formal** (`gate.py enmienda`) que invalida automáticamente verificaciones y reviews previos.
+- **Rol 2: Implementer (`implementer.md`, `worktree.py`)**: Trabaja aislado en un `git worktree` dedicado. Aplica TDD vertical estricto (`1 test en costura pública -> Red -> código mínimo -> Green -> Refactor`) con 5 paradas XP inmediatas ante desvíos. Ofrece dos modos:
+  - *Subagente delegado (por defecto)*: ejecución autónoma con amnesia deliberada y brief compacto de contexto.
+  - *Modo Pair interactivo (`--pair`)*: la IA actúa como Driver y el humano como Navigator en la sesión principal, avanzando micro-ciclo a micro-ciclo con confirmación explícita.
+  - Registra citas verificables `archivo:linea` en `docs/impl-<id>.md`.
+- **Rol 3: Reviewer Aislado (`revisor.md`, `revision.py`)**: Subagente independiente lanzado con el briefing autocontenido de `revision.py --briefing`. Contrasta las citas contra el código real, audita la integridad de los tests (prohíbe tests tautológicos o relajar aserciones viejas) y utiliza `codebase-memory-mcp` (`search_graph`, `trace_path`) para orientarse sin modificar código. Sella formalmente desde la sesión principal (`gate.py revision --veredicto approved|changes_requested|blocked`) con un tope de 2 rondas.
+- **Rol 4: Cierre (`gate.py close`)**: En monorepos ejecuta `git merge --no-ff`. En multi-repos sin `.git` valida la integración manual (`--integrated`). Archiva el progreso en `harness/progress/archive/`, sincroniza la documentación generada en `docs/prd/` y `docs/sdd.md`, ejecuta los runners post-merge medidos y valida el registro de la lección procedural en `leccion.py`.
 
-**Hermes** (perfil `default`; con otro perfil va bajo
-`~/.hermes/profiles/<perfil>/skills/`). Se carga en la **próxima** sesión;
-verifica con `/skills`:
+### 2. Verificadores Post-Merge Medidos Multi-Toolchain
+Los tests de feature solo miden su propio worktree; no pueden anticipar choques de integración entre ramas paralelas. El arnés mide el **delta de rojos** contra una foto tomada antes del merge:
+- **Go (`postmerge_medido.py`, `postmerge_exec.py`)**: Procesa `go test -json` instrumentado con bandera `-exec`. Detecta fallos nuevos discriminados por `(paquete, test)`, abortando ante paquetes que no compilan, `panic` en `init()` o tests eliminados (exit 2).
+- **Frontend / Angular / TypeScript (`postmerge_frontend.py`)**: Ejecuta suites bajo Angular 22, Vitest 4 y `node:test` mediante reporters dedicados (`frontend_vitest_reporter.mjs`, `frontend_node_reporter.mjs`).
+- **Infraestructura Terraform (`postmerge_terraform.py`)**: Valida código HCL con `terraform fmt`, `terraform validate` y `terraform test`.
+- *Nota:* El script antiguo `scripts/postmerge.py` ha sido completamente retirado y neutralizado para prevenir falsos verdes por parsing de regex.
 
+### 3. Memoria Procedural Cruzada entre Agentes (`leccion.py`)
+Las lecciones aprendidas son memoria del usuario, no del agente donde se descubrieron:
+- Escanea y valida lecciones en todas las raíces de agentes de la máquina: `~/.hermes/skills`, `~/.claude/skills`, `~/.gemini/config/skills`, `~/.gemini/skills`, `~/.agents/skills`, `~/.codex/skills`, `~/.grok/skills` y `~/.kimi-code/skills`.
+- Espejado bidireccional (`leccion.py espejar`): traslada lecciones creadas en Claude Code hacia Hermes y deja symlinks para mantenerlas sincronizadas.
+- El cierre (`gate.py close --leccion <clase>`) exige que la lección exista físicamente en alguna raíz activa.
+
+### 4. Telemetría y Monitoreo Forense de MCP (`cbm_procesos.py`, `contexto.py`)
+- Monitorea el daemon de `codebase-memory-mcp` y sus trabajadores.
+- Identifica y elimina procesos huérfanos reasignados a `PID 1` y archivos temporales abandonados (`*.db.stage.*`).
+- Detecta sockets cortados (`->(none)`) y recupera daemons huérfanos de socket mediante `--reiniciar-daemon`. En Windows opera con *no-op* seguro para evitar falsos positivos.
+- Extrae resúmenes contextuales compactos por feature combinando el backlog, objetivos del PRD, decisiones del SDD y dependencias cruzadas.
+
+### 5. Memory Hub Postgres & Visualización en Obsidian
+- **Memory Hub (`hub.py`)**: Grafo relacional multi-repo compartido entre máquinas (`graph_nodes`, `graph_edges`) sobre PostgreSQL con `psycopg`. Responde a consultas de impacto transversal antes de diseñar specs.
+- **Vault Obsidian (`vault.py`)**: Genera un cuadro de mando de notas interconectadas en `docs/vault/` para visualizar el backlog vivo, el estado de cada feature, specs y decisiones de arquitectura (con grafo estructural opt-in mediante `--con-grafo`).
+
+### 6. Sincronización Remota con Atlassian (`atlassian.py`)
+- Si existe `harness/atlassian.json`, sincroniza issues en Jira, subtasks por AC y páginas vivas en Confluence con el spec, la evidencia y el review formal al invocar `gate.py close --publicar-atlassian`.
+
+---
+
+## Políticas de Modelos y Reasoning Effort
+
+El arnés gestiona el modelo y el esfuerzo cognitivo según el proveedor del agente (ver detalles en [`references/modelos.md`](references/modelos.md)):
+
+| Host / Proveedor | Rol 0 (Producto) y Rol 1 (Leader) | Rol 2 (Implementer) | Rol 3 (Reviewer Aislado) | Rol 4 (Cierre) |
+| :--- | :--- | :--- | :--- | :--- |
+| **Claude 5.5** (Claude Code / Hermes) | `claude-opus-5-5` (`xhigh`) | `claude-sonnet-5-5` (`high` / `xhigh`) | `claude-opus-5-5` (`xhigh` / `high` seg.) | `claude-opus-5-5` (`xhigh`) |
+| **OpenAI GPT-6** (Codex / Hermes) | `gpt-6-astra` (`medium` / `high`) | `gpt-6-astra` (`medium` / `high`) | `gpt-6-astra` (`high`) | `gpt-6-astra` (`medium`) |
+| **Gemini 4 Argon** (AGY / Hermes) | `gemini-4-argon` (`high`) | `gemini-4-argon` (`high`) | `gemini-4-argon` (`high`, subagente `self`) | `gemini-4-argon` (`high`) |
+| **Grok** | Modelo de sesión | Sesión (`--pair` o autónomo) | Subagente `spawn_subagent` (espera id) | Gates locales |
+| **Kimi Code** | Sesión principal | Sesión (`--pair` o autónomo) | Subagente `Agent` (`subagent_type: revisor`) | Gates locales |
+
+---
+
+## Instalación y Configuración por Host
+
+La skill se distribuye como un repositorio git clonado en el directorio de skills de tu agente, sin instaladores propietarios.
+
+### 1. Hermes Agent
+Clona en el perfil activo (por defecto `default`):
 ```bash
-git clone https://github.com/calpil/harness-flow.git \
-  ~/.hermes/skills/software-development/harness-flow
+git clone https://github.com/calpil/harness-flow.git ~/.hermes/skills/software-development/harness-flow
 ```
 
-**Claude Code** (personal, disponible en todos tus proyectos; para una sola
-repo usa `<repo>/.claude/skills/harness-flow`). Verifica con `/skills`:
-
+### 2. Claude Code
+Clona en las skills de Claude Code (o crea un enlace simbólico desde el clon de Hermes):
 ```bash
-git clone https://github.com/calpil/harness-flow.git \
-  ~/.claude/skills/harness-flow
+git clone https://github.com/calpil/harness-flow.git ~/.claude/skills/harness-flow
+# O enlace simbólico:
+ln -s ~/.hermes/skills/software-development/harness-flow ~/.claude/skills/harness-flow
 ```
+Claude Code carga automáticamente la capa nativa declarada en `.claude-plugin/plugin.json`:
+- Subagentes: `harness-flow:revisor` (Opus 5.5 con herramientas MCP habilitadas) e `harness-flow:implementer` (Sonnet 5.5).
+- Comandos: `/harness-flow:estado`, `/harness-flow:producto`, `/harness-flow:spec`, `/harness-flow:implementar`, `/harness-flow:review`, `/harness-flow:cierre`.
+- Permisos configurados en `.claude/settings.json` para ejecutar sin interrupciones el entorno virtual y los scripts del arnés.
 
-Si ya tienes el clone para Hermes, enlazalo en vez de duplicarlo — Claude Code
-lee la skill a traves del symlink:
-
+### 3. Google Antigravity (AGY) y Gemini CLI
+AGY descubre skills globales en `~/.gemini/config/skills/`, mientras que Gemini CLI lee `~/.agents/skills/`:
 ```bash
-ln -s ~/.hermes/skills/software-development/harness-flow \
-  ~/.claude/skills/harness-flow
+ln -s ~/.hermes/skills/software-development/harness-flow ~/.gemini/config/skills/harness-flow
+# Para Gemini CLI / Codex:
+ln -s ~/.hermes/skills/software-development/harness-flow ~/.agents/skills/harness-flow
 ```
 
-**Grok** lee `~/.agents/skills` y `~/.grok/skills` (tambien `.claude/skills` y
-`.cursor/skills` si esa compatibilidad esta encendida). No lee `~/.hermes/skills`.
-Con el clone de Hermes, un symlink basta:
-
+### 4. OpenAI GPT / Codex CLI
+Codex lee `~/.agents/skills/` y `$CODEX_HOME/skills` (`~/.codex/skills`):
 ```bash
-ln -s ~/.hermes/skills/software-development/harness-flow \
-  ~/.agents/skills/harness-flow
+git clone https://github.com/calpil/harness-flow.git ~/.agents/skills/harness-flow
 ```
+Incluye metadata de invocación automática en `agents/openai.yaml`.
 
-En una sesion de Grok `entorno.py` reporta host `grok` (`GROK_AGENT`), aunque
-el script resuelva al clone. El revisor es `spawn_subagent` y las lecciones se
-escriben en `~/.grok/skills`. Ver [`references/grok.md`](references/grok.md).
+### 5. Grok y Kimi Code
+- **Grok**: lee `~/.agents/skills` y `~/.grok/skills` (ver [`references/grok.md`](references/grok.md)).
+- **Kimi Code**: instala como plugin desde el TUI con `/plugins install <ruta-del-clone>` o symlink en `~/.kimi-code/skills/` (manifiesto [`kimi.plugin.json`](kimi.plugin.json)).
 
-**AGY (Google Antigravity) y Gemini CLI** leen el mismo `SKILL.md`. Gemini CLI
-carga `~/.agents/skills`, mientras que AGY descubre `.agents/skills` solo a nivel
-de proyecto y usa `~/.gemini/config/skills` como raiz global de la maquina:
-
-```bash
-ln -s ~/.hermes/skills/software-development/harness-flow \
-  ~/.gemini/config/skills/harness-flow
-```
-
-En una sesion de AGY (`ANTIGRAVITY_AGENT=1`) o Gemini CLI (`GEMINI_CLI=1`),
-`entorno.py` reporta host `gemini` aunque el script entre por `~/.agents/skills`
-o el clone de Hermes. `leccion.py` busca lecciones tambien en
-`~/.gemini/config/skills`, `~/.codex/skills`, `~/.grok/skills` y
-`~/.kimi-code/skills`.
-
-Kimi Code ademas puede instalar el repo como plugin (`/plugins install
-<ruta-del-clone>`, manifiesto `kimi.plugin.json`): registra el agente `revisor`
-para la tool Agent (`subagent_type: "revisor"`). El plugin corre desde una
-copia en `$KIMI_CODE_HOME/plugins/managed/`, asi que tras un `git pull` del
-clone hay que reinstalarlo.
-
-Ademas de la skill, Claude Code carga la capa nativa que trae el repo
-(`.claude-plugin/plugin.json`): los subagentes `harness-flow:revisor` (Opus 5.5) e
-`harness-flow:implementer` (Sonnet 5.5), y los comandos `/harness-flow:estado`,
-`:producto`, `:spec`, `:implementar`, `:review` y `:cierre`, cada uno con su modelo;
-el implementer y el revisor reciben el esfuerzo que la skill elige por tarea
-([`references/modelos.md`](references/modelos.md)). Comprueba con
-`claude plugin list` que aparezca `harness-flow@skills-dir` como `loaded`. Los
-otros hosts ignoran esos archivos. Ver [`references/claude.md`](references/claude.md).
-
-**OpenAI GPT/Codex** (personal, disponible en todos tus proyectos; para repo usa
-`<repo>/.agents/skills/harness-flow`). Codex tambien lee `$CODEX_HOME/skills`
-(`~/.codex/skills`), que es donde instala su propio tooling. ChatGPT/Codex
-detecta cambios de skills automaticamente; si no aparece, reinicia
-Codex/ChatGPT:
-
-```bash
-git clone https://github.com/calpil/harness-flow.git \
-  ~/.agents/skills/harness-flow
-```
-
-Para una skill propia del proyecto, Codex tambien admite
-`<repo>/.codex/skills/harness-flow`; `leccion.py donde` incluye ambas raíces
-locales al crear lecciones.
-
-### Windows
-
-No son "las mismas rutas bajo `%USERPROFILE%`": Hermes busca primero en
-`%LOCALAPPDATA%`, y el enlace entre hosts no se hace con `ln -s`.
-
-**Claude Code** (PowerShell):
-
-```powershell
-git clone https://github.com/calpil/harness-flow.git `
-  $env:USERPROFILE\.claude\skills\harness-flow
-```
-
-**Hermes**. La raiz que mira primero es `%LOCALAPPDATA%\hermes\skills`; tambien
-acepta `%USERPROFILE%\.hermes\skills`, y `HERMES_SKILLS_DIR` gana sobre ambas:
-
-```powershell
-git clone https://github.com/calpil/harness-flow.git `
-  $env:LOCALAPPDATA\hermes\skills\software-development\harness-flow
-```
-
-**GPT/Codex**: `$env:USERPROFILE\.agents\skills\harness-flow`.
-
-**Compartir un solo clone entre hosts.** `ln -s` no existe en Windows. Un
-*junction* es la opcion practica porque no pide permisos de administrador ni
-Modo Desarrollador (solo sirve para directorios en el mismo volumen):
-
+### 6. Entornos Windows
+En Windows, crea un junction de directorio sin requerir elevación de privilegios:
 ```cmd
-mklink /J "%USERPROFILE%\.claude\skills\harness-flow" ^
-  "%LOCALAPPDATA%\hermes\skills\software-development\harness-flow"
+mklink /J "%USERPROFILE%\.claude\skills\harness-flow" "%LOCALAPPDATA%\hermes\skills\software-development\harness-flow"
 ```
+Recomendado: instalar **Git for Windows** para utilizar sintaxis Bash estándar. Si se ejecuta en PowerShell puro, los comandos soportan invocación nativa mediante `python <skill>\scripts\entorno.py --powershell | Invoke-Expression`.
 
-Con Modo Desarrollador activo tambien sirve un symlink real, que si cruza
-volumenes:
-
-```powershell
-New-Item -ItemType SymbolicLink -Force `
-  -Path  "$env:USERPROFILE\.claude\skills\harness-flow" `
-  -Target "$env:LOCALAPPDATA\hermes\skills\software-development\harness-flow"
-```
-
-**Instala Git for Windows.** Sin el, Claude Code no usa Bash y cae a PowerShell
-como shell, donde `eval "$(...)"` no existe y el interprete se llama `python`,
-no `python3`. Los comandos `/harness-flow:*` traen las dos formas; cual usar lo
-explica [`references/claude.md`](references/claude.md).
-
-El venv neutro queda en `%USERPROFILE%\.harness-flow\venv`, con el interprete
-en `Scripts\python.exe` (no `bin/python`). `entorno.py` lo resuelve solo.
-
-
-Luego instala la dependencia del hub Postgres en el intérprete correcto. El
-script lo detecta solo en Windows, Linux y macOS (en Claude Code crea un venv
-propio en `~/.harness-flow/venv` en vez de tocar el python del sistema):
-
+### Instalación de Dependencias del Hub
+El script `entorno.py` configura automáticamente el entorno virtual neutro `~/.harness-flow/venv` con `psycopg`:
 ```bash
-# Hermes
 python3 ~/.hermes/skills/software-development/harness-flow/scripts/entorno.py --instalar-deps
-# Claude Code
-python3 ~/.claude/skills/harness-flow/scripts/entorno.py --instalar-deps
-# AGY / Gemini
-python3 ~/.gemini/config/skills/harness-flow/scripts/entorno.py --instalar-deps
-# GPT/Codex / Gemini CLI / Grok
-python3 ~/.agents/skills/harness-flow/scripts/entorno.py --instalar-deps
 ```
 
-En Windows el interprete se llama `python` (o `py -3`), no `python3`:
+---
 
-```powershell
-python $env:USERPROFILE\.claude\skills\harness-flow\scripts\entorno.py --instalar-deps
-```
+## Flujo Operativo en un Proyecto
 
-Sin flags, `entorno.py` imprime un diagnóstico (SO, host detectado, rutas, si
-`psycopg` está presente) y sale con exit≠0 si no puede resolver un intérprete
-usable. La falta de `psycopg` solo es error con `--hub`, porque los gates
-locales funcionan sin el Memory Hub. Si la detección no
-acierta, `--host claude|hermes|gpt|codex|gemini|agy|grok|generic` la fuerza, y `HARNESS_PYTHON` /
-`HARNESS_SKILLS_DIR` sobrescriben intérprete y raíz de skills.
-
-Credenciales en `~/.harness-hub/.env` (fuera de todo repo, por máquina):
-
-```
-DB_HOST=...
-DB_PORT=25060
-DB_NAME=...
-DB_USER=...
-DB_PASSWORD=...
-DB_SSL_MODE=require
-```
-
-## Actualización
-
-Es un clone, así que se actualiza con git. Los cambios aplican en la
-**siguiente** sesión, porque el `SKILL.md` se lee al iniciar.
-
+### 1. Inicialización de Entorno en la Sesión
+Define las variables `$H` (directorio de scripts) y `$PY` (intérprete virtual) en tu terminal:
 ```bash
-cd ~/.hermes/skills/software-development/harness-flow   # o ~/.claude/skills/harness-flow
-git pull
+# bash / zsh (macOS / Linux)
+eval "$(python3 <ruta-skill>/scripts/entorno.py --shell)"
+
+# PowerShell (Windows)
+python <ruta-skill>\scripts\entorno.py --powershell | Invoke-Expression
+```
+*(En Claude Code, AGY, Codex y Grok, ejecuta el comando y el script en la misma llamada de herramienta bash/terminal).*
+
+### 2. Arranque de Sesión
+Antes de realizar cualquier acción sustantiva, consulta el panorama del proyecto:
+```bash
+$PY "$H/estado.py"
 ```
 
-## Uso en un proyecto
-
-Primero define `H` (scripts), `PY` (intérprete con dependencias) y
-`HARNESS_HOST` sin hardcodear rutas — sustituye `<skill>` por el directorio
-donde clonaste:
-
+### 3. Ciclo de Vida de una Feature (Monorepo)
 ```bash
-# bash / zsh
-eval "$(python3 <skill>/scripts/entorno.py --shell)"
+# 1. Crear feature vinculada a candidata F-n del PRD
+$PY "$H/add.py" --name "Checkout con cupon" --prd docs/prd/PRD-master.md --candidata F-3
 
-# PowerShell
-python <skill>\scripts\entorno.py --powershell | Invoke-Expression
-```
-
-En Codex, Claude Code, AGY/Gemini y Grok repite la inicializacion y el comando en la misma
-llamada de terminal: las variables no sobreviven a llamadas independientes.
-En Codex agrega `--host codex` a `entorno.py`, incluso al usar el clone de
-Hermes. Ejemplo completo en [`references/openai.md`](references/openai.md).
-
-En un monorepo, desde su raiz Git:
-
-```bash
-$PY "$H/init.py" --project mi-proyecto
-$PY "$H/add.py" --name "Checkout con cupon"
+# 2. Iniciar worktree aislado
 $PY "$H/worktree.py" start --feature 1
-# ... escribes el spec, el usuario lo aprueba, implementas, revisas ...
+
+# 3. Redactar spec y aprobar con ritual explícito del usuario
+$PY "$H/gate.py" approve-spec --feature 1 --yes
+
+# 4. Implementar bajo TDD vertical (modo delegado o modo pair)
+# En Claude Code: /harness-flow:implementar 1 --pair
+
+# 5. Generar briefing de revisión y lanzar revisor aislado
+$PY "$H/revision.py" --feature 1 --briefing
+# Tras revisar el informe en docs/review-1.md, sellar veredicto:
+$PY "$H/gate.py" revision --feature 1 --veredicto approved
+
+# 6. Cierre con merge, postmerge medido y registro de lección
 $PY "$H/gate.py" close --feature 1 --status done --to main --leccion checkout
-$PY "$H/documentacion.py" sync        # opcional; close done lo corre automaticamente
 ```
 
-En una raiz multi-repo SIN `.git`, con repos/worktrees existentes, no usar ese
-merge legacy. Declarar el mapa completo y SHAs reales segun
-[`references/multirepo.md`](references/multirepo.md):
-
+### 4. Ciclo de Vida en Raíz Multi-Repo (sin `.git` en la raíz)
+Para proyectos multi-servicio donde cada componente es un repositorio independiente:
 ```bash
+# Registrar repositorios y worktrees involucrados
 $PY "$H/worktree.py" register --feature 1 --manifest /ruta/registro.json
-# Integracion MANUAL autorizada, registro del tip final, verify y review fresco:
+
+# Verificar criterios de aceptación y generar briefing de revisión
 $PY "$H/gate.py" verify --feature 1
 $PY "$H/revision.py" --feature 1 --briefing
-# Delegar review independiente; leerlo y sellarlo antes del close.
+
+# Sellar revisión y cerrar validando ancestría y postmerge en todos los destinos
 $PY "$H/gate.py" revision --feature 1 --veredicto approved
 $PY "$H/gate.py" close --feature 1 --status done --to develop \
-  --integrated --postmerge /ruta/bases-postmerge.json --leccion <clase-existente>
+  --integrated --postmerge /ruta/bases-postmerge.json --leccion checkout
 ```
 
-No crea ramas ni worktrees, ni instala nada; `--integrated` comprueba integracion
-ya realizada por ancestria, limpieza y tips exactos por repo. Guarda fuentes/tips
-en `integraciones` y SDD, sin un merge global ficticio. El registro no autoriza
-roles ni ediciones protegidas y no elimina bloqueos de otras features. Los mismos
-comandos funcionan por symlink desde `.claude/skills`. El cierre exige el mapa de
-bases reales `--postmerge` y ejecuta Go JSON/-exec o Angular22/Vitest4+node:test de ADR
-(con el Node que declara el repo)
-en TODOS los tips destino antes de done; no admite recibos manuales ni exit0 sin
-pruebas. Protocolos ajenos permanecen bloqueados (no hay comandos genericos).
-El `postmerge.py` heredado se conserva; `postmerge_medido.py` y el nuevo CLI
-`postmerge_frontend.py` respaldan este cierre. Contrato, comandos para bases,
-procedencia, evidencia durable y limites: `references/multirepo.md`.
+---
 
-`close --status done` archiva `harness/progress/current-<id>.md` en
-`harness/progress/archive/` y sincroniza `docs/prd/PRD-master.md` +
-`docs/sdd.md` con las features implementadas. Los bloques manuales fuera de los
-marcadores `harness-flow:features` no se tocan.
+## Estructura del Repositorio
 
-No se copia nada al repo salvo `harness/` y `docs/`. Una instalación por proyecto
-multi-repo, no por microservicio.
-
-## Estructura
-
+```text
+harness-flow/
+├── SKILL.md                          <- Instrucciones maestras leídas por los agentes
+├── README.md                         <- Documentación general de arquitectura y uso
+├── .claude-plugin/plugin.json        <- Manifiesto del plugin skills-dir para Claude Code
+├── .claude/settings.json             <- Permisos pre-autorizados para Claude Code
+├── kimi.plugin.json                  <- Manifiesto de plugin para Kimi Code
+├── agents/
+│   ├── openai.yaml                   <- Metadata de invocación automática en GPT/Codex
+│   ├── revisor.md                    <- Subagente revisor aislado (Opus 5.5, MCP activado)
+│   └── implementer.md                <- Subagente implementador (Sonnet 5.5)
+├── commands/                         <- Comandos slash para Claude Code (/harness-flow:*)
+│   ├── estado.md, producto.md, spec.md, implementar.md, review.md, cierre.md
+├── scripts/
+│   ├── entorno.py                    <- Detección multi-host, resolución de $PY y $H
+│   ├── estado.py                     <- Diagnóstico global de sesión, backlog y documentos
+│   ├── gate.py                       <- Orquestador determinístico de gates (exit ≠ 0)
+│   ├── comun.py, bloques.py          <- Parsing de ACs, firmas, hashes y manipulación segura
+│   ├── init.py, add.py               <- Inicialización de proyecto y alta de features
+│   ├── producto.py                   <- Rol 0: borradores y aprobación de PRD/SDD
+│   ├── documentacion.py              <- Sincronización de bloques generados en PRD/SDD
+│   ├── worktree.py, multirepo.py     <- Aislamiento de ramas y verificación multi-repo
+│   ├── revision.py                   <- Generación del paquete de briefing para el revisor
+│   ├── postmerge_medido.py           <- Runner post-merge medido para Go (JSON/-exec)
+│   ├── postmerge_exec.py             <- Instrumentación de ejecución Go
+│   ├── postmerge_frontend.py         <- Runner post-merge para Angular/Vitest/Node
+│   ├── frontend_vitest_reporter.mjs  <- Reporter de integración Vitest
+│   ├── frontend_node_reporter.mjs    <- Reporter de integración node:test
+│   ├── postmerge_terraform.py        <- Runner post-merge para HCL/Terraform
+│   ├── medicion_destino.py           <- Orquestador de mediciones pre y post merge
+│   ├── cierre_local.py, retiros.py   <- Lógica de integración local y control de deprecaciones
+│   ├── postmerge.py                  <- Stub neutralizado (aborto con exit 2 hacia runner medido)
+│   ├── cbm_procesos.py               <- Telemetría forense y gestión de procesos CBM
+│   ├── contexto.py                   <- Cálculo de frescura del grafo y generación de briefs
+│   ├── leccion.py                    <- Memoria procedural cruzada entre agentes de la máquina
+│   ├── hub.py                        <- Integración con Memory Hub Postgres
+│   ├── vault.py                      <- Generación del vault de Obsidian en docs/vault/
+│   └── atlassian.py                  <- Sincronización con Jira y Confluence
+├── templates/                        <- Plantillas oficiales de spec, prd, sdd y enmiendas
+├── docs/
+│   └── explicacion-y-diagnostico.md  <- Informe de auditoría exhaustiva y estado de salud
+├── references/                       <- Documentación especializada por host y subsistema
+│   ├── hosts.md, modelos.md, vertical-slice.md, contexto.md, lecciones-del-arnes.md
+│   ├── multirepo.md, claude.md, openai.md, grok.md, kimi.md, entorno.md
+│   ├── hub.md, obsidian.md, atlassian.md, documentacion.md
+└── tests/                            <- Suite exhaustiva de tests unitarios y de regresión
 ```
-SKILL.md                 el proceso que sigue el agente
-.claude-plugin/          manifiesto del plugin skills-dir (solo Claude Code)
-kimi.plugin.json         manifiesto de plugin para Kimi Code (skill + agente revisor)
-agents/openai.yaml       metadata para invocacion automatica en GPT/Codex
-agents/revisor.md        subagente revisor (Claude Code y Kimi lo registran; Grok lee el cuerpo)
-agents/implementer.md    subagente implementer (Claude Code; Hermes via `claude -p --agent`)
-commands/                atajos /harness-flow:... (solo Claude Code)
-scripts/
-  entorno.py             detecta host, H y PY por SO (Windows/Linux/macOS)
-  comun.py               rutas, backlog, firmas, parsers de AC
-  init.py add.py         alta de proyecto y de features
-  gate.py                TODOS los gates (exit≠0)
-  producto.py            rol producto: borrador y aprobacion del PRD inicial / SDD
-  documentacion.py       PRD/SDD generados desde features cerradas
-  worktree.py            aislamiento por feature
-  multirepo.py           validacion estricta de repos/fuentes/destinos existentes
-  revision.py            paquete de revisión (solo lectura)
-  leccion.py             memoria procedural por clase de trabajo
-  hub.py                 Memory Hub Postgres
-  vault.py               generación del vault Obsidian
-  atlassian.py           Jira / Confluence
-  estado.py              panorama al entrar al proyecto
-tests/                   regresiones del port neutro
-templates/               spec, enmienda, evidencia, review, prd, sdd
-references/              Claude Code, OpenAI, Grok, Obsidian, Atlassian, multirepo
+
+---
+
+## Verificación y Calidad
+
+El arnés se valida de forma continua mediante suites de tests unitarios en Python que cubren:
+- Determinismo de gates y firmas criptográficas (`test_gates.py`, `test_firmas.py`).
+- Flujo de documentos y control de rutas protegidas (`test_prd_sdd_flujo.py`).
+- Runners post-merge medidos (`test_measured_runner_go.py`, `test_terraform_runner.py`, `test_postmerge.py`).
+- Detección de host y compatibilidad multi-host (`test_entorno.py`, `test_leccion_multihost.py`, `test_plugin_claude.py`).
+- Monitor forense de procesos (`test_cbm_procesos.py`).
+
+Para ejecutar las pruebas del arnés:
+```bash
+/Users/alan/.harness-flow/venv/bin/python -m unittest discover -s tests -p "test_*.py"
 ```
+
+---
 
 ## Licencia
 
