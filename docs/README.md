@@ -14,7 +14,7 @@ Bienvenido al directorio de documentación técnica y memorias de arquitectura d
 
 ---
 
-## 2. Los 7 Hitos Técnicos Implementados
+## 2. Los Hitos Técnicos Implementados
 
 El detalle exhaustivo y los componentes de cada hito se encuentran en [`memoria-tecnica-implementaciones.md`](memoria-tecnica-implementaciones.md):
 
@@ -28,8 +28,9 @@ flowchart TD
     H6["<b>Hito 6: Auditoría Integral 8 Stacks</b><br/>Verificadores AST/regex para todos los stacks; 8/8 plantillas CALPIL COMPLIANT"]
     H7["<b>Hito 7: Patrones GoF & Fowler Refactoring</b><br/>GoF por capa hexagonal, regla de Dos Sombreros (Beck/Fowler) y 24 Code Smells"]
     H8["<b>Hito 8: Auto-Normalización y Feature #0</b><br/>Auto-instala Nivel 1 (reglas/skills) y crea F-0 prioritaria bloqueando features de negocio si hay violaciones"]
+    H9["<b>Hito 9: Algoritmos y Estructuras CLRS</b><br/>Complejidad asintótica, DAG de features (DFS 3-color/Kahn) y prevención de N+1 y O(N^2)"]
 
-    H1 --> H2 --> H3 --> H4 --> H5 --> H6 --> H7 --> H8
+    H1 --> H2 --> H3 --> H4 --> H5 --> H6 --> H7 --> H8 --> H9
 ```
 
 ---
@@ -38,6 +39,7 @@ flowchart TD
 
 Los documentos de `docs/` complementan y fundamentan las guías operativas que los agentes cargan en tiempo de ejecución:
 
+* [`references/algoritmos-y-estructuras-clrs.md`](../references/algoritmos-y-estructuras-clrs.md): Fundamentos de algoritmos y estructuras de datos (CLRS), análisis asintótico, ordenación topológica y prevención de anti-patrones.
 * [`references/patrones-gof-y-refactoring.md`](../references/patrones-gof-y-refactoring.md): Matriz de patrones GoF por capa hexagonal, regla de los dos sombreros y catálogo de 24 *Code Smells*.
 * [`references/filosofia-diseno-ousterhout.md`](../references/filosofia-diseno-ousterhout.md): Guía de diseño de software de John Ousterhout (*Deep Modules*, combate a la *classitis*, *Design It Twice*).
 * [`references/patrones-datos-ddia.md`](../references/patrones-datos-ddia.md): Patrones de datos distribuidos basados en Martin Kleppmann (Transactional Outbox, OCC, Idempotencia).

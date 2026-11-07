@@ -7,9 +7,10 @@ import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from comun import (bloqueos_feature, cubre_acs, enmiendas_posteriores, impl_path,  # noqa: E402
-                   load_backlog, paths, requiere_declarados, review_path,
-                   sello_revision, sig_fresh, spec_acs, spec_estado, spec_path)
+from comun import (bloqueos_feature, cubre_acs, detectar_ciclos_dependencias,
+                   enmiendas_posteriores, impl_path, load_backlog, paths,
+                   requiere_declarados, review_path, sello_revision, sig_fresh,
+                   spec_acs, spec_estado, spec_path)
 
 ABIERTOS = ("todo", "pending", "in_progress", "blocked", "review")
 CERRADOS = ("done", "superseded")
@@ -132,9 +133,14 @@ def main() -> None:
         fid = listas[0]["id"]
         print(f"   arranca la #{fid}: worktree.py start --feature {fid}")
     elif pendientes:
-        f0 = pendientes[0]
-        bloq = ", ".join(bloqueos_feature(data, f0))
-        print(f"   la #{f0['id']} esta bloqueada por {bloq}: cierra primero su dependencia")
+        ciclos = detectar_ciclos_dependencias(data)
+        if ciclos:
+            ciclo_fmt = " -> ".join(f"#{x}" for x in ciclos[0])
+            print(f"   [!] CICLO DETECTADO (CLRS): {ciclo_fmt}: rompe la circularidad en feature_list.json")
+        else:
+            f0 = pendientes[0]
+            bloq = ", ".join(bloqueos_feature(data, f0))
+            print(f"   la #{f0['id']} esta bloqueada por {bloq}: cierra primero su dependencia")
     else:
         print("   revisa las features blocked/review antes de iniciar otra.")
 

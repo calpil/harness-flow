@@ -295,7 +295,39 @@ Se diseñó e integró en el ciclo de arranque y ejecución de Harness Flow el m
 
 ---
 
-## 11. Estado de Verificación y Métricas de Calidad
+## 11. Hito 9: Fundamentos de Algoritmos y Estructuras de Datos (CLRS - Cormen, Leiserson, Rivest, Stein)
+
+A partir del análisis del tratado canónico *Introduction to Algorithms* (CLRS) de Thomas H. Cormen, Charles E. Leiserson, Ronald L. Rivest y Clifford Stein, se integraron los fundamentos de complejidad asintótica, teoría de grafos y selección óptima de estructuras de datos en todas las fases del ciclo de vida de Harness Flow.
+
+### Documentación y Referencias:
+* [`references/algoritmos-y-estructuras-clrs.md`](file:///Users/alan/.hermes/skills/software-development/harness-flow/references/algoritmos-y-estructuras-clrs.md): Tratado normativo de complejidad asintótica ($O(1), O(\log N), O(N), O(N^2)$), catálogo de estructuras de datos canónicas según stack tecnológico y directivas de prevención de anti-patrones.
+
+### Principios y Mecanismos Integrados:
+1. **Modelado y Validación de Dependencias como Grafos Acíclicos Dirigidos (DAG)**:
+   * En [`scripts/comun.py`](file:///Users/alan/.hermes/skills/software-development/harness-flow/scripts/comun.py):
+     * `detectar_ciclos_dependencias(data)`: Implementación de DFS canónico de 3 colores ($O(V + E)$) para detectar aristas de retroceso (*back-edges*) en el backlog de features, reportando la secuencia exacta del ciclo si existe.
+     * `orden_topologico_features(data)`: Implementación del algoritmo de Kahn basado en colas de grados de entrada ($O(V + E)$) para derivar la secuencia lineal determinista óptima de implementación de features.
+   * En [`scripts/gate.py check`](file:///Users/alan/.hermes/skills/software-development/harness-flow/scripts/gate.py) y [`scripts/estado.py`](file:///Users/alan/.hermes/skills/software-development/harness-flow/scripts/estado.py): Detección y bloqueo inmediato si se introducen dependencias circulares en `feature_list.json`.
+2. **Estimación de $N$ y Complejidad Asintótica en Decisiones de Arquitectura (SDD)**:
+   * En [`templates/sdd.md`](file:///Users/alan/.hermes/skills/software-development/harness-flow/templates/sdd.md):
+     * `## Componentes`: Obligatoriedad de estimar el orden de magnitud de $N$ (concurrencia, throughput, volumen en memoria) y justificar la elección de estructuras según la carga (Hash Tables $O(1)$, Heaps $O(\log N)$, B-Trees $O(\log N)$).
+     * `## Datos e integraciones`: Especificación de índices eficientes y eliminación de consultas $N+1$ mediante batching / queries con cláusula `IN`.
+     * `## Decisiones`: Inclusión explícita de la complejidad asintótica en el trade-off de decisiones no triviales ($D-n$).
+3. **Optimización Asintótica en Refactorización TDD (Implementer)**:
+   * En [`agents/implementer.md`](file:///Users/alan/.hermes/skills/software-development/harness-flow/agents/implementer.md): En Sombrero 2 (Refactor to Patterns), se aplican directivas de eficiencia de CLRS:
+     * Pre-alocación obligatoria de colecciones con capacidad conocida (`make([]T, 0, cap)`, `Vec::with_capacity(cap)`) para evitar realocaciones geométricas $O(N)$.
+     * Reemplazo de búsquedas lineales anidadas ($O(N^2)$) por índices o Lookups en Hash Sets / Maps ($O(1)$ amortizado / $O(N)$ total).
+     * Prohibición de concatenación iterativa de strings (`+=`) en bucles no acotados; uso de `strings.Builder` o buffers contiguos.
+     * Prevención de consultas $N+1$ agrupando accesos a persistencia en batch ($O(1)$ roundtrips de red).
+4. **Auditoría de Complejidad y Anti-Patrones en el Revisor**:
+   * En [`agents/revisor.md`](file:///Users/alan/.hermes/skills/software-development/harness-flow/agents/revisor.md) y [`scripts/revision.py`](file:///Users/alan/.hermes/skills/software-development/harness-flow/scripts/revision.py): El revisor aislado audita el diff y clasifica:
+     * Consultas $N+1$ a base de datos o llamadas HTTP en bucles como **Bloqueante**.
+     * Búsquedas lineales anidadas $O(N^2)$ y concatenación iterativa de cadenas como **Mayor**.
+     * Reasignaciones dinámicas sin pre-alocación de capacidad como **Menor**.
+
+---
+
+## 12. Estado de Verificación y Métricas de Calidad
 
 * **Batería de Pruebas Automatizadas**: 20 tests dedicados de stacks en `tests/test_stack.py` y 86 tests de flujo core ejecutados pasando al 100%:
   ```bash

@@ -29,8 +29,8 @@ sys.path.insert(0, str(Path(__file__).parent))
 from comun import (  # noqa: E402
     ENMIENDAS_RE, Reporte, ac_comandos, ac_costuras, acs_faltantes, acs_no_reconocidos,
     avisos_vertical_spec, bitacora, bloqueos_feature, comparar_huellas, cubre_acs,
-    enmiendas_posteriores, get_feature, git, impl_path, load_backlog, n_enmiendas,
-    now_iso, paths, review_path, save_backlog, sello_revision,
+    detectar_ciclos_dependencias, enmiendas_posteriores, get_feature, git, impl_path,
+    load_backlog, n_enmiendas, now_iso, paths, review_path, save_backlog, sello_revision,
     sig_fresh, sign, spec_acs, spec_estado, spec_huella, spec_path,
 )
 
@@ -52,6 +52,12 @@ def cmd_check(args) -> None:
         r.info("no hay features abiertas")
     for f in abiertas:
         _check_feature(p, f, rules, r)
+
+    ciclos = detectar_ciclos_dependencias(data)
+    if ciclos:
+        for c in ciclos:
+            r.fallo(f"ciclo de dependencias detectado en backlog: {' -> '.join(f'#{x}' for x in c)}",
+                    "rompe la dependencia circular en feature_list.json")
 
     import producto
     try:

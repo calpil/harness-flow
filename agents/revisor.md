@@ -89,6 +89,11 @@ evidencia y el codigo tu mismo.
   - **Feature Envy (Mayor):** Métodos que manipulan intensivamente atributos de otra clase en lugar de delegar el comportamiento a ella (`Move Method`).
   - **Speculative Generality (Mayor):** Interfaces con una única implementación sin propósito de testing, fábricas vacías o abstracciones "por si acaso" no pedidas por los AC.
   - **Middle Man (Mayor):** Clases o métodos que solo delegan trabajo sin aportar transformación ni valor añadido.
+- **Auditoría de Algoritmos y Complejidad Asintótica (CLRS - ver `references/algoritmos-y-estructuras-clrs.md`):**
+  - **Consultas $N+1$ (Bloqueante):** Detecta ejecuciones de queries a base de datos o llamadas HTTP remotas dentro de bucles sobre colecciones sin agrupación en batch (`IN (?, ?)`).
+  - **Búsquedas lineales anidadas $O(N^2)$ (Mayor):** Identifica bucles anidados donde la colección interna se recorre linealmente (`find`, `indexOf`, `contains` sobre listas sin indexar por Hash Table o Map).
+  - **Concatenación de Strings en Bucles (Mayor):** Identifica concatenación iterativa con operador `+=` en bucles no acotados en lugar de buffers contiguos o `StringBuilder`.
+  - **Reasignación geométrica innecesaria (Menor):** Creación de slices o arrays de tamaño dinámico conocido sin pre-alocar capacidad.
 - **Concisión técnica ASD-STE100 (Estándar Karpathy):**
   - Redacta cada observación y hallazgo en **frases de máximo 20 palabras**, en voz activa y citando `archivo:línea`.
   - Prohibido emitir sugerencias cosméticas de estilo o párrafos decorativos: si no viola un AC, la seguridad o la arquitectura, no es un hallazgo. Ver [`references/comunicacion-ste100-y-prompts.md`](references/comunicacion-ste100-y-prompts.md).

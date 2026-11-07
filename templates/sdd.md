@@ -37,6 +37,11 @@ Estado: draft
        - Lógica de negocio: usa Strategy / State para variar algoritmos o estados complejos.
        - Cross-cutting: usa Decorator / Proxy para Outbox, OCC, métricas y reintentos.
        - Composition Root: centraliza Factory / Builder únicamente en el arranque (`main`).
+     Algoritmos y Estructuras de Datos CLRS (ver `references/algoritmos-y-estructuras-clrs.md`):
+       - Estima el orden de magnitud de N (volumen en memoria, throughput req/s, concurrencia).
+       - Selecciona la estructura adecuada para la carga: Hash Table O(1) amortizado para búsquedas exactas,
+         Heap / Cola de Prioridad O(log N) para tareas o eventos ponderados, B-Tree O(log N) para rangos.
+       - Prohibidas complejidades asintóticas accidentales O(N^2) en componentes críticos.
      Diseño simple (YAGNI & Anti-Speculative Generality): no agregues capas, repositorios, factories ni
      abstracciones "por si acaso" para un futuro hipotético. Todo patrón debe justificarse por necesidad real. -->
 
@@ -54,12 +59,15 @@ Estado: draft
           en lugar de llamadas separadas a colas o APIs externas.
        4. Control de concurrencia: define Optimistic Concurrency Control (OCC) con columna `version`
           para prevenir Lost Updates sin bloqueos pesados de tabla.
-       5. Evolución de esquemas: migraciones sin downtime bajo el patrón Expand-Contract. -->
+       5. Evolución de esquemas: migraciones sin downtime bajo el patrón Expand-Contract.
+       6. Eficiencia de acceso (CLRS): define índices B-Tree para rangos O(log N) y Hash para búsquedas O(1);
+          previene explícitamente consultas N+1 mediante batching / IN queries (O(1) roundtrips). -->
 
 ## Decisiones
 
 <!-- Principio "Design It Twice" (John Ousterhout): toda decisión D-n debe contrastar
-     al menos dos alternativas de diseño radicalmente diferentes. Una decisión sin alternativa
+     al menos dos alternativas de diseño radicalmente diferentes. Para decisiones algorítmicas
+     o de estructuras de datos (CLRS), incluye la complejidad asintótica en el trade-off (ej. O(1) vs O(N)). Una decisión sin alternativa
      descartada no es una decisión, es una descripción. El nombre
      es para que el spec de cada feature la cite ("decisiones que aplica: D2").
      Sin `Descartada:` (o `Descartado:`) con texto, aprobar se niega.

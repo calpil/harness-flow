@@ -68,12 +68,17 @@ detente; no los busques ni los inventes.
 - **Bucle TDD Vertical y la Regla de los Dos Sombreros (Kent Beck & Martin Fowler - ver `references/patrones-gof-y-refactoring.md`):**
   No escribas todos los tests de todos los AC primero y luego todo el codigo. Avanza un test a la vez:
   1. **Sombrero 1 (Feature / Red -> Green):** Escribe **1 test** en la costura pública (`[costura: ...]`) y comprueba que falla por el motivo esperado (**Red**). Luego escribe el **código más simple y directo** para pasar ese test (**Green**). PROHIBIDO diseñar jerarquías o patrones complejos en este paso.
-  2. **Sombrero 2 (Refactor to Patterns / Green -> Verde Saneado):** Con el test en verde, aplica la inversión del 10%-20% auditando *Code Smells* de Fowler:
+  2. **Sombrero 2 (Refactor to Patterns / Green -> Verde Saneado):** Con el test en verde, aplica la inversión del 10%-20% auditando *Code Smells* de Fowler y directivas de eficiencia de CLRS:
      - *Primitive Obsession:* Reemplaza primitivos crudos de dominio por Value Objects tipados con validación.
      - *Switch Statements / Cadenas if-else repetidas:* Refactoriza hacia *Strategy* o *Polymorphism*.
      - *Long Parameter List / Data Clumps:* Extrae Parameter Objects o Commands.
      - *Feature Envy:* Mueve métodos hacia la clase que contiene los datos (`Move Method`).
      - *Speculative Generality (YAGNI):* Elimina interfaces con una sola implementación o clases vacías.
+     - *Estructuras de datos y complejidad (CLRS - ver `references/algoritmos-y-estructuras-clrs.md`):*
+       - Pre-aloca colecciones/slices con capacidad conocida (`make([]T, 0, cap)`, `Vec::with_capacity(cap)`) para evitar realocaciones geométricas $O(N)$.
+       - Reemplaza búsquedas lineales anidadas en listas ($O(N^2)$) por índices o Lookups en Hash Sets / Maps ($O(1)$ amortizado / $O(N)$ total).
+       - Elimina consultas $N+1$ agrupando accesos a persistencia en batch (`IN (?, ?)`) con $O(1)$ roundtrips de red.
+       - Prohíbe concatenación iterativa de cadenas (`+=`) en bucles no acotados; usa `strings.Builder` o buffers contiguos.
      - Separa los commits funcionales (`feat:`/`fix:`) de los de refactor puro (`refactor:`). Los tests existentes NO se modifican durante el refactor.
 - **Cumplimiento estricto de la normativa del stack tecnológico:**
   Si el brief indica un stack normativo (ej. Golang Hexagonal o Angular Product):

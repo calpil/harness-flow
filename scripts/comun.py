@@ -202,6 +202,97 @@ def bloqueos_feature(data: dict, f: dict) -> list[str]:
             bloqueos.append(req)
     return list(dict.fromkeys(bloqueos))
 
+
+def detectar_ciclos_dependencias(data: dict) -> list[list[str]]:
+    """Detecta ciclos en el grafo de dependencias de features usando DFS de 3 colores (CLRS).
+    
+    Devuelve lista de ciclos encontrados, o [] si el grafo es un DAG valido.
+    """
+    feats = data.get("features") or []
+    id_map = {str(f.get("id")): f for f in feats if f.get("id") is not None}
+
+    adj: dict[str, list[str]] = {}
+    for fid, f in id_map.items():
+        deps: list[str] = []
+        for req in requiere_declarados(f):
+            if req.startswith("#"):
+                tid = req[1:]
+                if tid in id_map:
+                    deps.append(tid)
+            elif req.startswith("F-"):
+                matches = [str(x["id"]) for x in feats
+                           if x.get("prd_candidata") == req and str(x.get("id")) in id_map]
+                deps.extend(matches)
+        adj[fid] = list(dict.fromkeys(deps))
+
+    WHITE, GRAY, BLACK = 0, 1, 2
+    color: dict[str, int] = {fid: WHITE for fid in id_map}
+    ciclos: list[list[str]] = []
+    path: list[str] = []
+
+    def dfs(u: str) -> None:
+        color[u] = GRAY
+        path.append(u)
+        for v in adj.get(u, []):
+            if color.get(v, WHITE) == GRAY:
+                idx = path.index(v)
+                ciclos.append(path[idx:] + [v])
+            elif color.get(v, WHITE) == WHITE:
+                dfs(v)
+        path.pop()
+        color[u] = BLACK
+
+    for fid in id_map:
+        if color[fid] == WHITE:
+            dfs(fid)
+
+    return ciclos
+
+
+def orden_topologico_features(data: dict) -> list[str]:
+    """Calcula el orden topologico de features usando el algoritmo de Kahn (CLRS Topological Sort).
+    
+    Devuelve la secuencia lineal valida de ejecucion. Sube ValueError si hay ciclos.
+    """
+    ciclos = detectar_ciclos_dependencias(data)
+    if ciclos:
+        ciclo_str = " -> ".join(f"#{x}" for x in ciclos[0])
+        raise ValueError(f"Ciclo de dependencias detectado en el backlog: {ciclo_str}")
+
+    feats = data.get("features") or []
+    id_map = {str(f.get("id")): f for f in feats if f.get("id") is not None}
+
+    adj_prec: dict[str, list[str]] = {fid: [] for fid in id_map}
+    in_degree: dict[str, int] = {fid: 0 for fid in id_map}
+
+    for fid, f in id_map.items():
+        for req in requiere_declarados(f):
+            if req.startswith("#"):
+                tid = req[1:]
+                if tid in id_map:
+                    adj_prec[tid].append(fid)
+                    in_degree[fid] += 1
+            elif req.startswith("F-"):
+                matches = [str(x["id"]) for x in feats
+                           if x.get("prd_candidata") == req and str(x.get("id")) in id_map]
+                for tid in matches:
+                    adj_prec[tid].append(fid)
+                    in_degree[fid] += 1
+
+    from collections import deque
+    queue = deque([fid for fid, deg in in_degree.items() if deg == 0])
+    orden: list[str] = []
+
+    while queue:
+        u = queue.popleft()
+        orden.append(u)
+        for v in adj_prec[u]:
+            in_degree[v] -= 1
+            if in_degree[v] == 0:
+                queue.append(v)
+
+    return orden
+
 SERVICE_RE = re.compile(r"(ms-[a-z0-9-]+-service|[a-z0-9-]+-ui|fn-[a-z0-9-]+)")
 
 def micros_declarados(f: dict) -> list[str]:

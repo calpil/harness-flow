@@ -443,4 +443,5 @@ Python. Si no hay revisor aislado, puedes revisar localmente con
 | [`references/patrones-datos-ddia.md`](references/patrones-datos-ddia.md) | patrones de datos DDIA (Transactional Outbox, Idempotency-Key, OCC, prevención de Dual-Write) |
 | [`references/filosofia-diseno-ousterhout.md`](references/filosofia-diseno-ousterhout.md) | filosofía de diseño de software de John Ousterhout (Deep Modules, anti-classitis, Design It Twice) |
 | [`references/patrones-gof-y-refactoring.md`](references/patrones-gof-y-refactoring.md) | patrones GoF en arquitectura hexagonal, regla de los dos sombreros de Beck/Fowler y catálogo de Code Smells |
+| [`references/algoritmos-y-estructuras-clrs.md`](references/algoritmos-y-estructuras-clrs.md) | algoritmos y estructuras CLRS: complejidad asintótica, orden topológico de features y prevención de N+1/O(N^2) |
 | [`references/documentacion.md`](references/documentacion.md) | rol producto (PRD inicial / SDD de arquitectura), su sello y como se sincronizan |
