@@ -246,6 +246,7 @@ harness-flow/
 │   └── python-dataproduct/           <- Python data product / FastAPI / Polars, 4 rules, 11 skills, check-architecture.py
 ├── templates/                        <- Plantillas oficiales de spec, prd, sdd y enmiendas
 ├── docs/
+│   ├── README.md                     <- Índice y guía maestra de documentación técnica
 │   ├── explicacion-y-diagnostico.md  <- Informe de auditoría exhaustiva y estado de salud
 │   ├── principios-karpathy-ste100-harness-flow.md <- Principios de Karpathy y norma ASD-STE100 en el arnés
 │   └── memoria-tecnica-implementaciones.md <- Memoria técnica exhaustiva de todas las capacidades y 8 stacks

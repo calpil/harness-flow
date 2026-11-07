@@ -6,14 +6,15 @@ Este documento recopila y estructura de manera exhaustiva todas las capacidades,
 
 ## 1. Resumen Ejecutivo de la Evolución del Arnés
 
-**Harness Flow** ha evolucionado de un arnés de desarrollo guiado por gates a una **plataforma integral de ingeniería de software para sistemas multi-agente y desarrollo en pair programming**. Su arquitectura integra gobernanza multi-stack, verificación continua en caliente y la convergencia de tres marcos metodológicos de vanguardia:
+**Harness Flow** ha evolucionado de un arnés de desarrollo guiado por gates a una **plataforma integral de ingeniería de software para sistemas multi-agente y desarrollo en pair programming**. Su arquitectura integra gobernanza multi-stack, verificación continua en caliente y la convergencia de cuatro marcos metodológicos de vanguardia:
 
 ```mermaid
 flowchart TD
-    subgraph Marcos["Tres Marcos Metodológicos Fundacionales"]
+    subgraph Marcos["Cuatro Marcos Metodológicos Fundacionales"]
         M1["<b>Andrej Karpathy & ASD-STE100</b><br/>Comunicación de alta densidad, frases &le; 20 palabras, diagramas Mermaid y micro-reportes."]
         M2["<b>Martin Kleppmann (DDIA)</b><br/>Fiabilidad distribuida, Transactional Outbox, OCC, Idempotency-Key y Expand-Contract."]
         M3["<b>John Ousterhout (Stanford)</b><br/>A Philosophy of Software Design: Deep Modules, anti-classitis, pull complexity downwards y Design It Twice."]
+        M4["<b>Gang of Four & Martin Fowler</b><br/>Patrones GoF en arquitectura hexagonal, regla de los dos sombreros de Beck/Fowler y catálogo de Code Smells."]
     end
 
     subgraph Stacks["Gobernanza Multi-Stack de CALPIL"]
