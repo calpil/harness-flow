@@ -30,8 +30,9 @@ flowchart TD
     H8["<b>Hito 8: Auto-Normalización y Feature #0</b><br/>Auto-instala Nivel 1 (reglas/skills) y crea F-0 prioritaria bloqueando features de negocio si hay violaciones"]
     H9["<b>Hito 9: Algoritmos y Estructuras CLRS</b><br/>Complejidad asintótica, DAG de features (DFS 3-color/Kahn) y prevención de N+1 y O(N^2)"]
     H10["<b>Hito 10: AI Engineering (Chip Huyen)</b><br/>Pipeline 5 capas, Structured Outputs, Golden Datasets, Bounded Reflection y AI-as-a-Judge"]
+    H11["<b>Hito 11: Microservicios y Sistemas Distribuidos (Sam Newman)</b><br/>Database per Service, Monolith-First, comunicación síncrona/EDA bajo YAGNI, resiliencia y Expand-Contract"]
 
-    H1 --> H2 --> H3 --> H4 --> H5 --> H6 --> H7 --> H8 --> H9 --> H10
+    H1 --> H2 --> H3 --> H4 --> H5 --> H6 --> H7 --> H8 --> H9 --> H10 --> H11
 ```
 
 ---
@@ -40,6 +41,7 @@ flowchart TD
 
 Los documentos de `docs/` complementan y fundamentan las guías operativas que los agentes cargan en tiempo de ejecución:
 
+* [`references/microservicios-sam-newman.md`](../references/microservicios-sam-newman.md): Principios de microservicios y sistemas distribuidos (Sam Newman), Database per Service, resiliencia y contratos.
 * [`references/ai-engineering-chip-huyen.md`](../references/ai-engineering-chip-huyen.md): Arquitectura de AI Engineering (Chip Huyen), pipeline de 5 capas, Structured Outputs y mitigación de sesgos en AI-as-a-Judge.
 * [`references/algoritmos-y-estructuras-clrs.md`](../references/algoritmos-y-estructuras-clrs.md): Fundamentos de algoritmos y estructuras de datos (CLRS), análisis asintótico, ordenación topológica y prevención de anti-patrones.
 * [`references/patrones-gof-y-refactoring.md`](../references/patrones-gof-y-refactoring.md): Matriz de patrones GoF por capa hexagonal, regla de los dos sombreros y catálogo de 24 *Code Smells*.

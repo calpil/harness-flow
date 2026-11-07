@@ -45,6 +45,10 @@ Estado: draft
      Arquitectura de AI Engineering (Chip Huyen - ver `references/ai-engineering-chip-huyen.md`):
        - Modela el pipeline defensivo de 5 capas: Guardrail de entrada -> Context Assembly & Prompt Caching -> Model Router -> Foundation Model (Structured Outputs) -> Validador de salida & Circuit Breaker.
        - Maximiza Prompt Caching ordenando prefijos estáticos (instrucciones, schemas, contratos) antes de variables dinámicas.
+     Principios de Microservicios y Sistemas Distribuidos (Sam Newman - ver `references/microservicios-sam-newman.md`):
+       - Modela fronteras alineadas a Bounded Contexts y capacidades de negocio; prioriza Monolito Modular si no hay necesidad de distribución.
+       - Trazabilidad distribuida: propaga Correlation IDs (`X-Correlation-ID` o W3C `traceparent`) en toda llamada HTTP o evento.
+       - Resiliencia distribuida: especifica Circuit Breakers, Bulkheads y Timeouts agresivos en clientes remotos.
      Diseño simple (YAGNI & Anti-Speculative Generality): no agregues capas, repositorios, factories ni
      abstracciones "por si acaso" para un futuro hipotético. Todo patrón debe justificarse por necesidad real. -->
 
@@ -66,7 +70,9 @@ Estado: draft
        6. Eficiencia de acceso (CLRS): define índices B-Tree para rangos O(log N) y Hash para búsquedas O(1);
           previene explícitamente consultas N+1 mediante batching / IN queries (O(1) roundtrips).
        7. Integración con Modelos Fundacionales / LLM (Chip Huyen): define esquemas formales JSON Schema
-          o Tool Calling nativo para toda salida de IA; prohibido el parsing de texto libre en integraciones de sistema. -->
+          o Tool Calling nativo para toda salida de IA; prohibido el parsing de texto libre en integraciones de sistema.
+       8. Database per Service (Sam Newman): encapsulamiento estricto de persistencia; PROHIBIDO el acceso directo o joins a bases de datos de otros microservicios.
+       9. Estilo de comunicación pragmático (YAGNI): Request/Response síncrono (REST/gRPC) por defecto; Event-Driven (EDA / Brokers) solo si el negocio exige desacoplamiento temporal o múltiples suscriptores reales. -->
 
 ## Decisiones
 
@@ -74,6 +80,7 @@ Estado: draft
      al menos dos alternativas de diseño radicalmente diferentes. Para decisiones algorítmicas
      o de estructuras de datos (CLRS), incluye la complejidad asintótica en el trade-off (ej. O(1) vs O(N)).
      Para componentes de IA (Chip Huyen), incluye el trade-off de modelos (Model Routing: costo vs latencia vs inteligencia), o RAG vs Fine-tuning.
+     Para arquitectura de servicios (Sam Newman), documenta el trade-off de Monolito vs Microservicios, y Síncrono (REST/gRPC) vs Asíncrono (EDA/colas).
      Una decisión sin alternativa descartada no es una decisión, es una descripción. El nombre
      es para que el spec de cada feature la cite ("decisiones que aplica: D2").
      Sin `Descartada:` (o `Descartado:`) con texto, aprobar se niega.

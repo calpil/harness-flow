@@ -445,4 +445,5 @@ Python. Si no hay revisor aislado, puedes revisar localmente con
 | [`references/patrones-gof-y-refactoring.md`](references/patrones-gof-y-refactoring.md) | patrones GoF en arquitectura hexagonal, regla de los dos sombreros de Beck/Fowler y catálogo de Code Smells |
 | [`references/algoritmos-y-estructuras-clrs.md`](references/algoritmos-y-estructuras-clrs.md) | algoritmos y estructuras CLRS: complejidad asintótica, orden topológico de features y prevención de N+1/O(N^2) |
 | [`references/ai-engineering-chip-huyen.md`](references/ai-engineering-chip-huyen.md) | ingeniería de IA (Chip Huyen): arquitectura de 5 capas, structured outputs, guardrails y AI-as-a-judge |
+| [`references/microservicios-sam-newman.md`](references/microservicios-sam-newman.md) | microservicios y sistemas distribuidos (Sam Newman): Database per Service, resiliencia y contratos |
 | [`references/documentacion.md`](references/documentacion.md) | rol producto (PRD inicial / SDD de arquitectura), su sello y como se sincronizan |

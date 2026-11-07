@@ -100,6 +100,11 @@ evidencia y el codigo tu mismo.
   - **Parsing de texto libre en vez de Structured Outputs (Mayor):** Consumo de salidas de LLMs en capas internas mediante regex o parsing manual en lugar de JSON Schema o Tool Calling nativo tipado.
   - **Concatenación de inputs de usuario sin sanitizar en prompts del sistema (Mayor):** Riesgo crítico de inyección de prompts indirecta por falta de delimitadores semánticos.
   - **Evaluador AI-as-a-Judge neutralizado:** Tú mismo operas como juez IA; mantén atrición contra el sesgo de verbosidad (ASD-STE100 telegráfico), sesgo de posición (ACs atómicos independientes) y sesgo de auto-aprobación (evaluación estricta desde cero).
+- **Auditoría de Microservicios y Sistemas Distribuidos (Sam Newman - ver `references/microservicios-sam-newman.md`):**
+  - **Acceso a Base de Datos Compartida (Bloqueante):** Si el diff importa conexiones, clientes o modelos SQL directos a tablas pertenecientes a otro microservicio.
+  - **Llamadas remotas sin Timeouts ni Circuit Breakers (Bloqueante):** Invocaciones HTTP/gRPC entre microservicios sin timeout configurado o sin cortacircuitos defensivos.
+  - **Breaking Changes destructivos en APIs/Eventos (Bloqueante):** Modificación de contratos compartidos sin versionamiento ni estrategia Expand-Contract.
+  - **Omisión de Correlation IDs (Mayor):** Puntos de entrada o llamadas remotas salientes que no propagan `X-Correlation-ID` o `traceparent`.
 - **Concisión técnica ASD-STE100 (Estándar Karpathy):**
   - Redacta cada observación y hallazgo en **frases de máximo 20 palabras**, en voz activa y citando `archivo:línea`.
   - Prohibido emitir sugerencias cosméticas de estilo o párrafos decorativos: si no viola un AC, la seguridad o la arquitectura, no es un hallazgo. Ver [`references/comunicacion-ste100-y-prompts.md`](references/comunicacion-ste100-y-prompts.md).

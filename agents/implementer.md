@@ -84,6 +84,11 @@ detente; no los busques ni los inventes.
        - Resiliencia en llamadas a APIs de IA: timeouts obligatorios, reintentos con exponential backoff y jitter ante códigos 429/5xx.
        - Patrón Bounded Reflection (auto-corrección de esquema): máximo 2 reintentos de corrección con error feedback antes de degradar o abortar.
        - Ingeniería defensiva: sanitiza entradas de usuario con delimitadores semánticos (`<user_input>`) para neutralizar inyecciones de prompts.
+     - *Arquitectura de Microservicios (Sam Newman - ver `references/microservicios-sam-newman.md`):*
+       - Database per Service: PROHIBIDO consultar directamente bases de datos de otros servicios; accede siempre vía API o eventos.
+       - Trazabilidad: propaga `X-Correlation-ID` o `traceparent` en todas las llamadas HTTP salientes y eventos de dominio.
+       - Resiliencia distribuida: timeouts explícitos (< 3s) y Circuit Breakers en clientes HTTP/gRPC hacia otros servicios.
+       - Despliegue independiente: ante cambios de contrato, aplica Expand-Contract para no romper a consumidores existentes.
      - Separa los commits funcionales (`feat:`/`fix:`) de los de refactor puro (`refactor:`). Los tests existentes NO se modifican durante el refactor.
 - **Cumplimiento estricto de la normativa del stack tecnológico:**
   Si el brief indica un stack normativo (ej. Golang Hexagonal o Angular Product):

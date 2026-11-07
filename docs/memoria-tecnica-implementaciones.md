@@ -370,7 +370,30 @@ A partir del análisis del tratado canónico *AI Engineering: Building Applicati
 
 ---
 
-## 13. Estado de Verificación y Métricas de Calidad
+## 13. Hito 11: Microservicios y Sistemas Distribuidos (Sam Newman)
+
+A partir del análisis del tratado canónico *Building Microservices: Designing Fine-Grained Systems* (2ª Edición, O'Reilly, 2021) y *Monolith to Microservices* de Sam Newman, reseñado por BettaTech (*Este libro me hizo madurar como ingeniero*), se integraron los principios de diseño y gobierno de sistemas distribuidos y microservicios en Harness Flow.
+
+### Documentación y Referencias:
+* [`references/microservicios-sam-newman.md`](file:///Users/alan/.hermes/skills/software-development/harness-flow/references/microservicios-sam-newman.md): Tratado normativo de los 7 principios de microservicios, encapsulamiento estricto *Database per Service*, selección pragmática de comunicación (Síncrono vs EDA bajo YAGNI), resiliencia distribuida y trazabilidad con *Correlation IDs*.
+
+### Principios y Mecanismos Integrados:
+1. **Regla de Oro: Database per Service y Bounded Contexts**:
+   * En [`templates/sdd.md`](file:///Users/alan/.hermes/skills/software-development/harness-flow/templates/sdd.md): Prohibición absoluta de bases de datos compartidas (*Shared Database*) entre microservicios; interacción exclusiva vía APIs públicas o eventos. Delimitación de entidades por *Bounded Contexts* (DDD).
+2. **Selección Pragmática de Comunicación (Síncrono vs EDA sin Dogmas)**:
+   * En [`templates/sdd.md`](file:///Users/alan/.hermes/skills/software-development/harness-flow/templates/sdd.md): Se adopta el principio YAGNI de Newman: Request/Response síncrono (REST/gRPC) por defecto; Event-Driven Architecture (EDA) solo cuando el negocio exige desacoplamiento temporal, múltiples suscriptores o streaming masivo (ej. IoT).
+3. **Resiliencia Distribuida y Prevención de Fallos en Cascada**:
+   * En [`agents/implementer.md`](file:///Users/alan/.hermes/skills/software-development/harness-flow/agents/implementer.md) y [`templates/sdd.md`](file:///Users/alan/.hermes/skills/software-development/harness-flow/templates/sdd.md): Implementación obligatoria de *Circuit Breakers*, *Bulkheads*, timeouts agresivos (< 3s), reintentos con *exponential backoff* y *jitter*, y degradación grácil (*Graceful Degradation*).
+4. **Trazabilidad Distribuida con Correlation IDs**:
+   * Propagación mandatoria de `X-Correlation-ID` o W3C `traceparent` en todas las llamadas de red salientes y eventos para observabilidad end-to-end con OpenTelemetry.
+5. **Despliegue Independiente y Evolución de Contratos (Expand-Contract)**:
+   * En [`references/vertical-slice.md`](file:///Users/alan/.hermes/skills/software-development/harness-flow/references/vertical-slice.md): Cada rebanada vertical multi-servicio se planifica bajo el patrón de cambio paralelo (*Expand-Contract*) y se coordina con el subsistema [`scripts/multirepo.py`](file:///Users/alan/.hermes/skills/software-development/harness-flow/scripts/multirepo.py).
+6. **Auditoría Automatizada en el Revisor Aislado**:
+   * En [`agents/revisor.md`](file:///Users/alan/.hermes/skills/software-development/harness-flow/agents/revisor.md) y [`scripts/revision.py`](file:///Users/alan/.hermes/skills/software-development/harness-flow/scripts/revision.py): Detección y bloqueo estricto de accesos cruzados a bases de datos ajenas, llamadas remotas sin timeouts/circuit breakers, breaking changes destructivos y omisión de Correlation IDs.
+
+---
+
+## 14. Estado de Verificación y Métricas de Calidad
 
 * **Batería de Pruebas Automatizadas**: 20 tests dedicados de stacks en `tests/test_stack.py` y 86 tests de flujo core ejecutados pasando al 100%:
   ```bash
