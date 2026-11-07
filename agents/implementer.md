@@ -79,6 +79,11 @@ detente; no los busques ni los inventes.
        - Reemplaza búsquedas lineales anidadas en listas ($O(N^2)$) por índices o Lookups en Hash Sets / Maps ($O(1)$ amortizado / $O(N)$ total).
        - Elimina consultas $N+1$ agrupando accesos a persistencia en batch (`IN (?, ?)`) con $O(1)$ roundtrips de red.
        - Prohíbe concatenación iterativa de cadenas (`+=`) en bucles no acotados; usa `strings.Builder` o buffers contiguos.
+     - *Ingeniería de IA y Modelos Fundacionales (Chip Huyen - ver `references/ai-engineering-chip-huyen.md`):*
+       - Salidas estructuradas obligatorias (JSON Schema estricto o Tool Calling nativo); prohibido el parsing artesanal de texto libre.
+       - Resiliencia en llamadas a APIs de IA: timeouts obligatorios, reintentos con exponential backoff y jitter ante códigos 429/5xx.
+       - Patrón Bounded Reflection (auto-corrección de esquema): máximo 2 reintentos de corrección con error feedback antes de degradar o abortar.
+       - Ingeniería defensiva: sanitiza entradas de usuario con delimitadores semánticos (`<user_input>`) para neutralizar inyecciones de prompts.
      - Separa los commits funcionales (`feat:`/`fix:`) de los de refactor puro (`refactor:`). Los tests existentes NO se modifican durante el refactor.
 - **Cumplimiento estricto de la normativa del stack tecnológico:**
   Si el brief indica un stack normativo (ej. Golang Hexagonal o Angular Product):

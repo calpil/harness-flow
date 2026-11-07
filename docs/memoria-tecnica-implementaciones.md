@@ -327,7 +327,44 @@ A partir del análisis del tratado canónico *Introduction to Algorithms* (CLRS)
 
 ---
 
-## 12. Estado de Verificación y Métricas de Calidad
+## 12. Hito 10: Ingeniería de Inteligencia Artificial y Modelos Fundacionales (Chip Huyen)
+
+A partir del análisis del tratado canónico *AI Engineering: Building Applications with Foundation Models* de Chip Huyen (O'Reilly, 2025; Stanford CS 329S / CS 25) y su reseña por BettaTech (*The AI book every developer should read*), se formalizaron los principios de ingeniería determinista para gobernar sistemas construidos sobre modelos de lenguaje probabilísticos.
+
+### Documentación y Referencias:
+* [`references/ai-engineering-chip-huyen.md`](file:///Users/alan/.hermes/skills/software-development/harness-flow/references/ai-engineering-chip-huyen.md): Tratado normativo de arquitectura de IA en 5 capas, estructuración jerárquica para *Prompt Caching*, mitigación de los 3 sesgos en *AI-as-a-Judge*, prevención de *Indirect Prompt Injection* y resiliencia con *Bounded Reflection*.
+
+### Principios y Mecanismos Integrados:
+1. **Contratos de Incertidumbre y Golden Datasets en PRD**:
+   * En [`templates/prd.md`](file:///Users/alan/.hermes/skills/software-development/harness-flow/templates/prd.md):
+     * Prohibición de requisitos ambiguos ("el agente responderá inteligentemente").
+     * Exigencia de SLAs cuantificables de precisión y recall con fallbacks deterministas si la confianza decae.
+     * Definición obligatoria de un **Golden Dataset** (20–50 casos representativos) antes de iniciar la construcción.
+     * Diseño explícito de la ruta de escape **Human-in-the-Loop** para flujos no deterministas.
+2. **Pipeline Defensivo Canónico de 5 Capas en Arquitectura (SDD)**:
+   * En [`templates/sdd.md`](file:///Users/alan/.hermes/skills/software-development/harness-flow/templates/sdd.md):
+     * Modelado obligatorio de las 5 capas: *Ingress Guardrail* $\rightarrow$ *Context Assembly & Prompt Caching* $\rightarrow$ *Model Router* $\rightarrow$ *Foundation Model con Structured Outputs* $\rightarrow$ *Egress Validator & Circuit Breaker*.
+     * Jerarquización de prompts con prefijos estáticos para maximizar la tasa de acierto del **Prompt Caching** (reduciendo hasta 80% de latencia y costo).
+     * Prohibición del parsing artesanal de texto libre; uso estricto de **JSON Schema** o **Tool Calling** nativo en interfaces de datos.
+     * Justificación de decisiones $D-n$ mediante trade-offs de modelos (Model Routing) y matrices RAG vs. Fine-tuning.
+3. **Resiliencia, TDD y Bounded Reflection en Implementación**:
+   * En [`agents/implementer.md`](file:///Users/alan/.hermes/skills/software-development/harness-flow/agents/implementer.md):
+     * Timeouts deterministas obligatorios y reintentos con *exponential backoff* y *jitter* ante errores de red o códigos 429/5xx.
+     * Patrón **Bounded Reflection**: reintentos de auto-corrección ante fallos de validación de esquema acotados estrictamente a **máximo 2 ciclos** para erradicar bucles infinitos y consumo desmedido de tokens.
+     * Sanitización de entradas no confiables mediante delimitadores semánticos explícitos (`<user_input>`) para neutralizar inyecciones de prompts.
+4. **Auditoría Especializada y Neutralización de Sesgos en el Revisor (AI-as-a-Judge)**:
+   * En [`agents/revisor.md`](file:///Users/alan/.hermes/skills/software-development/harness-flow/agents/revisor.md) y [`scripts/revision.py`](file:///Users/alan/.hermes/skills/software-development/harness-flow/scripts/revision.py):
+     * **Mitigación activa de los 3 sesgos del juez IA**:
+       1. *Position bias*: Evaluación atómica e independiente por AC-n.
+       2. *Verbosity bias*: Brevedad extrema exigida por la norma aeroespacial ASD-STE100 ($\le 20$ palabras).
+       3. *Self-enhancement bias*: Amnesia deliberada del subagente revisor, que arranca sin memoria de la sesión de implementación y evalúa el código en frío desde el árbol de git.
+     * **Auditoría en el diff**:
+       * Clasificación como **Bloqueante** de llamadas a APIs de LLMs sin timeouts ni backoff, o bucles agénticos sin parada estricta ($\le 2$).
+       * Clasificación como **Mayor** del parsing de texto libre sin Structured Outputs y de la concatenación de prompts sin sanitizar.
+
+---
+
+## 13. Estado de Verificación y Métricas de Calidad
 
 * **Batería de Pruebas Automatizadas**: 20 tests dedicados de stacks en `tests/test_stack.py` y 86 tests de flujo core ejecutados pasando al 100%:
   ```bash

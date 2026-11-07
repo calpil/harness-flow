@@ -57,7 +57,11 @@ Despues:
      ("cumple O2"). Los no-objetivos frenan el "ya que estamos".
        - O1: toda venta cerrada recibe su llamada en menos de 5 segundos
        - O2: reversible: interruptor por cliente, se apaga en 1 clic
-       - NO1: no vende ni reagenda nada, solo agradece -->
+       - NO1: no vende ni reagenda nada, solo agradece
+     Componentes de Inteligencia Artificial / LLM (Chip Huyen - ver `references/ai-engineering-chip-huyen.md`):
+       - Prohibidos requisitos vagos como "el agente responde de forma inteligente".
+       - Define Contratos de Incertidumbre y SLAs cuantificables (ej. "clasificación con >= 95% de precisión; fallback determinista si confianza < 0.85").
+       - Exige la definición de un Golden Dataset (mínimo 10-20 casos reales de prueba con entradas y salidas esperadas). -->
 
 ## Como funciona hoy y como va a funcionar
 
@@ -88,7 +92,10 @@ Despues:
        ENTONCES lo llamamos en 5 segundos, con un guion que agradece,
                 solo en horario habil
        Promesas: una sola llamada por venta; nunca fuera de horario;
-                 si no contesta, no insiste. -->
+                 si no contesta, no insiste.
+     Para flujos basados en IA o LLMs (Chip Huyen):
+       - Diseña la ruta Human-in-the-Loop o fallback determinista cuando la confianza sea baja o el modelo falle.
+       - Promesas: salida siempre validada contra esquema formal; nunca enviar payloads malformados a capas internas. -->
 
 ## Features candidatas
 

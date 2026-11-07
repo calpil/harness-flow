@@ -94,6 +94,12 @@ evidencia y el codigo tu mismo.
   - **Búsquedas lineales anidadas $O(N^2)$ (Mayor):** Identifica bucles anidados donde la colección interna se recorre linealmente (`find`, `indexOf`, `contains` sobre listas sin indexar por Hash Table o Map).
   - **Concatenación de Strings en Bucles (Mayor):** Identifica concatenación iterativa con operador `+=` en bucles no acotados en lugar de buffers contiguos o `StringBuilder`.
   - **Reasignación geométrica innecesaria (Menor):** Creación de slices o arrays de tamaño dinámico conocido sin pre-alocar capacidad.
+- **Auditoría de AI Engineering y Modelos Fundacionales (Chip Huyen - ver `references/ai-engineering-chip-huyen.md`):**
+  - **Llamadas a LLMs sin timeouts ni reintentos resilientes (Bloqueante):** Invocaciones a APIs de IA externas sin timeout explícito o sin backoff exponencial con jitter ante fallos transitorios.
+  - **Loops agénticos o de reflexión no acotados (Bloqueante):** Ciclos de reintento de auto-corrección sin límite estricto de $\le 2$ iteraciones.
+  - **Parsing de texto libre en vez de Structured Outputs (Mayor):** Consumo de salidas de LLMs en capas internas mediante regex o parsing manual en lugar de JSON Schema o Tool Calling nativo tipado.
+  - **Concatenación de inputs de usuario sin sanitizar en prompts del sistema (Mayor):** Riesgo crítico de inyección de prompts indirecta por falta de delimitadores semánticos.
+  - **Evaluador AI-as-a-Judge neutralizado:** Tú mismo operas como juez IA; mantén atrición contra el sesgo de verbosidad (ASD-STE100 telegráfico), sesgo de posición (ACs atómicos independientes) y sesgo de auto-aprobación (evaluación estricta desde cero).
 - **Concisión técnica ASD-STE100 (Estándar Karpathy):**
   - Redacta cada observación y hallazgo en **frases de máximo 20 palabras**, en voz activa y citando `archivo:línea`.
   - Prohibido emitir sugerencias cosméticas de estilo o párrafos decorativos: si no viola un AC, la seguridad o la arquitectura, no es un hallazgo. Ver [`references/comunicacion-ste100-y-prompts.md`](references/comunicacion-ste100-y-prompts.md).

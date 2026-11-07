@@ -42,6 +42,9 @@ Estado: draft
        - Selecciona la estructura adecuada para la carga: Hash Table O(1) amortizado para búsquedas exactas,
          Heap / Cola de Prioridad O(log N) para tareas o eventos ponderados, B-Tree O(log N) para rangos.
        - Prohibidas complejidades asintóticas accidentales O(N^2) en componentes críticos.
+     Arquitectura de AI Engineering (Chip Huyen - ver `references/ai-engineering-chip-huyen.md`):
+       - Modela el pipeline defensivo de 5 capas: Guardrail de entrada -> Context Assembly & Prompt Caching -> Model Router -> Foundation Model (Structured Outputs) -> Validador de salida & Circuit Breaker.
+       - Maximiza Prompt Caching ordenando prefijos estáticos (instrucciones, schemas, contratos) antes de variables dinámicas.
      Diseño simple (YAGNI & Anti-Speculative Generality): no agregues capas, repositorios, factories ni
      abstracciones "por si acaso" para un futuro hipotético. Todo patrón debe justificarse por necesidad real. -->
 
@@ -61,14 +64,17 @@ Estado: draft
           para prevenir Lost Updates sin bloqueos pesados de tabla.
        5. Evolución de esquemas: migraciones sin downtime bajo el patrón Expand-Contract.
        6. Eficiencia de acceso (CLRS): define índices B-Tree para rangos O(log N) y Hash para búsquedas O(1);
-          previene explícitamente consultas N+1 mediante batching / IN queries (O(1) roundtrips). -->
+          previene explícitamente consultas N+1 mediante batching / IN queries (O(1) roundtrips).
+       7. Integración con Modelos Fundacionales / LLM (Chip Huyen): define esquemas formales JSON Schema
+          o Tool Calling nativo para toda salida de IA; prohibido el parsing de texto libre en integraciones de sistema. -->
 
 ## Decisiones
 
 <!-- Principio "Design It Twice" (John Ousterhout): toda decisión D-n debe contrastar
      al menos dos alternativas de diseño radicalmente diferentes. Para decisiones algorítmicas
-     o de estructuras de datos (CLRS), incluye la complejidad asintótica en el trade-off (ej. O(1) vs O(N)). Una decisión sin alternativa
-     descartada no es una decisión, es una descripción. El nombre
+     o de estructuras de datos (CLRS), incluye la complejidad asintótica en el trade-off (ej. O(1) vs O(N)).
+     Para componentes de IA (Chip Huyen), incluye el trade-off de modelos (Model Routing: costo vs latencia vs inteligencia), o RAG vs Fine-tuning.
+     Una decisión sin alternativa descartada no es una decisión, es una descripción. El nombre
      es para que el spec de cada feature la cite ("decisiones que aplica: D2").
      Sin `Descartada:` (o `Descartado:`) con texto, aprobar se niega.
      Formato STE100 recomendado (terna de 3 frases activas):

@@ -225,6 +225,7 @@ Reglas:
 - Audita la filosofía de diseño (Ousterhout): detecta y clasifica como MAYOR métodos pass-through que solo reenvían llamadas sin abstraer, fuga de información entre capas (Information Leakage) o sobre-fragmentación artificial (classitis).
 - Audita Code Smells y patrones GoF (Martin Fowler & GoF): detecta y clasifica como MAYOR la obsesión con primitivos en entidades core (Primitive Obsession: IDs o importes como strings/ints sin Value Objects), acoplamiento disperso (Shotgun Surgery), envidia de atributos ajenos (Feature Envy), abstracciones prematuras no pedidas por los AC (Speculative Generality) o intermediarios vacíos (Middle Man).
 - Audita algoritmos y estructuras de datos (CLRS): detecta y clasifica como BLOQUEANTE consultas N+1 (queries de base de datos o HTTP en bucles sin batching), como MAYOR búsquedas lineales anidadas O(N^2) sobre colecciones no indexadas y concatenación iterativa de strings en bucles sin buffers contiguos (StringBuilder).
+- Audita ingeniería de IA y modelos fundacionales (Chip Huyen): detecta y clasifica como BLOQUEANTE llamadas a APIs de LLMs sin timeouts ni reintentos resilientes (backoff + jitter), o loops agénticos/de auto-corrección sin límite estricto de <= 2 iteraciones; clasifica como MAYOR el parsing de texto libre en lugar de Structured Outputs (JSON Schema / Tool Calling) y la concatenación directa de inputs de usuario en prompts sin delimitadores semánticos.
 - No modifiques codigo. Solo lees y escribes {rp.name}.
 """)
     # Normativa del stack tecnologico (CALPIL)
