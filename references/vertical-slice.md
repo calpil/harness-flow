@@ -151,7 +151,7 @@ Cuando toda la lista de tests está en verde:
 ## 6. Activación Automática de Modo Pair en Stacks CALPIL y Protocolo de Preguntas de Formulario
 
 ### Activación Automática
-Cuando el proyecto o microservicio pertenece a un stack tecnológico normativo de CALPIL (`golang-hexagonal` o `angular-product`), detectado mediante `stack.py detectar`:
+Cuando el proyecto o microservicio pertenece a un stack tecnológico normativo de CALPIL (`golang-hexagonal`, `angular-product`, `dotnet-hexagonal` o cualquiera de los stacks soportados), detectado mediante `stack.py detectar`:
 - **El Modo Pair interactivo se activa de forma automática**, sin requerir la bandera `--pair` manual ni configuración adicional.
 - La IA asume el rol de **Driver** (escribe los tests acoplados a costuras públicas y el código mínimo) y el usuario humano asume el rol de **Navigator** (supervisa la dirección, acuerdos de diseño y aprobación).
 

@@ -1,0 +1,121 @@
+{
+  "id": "dotnet-hexagonal",
+  "name": "CALPIL .NET Hexagonal Architecture Stack",
+  "version": "1.0.0",
+  "language": "csharp",
+  "framework": "dotnet",
+  "architecture": "hexagonal",
+  "description": "Stack backend C# 13 / .NET con arquitectura hexagonal / Clean Architecture (Domain puro sin ASP.NET/Dapper/EF, Application ports/use-cases, Infrastructure con Dapper/ADO.NET y WebApi con MVC Controllers y ProblemDetails RFC 7807).",
+  "detection": {
+    "files_any": [
+      "*.sln",
+      "*.slnx",
+      "*.csproj",
+      "Directory.Build.props"
+    ],
+    "extensions": [
+      ".cs",
+      ".csproj",
+      ".sln",
+      ".slnx"
+    ],
+    "strong_indicators": [
+      "src/**/*.Domain",
+      "src/**/*.Application",
+      "src/**/*.Infrastructure",
+      "src/**/*.WebApi",
+      "tests/**/*.Tests"
+    ],
+    "dependencies": [
+      "Microsoft.AspNetCore",
+      "Dapper",
+      "Npgsql"
+    ],
+    "anti_indicators": [
+      "go.mod",
+      "angular.json",
+      "pom.xml"
+    ]
+  },
+  "normative": {
+    "rules": [
+      "architecture.md",
+      "dependencies.md",
+      "security.md",
+      "testing.md"
+    ],
+    "skills": [
+      "add-api-endpoint",
+      "add-feature",
+      "add-persistence",
+      "architecture-review",
+      "debug-targeted",
+      "dependency-review",
+      "prepare-release",
+      "security-review",
+      "write-tests"
+    ],
+    "architecture_constraints": {
+      "domain_purity": {
+        "path_pattern": "src/**/*.Domain/**",
+        "forbidden_imports": [
+          "Microsoft.AspNetCore",
+          "Dapper",
+          "Npgsql",
+          "Microsoft.EntityFrameworkCore",
+          "System.Data"
+        ],
+        "rationale": "La capa Domain debe ser C# puro (.NET BCL) sin dependencias de transporte, persistencia ni frameworks."
+      },
+      "application_isolation": {
+        "path_pattern": "src/**/*.Application/**",
+        "forbidden_imports": [
+          "Infrastructure",
+          "WebApi",
+          "Microsoft.AspNetCore.Mvc"
+        ],
+        "rationale": "La capa Application solo depende de Domain y de sus propios puertos."
+      },
+      "composition_root": {
+        "required_entrypoint": "Program.cs",
+        "rationale": "Program.cs en WebApi es el único punto autorizado para instanciar y cablear adapters con use cases e inyección de dependencias."
+      },
+      "security_headers_and_errors": {
+        "problem_details_rfc": "RFC 7807 (application/problem+json)",
+        "security_headers": [
+          "X-Content-Type-Options",
+          "X-Frame-Options",
+          "X-XSS-Protection"
+        ],
+        "correlation_id": "X-Correlation-ID"
+      },
+      "testing_standards": {
+        "forbidden_calls": [
+          "Thread.Sleep"
+        ],
+        "inmemory_repository_pattern": true
+      }
+    }
+  },
+  "runners": {
+    "test_command": "dotnet test",
+    "skills_validator": "node stacks/dotnet-hexagonal/scripts/validate-agent-skills.mjs"
+  },
+  "documentation": {
+    "official_docs": "https://learn.microsoft.com/en-us/dotnet/",
+    "security_advisories": "https://github.com/dotnet/announcements/issues?q=is%3Aissue+label%3ASecurity",
+    "context7": {
+      "library_id": "/dotnet/runtime",
+      "ecosystem": "nuget",
+      "suggested_queries": [
+        "ASP.NET Core Web API controllers RFC 7807",
+        "Dapper connection pooling Npgsql PostgreSQL",
+        "xUnit WebApplicationFactory integration testing"
+      ]
+    }
+  },
+  "security_audit": {
+    "command": "dotnet list package --vulnerable",
+    "minimum_version": "8.0.0"
+  }
+}

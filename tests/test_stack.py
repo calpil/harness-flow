@@ -13,6 +13,7 @@ class TestStackManager(unittest.TestCase):
         self.calpil_root = Path("/Users/alan/Documents/Git/CALPIL")
         self.go_template = self.calpil_root / "calpil-golang-hexagonal-template"
         self.ng_template = self.calpil_root / "calpil-angular-product-template"
+        self.dotnet_template = self.calpil_root / "calpil-dotnet-hexagonal-template"
 
     def tearDown(self):
         shutil.rmtree(self.tmpdir, ignore_errors=True)
@@ -65,6 +66,13 @@ class TestStackManager(unittest.TestCase):
             self.assertEqual(res["stack"], "python-dataproduct")
             self.assertGreaterEqual(res["confidence"], 80)
 
+    def test_detectar_dotnet_hexagonal(self):
+        if self.dotnet_template.exists():
+            res = stack.detectar_stack_directorio(self.dotnet_template)
+            self.assertEqual(res["stack"], "dotnet-hexagonal")
+            self.assertGreaterEqual(res["confidence"], 80)
+            self.assertTrue(any(".sln" in ind or ".cs" in ind for ind in res["indicators"]))
+
     def test_detectar_custom_future_stack(self):
         # Simular la adición de un nuevo stack a futuro (ej. Rust Axum)
         custom_stack_dir = stack.STACKS_DIR / "custom-rust-stack"
@@ -110,6 +118,45 @@ class TestStackManager(unittest.TestCase):
             self.assertTrue(diag_ng["architecture_ok"])
             self.assertTrue(diag_ng["rules_ok"])
 
+        if self.dotnet_template.exists():
+            diag_dotnet = stack.verificar_cumplimiento(self.dotnet_template)
+            self.assertTrue(diag_dotnet["compliant"])
+            self.assertTrue(diag_dotnet["architecture_ok"])
+            self.assertTrue(diag_dotnet["rules_ok"])
+
+    def test_check_architecture_dotnet_violations(self):
+        # Probar que el checker detecta violaciones en .NET
+        import importlib.util
+        spec = importlib.util.spec_from_file_location(
+            "check_dotnet",
+            str(stack.STACKS_DIR / "dotnet-hexagonal" / "scripts" / "check-architecture.py")
+        )
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+
+        bad_repo = self.tmpdir / "bad-dotnet"
+        bad_repo.mkdir()
+        (bad_repo / "src" / "Bad.Domain").mkdir(parents=True)
+        (bad_repo / "src" / "Bad.Domain" / "Bad.Domain.csproj").write_text(
+            '<Project Sdk="Microsoft.NET.Sdk">\n<ItemGroup><PackageReference Include="Dapper" Version="2.0" /></ItemGroup>\n</Project>',
+            encoding="utf-8"
+        )
+        (bad_repo / "src" / "Bad.Domain" / "Entity.cs").write_text(
+            'using Microsoft.AspNetCore.Mvc;\npublic class Entity {}',
+            encoding="utf-8"
+        )
+        (bad_repo / "tests").mkdir()
+        (bad_repo / "tests" / "EntityTest.cs").write_text(
+            'using System.Threading;\npublic class EntityTest { void Test() { Thread.Sleep(100); } }',
+            encoding="utf-8"
+        )
+
+        errors, warnings = mod.check_dotnet_architecture(bad_repo)
+        self.assertGreaterEqual(len(errors), 2)
+        self.assertTrue(any("Composition Root ausente" in e for e in errors))
+        self.assertTrue(any("Domain no debe incluir el paquete externo 'dapper'" in e for e in errors))
+        self.assertTrue(any("Thread.Sleep" in e for e in errors))
+
     def test_verificar_non_compliant_repo(self):
         mock_repo = self.tmpdir / "legacy-repo"
         mock_repo.mkdir()
@@ -151,6 +198,13 @@ class TestStackManager(unittest.TestCase):
             self.assertEqual(res["official_docs"], "https://go.dev/doc/")
             self.assertEqual(res["minimum_version"], "1.23.0")
             self.assertIn("govulncheck", res["audit_command"])
+
+        if self.dotnet_template.exists():
+            res_dn = stack.auditar_seguridad_y_versiones(self.dotnet_template)
+            self.assertEqual(res_dn["stack"], "dotnet-hexagonal")
+            self.assertEqual(res_dn["context7_library"], "/dotnet/runtime")
+            self.assertEqual(res_dn["minimum_version"], "8.0.0")
+            self.assertIn("dotnet list package", res_dn["audit_command"])
 
 
 if __name__ == "__main__":

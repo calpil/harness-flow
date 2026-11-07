@@ -263,26 +263,15 @@ def verificar_cumplimiento(repo: Path, stack_id: str | None = None) -> dict[str,
     # C. Chequeo de Arquitectura
     arch_ok = True
     arch_errors: list[str] = []
-    if stack_id == "golang-hexagonal":
-        arch_script = STACKS_DIR / "golang-hexagonal" / "scripts" / "check-architecture.py"
-        if arch_script.exists():
-            code, out = _run_cmd([sys.executable, str(arch_script), "--repo", str(repo)])
-            if code != 0:
-                arch_ok = False
-                for line in out.splitlines():
-                    if line.startswith("  - "):
-                        arch_errors.append(line.strip())
-                        findings.append(f"Arquitectura Go: {line.strip()}")
-    elif stack_id == "angular-product":
-        arch_script = STACKS_DIR / "angular-product" / "scripts" / "check-architecture.py"
-        if arch_script.exists():
-            code, out = _run_cmd([sys.executable, str(arch_script), "--repo", str(repo)])
-            if code != 0:
-                arch_ok = False
-                for line in out.splitlines():
-                    if line.startswith("  - "):
-                        arch_errors.append(line.strip())
-                        findings.append(f"Arquitectura Angular: {line.strip()}")
+    arch_script = STACKS_DIR / stack_id / "scripts" / "check-architecture.py"
+    if arch_script.exists():
+        code, out = _run_cmd([sys.executable, str(arch_script), "--repo", str(repo)])
+        if code != 0:
+            arch_ok = False
+            for line in out.splitlines():
+                if line.startswith("  - "):
+                    arch_errors.append(line.strip())
+                    findings.append(f"Arquitectura {stack_id}: {line.strip()}")
 
     # D. Multi-LLM Readiness
     multi_llm_ready = (not missing_rules) and (len(missing_skills) == 0) and has_agents_md
@@ -366,36 +355,21 @@ def normalizar_repositorio(repo: Path, stack_id: str | None = None, dry_run: boo
             agents_md.write_text(agents_content, encoding="utf-8")
         actions_taken.append("Generado contrato multi-LLM en AGENTS.md")
 
-    # 4. Instalar script de verificación arquitectónica
+    # 4. Instalar scripts de verificación si existen en el stack
     scripts_dir = repo / "scripts"
-    if not dry_run:
-        scripts_dir.mkdir(parents=True, exist_ok=True)
-
-    if stack_id == "golang-hexagonal":
-        arch_py = stack_source_dir / "scripts" / "check-architecture.py"
-        if arch_py.exists():
-            dest_arch = scripts_dir / "check-architecture.py"
-            if not dest_arch.exists():
-                if not dry_run:
-                    shutil.copy2(arch_py, dest_arch)
-                    dest_arch.chmod(0o755)
-                actions_taken.append("Instalado validador: scripts/check-architecture.py")
-    elif stack_id == "angular-product":
-        arch_mjs = stack_source_dir / "scripts" / "check-architecture.mjs"
-        arch_py = stack_source_dir / "scripts" / "check-architecture.py"
-        if arch_mjs.exists():
-            dest_mjs = scripts_dir / "check-architecture.mjs"
-            if not dest_mjs.exists():
-                if not dry_run:
-                    shutil.copy2(arch_mjs, dest_mjs)
-                actions_taken.append("Instalado validador: scripts/check-architecture.mjs")
-        if arch_py.exists():
-            dest_py = scripts_dir / "check-architecture.py"
-            if not dest_py.exists():
-                if not dry_run:
-                    shutil.copy2(arch_py, dest_py)
-                    dest_py.chmod(0o755)
-                actions_taken.append("Instalado validador: scripts/check-architecture.py")
+    stack_scripts_dir = stack_source_dir / "scripts"
+    if stack_scripts_dir.exists():
+        if not dry_run:
+            scripts_dir.mkdir(parents=True, exist_ok=True)
+        for s_file in stack_scripts_dir.glob("*"):
+            if s_file.is_file():
+                dest_file = scripts_dir / s_file.name
+                if not dest_file.exists():
+                    if not dry_run:
+                        shutil.copy2(s_file, dest_file)
+                        if s_file.suffix in (".py", ".sh", ".mjs"):
+                            dest_file.chmod(0o755)
+                    actions_taken.append(f"Instalado validador: scripts/{s_file.name}")
 
     return {
         "status": "normalized",
@@ -520,6 +494,17 @@ def auditar_seguridad_y_versiones(repo: Path, stack_id: str | None = None) -> di
                 min_prefix = ".".join(min_version.split(".")[:2])
                 if detected_ver < min_prefix:
                     warnings.append(f"Versión de Go en go.mod ({detected_ver}) es inferior a la mínima recomendada ({min_version})")
+        elif stack_id == "dotnet-hexagonal":
+            for csproj in repo.glob("**/*.csproj"):
+                text = csproj.read_text(encoding="utf-8", errors="ignore")
+                m = re.search(r"<TargetFramework>net([0-9.]+)</TargetFramework>", text)
+                if m:
+                    detected_ver = m.group(1)
+                    det_parts = tuple(int(x) for x in re.findall(r"\d+", detected_ver))
+                    min_parts = tuple(int(x) for x in re.findall(r"\d+", min_version))
+                    if det_parts < min_parts:
+                        warnings.append(f"Versión de .NET en {csproj.name} (net{detected_ver}) es inferior a la mínima recomendada (net{min_version})")
+                    break
 
     return {
         "stack": stack_id,
@@ -630,6 +615,51 @@ def generar_plan_refactor(repo: Path, stack_id: str | None = None) -> dict[str, 
                     "description": f"Corregir import prohibido entre capas: {err}"
                 })
 
+    elif stack_id == "dotnet-hexagonal":
+        program_files = [p for p in repo.glob("**/Program.cs") if "obj" not in p.parts and "bin" not in p.parts]
+        if not program_files:
+            steps.append({
+                "step": 1,
+                "title": "Crear Composition Root canónico (Program.cs)",
+                "action": "scaffold",
+                "target": "src/WebApi/Program.cs",
+                "description": "Centralizar arranque de ASP.NET Core, middlewares RFC 7807, CORS e inyección de dependencias en Program.cs."
+            })
+        has_domain = any("domain" in p.name.lower() for p in repo.glob("src/*")) or any("domain" in p.name.lower() for p in repo.glob("*"))
+        if not has_domain:
+            steps.append({
+                "step": 2,
+                "title": "Separar solución en proyectos hexagonales (.Domain, .Application, .Infrastructure, .WebApi)",
+                "action": "reorganize",
+                "target": "src/(Domain|Application|Infrastructure|WebApi)",
+                "description": "Aislar entidades en Domain (C# puro), use cases en Application, Dapper en Infrastructure y controllers en WebApi."
+            })
+        for err in diag.get("architecture_errors", []):
+            if "Domain no permite dependencia" in err or "no debe referenciar" in err:
+                steps.append({
+                    "step": len(steps) + 1,
+                    "title": "Desacoplar dependencias impuras en proyecto Domain",
+                    "action": "refactor_domain",
+                    "target": err.split(":")[0],
+                    "description": f"Extraer transporte/SQL a adaptadores e interfaces de puertos: {err}"
+                })
+            elif "Application no debe importar" in err:
+                steps.append({
+                    "step": len(steps) + 1,
+                    "title": "Invertir dependencia en Application mediante puertos (DIP)",
+                    "action": "invert_dependency",
+                    "target": err.split(":")[0],
+                    "description": f"Application debe depender de interfaces (Ports/I...Repository.cs) en lugar de implementaciones concretas: {err}"
+                })
+            elif "Thread.Sleep" in err:
+                steps.append({
+                    "step": len(steps) + 1,
+                    "title": "Eliminar Thread.Sleep arbitrario en pruebas",
+                    "action": "fix_test_determinism",
+                    "target": err.split(":")[0],
+                    "description": "Reemplazar Thread.Sleep con FakeClock o sincronización asíncrona determinista."
+                })
+
     return {
         "needed": True,
         "stack": stack_id,
@@ -718,6 +748,45 @@ func main() {
             if not c.exists():
                 c.mkdir(parents=True, exist_ok=True)
                 creados.append(str(c.relative_to(repo)))
+
+    elif stack_id == "dotnet-hexagonal":
+        carpetas = [
+            repo / "src" / "Domain",
+            repo / "src" / "Application",
+            repo / "src" / "Infrastructure",
+            repo / "src" / "WebApi",
+            repo / "tests" / "Domain.Tests",
+            repo / "tests" / "Application.Tests",
+            repo / "tests" / "WebApi.Tests",
+        ]
+        for c in carpetas:
+            if not c.exists():
+                c.mkdir(parents=True, exist_ok=True)
+                creados.append(str(c.relative_to(repo)))
+
+        program_cs = repo / "src" / "WebApi" / "Program.cs"
+        existing_program = [p for p in repo.glob("**/Program.cs") if "obj" not in p.parts and "bin" not in p.parts]
+        if not program_cs.exists() and not existing_program:
+            program_cs.write_text("""var builder = WebApplication.CreateBuilder(args);
+
+builder.Services.AddControllers();
+
+var app = builder.Build();
+
+app.Use(async (context, next) =>
+{
+    context.Response.Headers.Append("X-Content-Type-Options", "nosniff");
+    context.Response.Headers.Append("X-Frame-Options", "DENY");
+    context.Response.Headers.Append("X-XSS-Protection", "1; mode=block");
+    await next();
+});
+
+app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
+app.MapControllers();
+
+app.Run();
+""", encoding="utf-8")
+            creados.append(str(program_cs.relative_to(repo)))
 
     return creados
 

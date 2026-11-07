@@ -50,7 +50,7 @@ Las lecciones aprendidas son memoria del usuario, no del agente donde se descubr
 
 ### 7. Gobernanza de Stacks Tecnológicos, Context7 y Modo Pair Automático (`stack.py`)
 - **Detección Dinámica y Extensible de Stacks**: Motor declarativo (`stacks/<stack-id>/manifest.json`) que escanea y clasifica cualquier repositorio o microservicio según archivos base (`files_any`/`files_all`), extensiones, dependencias de `package.json`, coincidencia de contenido (`content_matches`), indicadores estructurales (`strong_indicators`) y reglas de descarte (`anti_indicators`).
-  - Catálogo activo: **Golang Hexagonal** (`golang-hexagonal`), **Angular Product** (`angular-product`), **Next.js Product** (`nextjs-product`), **Spring Boot Hexagonal** (`springboot-hexagonal`), **NestJS Hexagonal** (`nestjs-hexagonal`), y **Python Data Product** (`python-dataproduct`).
+  - Catálogo activo: **Golang Hexagonal** (`golang-hexagonal`), **Angular Product** (`angular-product`), **.NET Hexagonal** (`dotnet-hexagonal`), **Next.js Product** (`nextjs-product`), **Spring Boot Hexagonal** (`springboot-hexagonal`), **NestJS Hexagonal** (`nestjs-hexagonal`), y **Python Data Product** (`python-dataproduct`).
   - Extensible: cualquier nuevo stack se soporta simplemente creando `stacks/<nuevo-stack>/manifest.json` sin tocar código Python.
 - **Verificación Normativa y Refactorización Guiada**: Audita cumplimiento de reglas (`.claude/rules/`), skills (`.claude/skills/`, `.agents/skills/`), contratos multi-LLM (`AGENTS.md`) y límites de arquitectura en caliente (`check-architecture.py`). Si un repositorio no cumple, genera planes de refactorización vertical (*Expand-Contract*) y scaffolding automático del esqueleto canónico (`stack.py refactorizar --scaffold`).
 - **Normalización Multi-LLM**: Provee paridad completa instalando rules y skills en los formatos de Claude Code, Codex, Gemini/AGY, Hermes, Grok y Kimi Code.
@@ -234,6 +234,7 @@ harness-flow/
 ├── stacks/                           <- Stacks tecnológicos declarativos (manifests, rules, skills, checkers)
 │   ├── golang-hexagonal/             <- Arquitectura hexagonal Go, 4 rules, 9 skills, check-architecture.py
 │   ├── angular-product/              <- Angular 17+ zoneless, 6 rules, 31 skills, check-architecture.mjs
+│   ├── dotnet-hexagonal/             <- Clean Architecture C# 13/.NET 10, 4 rules, 9 skills, check-architecture.py
 │   ├── nextjs-product/               <- Next.js App Router, 6 rules, 37 skills
 │   ├── springboot-hexagonal/         <- Spring Boot 3 Java hexagonal, 4 rules, 15 skills
 │   ├── nestjs-hexagonal/             <- NestJS TypeScript hexagonal, 4 rules, 14 skills
