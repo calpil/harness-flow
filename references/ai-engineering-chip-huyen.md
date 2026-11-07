@@ -111,3 +111,73 @@ flowchart TD
 | **Implementer (TDD)** | Sombrero 1 y Sombrero 2 | TDD con validación de esquemas; **Bounded Reflection** (máximo 2 reintentos ante error de schema); sanitización de inyecciones; llamadas con timeouts y backoff con jitter. |
 | **Revisor Aislado** | Subagente Revisor | Opera bajo **AI-as-a-Judge neutralizado**: amnesia deliberada (sin self-enhancement), concisión telegráfica ASD-STE100 (sin verbosity bias) y evaluación atómica de ACs (sin position bias). Audita llamadas a LLMs en el diff. |
 | **Gates Automatizados** | `gate.py` / `estado.py` | Bloquea features sin cobertura de tests deterministas sobre schemas de IA o con loops agénticos no acotados. |
+
+---
+
+## 7. Formulación y Rebanado Vertical de Features de Negocio con IA
+
+### Caso Arquetípico: Mantenimiento Predictivo Industrial e IoT (Ascensores, Sala de Bombas y Pozos de Agua)
+
+Cuando un negocio plantea un requerimiento como:
+> *"Aplicar IA que genere un sistema predictivo para mantenciones de ascensor, sala de bomba y pozos de agua"*
+
+El error habitual es abordar el problema de forma horizontal (*"entrenar modelo de machine learning"*, *"crear base de datos de telemetría"*, *"diseñar dashboard"*). En Harness Flow, este requerimiento se traduce a la metodología de **AI Engineering y Vertical Slices** siguiendo estos pasos:
+
+### A. Formulación del Problema (Problem Framing de Chip Huyen)
+1. **Tarea Analítica Clara**:
+   * No pedir "IA mágica". Definir la tarea como: **Detección de anomalías no supervisada sobre series de telemetría física** + **Clasificación de riesgo de falla** (`normal`, `advertencia`, `critico`) con horizonte temporal de 7 a 14 días.
+2. **Telemetría y Fuentes de Datos**:
+   * *Sala de bombas:* Corriente de consumo (Amperes), presión hidrostática (bar), temperatura de carcasa (°C) y horas continuas de funcionamiento.
+   * *Pozos de agua / sentinas:* Frecuencia de activación de bomba de achique, tiempo de vaciado del pozo (minutos) y estado del sensor de nivel/flotador.
+   * *Ascensores:* Contador de viajes acumulados, tiempos de apertura/cierre de puertas, vibración del motor de tracción y corriente en maniobra.
+3. **Asimetría de Pérdida (Loss Asymmetry)**:
+   * *Falso Negativo (Falla no prevista):* El pozo de agua colapsa e inunda el subterráneo del edificio, o un ascensor se bloquea con personas dentro ($$$$ costo catastrófico, riesgo de vida y daño patrimonial).
+   * *Falso Positivo (Falsa alarma):* El técnico baja a la sala de bombas a hacer una inspección visual de 10 minutos (costo marginal bajo).
+   * *Directiva:* El sistema se calibra para **alto recall** en riesgo crítico, asumiendo una tasa moderada de falsas alarmas antes que perder una falla inminente.
+4. **Regla del Baseline Heurístico Obligatorio (Baseline-First)**:
+   * Toda feature predictiva DEBE comenzar definiendo la regla determinista base:
+     * *Bomba:* `temperatura > 75°C` O `horas_sin_mantencion > 720h`.
+     * *Pozo:* `tiempo_vaciado > 15 min` O `arranques_por_hora > 12`.
+     * *Ascensor:* `viajes_acumulados > 10.000` O `vibracion > 4.5 mm/s`.
+   * El modelo fundacional/predictivo debe superar el baseline en anticipación o justificar su valor contextual (ej. correlacionar corriente con vibración). Si el servicio de IA falla o hay desconexión, **el baseline actúa como fallback determinista infalible**.
+
+### B. Descomposición Vertical en Candidatas `F-n` del Backlog (PRD)
+
+```mermaid
+flowchart TD
+    F1["<b>F-1: Walking Skeleton Sala de Bombas</b><br/>Ingesta de 1 bomba &rarr; baseline + inferencia estructurada &rarr; alerta visible &rarr; test"]
+    F2["<b>F-2: Pozos de Agua y Detección de Inundación</b><br/>Anomalías en tiempo de vaciado &rarr; alerta de riesgo crítico &rarr; tests"]
+    F3["<b>F-3: Ascensores por Fatiga Mecánica y Puertas</b><br/>Viajes acumulados y vibración &rarr; orden de revisión preventiva &rarr; tests"]
+    F4["<b>F-4: Loop de Feedback Técnico (Human-in-the-Loop)</b><br/>Técnico valida en terreno &rarr; enriquece Golden Dataset y calibra umbrales"]
+
+    F1 --> F2
+    F1 --> F3
+    F1 & F2 & F3 --> F4
+```
+
+1. **`F-1: Walking skeleton predictivo de sala de bombas`**:
+   * *Alcance:* Ingesta de telemetría de 1 bomba (corriente + temperatura + horas) $\rightarrow$ evaluación con baseline + modelo fundacional mediante JSON Schema estricto $\rightarrow$ alerta observable en API/UI de conserjería $\rightarrow$ test con caso del Golden Dataset. (Cumple O1).
+2. **`F-2: Detección de anomalías de nivel y achique en pozos de agua`**:
+   * *Alcance:* Registro de tiempo de vaciado del pozo y arranques por hora $\rightarrow$ detección de ciclos cortos (obstrucción o flotador trabado) $\rightarrow$ notificación de alerta temprana de inundación $\rightarrow$ tests. (Cumple O1; requiere: F-1).
+3. **`F-3: Mantenimiento predictivo de ascensores por ciclos de viaje y puertas`**:
+   * *Alcance:* Telemetría de maniobra y vibración de motor $\rightarrow$ inferencia de desgaste de rodamientos o zapatas $\rightarrow$ emisión de sugerencia de revisión técnica antes de falla de tracción $\rightarrow$ tests. (Cumple O1; requiere: F-1).
+4. **`F-4: Calibración y loop de retroalimentación de técnicos (Human-in-the-Loop)`**:
+   * *Alcance:* Formulario rápido donde el técnico marca si el diagnóstico fue acertado (*true positive* vs *falsa alarma*) $\rightarrow$ almacenamiento de la tupla `(telemetria, prediccion, veredicto_tecnico)` para re-evaluación continua del Golden Dataset. (Cumple O1; requiere: F-1, F-2, F-3).
+
+### C. Patrón de Criterios de Aceptación (AC) en el Spec (Rol Leader)
+
+Al redactar el spec de una feature predictiva (`templates/spec.md`), se deben definir 3 costuras obligatorias:
+
+1. **AC-1 (Inferencia estructurada en costura API/Endpoint):**
+   * *Given* un lote de telemetría de sensor (ej. bomba con $T=78^\circ\text{C}$ y corriente $I=16\text{A}$ continua),
+   * *When* se envía a `/api/mantenimiento/evaluar-activo`,
+   * *Then* devuelve HTTP 200 con JSON validado por schema (`nivel_riesgo: "critico"`, `tiempo_estimado_falla_dias: <= 3`, `componente_afectado: "rodamiento_motor"`, `explicacion: "..."`).
+2. **AC-2 (Fallback determinista ante fallo de IA en costura Servicio):**
+   * *Given* que la API externa del modelo de lenguaje supera el timeout de 3 segundos o devuelve error 500,
+   * *When* el servicio evalúa la telemetría,
+   * *Then* aplica la regla heurística determinista (`temperatura > 75°C => alerta`), marca `fuente: "heuristica_fallback"` y emite la alerta preventiva sin interrumpir el flujo.
+3. **AC-3 (Validación de feedback humano en costura Integración/DB):**
+   * *Given* un técnico que atiende la alerta en terreno,
+   * *When* confirma la orden con veredicto `"falla_confirmada"`,
+   * *Then* el sistema persiste la telemetría y el diagnóstico en la tabla de calibración para enriquecer el Golden Dataset.
+

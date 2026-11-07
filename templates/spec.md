@@ -28,6 +28,10 @@ fuera de la existencia: casos límite normales (listas vacías, borrado idempote
 como respuestas ordinarias de negocio, no como excepciones técnicas.
 Principio GoF & Fowler (ver `references/patrones-gof-y-refactoring.md`): "Program to an interface, not an implementation".
 Las costuras públicas miden puertos y contratos estables, desacoplados de detalles de implementación internos.
+Patrón de ACs para Features de IA / Predictivas (Chip Huyen - ver `references/ai-engineering-chip-huyen.md`):
+  - Inferencia estructurada: salida feliz tipada y validada contra JSON Schema.
+  - Fallback determinista: regla heurística base infalible si la IA falla o supera el timeout.
+  - Human-in-the-Loop: persistencia de telemetría y veredicto humano para calibrar el Golden Dataset.
 Apunta a 2-5 AC por vertical slice; si necesita mas de 5, considera dividir la
 feature en slices verticales mas chicos antes de aprobar.
 

@@ -112,6 +112,8 @@ Despues:
        - Si un cambio requiere refactor amplio o migracion, usar expand-contract
          (agregar -> migrar -> eliminar el camino viejo) para no romper la app.
        - Declara bloqueos con (requiere: F-1, F-2) solo cuando una historia no tiene sentido sin otra.
+       - Para features de negocio con IA o predicción (Chip Huyen - ver `references/ai-engineering-chip-huyen.md`):
+         corta verticalmente por activo o caso de uso (ej. F-1: Walking skeleton bombas con baseline y JSON Schema; F-2: Pozos de agua; F-3: Ascensores; F-4: Feedback técnico Human-in-the-Loop), NUNCA por tareas de ML horizontales ("entrenar modelo", "hacer EDA").
      Cada una entra al backlog con
        add.py --name "<nombre>" --prd docs/prd/PRD-master.md
      y recibe su spec con AC en el rol leader. -->

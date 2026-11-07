@@ -361,6 +361,12 @@ A partir del análisis del tratado canónico *AI Engineering: Building Applicati
      * **Auditoría en el diff**:
        * Clasificación como **Bloqueante** de llamadas a APIs de LLMs sin timeouts ni backoff, o bucles agénticos sin parada estricta ($\le 2$).
        * Clasificación como **Mayor** del parsing de texto libre sin Structured Outputs y de la concatenación de prompts sin sanitizar.
+5. **Formulación y Rebanado Vertical de Features de Negocio con IA (Ej. Mantenimiento Predictivo Industrial)**:
+   * En [`references/ai-engineering-chip-huyen.md`](file:///Users/alan/.hermes/skills/software-development/harness-flow/references/ai-engineering-chip-huyen.md) y [`references/vertical-slice.md`](file:///Users/alan/.hermes/skills/software-development/harness-flow/references/vertical-slice.md):
+     * Guía paso a paso para traducir requerimientos de negocio complejos (como *"Aplicar IA predictiva para mantenimiento de ascensores, sala de bombas y pozos de agua"*) en Vertical Slices punta a punta.
+     * **Problem Framing**: Definición formal de la tarea analítica (Detección de anomalías no supervisada + Clasificación de riesgo con ventana de $K$ días), análisis de la **asimetría de pérdida** (alto recall para evitar costos catastróficos por fallas no previstas) y **regla del baseline heurístico obligatorio** (toda IA debe superar una regla simple determinista y contar con ella como fallback).
+     * **Rebanado Vertical Canónico (`F-1` a `F-4`)**: Prohibición de historias horizontales (*"hacer modelo"*, *"diseñar pantalla"*); corte vertical por activo y funcionalidad (`F-1` walking skeleton de bomba con baseline y JSON Schema $\rightarrow$ `F-2` pozos de agua y achique $\rightarrow$ `F-3` ascensores por fatiga y vibración $\rightarrow$ `F-4` loop de confirmación técnica en terreno para calibración de Golden Datasets).
+     * **Plantilla de ACs Predictivos** en [`templates/spec.md`](file:///Users/alan/.hermes/skills/software-development/harness-flow/templates/spec.md): Patrones Given/When/Then con salida feliz tipada, fallback heurístico ante timeout/error y persistencia de veredicto humano.
 
 ---
 

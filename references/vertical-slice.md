@@ -51,6 +51,11 @@ harness-flow:  Rol 0 (Producto)  →  Rol 1 (Leader: spec)  →  Rol 2 (--pair o
    - `add.py --candidata F-n` hereda los bloqueos automáticamente (o recibe `--requiere 1,2`) y `estado.py` destaca en `Siguiente paso sugerido:` la **frontera** (la primera feature sin bloqueos abiertos).
 5. **Refactors amplios mediante *Expand–Contract* (Parallel Change):**
    - Si un cambio requiere migrar un contrato o esquema compartido, córtalo en pasos que nunca rompan la app: (1) *Expand* (añadir lo nuevo junto a lo viejo), (2) *Migrate* (mover consumidores), (3) *Contract* (eliminar lo viejo).
+6. **Features de negocio basadas en IA o analítica predictiva (Chip Huyen - ver `references/ai-engineering-chip-huyen.md`):**
+   - Prohibido cortar historias de IA por capas horizontales (*"F-1: recolectar telemetría"*, *"F-2: entrenar modelo"*, *"F-3: armar dashboard"*).
+   - `F-1` es un walking skeleton predictivo completo: ingesta de telemetría de 1 activo (ej. sala de bombas) $\rightarrow$ baseline heurístico + inferencia con Structured Output $\rightarrow$ alerta observable en UI/API $\rightarrow$ test con caso del Golden Dataset.
+   - Slices posteriores expanden a nuevos activos (ej. `F-2: pozos de agua y achique`, `F-3: ascensores por viajes y vibración`) o añaden el circuito de calibración (`F-4: confirmación en terreno Human-in-the-Loop`).
+   - Todo slice de IA debe contemplar un fallback determinista infalible si la inferencia externa falla.
 
 ---
 
