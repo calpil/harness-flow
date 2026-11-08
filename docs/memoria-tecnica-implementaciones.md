@@ -473,7 +473,46 @@ A partir de los estándares internacionales de seguridad en aplicaciones de OWAS
 
 ---
 
-## 17. Estado de Verificación y Métricas de Calidad
+## 17. Hito 15: Lectura de *Design Patterns* por fase (Gamma, Helm, Johnson, Vlissides)
+
+A partir de *Design Patterns: Elements of Reusable Object-Oriented Software* (Addison-Wesley, 1994) se cerró la guía operativa de los seis capítulos. No se reescribió el catálogo de los 23 patrones y no se cambiaron gates, plantillas ni agentes. La guía dice cuándo un patrón entra en cada fase. La matriz de capa sigue en [`references/patrones-gof-y-refactoring.md`](file:///Users/alan/.hermes/skills/software-development/harness-flow/references/patrones-gof-y-refactoring.md).
+
+### Documentación y Referencias:
+* [`references/design-patterns-gof.md`](file:///Users/alan/.hermes/skills/software-development/harness-flow/references/design-patterns-gof.md): Lectura cerrada, capítulos 1 a 6. Enlazada desde `SKILL.md`, `README.md`, `docs/README.md` y una línea de estado en el catálogo.
+
+### Qué fija cada capítulo:
+1. **Capítulo 1 — Cuándo un patrón no entra**:
+   * Un patrón es nombre, problema, solución y costo. Entra en un `D-n` solo si el eje ya está en el PRD, en una decisión o en un olor del código verde.
+   * Las clases entran en el sombrero de refactor. El primer verde se queda en el código más simple.
+   * No se crea una interfaz de un solo implementador. Una delegación que solo reenvía sigue siendo un middle man.
+   * Los stacks CALPIL son el framework. Una feature no reinventa MVC ni la arquitectura del stack. El libro de 1994 no cubre concurrencia, distribución ni tiempo real.
+2. **Capítulo 2 — Lexi no es el esqueleto**:
+   * El editor del libro recorre ocho patrones. `F-1` no los instala juntos. Un eje real por candidata.
+   * Composite solo si el dominio es un árbol. Strategy solo con dos algoritmos reales. Decorator solo si el envoltorio añade conducta que se apila.
+   * Un kit de UI no pide Abstract Factory. Una plataforma es Adapter, no Bridge. Command solo si un AC pide deshacer. El iterador es el del lenguaje. Visitor solo si se suman análisis y los tipos de nodo no. Flyweight espera una medición. El dominio no recibe la ventana.
+3. **Capítulo 3 — Crear en la raíz de composición**:
+   * Se empieza con `new` en la raíz. Factory Method solo si la subclase ya existía por otra razón. Abstract Factory solo con dos familias reales de producto. Builder solo si el mismo proceso deja dos representaciones. Prototype solo si un AC duplica o registra ejemplares.
+   * El `Instance()` global de Singleton se rechaza. La unicidad es inyección.
+4. **Capítulo 4 — El envoltorio se distingue por la intención**:
+   * Adapter de objeto, y solo cuando las dos interfaces ya existen. Bridge solo si la abstracción propia y la implementación ajena ya crecen las dos.
+   * En Composite, añadir hijos vive en el tipo compuesto. Decorator añade conducta apilable y rompe la identidad. Facade define una interfaz nueva sobre un subsistema real, no un reenvío de una llamada.
+   * Flyweight solo si se cumplen las cinco condiciones del capítulo y la memoria se midió. El proxy controla el acceso a un sujeto. El proxy remoto no es la frontera entre servicios. Decorator y Proxy no se usan como sinónimos.
+5. **Capítulo 5 — Quién habla con quién**:
+   * Chain of Responsibility solo si la cadena ya existe y una petición sin dueño es un error explícito del puerto.
+   * Command para deshacer. Memento solo como foto estrecha dentro de ese comando, no como ceremonia de tres clases.
+   * Interpreter solo para un lenguaje chico que escribe el usuario. El mediador es el caso de uso, no una clase dios. Observer se queda en la UI del stack.
+   * State se transiciona solo. Strategy la elige quien llama. Template Method solo si la clase base ya existía y el framework obliga a redefinir un paso.
+6. **Capítulo 6 — El catálogo no genera el programa**:
+   * El catálogo es vocabulario y blanco del refactor. No hay un orden de aplicación que produzca la feature.
+   * El primer verde se parece al problema. El patrón es la consolidación, cuando la expansión ya duele.
+   * Dos intenciones reales en un mismo módulo profundo se quedan. Una sarta de clases con el nombre del patrón es classitis.
+
+### Qué no cambió:
+* Gates, plantillas y agentes. Los apéndices del libro (glosario, notación y clases de fundación) no se mapearon: los cubre el idioma del stack.
+
+---
+
+## 18. Estado de Verificación y Métricas de Calidad
 
 * **Batería de Pruebas Automatizadas**: 280 tests de flujo core, producto, stack, gates, auditoría y documentación ejecutados pasando al 100%:
   ```bash
