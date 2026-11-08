@@ -512,12 +512,31 @@ A partir de *Design Patterns: Elements of Reusable Object-Oriented Software* (Ad
 
 ---
 
-## 18. Estado de Verificación y Métricas de Calidad
+## 18. Hito 16: Paridad Total de Reglas Modulares Multi-LLM en Stacks CALPIL
 
-* **Batería de Pruebas Automatizadas**: 280 tests de flujo core, producto, stack, gates, auditoría y documentación ejecutados pasando al 100%:
+Se erradicó la asimetría de reglas hacia Claude Code implementando paridad nativa y completa para todos los ecosistemas de LLM (OpenAI/Codex, Gemini/AGY, Grok, Kimi, Hermes, Cursor y Claude Code):
+
+### Principios y Mecanismos Integrados:
+1. **Espejado Multi-LLM de Reglas Modulares**:
+   * En [`scripts/stack.py`](file:///Users/alan/.hermes/skills/software-development/harness-flow/scripts/stack.py): La función `normalizar_repositorio` ahora instala simultáneamente las reglas modulares (`architecture.md`, `dependencies.md`, `security.md`, `testing.md`) en:
+     - `.claude/rules/` (formato nativo con globs para Claude Code).
+     - `.agents/rules/` (estándar abierto interoperable para OpenAI Codex, Grok, Kimi y Hermes).
+     - `.gemini/rules/` (para Google Gemini CLI y Antigravity AGY).
+2. **Validador de Cumplimiento Tolerante e Interoperable**:
+   * En `stack.py verificar_cumplimiento`: La verificación de reglas modulares (`rules_ok`) ahora comprueba la presencia en cualquiera de los tres directorios canónicos (`.claude/rules/`, `.agents/rules/` o `.gemini/rules/`), eliminando la dependencia rígida del directorio de Claude.
+3. **Síntesis Arquitectónica en `AGENTS.md`**:
+   * En `_generar_agents_md()`: Se extraen los límites arquitectónicos detallados directamente de `architecture.md` (descartando frontmatter específico de un solo host) e integrándolos en el cuerpo de `AGENTS.md`. Todo agente que consulte `AGENTS.md` absorbe de inmediato las restricciones de arquitectura hexagonal sin necesidad de tool calls adicionales.
+4. **Cobertura de Pruebas Unitarias**:
+   * En [`tests/test_stack.py`](file:///Users/alan/.hermes/skills/software-development/harness-flow/tests/test_stack.py): Se añadieron aserciones para la presencia de reglas en `.agents/rules/` y `.gemini/rules/` y un nuevo test `test_verificar_multi_llm_rules_ok` validando repositorios exclusivos de agentes no-Claude.
+
+---
+
+## 19. Estado de Verificación y Métricas de Calidad
+
+* **Batería de Pruebas Automatizadas**: 282 tests de flujo core, producto, stack, gates, auditoría y documentación ejecutados pasando al 100%:
   ```bash
   PYTHONPATH=scripts:tests python3 -m unittest tests/test_producto.py tests/test_stack.py tests/test_estado.py tests/test_spec_acs.py tests/test_review_rondas.py tests/test_auditoria_tres.py tests/test_documentacion.py tests/test_clrs_algoritmos.py tests/test_prd_sdd_flujo.py tests/test_contexto.py tests/test_enmienda.py
-  # Ran 280 tests in 22.478s - OK
+  # Ran 282 tests in 27.517s - OK
   ```
 * **Validación de Habilidades de Agentes**: 100% de las habilidades validadas en todos los stacks con `validate-agent-skills.mjs`.
 * **Verificación de Arquitectura en las 8 Plantillas Reales de CALPIL**:

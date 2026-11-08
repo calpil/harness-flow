@@ -230,19 +230,21 @@ def verificar_cumplimiento(repo: Path, stack_id: str | None = None) -> dict[str,
     findings: list[str] = []
     warnings: list[str] = []
 
-    # A. Chequeo de Rules (.claude/rules/*.md y AGENTS.md)
-    rules_dir = repo / ".claude" / "rules"
+    # A. Chequeo de Rules Multi-LLM (.claude/rules/, .agents/rules/, .gemini/rules/ y AGENTS.md)
+    rules_claude = repo / ".claude" / "rules"
+    rules_agents = repo / ".agents" / "rules"
+    rules_gemini = repo / ".gemini" / "rules"
     expected_rules = manifest.get("normative", {}).get("rules", [])
     missing_rules = []
     for r in expected_rules:
-        if not (rules_dir / r).exists():
+        if not ((rules_claude / r).exists() or (rules_agents / r).exists() or (rules_gemini / r).exists()):
             missing_rules.append(r)
 
     agents_md = repo / "AGENTS.md"
     has_agents_md = agents_md.exists()
 
     if missing_rules:
-        findings.append(f"Reglas modulares faltantes en .claude/rules/: {', '.join(missing_rules)}")
+        findings.append(f"Reglas modulares faltantes en (.claude/rules/ o .agents/rules/): {', '.join(missing_rules)}")
     if not has_agents_md:
         warnings.append("Falta AGENTS.md en la raiz del microservicio/repo (recomendado para LLMs no-Claude: Codex, Gemini, Grok, Kimi)")
 
@@ -312,18 +314,35 @@ def normalizar_repositorio(repo: Path, stack_id: str | None = None, dry_run: boo
     stack_source_dir = STACKS_DIR / stack_id
     actions_taken: list[str] = []
 
-    # 1. Instalar .claude/rules/*.md
-    target_rules_dir = repo / ".claude" / "rules"
+    # 1. Instalar Rules Multi-LLM (.claude/rules/, .agents/rules/, .gemini/rules/)
+    target_claude_rules = repo / ".claude" / "rules"
+    target_agents_rules = repo / ".agents" / "rules"
+    target_gemini_rules = repo / ".gemini" / "rules"
     source_rules_dir = stack_source_dir / "rules"
     if source_rules_dir.exists():
         if not dry_run:
-            target_rules_dir.mkdir(parents=True, exist_ok=True)
+            target_claude_rules.mkdir(parents=True, exist_ok=True)
+            target_agents_rules.mkdir(parents=True, exist_ok=True)
+            target_gemini_rules.mkdir(parents=True, exist_ok=True)
         for r_file in source_rules_dir.glob("*.md"):
-            dest = target_rules_dir / r_file.name
-            if not dest.exists():
+            # A. Instalar en .claude/rules (Claude Code)
+            dest_claude = target_claude_rules / r_file.name
+            if not dest_claude.exists():
                 if not dry_run:
-                    shutil.copy2(r_file, dest)
+                    shutil.copy2(r_file, dest_claude)
                 actions_taken.append(f"Instalada regla: .claude/rules/{r_file.name}")
+            # B. Instalar en .agents/rules (OpenAI Codex, Grok, Kimi, Hermes)
+            dest_agents = target_agents_rules / r_file.name
+            if not dest_agents.exists():
+                if not dry_run:
+                    shutil.copy2(r_file, dest_agents)
+                actions_taken.append(f"Instalada regla compartida: .agents/rules/{r_file.name}")
+            # C. Instalar en .gemini/rules (Gemini CLI, Antigravity AGY)
+            dest_gemini = target_gemini_rules / r_file.name
+            if not dest_gemini.exists():
+                if not dry_run:
+                    shutil.copy2(r_file, dest_gemini)
+                actions_taken.append(f"Instalada regla Gemini/AGY: .gemini/rules/{r_file.name}")
 
     # 2. Instalar Skills tanto en .claude/skills/ como en .agents/skills/ (para Hermes, Codex, Gemini)
     target_claude_skills = repo / ".claude" / "skills"
@@ -380,6 +399,18 @@ def normalizar_repositorio(repo: Path, stack_id: str | None = None, dry_run: boo
     }
 
 
+def _leer_cuerpo_sin_frontmatter(p: Path) -> str:
+    """Lee un archivo markdown descartando el encabezado YAML frontmatter si existe."""
+    if not p.exists():
+        return ""
+    txt = p.read_text(encoding="utf-8")
+    if txt.startswith("---"):
+        partes = txt.split("---", 2)
+        if len(partes) >= 3:
+            return partes[2].strip()
+    return txt.strip()
+
+
 def _generar_agents_md(stack_id: str, manifest: dict[str, Any]) -> str:
     """Genera AGENTS.md unificado para interoperabilidad en todos los LLMs."""
     name = manifest.get("name", stack_id)
@@ -409,19 +440,27 @@ def _generar_agents_md(stack_id: str, manifest: dict[str, Any]) -> str:
             lines.append(f"- **{k.replace('_', ' ').capitalize()}:** {v}")
     lines.append("")
 
+    arch_file = STACKS_DIR / stack_id / "rules" / "architecture.md"
+    arch_body = _leer_cuerpo_sin_frontmatter(arch_file)
+    if arch_body:
+        lines.append("### Límites de Arquitectura Detallados")
+        lines.append("")
+        lines.append(arch_body)
+        lines.append("")
+
     lines.extend([
-        "## 2. Reglas Modulares Activas",
+        "## 2. Reglas Modulares Activas (Multi-LLM)",
         "",
-        "Todo agente de IA (Claude Code, OpenAI/Codex, Gemini/AGY, Grok, Kimi, Hermes) debe respetar las reglas:",
+        "Todo agente de IA (Claude Code, OpenAI/Codex, Gemini/AGY, Grok, Kimi, Hermes) debe respetar las reglas modulares sincronizadas en `.agents/rules/`, `.claude/rules/` y `.gemini/rules/`:",
     ])
     for r in rules:
-        lines.append(f"- `.claude/rules/{r}`")
+        lines.append(f"- `{r}` (rutas: `.agents/rules/{r}`, `.claude/rules/{r}`, `.gemini/rules/{r}`)")
     lines.append("")
 
     lines.extend([
         "## 3. Skills y Runbooks Disponibles",
         "",
-        "Disponibles en `.claude/skills/` y `.agents/skills/`:",
+        "Disponibles en `.agents/skills/` y `.claude/skills/`:",
     ])
     for s in skills:
         lines.append(f"- `{s}`")
@@ -1047,12 +1086,12 @@ def auto_normalizar_y_asegurar_cumplimiento(
         diag = verificar_cumplimiento(target_path, stack_id)
 
         # -------------------------------------------------------------
-        # Nivel 1: Entorno y Metadatos (.claude/rules, skills, AGENTS.md)
+        # Nivel 1: Entorno y Metadatos (.claude/rules, .agents/rules, .gemini/rules, skills, AGENTS.md)
         # -------------------------------------------------------------
         if not diag["rules_ok"] or not diag["skills_ok"] or not diag["multi_llm_ready"]:
             if auto_normalizar_nivel_1:
                 norm_res = normalizar_repositorio(target_path, stack_id, dry_run=False)
-                acciones = norm_res.get("actions_taken", [])
+                acciones = norm_res.get("actions", norm_res.get("actions_taken", []))
                 msg = f"Auto-normalizado Nivel 1 en {target_path.name} ({d['name']}): {len(acciones)} elementos instalados."
                 resultado["nivel_1_acciones"].append(msg)
                 # Re-verificar tras normalizar
@@ -1257,7 +1296,7 @@ def main() -> None:
             print(f"DIAGNÓSTICO NORMATIVO CALPIL: {diag['stack']} en {repo_path.name}")
             print("=" * 68)
             print(f"Estado global: {'✅ COMPLIANT' if diag['compliant'] else '❌ NON-COMPLIANT'}")
-            print(f"Rules .claude/rules: {'OK' if diag['rules_ok'] else 'FALTAN (' + ', '.join(diag['missing_rules']) + ')'}")
+            print(f"Rules modulares:     {'OK (multi-LLM)' if diag['rules_ok'] else 'FALTAN (' + ', '.join(diag['missing_rules']) + ')'}")
             missing_skills_cnt = len(diag['missing_skills'])
             skills_status = 'OK' if diag['skills_ok'] else f"FALTAN {missing_skills_cnt} skills"
             print(f"Skills operativas:   {skills_status}")

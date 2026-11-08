@@ -257,10 +257,27 @@ class TestStackManager(unittest.TestCase):
         res = stack.normalizar_repositorio(mock_repo)
         self.assertEqual(res["status"], "normalized")
         self.assertTrue((mock_repo / ".claude" / "rules" / "architecture.md").exists())
+        self.assertTrue((mock_repo / ".agents" / "rules" / "architecture.md").exists())
+        self.assertTrue((mock_repo / ".gemini" / "rules" / "architecture.md").exists())
         self.assertTrue((mock_repo / ".claude" / "skills" / "add-feature" / "SKILL.md").exists())
         self.assertTrue((mock_repo / ".agents" / "skills" / "add-feature" / "SKILL.md").exists())
         self.assertTrue((mock_repo / "AGENTS.md").exists())
         self.assertTrue((mock_repo / "scripts" / "check-architecture.py").exists())
+
+    def test_verificar_multi_llm_rules_ok(self):
+        # Repositorio que solo tiene .agents/rules/ (ej. configurado para OpenAI Codex / Gemini sin .claude/)
+        mock_repo = self.tmpdir / "agents-repo"
+        mock_repo.mkdir()
+        (mock_repo / "go.mod").write_text("module example.com/agents\n", encoding="utf-8")
+        agents_rules = mock_repo / ".agents" / "rules"
+        agents_rules.mkdir(parents=True, exist_ok=True)
+        manifest = stack.cargar_manifest("golang-hexagonal")
+        for r in manifest["normative"]["rules"]:
+            (agents_rules / r).write_text("# regla\n", encoding="utf-8")
+
+        diag = stack.verificar_cumplimiento(mock_repo, "golang-hexagonal")
+        self.assertTrue(diag["rules_ok"])
+        self.assertEqual(diag["missing_rules"], [])
 
     def test_refactorizar_plan(self):
         mock_repo = self.tmpdir / "unstructured-repo"

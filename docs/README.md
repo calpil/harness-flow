@@ -35,8 +35,10 @@ flowchart TD
     H12["<b>Hito 12: Ingeniería Pragmática y Design Docs (Gergely Orosz)</b><br/>Estándar RFC/Design Docs, entrega predecible de 1-3 días, code reviews sin nitpicking y blameless post-mortems"]
     H13["<b>Hito 13: Construcción Code Complete (Steve McConnell)</b><br/>Partes I a VII, layout gobernado por formateador del stack y estrategia de errores en SDD"]
     H14["<b>Hito 14: Seguridad Web OWASP, CLASP y ZAP</b><br/>OWASP Top 10, Shift-Left CLASP, casos de abuso, barricadas y escaneo dinámico DAST"]
+    H15["<b>Hito 15: Design Patterns por Fase (GoF)</b><br/>Lectura cerrada capítulos 1 a 6, blanco de refactorización y composición en main"]
+    H16["<b>Hito 16: Paridad Total de Rules Multi-LLM</b><br/>Espejado en .agents/rules/, .gemini/rules/, .claude/rules/ y síntesis en AGENTS.md"]
 
-    H1 --> H2 --> H3 --> H4 --> H5 --> H6 --> H7 --> H8 --> H9 --> H10 --> H11 --> H12 --> H13 --> H14
+    H1 --> H2 --> H3 --> H4 --> H5 --> H6 --> H7 --> H8 --> H9 --> H10 --> H11 --> H12 --> H13 --> H14 --> H15 --> H16
 ```
 
 ---
