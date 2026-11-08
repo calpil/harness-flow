@@ -90,6 +90,20 @@ El arnés gestiona el modelo y el esfuerzo cognitivo según el proveedor del age
 
 La skill se distribuye como un repositorio git clonado en el directorio de skills de tu agente, sin instaladores propietarios.
 
+> [!TIP]
+> **Consejo Pro: Un solo clon compartido para múltiples agentes**  
+> Si utilizas varios agentes (Claude Code, Google Antigravity/Gemini, OpenAI Codex, Hermes) en la misma máquina, no dupliques el repositorio. Clónalo una sola vez en tu ubicación preferida y crea enlaces simbólicos en un solo paso:
+> ```bash
+> # 1. Clonar una sola vez (ej. en Hermes o ~/.agents/skills/)
+> git clone https://github.com/calpil/harness-flow.git ~/.hermes/skills/software-development/harness-flow
+> 
+> # 2. Enlazar hacia los demás agentes:
+> ln -s ~/.hermes/skills/software-development/harness-flow ~/.claude/skills/harness-flow
+> ln -s ~/.hermes/skills/software-development/harness-flow ~/.gemini/config/skills/harness-flow
+> ln -s ~/.hermes/skills/software-development/harness-flow ~/.agents/skills/harness-flow
+> ```
+> *(En Windows usa `mklink /J` en lugar de `ln -s`).*
+
 ### 1. Hermes Agent
 Clona en el perfil activo (por defecto `default`):
 ```bash
