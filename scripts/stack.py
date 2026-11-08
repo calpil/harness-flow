@@ -452,7 +452,13 @@ def _generar_agents_md(stack_id: str, manifest: dict[str, Any]) -> str:
 # 4. Auditoría de Versiones y Seguridad (Context7 & Oficial)
 # ---------------------------------------------------------------------------
 
-def auditar_seguridad_y_versiones(repo: Path, stack_id: str | None = None) -> dict[str, Any]:
+def auditar_seguridad_y_versiones(
+    repo: Path,
+    stack_id: str | None = None,
+    dast: bool = False,
+    openapi_path: str | None = None,
+    target_url: str | None = None
+) -> dict[str, Any]:
     """Audita versiones del stack, dependencias y ejecuta escáner de seguridad si está disponible."""
     repo = repo.resolve()
     if not stack_id:
@@ -516,6 +522,92 @@ def auditar_seguridad_y_versiones(repo: Path, stack_id: str | None = None) -> di
                         warnings.append(f"Edición de Rust en {cargo_toml.relative_to(repo)} ({detected_edition}) es inferior a la mínima recomendada ({min_version})")
                     break
 
+    # 3. Escaneo dinámico DAST (OWASP ZAP) si fue solicitado
+    dast_info = None
+    if dast:
+        dast_tool = "OWASP ZAP (zaproxy/zap-stable)"
+        has_docker = False
+        if shutil.which("docker"):
+            code_d, _ = _run_cmd(["docker", "info"], timeout=2)
+            has_docker = (code_d == 0)
+
+        # Determinar contrato OpenAPI o target
+        found_openapi = None
+        if openapi_path:
+            p_api = (repo / openapi_path).resolve() if not Path(openapi_path).is_absolute() else Path(openapi_path)
+            if p_api.exists():
+                found_openapi = p_api
+        else:
+            candidates = [
+                "openapi.json", "openapi.yaml", "openapi.yml",
+                "swagger.json", "swagger.yaml", "swagger.yml",
+                "docs/openapi.json", "docs/openapi.yaml",
+                "api/openapi.json", "api/openapi.yaml"
+            ]
+            for c in candidates:
+                cand_path = repo / c
+                if cand_path.exists():
+                    found_openapi = cand_path
+                    break
+
+        target = target_url or "http://localhost:8080"
+        dast_output = ""
+        dast_status = "pending"
+        dast_mode = "openapi" if found_openapi else "baseline"
+        dast_cmd_str = ""
+
+        if has_docker:
+            if found_openapi:
+                rel_api = found_openapi.relative_to(repo) if found_openapi.is_relative_to(repo) else found_openapi.name
+                docker_cmd = [
+                    "docker", "run", "--rm",
+                    "-v", f"{repo}:/zap/wrk/:rw",
+                    "-t", "zaproxy/zap-stable",
+                    "zap-api-scan.py",
+                    "-t", f"/zap/wrk/{rel_api}",
+                    "-f", "openapi",
+                    "-I"
+                ]
+                dast_cmd_str = " ".join(docker_cmd)
+                code, out = _run_cmd(docker_cmd, cwd=repo)
+                dast_output = out
+                dast_status = "passed" if code == 0 else "warnings"
+                if code != 0:
+                    warnings.append(f"OWASP ZAP DAST detectó posibles advertencias en contrato {rel_api}")
+            else:
+                docker_cmd = [
+                    "docker", "run", "--rm",
+                    "-t", "zaproxy/zap-stable",
+                    "zap-baseline.py",
+                    "-t", target,
+                    "-I"
+                ]
+                dast_cmd_str = " ".join(docker_cmd)
+                code, out = _run_cmd(docker_cmd, cwd=repo)
+                dast_output = out
+                dast_status = "passed" if code == 0 else "warnings"
+                if code != 0:
+                    warnings.append(f"OWASP ZAP DAST detectó posibles alertas en {target}")
+        else:
+            dast_status = "skipped"
+            suggested_cmd = (
+                f"docker run --rm -v {repo}:/zap/wrk/:rw -t zaproxy/zap-stable zap-api-scan.py -t /zap/wrk/{found_openapi.name} -f openapi -I"
+                if found_openapi else
+                f"docker run --rm -t zaproxy/zap-stable zap-baseline.py -t {target} -I"
+            )
+            dast_cmd_str = suggested_cmd
+            warnings.append("Docker no disponible para ejecutar OWASP ZAP DAST en local. Se sugiere ejecutar en pipeline.")
+
+        dast_info = {
+            "enabled": True,
+            "tool": dast_tool,
+            "mode": dast_mode,
+            "status": dast_status,
+            "target": target if not found_openapi else str(found_openapi),
+            "command": dast_cmd_str,
+            "output": dast_output,
+        }
+
     return {
         "stack": stack_id,
         "repo": str(repo),
@@ -528,6 +620,7 @@ def auditar_seguridad_y_versiones(repo: Path, stack_id: str | None = None) -> di
         "findings": findings,
         "warnings": warnings,
         "audit_output": audit_output,
+        "dast": dast_info,
     }
 
 
@@ -1069,7 +1162,7 @@ Nuevas funcionalidades de negocio. Esta feature es estrictamente refactorizació
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _run_cmd(cmd: list[str], cwd: Path | None = None) -> tuple[int, str]:
+def _run_cmd(cmd: list[str], cwd: Path | None = None, timeout: int | None = None) -> tuple[int, str]:
     try:
         proc = subprocess.run(
             cmd,
@@ -1077,9 +1170,12 @@ def _run_cmd(cmd: list[str], cwd: Path | None = None) -> tuple[int, str]:
             stderr=subprocess.STDOUT,
             text=True,
             check=False,
-            cwd=str(cwd) if cwd else None
+            cwd=str(cwd) if cwd else None,
+            timeout=timeout
         )
         return proc.returncode, proc.stdout
+    except subprocess.TimeoutExpired:
+        return 124, f"Comando excedió el timeout de {timeout}s: {' '.join(cmd)}"
     except Exception as exc:
         return 1, str(exc)
 
@@ -1113,6 +1209,9 @@ def main() -> None:
     p_aud = sub.add_parser("auditar", help="Audita versiones del stack, vulnerabilidades (CVEs) y fuentes Context7/Oficiales")
     p_aud.add_argument("--repo", default=".", help="Ruta del repositorio")
     p_aud.add_argument("--stack", default=None, help="Forzar stack especifico")
+    p_aud.add_argument("--dast", action="store_true", help="Ejecuta escaneo dinámico DAST con OWASP ZAP (zaproxy/zap-stable)")
+    p_aud.add_argument("--openapi", default=None, help="Ruta al archivo openapi.json/yaml para escaneo DAST de API")
+    p_aud.add_argument("--target-url", default=None, help="URL objetivo para escaneo DAST (default: http://localhost:8080)")
     p_aud.add_argument("--json", action="store_true", help="Salida en formato JSON")
 
     # refactorizar
@@ -1175,7 +1274,13 @@ def main() -> None:
         sys.exit(0 if diag["compliant"] else 1)
 
     if args.cmd == "auditar":
-        res = auditar_seguridad_y_versiones(repo_path, args.stack)
+        res = auditar_seguridad_y_versiones(
+            repo_path,
+            args.stack,
+            dast=getattr(args, "dast", False),
+            openapi_path=getattr(args, "openapi", None),
+            target_url=getattr(args, "target_url", None),
+        )
         if args.json:
             print(json.dumps(res, indent=2))
         else:
@@ -1203,6 +1308,19 @@ def main() -> None:
                 print("\nSalida del escáner de seguridad:")
                 for line in res["audit_output"].splitlines()[:15]:
                     print(f"  | {line}")
+            if res.get("dast"):
+                dast_info = res["dast"]
+                print("\n" + "-" * 68)
+                print(f"ANÁLISIS DINÁMICO DAST (OWASP ZAP): {dast_info.get('status').upper()}")
+                print(f"Herramienta: {dast_info.get('tool')}")
+                print(f"Modo:        {dast_info.get('mode')}")
+                print(f"Objetivo:    {dast_info.get('target')}")
+                if dast_info.get("command"):
+                    print(f"Comando:     {dast_info.get('command')}")
+                if dast_info.get("output"):
+                    print("Salida DAST:")
+                    for line in dast_info["output"].splitlines()[:15]:
+                        print(f"  | {line}")
         sys.exit(0)
 
     if args.cmd == "normalizar":

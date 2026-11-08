@@ -7,7 +7,7 @@ Este documento establece la normativa técnica de diseño orientado a objetos, p
 * **Refactoring to Patterns** (Joshua Kerievsky).
 * **A Philosophy of Software Design** (John Ousterhout, Stanford).
 
-Cuándo un patrón entra en cada fase del arnés, sin repetir este catálogo: [`design-patterns-gof.md`](design-patterns-gof.md). Capítulo 1 cerrado. El resto se agrega ahí.
+Cuándo un patrón entra en cada fase del arnés, sin repetir este catálogo: [`design-patterns-gof.md`](design-patterns-gof.md). Capítulos 1 a 6 cerrados. La lectura del libro está en ese archivo.
 
 ---
 

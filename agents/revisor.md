@@ -114,6 +114,13 @@ evidencia y el codigo tu mismo.
   - **Ruptura de la Barricada Defensiva (Mayor):** Componentes de dominio procesando datos externos sucios sin validación ni conversión en los adaptadores o puertos de entrada.
   - **Violación de Corrección vs Robustez (Mayor):** Invención de datos de negocio ficticios (saldos, folios simulados, defaults no comprobados) en zonas donde el SDD o el dominio exige corrección estricta.
   - **Cero debate de Layout:** Delegar indentación, espacios y llaves al formateador del stack sin abrir observaciones cosméticas.
+- **Auditoría de Seguridad en Aplicaciones Web (OWASP Top 10 & CLASP - ver `references/seguridad-owasp-y-zap.md`):**
+  - **Inyección y Concatenación de Comandos/SQL (A03 - Bloqueante):** Cualquier concatenación dinámica de parámetros en queries SQL/NoSQL, scripts o shell sin prepared statements ni tipado estricto.
+  - **Secretos y Credenciales Hardcodeadas (A02 - Bloqueante):** Presencia de passwords, API keys, tokens o certificados en el diff o commits.
+  - **Control de Acceso y Tenant Crossing (A01 - Bloqueante):** Endpoints o queries que no filtran por el tenant/usuario autenticado, permitiendo IDOR o acceso horizontal no autorizado.
+  - **Server-Side Request Forgery / SSRF (A10 - Mayor):** Peticiones HTTP salientes hacia URLs externas no validadas contra una whitelist estricta o sin bloqueo de IPs privadas/metadata cloud.
+  - **Falta de Tests Negativos (Mayor):** Endpoints con autenticación/autorización que no incluyen al menos un test de rechazo (401/403/422).
+  - **Configuración Insegura y Headers Omitidos (A05 - Menor):** Respuestas web sin headers de seguridad recomendados (CSP, HSTS) o exposición de stack traces.
 - **Concisión técnica ASD-STE100 (Estándar Karpathy):**
   - Redacta cada observación y hallazgo en **frases de máximo 20 palabras**, en voz activa y citando `archivo:línea`.
   - Prohibido emitir sugerencias cosméticas de estilo o párrafos decorativos: si no viola un AC, la seguridad o la arquitectura, no es un hallazgo. Ver [`references/comunicacion-ste100-y-prompts.md`](references/comunicacion-ste100-y-prompts.md).

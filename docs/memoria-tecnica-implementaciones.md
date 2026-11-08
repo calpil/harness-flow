@@ -193,6 +193,7 @@ A partir del análisis del video de BettaTech (*¿Es este libro el Clean Code Mo
 | [`references/patrones-datos-ddia.md`](file:///Users/alan/.hermes/skills/software-development/harness-flow/references/patrones-datos-ddia.md) | Referencia | Patrones de datos DDIA (Transactional Outbox, OCC, Idempotencia, Kafka vs No-Kafka) |
 | [`references/filosofia-diseno-ousterhout.md`](file:///Users/alan/.hermes/skills/software-development/harness-flow/references/filosofia-diseno-ousterhout.md) | Referencia | Guía de diseño de software de John Ousterhout (Deep Modules, anti-classitis, Design It Twice) |
 | [`references/patrones-gof-y-refactoring.md`](file:///Users/alan/.hermes/skills/software-development/harness-flow/references/patrones-gof-y-refactoring.md) | Referencia | Patrones GoF en arquitectura hexagonal, regla de dos sombreros de Beck/Fowler y catálogo de Code Smells |
+| [`references/design-patterns-gof.md`](file:///Users/alan/.hermes/skills/software-development/harness-flow/references/design-patterns-gof.md) | Referencia | Lectura cerrada de *Design Patterns* (capítulos 1 a 6): cuándo entra un patrón en cada fase. No repite el catálogo |
 | [`references/context7-documentacion-oficial.md`](file:///Users/alan/.hermes/skills/software-development/harness-flow/references/context7-documentacion-oficial.md) | Referencia | Matriz de fuentes oficiales, bibliotecas Context7 y escáneres de seguridad por stack |
 | [`templates/sdd.md`](file:///Users/alan/.hermes/skills/software-development/harness-flow/templates/sdd.md) | Plantilla | Diseño de arquitectura enriquecido con Mermaid, DDIA, Design It Twice y Deep Modules |
 | [`templates/spec.md`](file:///Users/alan/.hermes/skills/software-development/harness-flow/templates/spec.md) | Plantilla | Especificación de features con regla STE100 (≤20 palabras), costuras en módulos profundos |
@@ -443,7 +444,36 @@ A partir del tratado canónico *Code Complete, Second Edition* (Microsoft Press,
 
 ---
 
-## 16. Estado de Verificación y Métricas de Calidad
+## 16. Hito 14: Seguridad Web en el SDLC (OWASP Top 10, OWASP CLASP y OWASP ZAP)
+
+A partir de los estándares internacionales de seguridad en aplicaciones de OWASP, se integró en Harness Flow la metodología *Shift-Left* de OWASP CLASP, el catálogo taxonómico de riesgos de OWASP Top 10 (2021) y la verificación dinámica automatizada (DAST) con OWASP ZAP.
+
+### Documentación y Referencias:
+* [`references/seguridad-owasp-y-zap.md`](file:///Users/alan/.hermes/skills/software-development/harness-flow/references/seguridad-owasp-y-zap.md): Tratado normativo completo de seguridad en el SDLC, modelado de amenazas, barricadas defensivas, casos de abuso y pruebas DAST.
+
+### Principios y Mecanismos Integrados:
+1. **Casos de Abuso (*Misuse Cases*) en el PRD**:
+   * En [`templates/prd.md`](file:///Users/alan/.hermes/skills/software-development/harness-flow/templates/prd.md): Identificación obligatoria de vectores de abuso en `## La historia` y delimitación estricta de alcance y datos sensibles en `## Objetivos y no-objetivos` para erradicar el *scope creep* vulnerable.
+2. **Fronteras de Confianza (*Trust Boundaries*) y Barricadas en el SDD**:
+   * En [`templates/sdd.md`](file:///Users/alan/.hermes/skills/software-development/harness-flow/templates/sdd.md):
+     * Modelado visual explícito de *Trust Boundaries* en el diagrama Mermaid de `## Componentes`.
+     * Control de Acceso (A01) y prevención de *Tenant Crossing*.
+     * Mitigación de SSRF (A10) en clientes HTTP salientes mediante whitelists de dominios y bloqueo de IPs privadas/metadata cloud.
+     * Criptografía moderna (A02) y política estricta de *Zero Hardcoded Secrets* vía `.env` protegido.
+3. **Criterios de Aceptación Negativos (*Negative ACs*) en Specs**:
+   * En la planificación de features, exigencia de al menos un AC negativo comprobable (401/403/422/SQLi neutralizada) para endpoints o funciones protegidas.
+4. **Auditoría Estricta en el Revisor Aislado**:
+   * En [`agents/revisor.md`](file:///Users/alan/.hermes/skills/software-development/harness-flow/agents/revisor.md): Nueva sección de auditoría OWASP Top 10 clasificando como hallazgos **bloqueantes**: concatenación de comandos/SQL (A03), secretos quemados (A02) y fallas de control de acceso / tenant crossing (A01); y como **mayores**: SSRF (A10), fallos silenciados (A09) y omisión de tests negativos.
+5. **Verificación Dinámica DAST con OWASP ZAP**:
+   * En [`scripts/stack.py`](file:///Users/alan/.hermes/skills/software-development/harness-flow/scripts/stack.py): Soporte de escaneo dinámico vía CLI:
+     ```bash
+     $PY "$H/stack.py" auditar --dast [--openapi ruta/a/openapi.json] [--target-url http://localhost:8080]
+     ```
+     Ejecución con contenedor oficial `zaproxy/zap-stable` (`zap-api-scan.py` o `zap-baseline.py`) con detección y reporte de alertas.
+
+---
+
+## 17. Estado de Verificación y Métricas de Calidad
 
 * **Batería de Pruebas Automatizadas**: 280 tests de flujo core, producto, stack, gates, auditoría y documentación ejecutados pasando al 100%:
   ```bash

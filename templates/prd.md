@@ -46,7 +46,10 @@ Despues:
        Asi NO: "escuchar el cambio de estado, agendar una tarea de llamada".
        Asi SI: "Marta cerro su compra un viernes a las 6 de la tarde. Nadie la
        llamo. El lunes le llego la misma plantilla de siempre, y esa confianza
-       recien ganada se enfrio justo cuando mas cerca estaba de recomendarnos." -->
+       recien ganada se enfrio justo cuando mas cerca estaba de recomendarnos."
+     Casos de Abuso y Seguridad (OWASP CLASP - ver `references/seguridad-owasp-y-zap.md`):
+       - Identifica cómo un actor no autorizado o usuario malicioso intentaría abusar de esta historia (ej. acceder a recursos ajenos, bypass de pago o inyección).
+       - Define quién tiene permitido operar y qué rechazo explícito debe ocurrir ante accesos indebidos. -->
 
 Antes:
 Despues:
@@ -64,7 +67,10 @@ Despues:
      Componentes de Inteligencia Artificial / LLM (Chip Huyen - ver `references/ai-engineering-chip-huyen.md`):
        - Prohibidos requisitos vagos como "el agente responde de forma inteligente".
        - Define Contratos de Incertidumbre y SLAs cuantificables (ej. "clasificación con >= 95% de precisión; fallback determinista si confianza < 0.85").
-       - Exige la definición de un Golden Dataset (mínimo 10-20 casos reales de prueba con entradas y salidas esperadas). -->
+       - Exige la definición de un Golden Dataset (mínimo 10-20 casos reales de prueba con entradas y salidas esperadas).
+     Requisitos de Seguridad y No-Objetivos (OWASP CLASP - ver `references/seguridad-owasp-y-zap.md`):
+       - Fija en Objetivos la protección estricta de datos confidenciales y la política de acceso (ej. O3: aislamiento estricto por tenant).
+       - Fija en No-Objetivos las exposiciones de superficie de ataque que quedan prohibidas (ej. NO2: no expone endpoints sin pasar por autenticación del BFF). -->
 
 ## Como funciona hoy y como va a funcionar
 

@@ -53,6 +53,10 @@ Estado: draft
        - Declara la filosofía por subsistema: Corrección estricta (abortar, rollback y fallo explícito en transacciones, dinero, folios, seguridad; prohibido inventar datos) vs Robustez (tolerar fallos con fallbacks neutros e inocuos en UI, feeds, analítica).
        - Diseña la Barricada en puertos/adaptadores: valida y convierte la entrada externa sucia al entrar; el interior asume datos limpios y usa aserciones solo para bugs internos de desarrollo.
        - Protocolo observable: estandariza el error de salida hacia clientes (ej. RFC 7807 ProblemDetails o tipos DomainError de dominio; prohibido filtrar excepciones crudas de infraestructura).
+     Seguridad y Modelado de Amenazas (OWASP Top 10 & CLASP - ver `references/seguridad-owasp-y-zap.md`):
+       - Modela explícitamente en el diagrama Mermaid las Fronteras de Confianza (Trust Boundaries) entre cliente, BFF y backend core.
+       - Control de Acceso (A01): define el modelo de autorización (RBAC/ABAC) y la prevención estricta de cruce de organizaciones/tenants (Tenant Crossing).
+       - Anti-SSRF (A10): en clientes HTTP salientes hacia servicios externos, especifica whitelist estricta de dominios y bloqueo de IPs privadas y metadata cloud (169.254.169.254).
      Diseño simple (YAGNI & Anti-Speculative Generality): no agregues capas, repositorios, factories ni
      abstracciones "por si acaso" para un futuro hipotético. Todo patrón debe justificarse por necesidad real. -->
 
@@ -76,7 +80,8 @@ Estado: draft
        7. Integración con Modelos Fundacionales / LLM (Chip Huyen): define esquemas formales JSON Schema
           o Tool Calling nativo para toda salida de IA; prohibido el parsing de texto libre en integraciones de sistema.
        8. Database per Service (Sam Newman): encapsulamiento estricto de persistencia; PROHIBIDO el acceso directo o joins a bases de datos de otros microservicios.
-       9. Estilo de comunicación pragmático (YAGNI): Request/Response síncrono (REST/gRPC) por defecto; Event-Driven (EDA / Brokers) solo si el negocio exige desacoplamiento temporal o múltiples suscriptores reales. -->
+       9. Estilo de comunicación pragmático (YAGNI): Request/Response síncrono (REST/gRPC) por defecto; Event-Driven (EDA / Brokers) solo si el negocio exige desacoplamiento temporal o múltiples suscriptores reales.
+       10. Criptografía y Secretos (OWASP A02 - ver `references/seguridad-owasp-y-zap.md`): especifica algoritmos modernos (Argon2id/Bcrypt para contraseñas, AES-256-GCM para datos en reposo); PROHIBIDOS secretos quemados en código (Zero Hardcoded Secrets vía .env protegido). -->
 
 ## Decisiones
 

@@ -294,6 +294,25 @@ class TestStackManager(unittest.TestCase):
             self.assertEqual(res_rust["minimum_version"], "2021")
             self.assertIn("cargo audit", res_rust["audit_command"])
 
+    def test_auditar_dast_zap(self):
+        if self.go_template.exists():
+            api_file = self.go_template / "openapi.json"
+            created_mock = False
+            if not api_file.exists():
+                api_file.write_text('{"openapi": "3.0.0", "info": {"title": "Test API", "version": "1.0"}}', encoding="utf-8")
+                created_mock = True
+            try:
+                res = stack.auditar_seguridad_y_versiones(self.go_template, dast=True)
+                self.assertIsNotNone(res.get("dast"))
+                dast_info = res["dast"]
+                self.assertTrue(dast_info["enabled"])
+                self.assertEqual(dast_info["mode"], "openapi")
+                self.assertIn("zap", dast_info["tool"].lower())
+                self.assertIn(dast_info["status"], ["passed", "warnings", "skipped"])
+            finally:
+                if created_mock and api_file.exists():
+                    api_file.unlink()
+
     def test_refactorizar_plan_y_scaffolding_rust(self):
         rust_repo = self.tmpdir / "unstructured-rust"
         rust_repo.mkdir()
