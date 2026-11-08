@@ -8,7 +8,8 @@ Bienvenido al directorio de documentación técnica y memorias de arquitectura d
 
 | Documento | Propósito y Alcance | Audiencia Principal |
 | :--- | :--- | :--- |
-| [`memoria-tecnica-implementaciones.md`](memoria-tecnica-implementaciones.md) | **Memoria técnica maestra** que documenta exhaustivamente todos los hitos implementados: stacks (.NET, Rust), metodologías (Karpathy/STE100, DDIA, Ousterhout, GoF/Fowler) y auditoría de los 8 stacks CALPIL. | Arquitectos, Líderes Técnicos e Ingenieros de Plataforma |
+| [`memoria-tecnica-implementaciones.md`](memoria-tecnica-implementaciones.md) | **Memoria técnica maestra** que documenta exhaustivamente todos los hitos implementados: stacks (.NET, Rust), metodologías (Karpathy/STE100, DDIA, Ousterhout, GoF/Fowler, McConnell, OWASP/ZAP) y auditoría de los 8 stacks CALPIL. | Arquitectos, Líderes Técnicos e Ingenieros de Plataforma |
+| [`patrones-de-diseno-y-raiz-de-composicion.md`](patrones-de-diseno-y-raiz-de-composicion.md) | **Guía de Patrones de Diseño y Raíz de Composición**: Mapeo dialéctico de patrones GoF (creacionales, estructurales y de comportamiento) en capas hexagonales y clarificación de la inyección en `main`. | Diseñadores de Arquitectura, Implementers y Revisores |
 | [`principios-karpathy-ste100-harness-flow.md`](principios-karpathy-ste100-harness-flow.md) | Informe especializado sobre los **7 principios de Andrej Karpathy** y la norma aeroespacial **ASD-STE100** para comunicación de alta densidad y micro-reportes. | Implementers, Revisores y Diseñadores de Prompts |
 | [`explicacion-y-diagnostico.md`](explicacion-y-diagnostico.md) | **Diagnóstico de salud y auditoría estructural** del arnés: verificación de gates, postmerge medido, scripts neutralizados y telemetría de procesos CBM. | Mantenedores del arnés y Administradores de Infraestructura |
 
@@ -32,8 +33,10 @@ flowchart TD
     H10["<b>Hito 10: AI Engineering (Chip Huyen)</b><br/>Pipeline 5 capas, Structured Outputs, Golden Datasets, Bounded Reflection y AI-as-a-Judge"]
     H11["<b>Hito 11: Microservicios y Sistemas Distribuidos (Sam Newman)</b><br/>Database per Service, Monolith-First, comunicación síncrona/EDA bajo YAGNI, resiliencia y Expand-Contract"]
     H12["<b>Hito 12: Ingeniería Pragmática y Design Docs (Gergely Orosz)</b><br/>Estándar RFC/Design Docs, entrega predecible de 1-3 días, code reviews sin nitpicking y blameless post-mortems"]
+    H13["<b>Hito 13: Construcción Code Complete (Steve McConnell)</b><br/>Partes I a VII, layout gobernado por formateador del stack y estrategia de errores en SDD"]
+    H14["<b>Hito 14: Seguridad Web OWASP, CLASP y ZAP</b><br/>OWASP Top 10, Shift-Left CLASP, casos de abuso, barricadas y escaneo dinámico DAST"]
 
-    H1 --> H2 --> H3 --> H4 --> H5 --> H6 --> H7 --> H8 --> H9 --> H10 --> H11 --> H12
+    H1 --> H2 --> H3 --> H4 --> H5 --> H6 --> H7 --> H8 --> H9 --> H10 --> H11 --> H12 --> H13 --> H14
 ```
 
 ---
