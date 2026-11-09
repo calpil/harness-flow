@@ -50,11 +50,22 @@ Las lecciones aprendidas son memoria del usuario, no del agente donde se descubr
 
 ### 7. Gobernanza de Stacks Tecnológicos, Context7 y Modo Pair Automático (`stack.py`)
 - **Detección Dinámica y Extensible de Stacks**: Motor declarativo (`stacks/<stack-id>/manifest.json`) que escanea y clasifica cualquier repositorio o microservicio según archivos base (`files_any`/`files_all`), extensiones, dependencias de `package.json`, coincidencia de contenido (`content_matches`), indicadores estructurales (`strong_indicators`) y reglas de descarte (`anti_indicators`).
-  - Catálogo activo: **Golang Hexagonal** (`golang-hexagonal`), **Angular Product** (`angular-product`), **.NET Hexagonal** (`dotnet-hexagonal`), **Rust Hexagonal** (`rust-hexagonal`), **Next.js Product** (`nextjs-product`), **Spring Boot Hexagonal** (`springboot-hexagonal`), **NestJS Hexagonal** (`nestjs-hexagonal`), **Python Data Product** (`python-dataproduct`), **iOS SwiftUI Clean Architecture** (`ios-swiftui-clean`), y **Android Jetpack Compose Clean Architecture** (`android-compose-clean`).
+  - **Catálogo Activo (10 Stacks)**:
+    - *Backend & Servicios*: **Golang Hexagonal** (`golang-hexagonal`), **.NET Hexagonal** (`dotnet-hexagonal`), **Rust Hexagonal** (`rust-hexagonal`), **Spring Boot Hexagonal** (`springboot-hexagonal`), **NestJS Hexagonal** (`nestjs-hexagonal`), y **Python Data Product** (`python-dataproduct`).
+    - *Web & Frontend*: **Angular Product** (`angular-product`) y **Next.js Product** (`nextjs-product`).
+    - *Mobile Nativo*: **iOS SwiftUI Clean Architecture** (`ios-swiftui-clean`) y **Android Jetpack Compose Clean Architecture** (`android-compose-clean`).
   - Extensible: cualquier nuevo stack se soporta simplemente creando `stacks/<nuevo-stack>/manifest.json` sin tocar código Python.
-- **Verificación Normativa y Refactorización Guiada**: Audita cumplimiento de reglas modulares multi-LLM (`.claude/rules/`, `.agents/rules/`, `.gemini/rules/`), skills (`.agents/skills/`, `.claude/skills/`), contratos universales (`AGENTS.md`) y límites de arquitectura en caliente (`check-architecture.py`). Si un repositorio no cumple, genera planes de refactorización vertical (*Expand-Contract*) y scaffolding automático del esqueleto canónico (`stack.py refactorizar --scaffold`).
-- **Normalización Multi-LLM**: Provee paridad completa instalando rules y skills sincronizadas en los formatos nativos de Claude Code, Codex, Gemini/AGY, Hermes, Grok y Kimi Code.
-- **Context7 & Documentación Oficial (`stack.py auditar`)**: Conexión con el servidor MCP de Context7 (`https://mcp.context7.com/mcp`) y enlaces oficiales para garantizar que toda implementación use versiones vigentes, APIs no obsoletas y ejecute escáneres de seguridad contra vulnerabilidades (CVEs con `govulncheck`, `npm audit`, etc.). Ver [`references/context7-documentacion-oficial.md`](references/context7-documentacion-oficial.md).
+- **Arquitectura y Paridad Total Multi-LLM**:
+  - **Triple espejo de reglas**: `.claude/rules/` (Claude Code), `.agents/rules/` (OpenAI Codex, Hermes, Grok, Kimi) y `.gemini/rules/` (Google Gemini CLI, Antigravity AGY).
+  - **Distribución dual de skills**: `.claude/skills/` y `.agents/skills/` bajo el estándar abierto Agent Skills (YAML frontmatter con `name` y `description`).
+  - **Contrato universal en `AGENTS.md`**: Síntesis generada automáticamente que extrae las restricciones arquitectónicas de `architecture.md` (descartando frontmatters específicos) para que cualquier LLM las absorba al inicio de sesión.
+  - **Neutralidad de rutas internas**: Los 56 archivos de skills y reglas utilizan rutas agnósticas (`.agents/skills/` o `.claude/skills/`), eliminando cláusulas restrictivas o scripts atados a un único host.
+  - **Validadores de skills auto-descubribles**: `validate-agent-skills.mjs` en los 10 stacks detecta y valida automáticamente `.agents/skills` o `.claude/skills` sin flags obligatorios.
+  - **Diagnóstico Dual en `stack.py verificar`**:
+    - `Multi-LLM Ready: SI / NO`: Confirma si las reglas y skills requeridas están operativas en el entorno actual.
+    - `Paridad Multi-LLM: TOTAL / PARCIAL`: Informa si todas las plataformas están simultáneamente sincronizadas (`claude-code`, `openai-codex/hermes/grok/kimi`, `gemini-cli/agy`) o si se debe ejecutar `stack.py normalizar`.
+- **Verificación Normativa y Refactorización Guiada**: Audita límites de arquitectura en caliente mediante verificadores AST/regex (`check-architecture.py`). Si un repositorio no cumple, genera planes de refactorización vertical (*Expand-Contract*) y scaffolding automático del esqueleto canónico (`stack.py refactorizar --scaffold`).
+- **Context7 & Documentación Oficial (`stack.py auditar`)**: Conexión con el servidor MCP de Context7 (`https://mcp.context7.com/mcp`) y enlaces oficiales para garantizar que toda implementación use versiones vigentes, APIs no obsoletas y ejecute escáneres de seguridad contra vulnerabilidades (CVEs con `govulncheck`, `npm audit`, `swift package audit`, `dependencyCheckAnalyze`, etc.). Ver [`references/context7-documentacion-oficial.md`](references/context7-documentacion-oficial.md).
 - **Modo Pair Interactivo Automático**: Al detectar un stack normativo, la implementación activa automáticamente el modo Pair (Driver = IA, Navigator = humano), avanzando en ciclos TDD con micro-reportes.
 - **Protocolo de Preguntas de Formulario**: La IA interviene con formularios estructurados (`ask_question` en Gemini/AGY o formulario interactivo en otros hosts) **únicamente cuando es indispensable**: decisiones de diseño no previstas, paradas de TDD tras 2 fallos consecutivos sin verde, aprobación de lista de tests y confirmación de gates.
 - **Principios de Karpathy y Norma Aeroespacial ASD-STE100**: Incorpora comunicación de alta densidad sin sobre-restricción (*over-constraining*), frases de máximo 20 palabras en voz activa, diagramas Mermaid obligatorios en SDD, criterios AC-n atómicos y micro-reportes telegráficos de pantalla de instrumentos en Pair Mode. Ver [`references/comunicacion-ste100-y-prompts.md`](references/comunicacion-ste100-y-prompts.md) y [`docs/principios-karpathy-ste100-harness-flow.md`](docs/principios-karpathy-ste100-harness-flow.md).
@@ -69,6 +80,24 @@ Las lecciones aprendidas son memoria del usuario, no del agente donde se descubr
 - **Construcción de software (Steve McConnell, *Code Complete*)**: La construcción es el centro del trabajo. La Parte I fija el terreno del rol 0 (problema, requisitos, arquitectura con estrategia de errores y barricada en SDD), la clase de software de cada feature y las prácticas de construcción que el arnés ya eligió. La Parte II fija el diseño de clases y rutinas, la barricada defensiva y el pseudocódigo del implementer, sin sustituir el TDD de la costura. Las Partes III y IV fijan el checklist de variables, nombres, tipos y control; el layout queda en el formateador del stack. La Parte V fija calidad, revisión, pruebas, depuración, refactor y afinado medido. La Parte VI fija tamaño, control del cambio, integración por rebanadas y herramientas. La Parte VII cierra el libro: layout del formateador, comentarios de intención y hábitos de oficio. Las siete partes integradas en [`references/code-complete-mcconnell.md`](references/code-complete-mcconnell.md).
 - **Seguridad en Aplicaciones Web (OWASP Top 10, OWASP CLASP y OWASP ZAP)**: Metodología *Shift-Left* integral. El PRD incorpora Casos de Abuso (*Misuse Cases*); el SDD delimita Fronteras de Confianza (*Trust Boundaries*), barricadas defensivas, cifrado seguro y mitigación anti-SSRF; los specs formalizan Criterios de Aceptación Negativos (*Negative ACs*); el implementer programa defensivamente con consultas parametrizadas y zero secrets; el revisor aislado audita severidades bloqueantes; y `stack.py auditar --dast` ejecuta análisis dinámico DAST automatizado con OWASP ZAP sobre endpoints o contratos OpenAPI. Ver [`references/seguridad-owasp-y-zap.md`](references/seguridad-owasp-y-zap.md).
 - **Auto-Normalización Temprana y Prioridad Arquitectónica (Feature #0)**: En el arranque de sesión o al intentar implementar features, el arnés evalúa el repositorio: si faltan reglas modulares o skills, las auto-instala inmediatamente (Nivel 1). Si el código fuente tiene violaciones de arquitectura detectadas por `check-architecture.py` (Nivel 2), crea automáticamente la **Feature #0** en el backlog y bloquea todas las features de negocio (`requiere: [0]`) hasta que el código quede normalizado y en verde.
+
+#### Comandos de Gobernanza de Stacks (`stack.py`)
+```bash
+# 1. Detectar stack tecnológico en repositorio o microservicio
+$PY "$H/stack.py" detectar --repo <ruta>
+
+# 2. Diagnóstico normativo y paridad multi-LLM (rules, skills, arquitectura)
+$PY "$H/stack.py" verificar --repo <ruta>
+
+# 3. Normalizar repositorio (instala .claude/, .agents/, .gemini/ y genera AGENTS.md)
+$PY "$H/stack.py" normalizar --repo <ruta>
+
+# 4. Auditoría de versiones, seguridad oficial Context7 y análisis dinámico DAST
+$PY "$H/stack.py" auditar --repo <ruta> [--dast] [--openapi ruta/a/openapi.json]
+
+# 5. Generar plan de refactorización vertical o scaffolding canónico
+$PY "$H/stack.py" refactorizar --repo <ruta> [--scaffold]
+```
 
 ---
 

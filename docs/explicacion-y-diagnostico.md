@@ -59,6 +59,7 @@ El arnés se instala **una sola vez en la raíz del proyecto** (espacio de traba
 | `postmerge_medido.py` | Validador post-merge para Go: captura foto de rojos antes del merge y falla si hay rojos nuevos, build roto o tests desaparecidos. |
 | `postmerge_frontend.py`| Validador post-merge para Angular / Node / TypeScript. |
 | `postmerge_terraform.py`| Validador post-merge para infraestructura Terraform (`fmt`, `validate`, `test`). |
+| `stack.py` | Gobernanza de los 10 stacks tecnológicos CALPIL: detección dinámica, auditoría de cumplimiento, normalización multi-LLM (Claude, Codex, Gemini, Hermes), scaffolding y verificadores AST/regex. |
 | `documentacion.py` | Sincronización automática de bloques generados en `PRD-master.md` y `sdd.md`. |
 | `vault.py` | Generación del panel visual en Obsidian (`docs/vault/`). |
 | `atlassian.py` | Sincronización bidireccional opcional con Jira y Confluence. |

@@ -567,7 +567,32 @@ Se incorporó soporte oficial, gobernanza y validación automática para desarro
 
 ---
 
-## 20. Estado de Verificación y Métricas de Calidad
+## 20. Hito 18: Neutralización de Rutas a Host, Descubrimiento Universal de Skills y Diagnóstico de Paridad Multi-LLM
+
+Tras incorporar los stacks móviles, una auditoría profunda de interoperabilidad entre LLMs (Claude Code, OpenAI Codex, Google Antigravity, Gemini CLI, Hermes, Grok y Kimi Code) identificó acoplamientos remanentes en los textos internos de skills y scripts. Se ejecutó una neutralización exhaustiva y se elevó el motor de diagnóstico normativo:
+
+### Principios y Mecanismos Integrados:
+1. **Neutralización de Rutas Host-Específicas en 56 Archivos de Skills y Reglas**:
+   - En [`stacks/`](../stacks/): Se sustituyeron todas las rutas cableadas (`.claude/rules/`, `.claude/skills/`) por referencias abiertas y neutrales (`.agents/rules/` o `.claude/rules/` / `AGENTS.md`, y `.agents/skills/` o `.claude/skills/`).
+   - Se eliminaron cláusulas excluyentes heredadas (tales como `Skill ejecutable únicamente por Claude Code`) en `springboot-hexagonal`, `ios-swiftui-clean`, `android-compose-clean`, `rust-hexagonal` y `nestjs-hexagonal`, garantizando que cualquier modelo (GPT-6, Gemini 4, Claude 5.5, Grok, Kimi) pueda ejecutar las tareas procedurales sin sesgo de host.
+2. **Descubrimiento Dinámico y Agnóstico en `validate-agent-skills.mjs`**:
+   - En los 10 validadores de skills de los stacks, se implementó detección automática de directorio:
+     ```javascript
+     const defaultSkillsDir = existsSync('.agents/skills') ? '.agents/skills' : '.claude/skills';
+     const ROOT = resolve(process.argv[2] ?? defaultSkillsDir);
+     ```
+   - Permite que `validate-agent-skills.mjs` valide tanto en entornos que usan `.claude/skills` como en repositorios gobernados exclusivamente con el estándar abierto `.agents/skills`.
+3. **Métrica Dual de Paridad en `stack.py verificar`**:
+   - En [`scripts/stack.py`](../scripts/stack.py): Se desacopló la viabilidad operativa básica (`multi_llm_ready`) de la sincronización simétrica total (`full_multi_llm_parity`).
+   - El diagnóstico CLI ahora reporta con precisión:
+     - `Multi-LLM Ready: SI` (las reglas y skills mínimas están presentes para operar).
+     - `Paridad Multi-LLM: TOTAL (todos los hosts)` o `PARCIAL (hosts sincronizados: ...)`, alertando al desarrollador si a una plantilla le falta sincronizar carpetas mediante `stack.py normalizar`.
+4. **Validación Automatizada en Suite de Pruebas**:
+   - En [`tests/test_stack.py`](../tests/test_stack.py): `test_normalizar_repositorio` ahora comprueba explícitamente `full_multi_llm_parity=True` y que `hosts_active` incluya simultáneamente `claude-code`, `openai-codex/hermes/grok/kimi` y `gemini-cli/agy`.
+
+---
+
+## 21. Estado de Verificación y Métricas de Calidad
 
 * **Batería de Pruebas Automatizadas**: 286 tests de flujo core, producto, stack, gates, auditoría y documentación ejecutados pasando al 100% (incluyendo los 28 tests de validación exhaustiva de stacks en `tests/test_stack.py`).
 * **Validación de Habilidades de Agentes**: 100% de las habilidades validadas en los 10 stacks con `validate-agent-skills.mjs`.

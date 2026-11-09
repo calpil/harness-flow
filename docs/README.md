@@ -38,8 +38,9 @@ flowchart TD
     H15["<b>Hito 15: Design Patterns por Fase (GoF)</b><br/>Lectura cerrada capítulos 1 a 6, blanco de refactorización y composición en main"]
     H16["<b>Hito 16: Paridad Total de Rules Multi-LLM</b><br/>Espejado en .agents/rules/, .gemini/rules/, .claude/rules/ y síntesis en AGENTS.md"]
     H17["<b>Hito 17: Stacks Mobile iOS & Android</b><br/>SwiftUI y Compose Clean Architecture, 4 rules, 9 skills, check-architecture.py y paridad multi-LLM"]
+    H18["<b>Hito 18: Neutralidad y Paridad Multi-LLM</b><br/>Neutralización de 56 archivos, detección dinámica de skills y telemetría dual"]
 
-    H1 --> H2 --> H3 --> H4 --> H5 --> H6 --> H7 --> H8 --> H9 --> H10 --> H11 --> H12 --> H13 --> H14 --> H15 --> H16 --> H17
+    H1 --> H2 --> H3 --> H4 --> H5 --> H6 --> H7 --> H8 --> H9 --> H10 --> H11 --> H12 --> H13 --> H14 --> H15 --> H16 --> H17 --> H18
 ```
 
 ---
