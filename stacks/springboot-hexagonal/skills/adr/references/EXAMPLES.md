@@ -51,19 +51,19 @@ Necesito registrar por qué elegimos exponer solamente una API propia hacia los 
 
 ```bash
 # Crear un borrador con ID secuencial por repositorio
-python3 .claude/skills/adr/scripts/adr_tool.py new \
+python3 .agents/skills/adr/scripts/adr_tool.py new \
   --title "Estrategia de exposición de APIs" --dir docs/adr \
   --scope "Plataforma" --owner "Equipo responsable"
 
 # Validar todos los ADR del directorio
-python3 .claude/skills/adr/scripts/adr_tool.py validate --dir docs/adr
+python3 .agents/skills/adr/scripts/adr_tool.py validate --dir docs/adr
 
 # Previsualizar índice sin escribir
-python3 .claude/skills/adr/scripts/adr_tool.py index --dir docs/adr
+python3 .agents/skills/adr/scripts/adr_tool.py index --dir docs/adr
 
 # Actualizar índice, respetando contenido ajeno a los marcadores
-python3 .claude/skills/adr/scripts/adr_tool.py index --dir docs/adr --write
+python3 .agents/skills/adr/scripts/adr_tool.py index --dir docs/adr --write
 
 # Comprobar en CI que README esté actualizado
-python3 .claude/skills/adr/scripts/adr_tool.py index --dir docs/adr --check
+python3 .agents/skills/adr/scripts/adr_tool.py index --dir docs/adr --check
 ```

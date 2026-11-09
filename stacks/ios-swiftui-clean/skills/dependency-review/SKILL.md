@@ -12,7 +12,7 @@ Esta skill se activa cuando es necesario evaluar, agregar o actualizar dependenc
 Antes de modificar dependencias:
 - Revisar `Package.swift` y `Package.resolved`.
 - Revisar las dependencias declaradas en cada target.
-- Consultar las directrices de dependencias en `.claude/rules/dependencies.md`.
+- Consultar las directrices de dependencias en `.agents/rules/dependencies.md` (o `.agents/rules/dependencies.md (o .claude/rules/dependencies.md)`).
 
 ## Procedimiento ejecutable
 1. **Evaluar necesidad técnica:** Verificar si la capacidad requerida puede implementarse con Foundation, SwiftUI o Concurrency antes de añadir un paquete de terceros.

@@ -14,7 +14,7 @@ Antes de modificar código:
 - Identificar el crate y el módulo exacto donde se origina la falla.
 - Revisar los logs emitidos mediante `tracing` con nivel DEBUG.
 - Revisar el middleware de Correlation ID en `crates/api/src/middlewares/correlation_id.rs`.
-- Consultar las reglas de testing en `.claude/rules/testing.md`.
+- Consultar las reglas de testing en `.agents/rules/testing.md` (o `.agents/rules/testing.md (o .claude/rules/testing.md)`).
 
 ## Procedimiento ejecutable
 1. **Capturar la traza exacta:** Ejecutar el comando fallido con `RUST_BACKTRACE=1 cargo test -- --nocapture` para obtener el stacktrace completo y el número de línea.

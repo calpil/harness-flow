@@ -46,8 +46,8 @@ La elección NO es universal; evaluar costos, semántica de duplicados y capacid
 ## Herramienta
 
 ```bash
-python3 .claude/skills/adr/scripts/adr_tool.py --help
-python3 -m unittest discover -s .claude/skills/adr/scripts -p 'test_*.py'
+python3 .agents/skills/adr/scripts/adr_tool.py --help
+python3 -m unittest discover -s .agents/skills/adr/scripts -p 'test_*.py'
 ```
 
 Consultar help concreto antes de correr subcomandos, porque nombres de CLI dependen de la herramienta que existe en este ZIP. El agente no debe asumir `--approve` o autocommits.

@@ -13,7 +13,7 @@ Antes de escribir pruebas:
 - Revisar pruebas existentes en `Tests/CalpilDomainTests/`.
 - Revisar pruebas de repositorio en `Tests/CalpilDataTests/`.
 - Revisar pruebas de ViewModel en `Tests/CalpilPresentationTests/`.
-- Consultar las directrices de testing en `.claude/rules/testing.md`.
+- Consultar las directrices de testing en `.agents/rules/testing.md` (o `.agents/rules/testing.md (o .claude/rules/testing.md)`).
 
 ## Procedimiento ejecutable
 1. **Identificar la capa a evaluar:** Determinar si la prueba corresponde a reglas puras de dominio (`CalpilDomain`), adaptadores de datos (`CalpilData`) o lógica de presentación (`CalpilUI`).

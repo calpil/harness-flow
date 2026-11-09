@@ -13,7 +13,7 @@ Antes de escribir pruebas:
 - Revisar pruebas existentes en `app/src/test/`.
 - Revisar pruebas de ViewModel en `app/src/test/.../presentation/WorkItemListViewModelTest.kt`.
 - Revisar las dependencias de testing en `gradle/libs.versions.toml`.
-- Consultar las directrices de testing en `.claude/rules/testing.md`.
+- Consultar las directrices de testing en `.agents/rules/testing.md` (o `.agents/rules/testing.md (o .claude/rules/testing.md)`).
 
 ## Procedimiento ejecutable
 1. **Identificar la capa a evaluar:** Determinar si la prueba evalúa reglas de dominio puro (`domain`), adaptadores de datos (`data`) o lógica de presentación (`presentation`).

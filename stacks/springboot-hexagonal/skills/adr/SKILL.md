@@ -9,7 +9,7 @@ Eres un arquitecto principal que ayuda a registrar **decisiones técnicas y empr
 
 ## Compatibilidad con GitHub Copilot
 
-- Ubicación oficial en repositorios: `.claude/skills/adr/SKILL.md` con `name` y `description` en YAML frontmatter. Esta carpeta es la fuente única de la skill; no duplicarla en `.github/skills` ni en `.agents/skills` dentro del mismo repo.
+- Ubicación oficial en repositorios: `.agents/skills/adr/` o `.claude/skills/adr/` con `name` y `description` en YAML frontmatter.
 - En **Copilot CLI**: `/skills reload`, `/skills info adr` y luego pedir `Use the /adr skill to ...`. En VS Code (Agent Mode), seleccionar `/adr` en el chat o invocarla en lenguaje natural.
 - Antes de ejecutar cualquier comando comprobar el directorio de trabajo y revisar las rutas del repositorio; usar `python3` si está disponible. No asumir que Copilot puede ejecutar scripts sin autorización o sin terminal.
 - Utilizar enlaces a referencias relativas a `SKILL.md`, como [gobierno](./references/GOVERNANCE.md) y [template](./assets/ADR-TEMPLATE.md); leer los recursos pertinentes antes de cada modo.
@@ -69,7 +69,7 @@ Los ADR históricos del template usan `0001-...md` (sin prefijo `ADR-`). El scri
 1. Crear mediante el script opcional (stdlib de Python, sin dependencias):
 
    ```bash
-   python3 .claude/skills/adr/scripts/adr_tool.py new --title "Título de la decisión" --dir docs/adr --scope "Producto" --owner "Equipo de arquitectura"
+   python3 .agents/skills/adr/scripts/adr_tool.py new --title "Título de la decisión" --dir docs/adr --scope "Producto" --owner "Equipo de arquitectura"
    ```
 
 2. Completar el documento usando **hechos revisados en el repositorio**. No dejar plantillas repetitivas como contenido final; cuando falte información material, anotar `[Pendiente: ...]` y consecuencias del supuesto.
@@ -79,13 +79,13 @@ Los ADR históricos del template usan `0001-...md` (sin prefijo `ADR-`). El scri
 6. Validar con el script y revisar semántica (el script **no reemplaza** la revisión arquitectónica):
 
    ```bash
-   python3 .claude/skills/adr/scripts/adr_tool.py validate --dir docs/adr
+   python3 .agents/skills/adr/scripts/adr_tool.py validate --dir docs/adr
    ```
 
 7. Opcional: actualizar catálogo de forma segura:
 
    ```bash
-   python3 .claude/skills/adr/scripts/adr_tool.py index --dir docs/adr --write
+   python3 .agents/skills/adr/scripts/adr_tool.py index --dir docs/adr --write
    ```
 
 8. Informar ruta del archivo, decisión/resumen, evidencia usada, riesgos abiertos, estado y comandos de validación **realmente ejecutados**.
@@ -103,8 +103,8 @@ Por cada hallazgo: ubicación, evidencia, riesgo, corrección concreta y respons
 Revisiones automatizadas:
 
 ```bash
-python3 .claude/skills/adr/scripts/adr_tool.py validate --dir docs/adr
-python3 .claude/skills/adr/scripts/adr_tool.py index --dir docs/adr --check
+python3 .agents/skills/adr/scripts/adr_tool.py validate --dir docs/adr
+python3 .agents/skills/adr/scripts/adr_tool.py index --dir docs/adr --check
 ```
 
 ## Flujo E — Reemplazar una decisión

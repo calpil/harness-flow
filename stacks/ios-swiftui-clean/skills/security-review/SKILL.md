@@ -14,7 +14,7 @@ Antes de emitir el informe de seguridad:
 - Revisar que no se almacenen tokens o contraseñas en `UserDefaults`.
 - Comprobar la inyección de la cabecera `x-correlation-id`.
 - Verificar la configuración de App Transport Security (ATS).
-- Consultar las reglas en `.claude/rules/security.md`.
+- Consultar las reglas en `.agents/rules/security.md` (o `.agents/rules/security.md (o .claude/rules/security.md)`).
 
 ## Procedimiento ejecutable
 1. **Auditar almacenamiento local:** Comprobar que ningún secreto, token de autenticación o información personal identificable (PII) se persista en `UserDefaults`, archivos de texto plano o caché no cifrada.

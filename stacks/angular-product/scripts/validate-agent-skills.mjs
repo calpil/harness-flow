@@ -2,7 +2,8 @@
 import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 
-const ROOT = resolve(process.argv[2] ?? '.claude/skills');
+const defaultSkillsDir = existsSync('.agents/skills') ? '.agents/skills' : '.claude/skills';
+const ROOT = resolve(process.argv[2] ?? defaultSkillsDir);
 const errors = [];
 const names = new Set();
 const required = [

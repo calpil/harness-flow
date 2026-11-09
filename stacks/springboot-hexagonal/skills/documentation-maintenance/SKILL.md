@@ -5,7 +5,7 @@ description: "Update and organize Spring Boot template Markdown documentation, a
 
 # Documentation as Code / Link Integrity — CALPIL Engineering Skill
 
-> Skill ejecutable por GitHub Copilot/Claude Code. Ruta única: `.claude/skills/documentation-maintenance/`. Cada conclusión exige evidencia: no completar casillas con suposiciones.
+> Skill compatible con todos los agentes (Claude Code, OpenAI Codex, Gemini CLI, Antigravity, Hermes, Grok, Kimi). Rutas: `.agents/skills/documentation-maintenance/` o `.claude/skills/documentation-maintenance/`. Cada conclusión exige evidencia: no completar casillas con suposiciones.
 
 ## Cuándo activar y no activar
 
@@ -35,7 +35,7 @@ Si falta una definición no bloqueante, continuar con supuesto explícito conser
 4. **Fase 04** — Preservar README, CHANGELOG, LICENCE, AGENTS y guía de entrada en raíz; docs técnicos en subcarpetas.
 5. **Fase 05** — Actualizar instrucciones por secuencia reproducible: prerequisitos, comandos reales, outputs y rollback.
 6. **Fase 06** — Actualizar enlaces Markdown relativos, anchors y rutas de imágenes/scripts tras moves.
-7. **Fase 07** — Revisar que rutas .claude/skills y .github/prompts se resuelvan desde el repo real.
+7. **Fase 07** — Revisar que rutas (.agents/skills o .claude/skills) se resuelvan desde el repo real.
 8. **Fase 08** — No confundir documentación del template con evidencia de cumplimiento productivo.
 9. **Fase 09** — Ejecutar validador de customizaciones y git diff --check; revisar enlaces rotos.
 10. **Fase 10** — Resumir archivos movidos, reemplazados y contenido expresamente preservado.
@@ -70,7 +70,7 @@ Los comandos con `Nombre...` o `group:artifact` son **plantillas**: sustituir po
 - [ ] Script idempotente sin sobrescribir material existente.
 ### Dependencias y handoff
 
-- Si la tarea toca simultáneamente **contrato HTTP, persistencia, seguridad, observabilidad, ADR o dependencias**, invocar/leer las skills especializadas de `.claude/skills/` para **esa** superficie. No crear una segunda implementación de la misma política.
+- Si la tarea toca simultáneamente **contrato HTTP, persistencia, seguridad, observabilidad, ADR o dependencias**, invocar/leer las skills especializadas (`.agents/skills/` o `.claude/skills/`) para **esa** superficie. No crear una segunda implementación de la misma política.
 - La documentación canónica de ingeniería existente (si está en checkout) vive en `docs/ai/`; leer solo la guía del dominio afectado: `ARCHITECTURE_RULES.md`, `TESTING_RULES.md`, `SECURITY_RULES.md`, `DEPENDENCY_POLICY.md`, `DEFINITION_OF_DONE.md`.
 - La ruta del ejemplo `workitems` **no** es requisito de los equipos, ni fuente de verdad corporativa si se elimina.
 

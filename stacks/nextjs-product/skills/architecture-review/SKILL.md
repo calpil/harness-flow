@@ -70,7 +70,7 @@ npm run test:unit
 # Architecture Review
 
 Review the current repository, not an imagined generic layout.
-Read `docs/architecture/overview.md` and `.claude/rules/architecture.md` before recommending structural changes.
+Read `docs/architecture/overview.md` and architecture rules (`.agents/rules/architecture.md` or `.claude/rules/architecture.md` / `AGENTS.md`) before recommending structural changes.
 
 ## Feature model
 

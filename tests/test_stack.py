@@ -364,6 +364,12 @@ class TestStackManager(unittest.TestCase):
         self.assertTrue((mock_repo / "AGENTS.md").exists())
         self.assertTrue((mock_repo / "scripts" / "check-architecture.py").exists())
 
+        diag = stack.verificar_cumplimiento(mock_repo)
+        self.assertTrue(diag["full_multi_llm_parity"])
+        self.assertIn("claude-code", diag["hosts_active"])
+        self.assertIn("openai-codex/hermes/grok/kimi", diag["hosts_active"])
+        self.assertIn("gemini-cli/agy", diag["hosts_active"])
+
     def test_verificar_multi_llm_rules_ok(self):
         # Repositorio que solo tiene .agents/rules/ (ej. configurado para OpenAI Codex / Gemini sin .claude/)
         mock_repo = self.tmpdir / "agents-repo"

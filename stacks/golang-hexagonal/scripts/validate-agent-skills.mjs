@@ -2,7 +2,8 @@
 import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs';
 import { resolve, dirname, join } from 'node:path';
 
-const ROOT = resolve(process.argv[2] ?? '.claude/skills');
+const defaultSkillsDir = existsSync('.agents/skills') ? '.agents/skills' : '.claude/skills';
+const ROOT = resolve(process.argv[2] ?? defaultSkillsDir);
 const errors = [];
 const names = new Set();
 const requiredSections = [
@@ -16,7 +17,7 @@ const requiredSections = [
 ];
 
 if (!existsSync(ROOT)) {
-  console.error('[SKILLS] ERROR: Directorio .claude/skills ausente');
+  console.error(`[SKILLS] ERROR: Directorio de skills '${ROOT}' ausente (.agents/skills o .claude/skills)`);
   process.exit(1);
 }
 

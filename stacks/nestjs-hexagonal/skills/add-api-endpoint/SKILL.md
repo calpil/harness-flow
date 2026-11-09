@@ -47,6 +47,6 @@ Use `INestApplication` + `supertest` and the same shared app configuration as pr
 
 ## Definition of done
 
-Apply `.claude/skills/swagger-contract/SKILL.md` before considering the endpoint complete.
+Apply `swagger-contract skill (.agents/skills/swagger-contract/ o .claude/skills/swagger-contract/)` before considering the endpoint complete.
 
 The endpoint has an explicit contract, thin controller, validated input, explicit response mapping, shared error behavior, required authz, focused HTTP tests, updated OpenAPI contract checks and green focused validation. When the change touches controllers, ports, adapters, use-case wiring or module composition, run `npm run architecture` and treat any violation as blocking.

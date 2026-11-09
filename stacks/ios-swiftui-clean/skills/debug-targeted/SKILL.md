@@ -13,7 +13,7 @@ Antes de modificar código:
 - Inspeccionar el mensaje de error de XCTest o la traza del crash.
 - Identificar el módulo (Domain, Data o UI) donde ocurre la anomalía.
 - Revisar advertencias de Swift Concurrency o posibles carreras en actores.
-- Consultar las reglas de testing en `.claude/rules/testing.md`.
+- Consultar las reglas de testing en `.agents/rules/testing.md` (o `.agents/rules/testing.md (o .claude/rules/testing.md)`).
 
 ## Procedimiento ejecutable
 1. **Capturar la falla exacta:** Ejecutar `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift test --filter {FailingTest}` para aislar el fallo y observar el resultado.

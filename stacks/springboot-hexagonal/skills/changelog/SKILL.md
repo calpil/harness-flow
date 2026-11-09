@@ -5,7 +5,7 @@ description: "Maintain an accurate, human-readable CHANGELOG.md based on verifie
 
 # Keep a Changelog / Traceable Release History — CALPIL Engineering Skill
 
-> Skill ejecutable por GitHub Copilot/Claude Code. Ruta única: `.claude/skills/changelog/`. Cada conclusión exige evidencia: no completar casillas con suposiciones.
+> Skill compatible con todos los agentes (Claude Code, OpenAI Codex, Gemini CLI, Antigravity, Hermes, Grok, Kimi). Rutas: `.agents/skills/changelog/` o `.claude/skills/changelog/`. Cada conclusión exige evidencia: no completar casillas con suposiciones.
 
 ## Cuándo activar y no activar
 
@@ -69,7 +69,7 @@ Los comandos con `Nombre...` o `group:artifact` son **plantillas**: sustituir po
 - [ ] Incluye impacto y acciones de migración cuando corresponde.
 ### Dependencias y handoff
 
-- Si la tarea toca simultáneamente **contrato HTTP, persistencia, seguridad, observabilidad, ADR o dependencias**, invocar/leer las skills especializadas de `.claude/skills/` para **esa** superficie. No crear una segunda implementación de la misma política.
+- Si la tarea toca simultáneamente **contrato HTTP, persistencia, seguridad, observabilidad, ADR o dependencias**, invocar/leer las skills especializadas (`.agents/skills/` o `.claude/skills/`) para **esa** superficie. No crear una segunda implementación de la misma política.
 - La documentación canónica de ingeniería existente (si está en checkout) vive en `docs/ai/`; leer solo la guía del dominio afectado: `ARCHITECTURE_RULES.md`, `TESTING_RULES.md`, `SECURITY_RULES.md`, `DEPENDENCY_POLICY.md`, `DEFINITION_OF_DONE.md`.
 - La ruta del ejemplo `workitems` **no** es requisito de los equipos, ni fuente de verdad corporativa si se elimina.
 

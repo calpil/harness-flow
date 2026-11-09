@@ -14,7 +14,7 @@ Antes de escribir código:
 - Revisar interfaces de repositorio en `domain/repository/`.
 - Revisar adaptadores de datos en `data/repository/`.
 - Revisar componentes de UI y tema en `core/ui/theme/` y `core/ui/components/`.
-- Consultar las directrices de arquitectura en `.claude/rules/architecture.md`.
+- Consultar las directrices de arquitectura en `.agents/rules/architecture.md` (o `.agents/rules/architecture.md (o .claude/rules/architecture.md)`).
 
 ## Procedimiento ejecutable
 1. **Modelar la entidad de Dominio:** Crear la data class inmutable en `domain/model/` con métodos de fábrica (`create`) que validen invariantes y devuelvan `Result<T>`.

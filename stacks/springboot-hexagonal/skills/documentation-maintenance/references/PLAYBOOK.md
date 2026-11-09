@@ -9,7 +9,7 @@ aGENTS.md / CLAUDE.md               normas de agentes
 CHANGELOG.md                        historial de releases
 .github/copilot-instructions.md     instrucciones Copilot
 .github/prompts/*.prompt.md         invocaciones manuales
-.claude/skills/*/SKILL.md           procedimientos reutilizables
+.agents/skills/*/SKILL.md / .claude/skills/*/SKILL.md  procedimientos reutilizables
 docs/architecture/                  principios + ADR
 docs/engineering/                   contribución, deps, testing
 docs/operations/                    observabilidad, despliegue, runbooks
@@ -39,7 +39,7 @@ La documentación normativa debe separar “política CALPIL” de “demostraci
 - `pom.xml` vs `VERSIONS.md` y `DEPENDENCIES.md`.
 - Contrato HTTP real vs README/OpenAPI/curl.
 - Changelog master de Liquibase vs inventario de SQL.
-- Instrucciones `.github/copilot-instructions.md` vs árbol `.claude/skills`.
+- Instrucciones `.github/copilot-instructions.md` vs árbol de skills (`.agents/skills` / `.claude/skills`).
 - Changelog vs commits efectivos y estado `Unreleased`.
 
 Si hay conflicto, privilegiar fuente técnica (código y configuración ejecutable), levantar corrección de política/ADR cuando corresponda y no borrar evidencias históricas.

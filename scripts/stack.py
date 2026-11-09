@@ -275,7 +275,28 @@ def verificar_cumplimiento(repo: Path, stack_id: str | None = None) -> dict[str,
                     arch_errors.append(line.strip())
                     findings.append(f"Arquitectura {stack_id}: {line.strip()}")
 
-    # D. Multi-LLM Readiness
+    # D. Multi-LLM Readiness y Paridad
+    has_claude_rules = all((rules_claude / r).exists() for r in expected_rules) if expected_rules else True
+    has_agents_rules = all((rules_agents / r).exists() for r in expected_rules) if expected_rules else True
+    has_gemini_rules = all((rules_gemini / r).exists() for r in expected_rules) if expected_rules else True
+
+    has_claude_skills = all((skills_claude / s / "SKILL.md").exists() for s in expected_skills) if expected_skills else True
+    has_agents_skills = all((skills_agents / s / "SKILL.md").exists() for s in expected_skills) if expected_skills else True
+
+    full_multi_llm_parity = (
+        has_claude_rules and has_agents_rules and has_gemini_rules
+        and has_claude_skills and has_agents_skills
+        and has_agents_md
+    )
+
+    hosts_active: list[str] = []
+    if has_claude_rules and has_claude_skills:
+        hosts_active.append("claude-code")
+    if has_agents_rules and has_agents_skills:
+        hosts_active.append("openai-codex/hermes/grok/kimi")
+    if has_gemini_rules and (has_agents_skills or has_claude_skills):
+        hosts_active.append("gemini-cli/agy")
+
     multi_llm_ready = (not missing_rules) and (len(missing_skills) == 0) and has_agents_md
 
     compliant = (len(findings) == 0)
@@ -291,6 +312,8 @@ def verificar_cumplimiento(repo: Path, stack_id: str | None = None) -> dict[str,
         "architecture_ok": arch_ok,
         "architecture_errors": arch_errors,
         "multi_llm_ready": multi_llm_ready,
+        "full_multi_llm_parity": full_multi_llm_parity,
+        "hosts_active": hosts_active,
         "findings": findings,
         "warnings": warnings,
     }
@@ -1489,6 +1512,8 @@ def main() -> None:
             print(f"Skills operativas:   {skills_status}")
             print(f"Arquitectura:        {'OK' if diag['architecture_ok'] else 'VIOLACIONES DETECTADAS'}")
             print(f"Multi-LLM Ready:     {'SI' if diag['multi_llm_ready'] else 'NO'}")
+            parity_label = 'TOTAL (todos los hosts)' if diag.get('full_multi_llm_parity') else f"PARCIAL (hosts sincronizados: {', '.join(diag.get('hosts_active', [])) if diag.get('hosts_active') else 'ninguno'})"
+            print(f"Paridad Multi-LLM:   {parity_label}")
             if diag["findings"]:
                 print("\nHallazgos a corregir:")
                 for f in diag["findings"]:

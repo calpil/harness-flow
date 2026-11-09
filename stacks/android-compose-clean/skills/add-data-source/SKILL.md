@@ -13,7 +13,7 @@ Antes de codificar la fuente de datos:
 - Inspeccionar la interfaz de repositorio en `features/*/domain/repository/`.
 - Revisar el modelo de errores RFC 7807 en `core/network/ProblemDetails.kt`.
 - Revisar los DTOs de serialización en `features/*/data/dto/`.
-- Consultar las reglas de seguridad en `.claude/rules/security.md`.
+- Consultar las reglas de seguridad en `.agents/rules/security.md` (o `.agents/rules/security.md (o .claude/rules/security.md)`).
 
 ## Procedimiento ejecutable
 1. **Definir DTOs serializables:** Crear data classes con `@Serializable` en `data/dto/` con métodos de transformación `toDomain()`.
