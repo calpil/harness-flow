@@ -253,8 +253,52 @@ def _raices_declaradas(root: Path) -> list[Path]:
 # 2. Verificación Normativa
 # ---------------------------------------------------------------------------
 
-def verificar_cumplimiento(repo: Path, stack_id: str | None = None) -> dict[str, Any]:
-    """Evalúa cumplimiento con el estándar de rules, skills, arquitectura y testing."""
+REGLA_SKILLS_EXCLUIDAS = "stack_skills_excluidas"
+
+
+def skills_excluidas(rules: dict | None, stack_id: str) -> set[str]:
+    """Skills del stack que el proyecto retiro a proposito.
+
+    `rules.stack_skills_excluidas` en harness/feature_list.json:
+    `{"<stack-id>": ["<skill>", ...]}`. Sin esto, la normalizacion reinstalaba en
+    cada arranque de sesion las skills que el usuario habia quitado porque no
+    aplican al proyecto. Un valor que no se entiende no apaga la regla: falla.
+    """
+    valor = (rules or {}).get(REGLA_SKILLS_EXCLUIDAS)
+    if valor is None:
+        return set()
+    forma = f'rules.{REGLA_SKILLS_EXCLUIDAS} debe ser {{"<stack-id>": ["<skill>", ...]}}'
+    if not isinstance(valor, dict):
+        raise ValueError(f"{forma}; se encontro {type(valor).__name__}")
+    for clave, lista in valor.items():
+        if not isinstance(lista, list) or not all(isinstance(x, str) and x for x in lista):
+            raise ValueError(f"{forma}; la entrada '{clave}' no es una lista de nombres")
+    return set(valor.get(stack_id, []))
+
+
+def rules_del_proyecto(*inicios: Path) -> dict:
+    """`rules` del primer harness/feature_list.json que contenga a alguno de los inicios."""
+    for inicio in inicios:
+        inicio = inicio.resolve()
+        for carpeta in (inicio, *inicio.parents):
+            backlog = carpeta / "harness" / "feature_list.json"
+            if not backlog.is_file():
+                continue
+            try:
+                data = json.loads(backlog.read_text(encoding="utf-8"))
+            except (OSError, ValueError) as exc:
+                raise ValueError(f"{backlog} ilegible: {exc}")
+            rules = data.get("rules") if isinstance(data, dict) else None
+            return rules if isinstance(rules, dict) else {}
+    return {}
+
+
+def verificar_cumplimiento(repo: Path, stack_id: str | None = None,
+                          rules: dict | None = None) -> dict[str, Any]:
+    """Evalúa cumplimiento con el estándar de rules, skills, arquitectura y testing.
+
+    `rules` son las reglas del proyecto; sin ellas se leen del arnes que contiene al repo.
+    """
     repo = repo.resolve()
     if not stack_id:
         det = detectar_stack_directorio(repo)
@@ -296,8 +340,14 @@ def verificar_cumplimiento(repo: Path, stack_id: str | None = None) -> dict[str,
     # B. Chequeo de Skills (.claude/skills/ o .agents/skills/)
     skills_claude = repo / ".claude" / "skills"
     skills_agents = repo / ".agents" / "skills"
-    expected_skills = manifest.get("normative", {}).get("skills", [])
+    excluidas = skills_excluidas(rules_del_proyecto(repo) if rules is None else rules, stack_id)
+    normativas = manifest.get("normative", {}).get("skills", [])
+    expected_skills = [s for s in normativas if s not in excluidas]
     missing_skills = []
+
+    conocidas = set(normativas) | _skills_del_stack(stack_id)
+    for nombre in sorted(excluidas - conocidas):
+        warnings.append(f"rules.{REGLA_SKILLS_EXCLUIDAS}: '{nombre}' no es una skill del stack {stack_id} (revisa el nombre)")
 
     for s in expected_skills:
         found = (skills_claude / s / "SKILL.md").exists() or (skills_agents / s / "SKILL.md").exists()
@@ -354,6 +404,7 @@ def verificar_cumplimiento(repo: Path, stack_id: str | None = None) -> dict[str,
         "missing_rules": missing_rules,
         "skills_ok": len(missing_skills) == 0,
         "missing_skills": missing_skills,
+        "skills_excluidas": sorted(excluidas),
         "architecture_ok": arch_ok,
         "architecture_errors": arch_errors,
         "multi_llm_ready": multi_llm_ready,
@@ -368,8 +419,20 @@ def verificar_cumplimiento(repo: Path, stack_id: str | None = None) -> dict[str,
 # 3. Normalización Multi-LLM
 # ---------------------------------------------------------------------------
 
-def normalizar_repositorio(repo: Path, stack_id: str | None = None, dry_run: bool = False) -> dict[str, Any]:
-    """Aplica la normativa de CALPIL (copia rules, skills, AGENTS.md, checkers) al repo."""
+def _skills_del_stack(stack_id: str) -> set[str]:
+    origen = STACKS_DIR / stack_id / "skills"
+    if not origen.is_dir():
+        return set()
+    return {d.name for d in origen.iterdir() if (d / "SKILL.md").is_file()}
+
+
+def normalizar_repositorio(repo: Path, stack_id: str | None = None, dry_run: bool = False,
+                           rules: dict | None = None) -> dict[str, Any]:
+    """Aplica la normativa de CALPIL (copia rules, skills, AGENTS.md, checkers) al repo.
+
+    Solo agrega lo que falta. No instala las skills de `rules.stack_skills_excluidas`
+    ni reemplaza un AGENTS.md que ya existe: ambos son decisiones del usuario.
+    """
     repo = repo.resolve()
     if not stack_id:
         det = detectar_stack_directorio(repo)
@@ -381,6 +444,9 @@ def normalizar_repositorio(repo: Path, stack_id: str | None = None, dry_run: boo
     manifest = cargar_manifest(stack_id)
     stack_source_dir = STACKS_DIR / stack_id
     actions_taken: list[str] = []
+    avisos: list[str] = []
+    # Antes de escribir nada: una regla que no se entiende no deja el repo a medio instalar.
+    excluidas = skills_excluidas(rules_del_proyecto(repo) if rules is None else rules, stack_id)
 
     # 1. Instalar Rules Multi-LLM (.claude/rules/, .agents/rules/, .gemini/rules/)
     target_claude_rules = repo / ".claude" / "rules"
@@ -422,6 +488,8 @@ def normalizar_repositorio(repo: Path, stack_id: str | None = None, dry_run: boo
             target_claude_skills.mkdir(parents=True, exist_ok=True)
             target_shared_skills.mkdir(parents=True, exist_ok=True)
         for skill_dir in source_skills_dir.iterdir():
+            if skill_dir.name in excluidas:
+                continue
             if skill_dir.is_dir() and (skill_dir / "SKILL.md").exists():
                 dest_claude = target_claude_skills / skill_dir.name
                 dest_shared = target_shared_skills / skill_dir.name
@@ -436,11 +504,15 @@ def normalizar_repositorio(repo: Path, stack_id: str | None = None, dry_run: boo
 
     # 3. Generar / Sincronizar AGENTS.md (contrato multi-LLM)
     agents_md = repo / "AGENTS.md"
-    if not agents_md.exists() or "CALPIL" not in agents_md.read_text(encoding="utf-8", errors="ignore"):
+    if not agents_md.exists():
         agents_content = _generar_agents_md(stack_id, manifest)
         if not dry_run:
             agents_md.write_text(agents_content, encoding="utf-8")
         actions_taken.append("Generado contrato multi-LLM en AGENTS.md")
+    elif "CALPIL" not in agents_md.read_text(encoding="utf-8", errors="ignore"):
+        # Antes se reemplazaba entero por la plantilla del stack: el AGENTS.md del
+        # proyecto se perdia. Un archivo que ya existe es del usuario.
+        avisos.append("AGENTS.md ya existe y no se reemplaza: el contrato del stack queda en las rules instaladas")
 
     # 4. Instalar scripts de verificación si existen en el stack
     scripts_dir = repo / "scripts"
@@ -463,6 +535,8 @@ def normalizar_repositorio(repo: Path, stack_id: str | None = None, dry_run: boo
         "stack": stack_id,
         "repo": str(repo),
         "actions": actions_taken,
+        "warnings": avisos,
+        "skills_excluidas": sorted(excluidas),
         "dry_run": dry_run,
     }
 
@@ -1335,22 +1409,33 @@ def auto_normalizar_y_asegurar_cumplimiento(
     except Exception:
         p_paths = None
 
+    # Las reglas del proyecto valen para todos sus repos, tambien los que viven fuera de la raiz.
+    rules_proj = (data.get("rules") or {}) if isinstance(data, dict) else None
+
     for d in st_calpil:
         target_path = Path(d["path"])
         stack_id = d["stack"]
-        diag = verificar_cumplimiento(target_path, stack_id)
+        try:
+            diag = verificar_cumplimiento(target_path, stack_id, rules=rules_proj)
+        except ValueError as exc:
+            # No se instala nada con una regla que no se entiende, y se dice.
+            resultado["nivel_1_acciones"].append(f"[!] {target_path.name}: {exc}. No se normaliza.")
+            continue
 
         # -------------------------------------------------------------
         # Nivel 1: Entorno y Metadatos (.claude/rules, .agents/rules, .gemini/rules, skills, AGENTS.md)
         # -------------------------------------------------------------
         if not diag["rules_ok"] or not diag["skills_ok"] or not diag["multi_llm_ready"]:
             if auto_normalizar_nivel_1:
-                norm_res = normalizar_repositorio(target_path, stack_id, dry_run=False)
+                norm_res = normalizar_repositorio(target_path, stack_id, dry_run=False, rules=rules_proj)
                 acciones = norm_res.get("actions", norm_res.get("actions_taken", []))
-                msg = f"Auto-normalizado Nivel 1 en {target_path.name} ({d['name']}): {len(acciones)} elementos instalados."
-                resultado["nivel_1_acciones"].append(msg)
+                if acciones:
+                    msg = f"Auto-normalizado Nivel 1 en {target_path.name} ({d['name']}): {len(acciones)} elementos instalados."
+                    resultado["nivel_1_acciones"].append(msg)
+                for aviso in norm_res.get("warnings", []):
+                    resultado["nivel_1_acciones"].append(f"[i] {target_path.name}: {aviso}")
                 # Re-verificar tras normalizar
-                diag = verificar_cumplimiento(target_path, stack_id)
+                diag = verificar_cumplimiento(target_path, stack_id, rules=rules_proj)
 
         # -------------------------------------------------------------
         # Nivel 2: Código Fuente / Arquitectura (check-architecture.py)
@@ -1542,8 +1627,17 @@ def main() -> None:
                     print(f"    Indicadores: {', '.join(t['indicators'])}")
         sys.exit(0)
 
+    if args.cmd in ("verificar", "normalizar"):
+        # Los microservicios pueden vivir fuera de la raiz del arnes: cuenta tambien el cwd.
+        try:
+            rules_cli = rules_del_proyecto(repo_path, Path.cwd())
+            skills_excluidas(rules_cli, args.stack or "")
+        except ValueError as exc:
+            print(f"[!!] {exc}", file=sys.stderr)
+            sys.exit(1)
+
     if args.cmd == "verificar":
-        diag = verificar_cumplimiento(repo_path, args.stack)
+        diag = verificar_cumplimiento(repo_path, args.stack, rules=rules_cli)
         if args.json:
             print(json.dumps(diag, indent=2))
         else:
@@ -1555,6 +1649,8 @@ def main() -> None:
             missing_skills_cnt = len(diag['missing_skills'])
             skills_status = 'OK' if diag['skills_ok'] else f"FALTAN {missing_skills_cnt} skills"
             print(f"Skills operativas:   {skills_status}")
+            if diag.get("skills_excluidas"):
+                print(f"Skills excluidas:    {', '.join(diag['skills_excluidas'])} (rules.{REGLA_SKILLS_EXCLUIDAS})")
             print(f"Arquitectura:        {'OK' if diag['architecture_ok'] else 'VIOLACIONES DETECTADAS'}")
             print(f"Multi-LLM Ready:     {'SI' if diag['multi_llm_ready'] else 'NO'}")
             parity_label = 'TOTAL (todos los hosts)' if diag.get('full_multi_llm_parity') else f"PARCIAL (hosts sincronizados: {', '.join(diag.get('hosts_active', [])) if diag.get('hosts_active') else 'ninguno'})"
@@ -1620,8 +1716,12 @@ def main() -> None:
         sys.exit(0)
 
     if args.cmd == "normalizar":
-        res = normalizar_repositorio(repo_path, args.stack, args.dry_run)
+        res = normalizar_repositorio(repo_path, args.stack, args.dry_run, rules=rules_cli)
         print(f"Normalización de stack '{res.get('stack')}' en {repo_path.name}:")
+        if res.get("skills_excluidas"):
+            print(f"  = Skills excluidas por el proyecto: {', '.join(res['skills_excluidas'])}")
+        for aviso in res.get("warnings", []):
+            print(f"  [i] {aviso}")
         actions = res.get("actions", [])
         if actions:
             for act in actions:
