@@ -108,7 +108,7 @@
   },
   "runners": {
     "test_command": "cargo test",
-    "skills_validator": "node stacks/rust-hexagonal/scripts/validate-agent-skills.mjs"
+    "skills_validator": "node assets/stacks/rust-hexagonal/scripts/validate-agent-skills.mjs"
   },
   "documentation": {
     "official_docs": "https://doc.rust-lang.org/",

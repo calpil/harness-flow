@@ -20,7 +20,10 @@ from pathlib import Path
 from typing import Any
 
 # Directorio base de stacks en harness-flow
-STACKS_DIR = Path(__file__).resolve().parent.parent / "stacks"
+# Bajo assets/ a proposito: Hermes recorre la skill entera y registra como skill
+# propia cada SKILL.md que encuentra, salvo en references/, templates/, assets/ y
+# scripts/. En la raiz, las plantillas de cada stack entraban a su indice.
+STACKS_DIR = Path(__file__).resolve().parent.parent / "assets" / "stacks"
 
 
 def cargar_manifest(stack_id: str) -> dict[str, Any]:
@@ -141,7 +144,7 @@ def evaluar_stack_manifest(manifest: dict[str, Any], repo: Path) -> tuple[int, l
 
 
 def detectar_stack_directorio(repo: Path) -> dict[str, Any]:
-    """Detecta dinámicamente el stack tecnológico predominante usando los manifests de stacks/."""
+    """Detecta dinámicamente el stack tecnológico predominante usando los manifests de assets/stacks/."""
     repo = repo.resolve()
     manifests = listar_stacks_disponibles()
 
@@ -1322,7 +1325,7 @@ def auto_normalizar_y_asegurar_cumplimiento(
                 if f0 is None:
                     manifest = cargar_manifest(stack_id)
                     test_runner = manifest.get("runners", {}).get("test", "npm test" if any(k in stack_id for k in ("angular", "nextjs", "nest")) else "go test ./...")
-                    rel_checker = f"stacks/{stack_id}/scripts/check-architecture.py"
+                    rel_checker = f"assets/stacks/{stack_id}/scripts/check-architecture.py"
                     try:
                         rel_target = str(target_path.relative_to(p_paths["root"])) if target_path != p_paths["root"] else "."
                     except Exception:

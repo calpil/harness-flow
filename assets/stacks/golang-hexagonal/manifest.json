@@ -76,7 +76,7 @@
   "runners": {
     "test_command": "go test -tags integration -count=1 -json ./...",
     "race_command": "go test -race ./...",
-    "skills_validator": "node stacks/golang-hexagonal/scripts/validate-agent-skills.mjs"
+    "skills_validator": "node assets/stacks/golang-hexagonal/scripts/validate-agent-skills.mjs"
   },
   "documentation": {
     "official_docs": "https://go.dev/doc/",

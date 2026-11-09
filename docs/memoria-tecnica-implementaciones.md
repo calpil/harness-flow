@@ -44,19 +44,19 @@ flowchart TD
 Se diseñó e integró formalmente el stack backend C# 13 / .NET 10 (LTS) bajo Clean Architecture / Arquitectura Hexagonal.
 
 ### Componentes Principales:
-* **Manifiesto Declarativo**: [`stacks/dotnet-hexagonal/manifest.json`](file:///Users/alan/.hermes/skills/software-development/harness-flow/stacks/dotnet-hexagonal/manifest.json)
+* **Manifiesto Declarativo**: [`assets/stacks/dotnet-hexagonal/manifest.json`](file:///Users/alan/.hermes/skills/software-development/harness-flow/assets/stacks/dotnet-hexagonal/manifest.json)
   * Detección por solución (`*.sln`, `*.slnx`, `*.csproj`), estructura de proyectos (`src/**/*.Domain`, `Application`, `Infrastructure`, `WebApi`) y dependencias clave (`Microsoft.AspNetCore`, `Dapper`, `Npgsql`).
   * Restricciones de arquitectura: pureza de Dominio en BCL sin dependencias externas, aislamiento de Application, Composition Root único en `Program.cs`, headers de seguridad y respuestas RFC 7807 (`application/problem+json`).
 * **Reglas Normativas Modulares (`rules/`)**:
-  * [`architecture.md`](file:///Users/alan/.hermes/skills/software-development/harness-flow/stacks/dotnet-hexagonal/rules/architecture.md): Límites de Clean Architecture en .NET.
-  * [`dependencies.md`](file:///Users/alan/.hermes/skills/software-development/harness-flow/stacks/dotnet-hexagonal/rules/dependencies.md): Gobierno de paquetes NuGet, versiones estables LTS y prohibición de dependencias en Dominio.
-  * [`security.md`](file:///Users/alan/.hermes/skills/software-development/harness-flow/stacks/dotnet-hexagonal/rules/security.md): Consultas SQL parametrizadas en Dapper, middlewares RFC 7807, headers HTTP y cero secretos en código.
-  * [`testing.md`](file:///Users/alan/.hermes/skills/software-development/harness-flow/stacks/dotnet-hexagonal/rules/testing.md): Pruebas deterministas con xUnit, `WebApplicationFactory<Program>`, in-memory fakes y prohibición de `Thread.Sleep`.
+  * [`architecture.md`](file:///Users/alan/.hermes/skills/software-development/harness-flow/assets/stacks/dotnet-hexagonal/rules/architecture.md): Límites de Clean Architecture en .NET.
+  * [`dependencies.md`](file:///Users/alan/.hermes/skills/software-development/harness-flow/assets/stacks/dotnet-hexagonal/rules/dependencies.md): Gobierno de paquetes NuGet, versiones estables LTS y prohibición de dependencias en Dominio.
+  * [`security.md`](file:///Users/alan/.hermes/skills/software-development/harness-flow/assets/stacks/dotnet-hexagonal/rules/security.md): Consultas SQL parametrizadas en Dapper, middlewares RFC 7807, headers HTTP y cero secretos en código.
+  * [`testing.md`](file:///Users/alan/.hermes/skills/software-development/harness-flow/assets/stacks/dotnet-hexagonal/rules/testing.md): Pruebas deterministas con xUnit, `WebApplicationFactory<Program>`, in-memory fakes y prohibición de `Thread.Sleep`.
 * **9 Habilidades Operativas (`skills/`)**:
   * Implementadas con frontmatter YAML, descripción válida (35–1024 caracteres), 7 secciones obligatorias y procedimiento ejecutable de ≥ 5 pasos: `add-api-endpoint`, `add-feature`, `add-persistence`, `architecture-review`, `debug-targeted`, `dependency-review`, `prepare-release`, `security-review`, `write-tests`.
 * **Herramientas de Auditoría**:
-  * [`stacks/dotnet-hexagonal/scripts/check-architecture.py`](file:///Users/alan/.hermes/skills/software-development/harness-flow/stacks/dotnet-hexagonal/scripts/check-architecture.py): Validador AST/regex de límites entre proyectos `.csproj` y archivos `.cs`.
-  * [`stacks/dotnet-hexagonal/scripts/validate-agent-skills.mjs`](file:///Users/alan/.hermes/skills/software-development/harness-flow/stacks/dotnet-hexagonal/scripts/validate-agent-skills.mjs): Validador de esquemas de skills.
+  * [`assets/stacks/dotnet-hexagonal/scripts/check-architecture.py`](file:///Users/alan/.hermes/skills/software-development/harness-flow/assets/stacks/dotnet-hexagonal/scripts/check-architecture.py): Validador AST/regex de límites entre proyectos `.csproj` y archivos `.cs`.
+  * [`assets/stacks/dotnet-hexagonal/scripts/validate-agent-skills.mjs`](file:///Users/alan/.hermes/skills/software-development/harness-flow/assets/stacks/dotnet-hexagonal/scripts/validate-agent-skills.mjs): Validador de esquemas de skills.
 * **Integración en `scripts/stack.py`**:
   * Scaffolding de estructura canónica (.Domain, .Application, .Infrastructure, .WebApi, Program.cs con middlewares).
   * Auditoría de versión de .NET en archivos `.csproj` frente a versión mínima `8.0.0` / `10.0.0`.
@@ -125,20 +125,20 @@ Basado en la obra *Designing Data-Intensive Applications* de Martin Kleppmann, s
 Se diseñó e integró formalmente el stack backend Rust (edición 2021/2024) con Axum, Tokio y SQLx.
 
 ### Componentes Principales:
-* **Manifiesto Declarativo**: [`stacks/rust-hexagonal/manifest.json`](file:///Users/alan/.hermes/skills/software-development/harness-flow/stacks/rust-hexagonal/manifest.json)
+* **Manifiesto Declarativo**: [`assets/stacks/rust-hexagonal/manifest.json`](file:///Users/alan/.hermes/skills/software-development/harness-flow/assets/stacks/rust-hexagonal/manifest.json)
   * Detección por `Cargo.toml`, `Cargo.lock`, extensiones `.rs`, dependencias (`axum`, `tokio`, `sqlx`) y crates (`crates/domain`, `application`, `infrastructure`, `api`) o estructura de carpetas `src/(domain|application|infrastructure)`.
   * Restricciones de arquitectura: Pureza de Dominio en Rust estándar (sin Axum, SQLx, Tokio net), Application aislada por traits, Composition Root en `src/main.rs`, serialización RFC 7807 y pruebas sin sleep.
   * Configuración Context7 (`/tokio-rs/axum`), documentación oficial en [doc.rust-lang.org](https://doc.rust-lang.org/) y auditoría con `cargo audit`.
 * **Reglas Normativas Modulares (`rules/`)**:
-  * [`architecture.md`](file:///Users/alan/.hermes/skills/software-development/harness-flow/stacks/rust-hexagonal/rules/architecture.md): Límites de arquitectura hexagonal en Rust.
-  * [`dependencies.md`](file:///Users/alan/.hermes/skills/software-development/harness-flow/stacks/rust-hexagonal/rules/dependencies.md): Dependencias centralizadas en workspace `[workspace.dependencies]`, versiones fijas y versionado de `Cargo.lock`.
-  * [`security.md`](file:///Users/alan/.hermes/skills/software-development/harness-flow/stacks/rust-hexagonal/rules/security.md): Consultas parametrizadas con `sqlx::query!`, headers HTTP de seguridad, `x-correlation-id` y contenedores Docker sin privilegios (`appuser`).
-  * [`testing.md`](file:///Users/alan/.hermes/skills/software-development/harness-flow/stacks/rust-hexagonal/rules/testing.md): Pruebas deterministas de dominio sin I/O, adaptador `InMemoryWorkItemRepository`, pruebas HTTP con `tower::ServiceExt::oneshot` y cero llamadas a `thread::sleep`.
+  * [`architecture.md`](file:///Users/alan/.hermes/skills/software-development/harness-flow/assets/stacks/rust-hexagonal/rules/architecture.md): Límites de arquitectura hexagonal en Rust.
+  * [`dependencies.md`](file:///Users/alan/.hermes/skills/software-development/harness-flow/assets/stacks/rust-hexagonal/rules/dependencies.md): Dependencias centralizadas en workspace `[workspace.dependencies]`, versiones fijas y versionado de `Cargo.lock`.
+  * [`security.md`](file:///Users/alan/.hermes/skills/software-development/harness-flow/assets/stacks/rust-hexagonal/rules/security.md): Consultas parametrizadas con `sqlx::query!`, headers HTTP de seguridad, `x-correlation-id` y contenedores Docker sin privilegios (`appuser`).
+  * [`testing.md`](file:///Users/alan/.hermes/skills/software-development/harness-flow/assets/stacks/rust-hexagonal/rules/testing.md): Pruebas deterministas de dominio sin I/O, adaptador `InMemoryWorkItemRepository`, pruebas HTTP con `tower::ServiceExt::oneshot` y cero llamadas a `thread::sleep`.
 * **9 Habilidades Operativas (`skills/`)**:
   * `add-api-endpoint`, `add-feature`, `add-persistence`, `architecture-review`, `debug-targeted`, `dependency-review`, `prepare-release`, `security-review`, `write-tests`.
-  * 100% conformes con el validador [`validate-agent-skills.mjs`](file:///Users/alan/.hermes/skills/software-development/harness-flow/stacks/rust-hexagonal/scripts/validate-agent-skills.mjs).
+  * 100% conformes con el validador [`validate-agent-skills.mjs`](file:///Users/alan/.hermes/skills/software-development/harness-flow/assets/stacks/rust-hexagonal/scripts/validate-agent-skills.mjs).
 * **Herramientas de Auditoría**:
-  * [`stacks/rust-hexagonal/scripts/check-architecture.py`](file:///Users/alan/.hermes/skills/software-development/harness-flow/stacks/rust-hexagonal/scripts/check-architecture.py): Validador AST/regex de pureza de Dominio, aislamiento de Application, verificación de `Cargo.toml` por crate, composición en `main.rs` y testing determinista.
+  * [`assets/stacks/rust-hexagonal/scripts/check-architecture.py`](file:///Users/alan/.hermes/skills/software-development/harness-flow/assets/stacks/rust-hexagonal/scripts/check-architecture.py): Validador AST/regex de pureza de Dominio, aislamiento de Application, verificación de `Cargo.toml` por crate, composición en `main.rs` y testing determinista.
 * **Integración en `scripts/stack.py`**:
   * Scaffolding de estructura canónica (Cargo.toml con Axum 0.8/Tokio, `src/main.rs`, `src/domain/`, `src/application/`, `src/infrastructure/`).
   * Detección y auditoría de edición mínima (`edition = "2021"`).
@@ -180,14 +180,14 @@ A partir del análisis del video de BettaTech (*¿Es este libro el Clean Code Mo
 
 | Archivo / Componente | Tipo | Propósito y Contenido Principal |
 | :--- | :--- | :--- |
-| [`stacks/dotnet-hexagonal/manifest.json`](file:///Users/alan/.hermes/skills/software-development/harness-flow/stacks/dotnet-hexagonal/manifest.json) | Manifiesto | Configuración declarativa del stack .NET Hexagonal C# 13 / .NET 10 |
-| [`stacks/dotnet-hexagonal/rules/*`](file:///Users/alan/.hermes/skills/software-development/harness-flow/stacks/dotnet-hexagonal/rules/) | Reglas | Reglas modulares de arquitectura, dependencias, seguridad y testing .NET |
-| [`stacks/dotnet-hexagonal/skills/*`](file:///Users/alan/.hermes/skills/software-development/harness-flow/stacks/dotnet-hexagonal/skills/) | Habilidades | 9 skills operativas para ingeniería .NET (API, persistencia, release, tests, etc.) |
-| [`stacks/dotnet-hexagonal/scripts/check-architecture.py`](file:///Users/alan/.hermes/skills/software-development/harness-flow/stacks/dotnet-hexagonal/scripts/check-architecture.py) | Script | Validador estricto de límites de Clean Architecture en .NET |
-| [`stacks/rust-hexagonal/manifest.json`](file:///Users/alan/.hermes/skills/software-development/harness-flow/stacks/rust-hexagonal/manifest.json) | Manifiesto | Configuración declarativa del stack Rust Hexagonal (Axum, Tokio, SQLx) |
-| [`stacks/rust-hexagonal/rules/*`](file:///Users/alan/.hermes/skills/software-development/harness-flow/stacks/rust-hexagonal/rules/) | Reglas | Reglas modulares de arquitectura, dependencias, seguridad y testing en Rust |
-| [`stacks/rust-hexagonal/skills/*`](file:///Users/alan/.hermes/skills/software-development/harness-flow/stacks/rust-hexagonal/skills/) | Habilidades | 9 skills operativas de ingeniería Rust (API endpoints, persistencia SQLx, tests, etc.) |
-| [`stacks/rust-hexagonal/scripts/check-architecture.py`](file:///Users/alan/.hermes/skills/software-development/harness-flow/stacks/rust-hexagonal/scripts/check-architecture.py) | Script | Validador estricto de pureza de dominio y límites hexagonales en Rust |
+| [`assets/stacks/dotnet-hexagonal/manifest.json`](file:///Users/alan/.hermes/skills/software-development/harness-flow/assets/stacks/dotnet-hexagonal/manifest.json) | Manifiesto | Configuración declarativa del stack .NET Hexagonal C# 13 / .NET 10 |
+| [`assets/stacks/dotnet-hexagonal/rules/*`](file:///Users/alan/.hermes/skills/software-development/harness-flow/assets/stacks/dotnet-hexagonal/rules/) | Reglas | Reglas modulares de arquitectura, dependencias, seguridad y testing .NET |
+| [`assets/stacks/dotnet-hexagonal/skills/*`](file:///Users/alan/.hermes/skills/software-development/harness-flow/assets/stacks/dotnet-hexagonal/skills/) | Habilidades | 9 skills operativas para ingeniería .NET (API, persistencia, release, tests, etc.) |
+| [`assets/stacks/dotnet-hexagonal/scripts/check-architecture.py`](file:///Users/alan/.hermes/skills/software-development/harness-flow/assets/stacks/dotnet-hexagonal/scripts/check-architecture.py) | Script | Validador estricto de límites de Clean Architecture en .NET |
+| [`assets/stacks/rust-hexagonal/manifest.json`](file:///Users/alan/.hermes/skills/software-development/harness-flow/assets/stacks/rust-hexagonal/manifest.json) | Manifiesto | Configuración declarativa del stack Rust Hexagonal (Axum, Tokio, SQLx) |
+| [`assets/stacks/rust-hexagonal/rules/*`](file:///Users/alan/.hermes/skills/software-development/harness-flow/assets/stacks/rust-hexagonal/rules/) | Reglas | Reglas modulares de arquitectura, dependencias, seguridad y testing en Rust |
+| [`assets/stacks/rust-hexagonal/skills/*`](file:///Users/alan/.hermes/skills/software-development/harness-flow/assets/stacks/rust-hexagonal/skills/) | Habilidades | 9 skills operativas de ingeniería Rust (API endpoints, persistencia SQLx, tests, etc.) |
+| [`assets/stacks/rust-hexagonal/scripts/check-architecture.py`](file:///Users/alan/.hermes/skills/software-development/harness-flow/assets/stacks/rust-hexagonal/scripts/check-architecture.py) | Script | Validador estricto de pureza de dominio y límites hexagonales en Rust |
 | [`references/comunicacion-ste100-y-prompts.md`](file:///Users/alan/.hermes/skills/software-development/harness-flow/references/comunicacion-ste100-y-prompts.md) | Referencia | Norma de comunicación técnica ASD-STE100 y optimización de prompts Karpathy |
 | [`docs/principios-karpathy-ste100-harness-flow.md`](file:///Users/alan/.hermes/skills/software-development/harness-flow/docs/principios-karpathy-ste100-harness-flow.md) | Documento | Análisis de los 7 principios de Karpathy y su integración en Harness Flow |
 | [`references/patrones-datos-ddia.md`](file:///Users/alan/.hermes/skills/software-development/harness-flow/references/patrones-datos-ddia.md) | Referencia | Patrones de datos DDIA (Transactional Outbox, OCC, Idempotencia, Kafka vs No-Kafka) |
@@ -224,14 +224,14 @@ Se realizó una auditoría rigurosa y exhaustiva sobre la totalidad de los 8 sta
    * `springboot-hexagonal`: Corregida discrepancia entre `add-persistence` declarada y las habilidades reales existentes (`changelog` y `documentation-maintenance`).
    * `nestjs-hexagonal`: Añadidas 3 habilidades faltantes en la lista del manifiesto (`add-auth-authorization`, `delivery-change`, `observability-change`), completando las 9 habilidades operativas.
 2. **Creación de Reglas Normativas Modulares (`rules/`)**:
-   * En `stacks/nestjs-hexagonal/rules/` y `stacks/python-dataproduct/rules/`, se crearon los 4 estándares normativos obligatorios: `architecture.md`, `dependencies.md`, `security.md` y `testing.md`.
+   * En `assets/stacks/nestjs-hexagonal/rules/` y `assets/stacks/python-dataproduct/rules/`, se crearon los 4 estándares normativos obligatorios: `architecture.md`, `dependencies.md`, `security.md` y `testing.md`.
 3. **Despliegue de Verificadores de Arquitectura (`check-architecture.py`)**:
    * Se diseñaron e implementaron los checkers AST y de regex arquitectónico faltantes en:
-     * [`stacks/springboot-hexagonal/scripts/check-architecture.py`](file:///Users/alan/.hermes/skills/software-development/harness-flow/stacks/springboot-hexagonal/scripts/check-architecture.py)
-     * [`stacks/nextjs-product/scripts/check-architecture.py`](file:///Users/alan/.hermes/skills/software-development/harness-flow/stacks/nextjs-product/scripts/check-architecture.py)
-     * [`stacks/nestjs-hexagonal/scripts/check-architecture.py`](file:///Users/alan/.hermes/skills/software-development/harness-flow/stacks/nestjs-hexagonal/scripts/check-architecture.py)
-     * [`stacks/python-dataproduct/scripts/check-architecture.py`](file:///Users/alan/.hermes/skills/software-development/harness-flow/stacks/python-dataproduct/scripts/check-architecture.py)
-   * Se distribuyó el script [`validate-agent-skills.mjs`](file:///Users/alan/.hermes/skills/software-development/harness-flow/scripts/validate-agent-skills.mjs) a todos los directorios `stacks/*/scripts/`.
+     * [`assets/stacks/springboot-hexagonal/scripts/check-architecture.py`](file:///Users/alan/.hermes/skills/software-development/harness-flow/assets/stacks/springboot-hexagonal/scripts/check-architecture.py)
+     * [`assets/stacks/nextjs-product/scripts/check-architecture.py`](file:///Users/alan/.hermes/skills/software-development/harness-flow/assets/stacks/nextjs-product/scripts/check-architecture.py)
+     * [`assets/stacks/nestjs-hexagonal/scripts/check-architecture.py`](file:///Users/alan/.hermes/skills/software-development/harness-flow/assets/stacks/nestjs-hexagonal/scripts/check-architecture.py)
+     * [`assets/stacks/python-dataproduct/scripts/check-architecture.py`](file:///Users/alan/.hermes/skills/software-development/harness-flow/assets/stacks/python-dataproduct/scripts/check-architecture.py)
+   * Se distribuyó el script [`validate-agent-skills.mjs`](file:///Users/alan/.hermes/skills/software-development/harness-flow/scripts/validate-agent-skills.mjs) a todos los directorios `assets/stacks/*/scripts/`.
 4. **Normalización y Validación de Plantillas CALPIL**:
    * Ejecutado `stack.py normalizar` sobre `calpil-nestjs-hexagonal-template` y `calpil-python-dataproduct-template` para desplegar las reglas en `.claude/rules/`.
    * Verificación en vivo de las 8 plantillas oficiales en `/Users/alan/Documents/Git/CALPIL`:
@@ -536,19 +536,19 @@ Se erradicó la asimetría de reglas hacia Claude Code implementando paridad nat
 Se incorporó soporte oficial, gobernanza y validación automática para desarrollo móvil nativo mediante dos nuevos stacks: **iOS SwiftUI Clean Architecture** (`ios-swiftui-clean`) y **Android Jetpack Compose Clean Architecture** (`android-compose-clean`), manteniendo paridad multi-LLM total para Claude Code, OpenAI Codex, Google Antigravity (AGY), Gemini CLI, Hermes, Grok y Kimi Code:
 
 ### Stacks Definidos:
-* [`stacks/ios-swiftui-clean/`](../stacks/ios-swiftui-clean/):
+* [`assets/stacks/ios-swiftui-clean/`](../assets/stacks/ios-swiftui-clean/):
   - **Tecnología**: Swift 6, SwiftUI, Swift Package Manager (SPM) modular.
   - **Capas Canónicas**: `Sources/CalpilDomain` (Swift puro sin UIKit ni SwiftUI), `Sources/CalpilData` (adaptadores de red y persistencia), `Sources/CalpilUI` (vistas y componentes declarativos) y `Sources/CalpilApp` (Composition Root centralizado con `@main`).
   - **Reglas Modulares (4)**: `architecture.md`, `dependencies.md`, `security.md`, `testing.md`.
   - **Skills Especializadas (9)**: `add-data-source`, `add-feature`, `add-screen`, `architecture-review`, `debug-targeted`, `dependency-review`, `prepare-release`, `security-review`, `write-tests`.
-  - **Verificador de Arquitectura AST/Regex**: [`stacks/ios-swiftui-clean/scripts/check-architecture.py`](../stacks/ios-swiftui-clean/scripts/check-architecture.py).
+  - **Verificador de Arquitectura AST/Regex**: [`assets/stacks/ios-swiftui-clean/scripts/check-architecture.py`](../assets/stacks/ios-swiftui-clean/scripts/check-architecture.py).
   - **Auditoría & Context7**: Context7 `/apple/swift`, docs oficiales Swift/Apple, `swift package audit`.
-* [`stacks/android-compose-clean/`](../stacks/android-compose-clean/):
+* [`assets/stacks/android-compose-clean/`](../assets/stacks/android-compose-clean/):
   - **Tecnología**: Kotlin 2.0+, Jetpack Compose, Material 3, Gradle Version Catalogs (`libs.versions.toml`).
   - **Capas Canónicas**: `domain` (Kotlin puro sin dependencias de `android.*`, Compose o Room), `data` (DTOs, DAOs, Room y repositorios), `presentation` (composables y ViewModels que consumen casos de uso de Domain sin acoplarse a DTOs de datos), `core` (UI theme y utilidades compartidas) y Composition Root en `CalpilApplication.kt` o `MainActivity.kt`.
   - **Reglas Modulares (4)**: `architecture.md`, `dependencies.md`, `security.md`, `testing.md`.
   - **Skills Especializadas (9)**: `add-data-source`, `add-feature`, `add-screen`, `architecture-review`, `debug-targeted`, `dependency-review`, `prepare-release`, `security-review`, `write-tests`.
-  - **Verificador de Arquitectura AST/Regex**: [`stacks/android-compose-clean/scripts/check-architecture.py`](../stacks/android-compose-clean/scripts/check-architecture.py).
+  - **Verificador de Arquitectura AST/Regex**: [`assets/stacks/android-compose-clean/scripts/check-architecture.py`](../assets/stacks/android-compose-clean/scripts/check-architecture.py).
   - **Auditoría & Context7**: Context7 `/google/android`, docs oficiales Android Developers, `./gradlew dependencyCheckAnalyze`.
 
 ### Principios y Mecanismos Integrados:
@@ -573,7 +573,7 @@ Tras incorporar los stacks móviles, una auditoría profunda de interoperabilida
 
 ### Principios y Mecanismos Integrados:
 1. **Neutralización de Rutas Host-Específicas en 56 Archivos de Skills y Reglas**:
-   - En [`stacks/`](../stacks/): Se sustituyeron todas las rutas cableadas (`.claude/rules/`, `.claude/skills/`) por referencias abiertas y neutrales (`.agents/rules/` o `.claude/rules/` / `AGENTS.md`, y `.agents/skills/` o `.claude/skills/`).
+   - En [`assets/stacks/`](../assets/stacks/): Se sustituyeron todas las rutas cableadas (`.claude/rules/`, `.claude/skills/`) por referencias abiertas y neutrales (`.agents/rules/` o `.claude/rules/` / `AGENTS.md`, y `.agents/skills/` o `.claude/skills/`).
    - Se eliminaron cláusulas excluyentes heredadas (tales como `Skill ejecutable únicamente por Claude Code`) en `springboot-hexagonal`, `ios-swiftui-clean`, `android-compose-clean`, `rust-hexagonal` y `nestjs-hexagonal`, garantizando que cualquier modelo (GPT-6, Gemini 4, Claude 5.5, Grok, Kimi) pueda ejecutar las tareas procedurales sin sesgo de host.
 2. **Descubrimiento Dinámico y Agnóstico en `validate-agent-skills.mjs`**:
    - En los 10 validadores de skills de los stacks, se implementó detección automática de directorio:

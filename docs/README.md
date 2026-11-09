@@ -69,13 +69,13 @@ Los documentos de `docs/` complementan y fundamentan las guías operativas que l
 
 Todos los stacks se encuentran auditados, normalizados y gobernados mediante sus correspondientes manifiestos, reglas modulares, habilidades y verificadores ejecutables:
 
-1. [`stacks/golang-hexagonal/`](../stacks/golang-hexagonal/): Go estándar puro en dominio, puertos Driving/Driven, `check-architecture.py`.
-2. [`stacks/angular-product/`](../stacks/angular-product/): Angular 17+ Zoneless, Signals, componentes standalone, `check-architecture.py`.
-3. [`stacks/dotnet-hexagonal/`](../stacks/dotnet-hexagonal/): C# 13 / .NET 10 LTS, Clean Architecture, xUnit, `check-architecture.py`.
-4. [`stacks/rust-hexagonal/`](../stacks/rust-hexagonal/): Rust 2021/2024, Axum 0.8, Tokio, SQLx, `check-architecture.py`.
-5. [`stacks/nextjs-product/`](../stacks/nextjs-product/): Next.js App Router, React Server Components, `check-architecture.py`.
-6. [`stacks/springboot-hexagonal/`](../stacks/springboot-hexagonal/): Spring Boot 3 Java, arquitectura hexagonal, `check-architecture.py`.
-7. [`stacks/nestjs-hexagonal/`](../stacks/nestjs-hexagonal/): NestJS TypeScript, módulos desacoplados, `check-architecture.py`.
-8. [`stacks/python-dataproduct/`](../stacks/python-dataproduct/): Python Data Product, FastAPI, Polars, `check-architecture.py`.
-9. [`stacks/ios-swiftui-clean/`](../stacks/ios-swiftui-clean/): Swift 6, SwiftUI, Swift Package Manager (SPM) modular (`CalpilDomain`, `CalpilData`, `CalpilUI`, `CalpilApp`), `check-architecture.py`.
-10. [`stacks/android-compose-clean/`](../stacks/android-compose-clean/): Kotlin 2.0+, Jetpack Compose, Material 3, Clean Architecture (`domain`, `data`, `presentation`, `core`), `check-architecture.py`.
+1. [`assets/stacks/golang-hexagonal/`](../assets/stacks/golang-hexagonal/): Go estándar puro en dominio, puertos Driving/Driven, `check-architecture.py`.
+2. [`assets/stacks/angular-product/`](../assets/stacks/angular-product/): Angular 17+ Zoneless, Signals, componentes standalone, `check-architecture.py`.
+3. [`assets/stacks/dotnet-hexagonal/`](../assets/stacks/dotnet-hexagonal/): C# 13 / .NET 10 LTS, Clean Architecture, xUnit, `check-architecture.py`.
+4. [`assets/stacks/rust-hexagonal/`](../assets/stacks/rust-hexagonal/): Rust 2021/2024, Axum 0.8, Tokio, SQLx, `check-architecture.py`.
+5. [`assets/stacks/nextjs-product/`](../assets/stacks/nextjs-product/): Next.js App Router, React Server Components, `check-architecture.py`.
+6. [`assets/stacks/springboot-hexagonal/`](../assets/stacks/springboot-hexagonal/): Spring Boot 3 Java, arquitectura hexagonal, `check-architecture.py`.
+7. [`assets/stacks/nestjs-hexagonal/`](../assets/stacks/nestjs-hexagonal/): NestJS TypeScript, módulos desacoplados, `check-architecture.py`.
+8. [`assets/stacks/python-dataproduct/`](../assets/stacks/python-dataproduct/): Python Data Product, FastAPI, Polars, `check-architecture.py`.
+9. [`assets/stacks/ios-swiftui-clean/`](../assets/stacks/ios-swiftui-clean/): Swift 6, SwiftUI, Swift Package Manager (SPM) modular (`CalpilDomain`, `CalpilData`, `CalpilUI`, `CalpilApp`), `check-architecture.py`.
+10. [`assets/stacks/android-compose-clean/`](../assets/stacks/android-compose-clean/): Kotlin 2.0+, Jetpack Compose, Material 3, Clean Architecture (`domain`, `data`, `presentation`, `core`), `check-architecture.py`.

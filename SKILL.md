@@ -274,7 +274,7 @@ Reglas en `harness/feature_list.json` → `rules`: `require_spec_approved`, `req
 
 ## Stacks Tecnológicos de CALPIL y Extensibilidad Multi-Stack
 
-Harness Flow integra un motor declarativo y extensible de detección y gobierno de stacks tecnológicos (`stacks/<stack-id>/manifest.json`). Reconoce automáticamente la arquitectura y convenciones de cada repositorio o microservicio:
+Harness Flow integra un motor declarativo y extensible de detección y gobierno de stacks tecnológicos (`assets/stacks/<stack-id>/manifest.json`). Reconoce automáticamente la arquitectura y convenciones de cada repositorio o microservicio:
 - **Golang Hexagonal (`golang-hexagonal`)**: dominio Go puro en `internal/*/domain/**` (sin frameworks/SQL), puertos de entrada/salida en `application/`, adaptadores Chi HTTP (RFC 7807) y persistencia `pgx`/in-memory, composition root en `cmd/server/main.go`, tests deterministas sin `time.Sleep` (`go test -race`).
 - **Angular Product (`angular-product`)**: feature-oriented layered (`src/app/features/<feat>/(domain|application|ui|data-access)`), dominio TypeScript puro sin dependencias de `@angular`/RxJS, Signals para reactividad, componentes standalone, composition root en `app.routes.ts` y linter de límites (`check-architecture.py` / `check-architecture.mjs`).
 - **.NET Hexagonal (`dotnet-hexagonal`)**: C# 13 / .NET 10 (LTS) con Clean Architecture multi-proyecto (`Domain` puro en BCL sin dependencias externas, `Application` con puertos in/out, `Infrastructure` con Dapper/ADO.NET y `Npgsql`, `WebApi` con MVC Controllers, ProblemDetails RFC 7807 y `Program.cs` como Composition Root, y tests deterministas con xUnit y `WebApplicationFactory`).
@@ -283,7 +283,7 @@ Harness Flow integra un motor declarativo y extensible de detección y gobierno 
 - **Spring Boot Hexagonal (`springboot-hexagonal`)**: Java 21 / Spring Boot 3.4 con dominio puro sin dependencias de Spring/JPA y ArchUnit.
 - **NestJS Hexagonal (`nestjs-hexagonal`)**: TypeScript / NestJS modular con Prisma ORM y puertos desacoplados.
 - **Python Data Product (`python-dataproduct`)**: Python 3.14 con FastAPI, Polars/Pydantic y adaptadores de origen/destino.
-- **Stacks Futuros**: cualquier nuevo stack se agrega simplemente creando una carpeta `stacks/<nuevo-stack>/manifest.json` con su bloque `"detection"` (indicadores de archivos, extensiones, dependencias y anti-indicadores); el motor lo detectará y normalizará de forma automática sin tocar código Python.
+- **Stacks Futuros**: cualquier nuevo stack se agrega simplemente creando una carpeta `assets/stacks/<nuevo-stack>/manifest.json` con su bloque `"detection"` (indicadores de archivos, extensiones, dependencias y anti-indicadores); el motor lo detectará y normalizará de forma automática sin tocar código Python.
 
 ### Comandos de Stacks
 

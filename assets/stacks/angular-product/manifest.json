@@ -85,7 +85,7 @@
   "runners": {
     "test_command": "npm test",
     "arch_command": "node scripts/check-architecture.mjs",
-    "skills_validator": "node stacks/angular-product/scripts/validate-agent-skills.mjs"
+    "skills_validator": "node assets/stacks/angular-product/scripts/validate-agent-skills.mjs"
   },
   "documentation": {
     "official_docs": "https://angular.dev",

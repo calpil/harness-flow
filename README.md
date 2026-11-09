@@ -49,12 +49,12 @@ Las lecciones aprendidas son memoria del usuario, no del agente donde se descubr
 - Si existe `harness/atlassian.json`, sincroniza issues en Jira, subtasks por AC y páginas vivas en Confluence con el spec, la evidencia y el review formal al invocar `gate.py close --publicar-atlassian`.
 
 ### 7. Gobernanza de Stacks Tecnológicos, Context7 y Modo Pair Automático (`stack.py`)
-- **Detección Dinámica y Extensible de Stacks**: Motor declarativo (`stacks/<stack-id>/manifest.json`) que escanea y clasifica cualquier repositorio o microservicio según archivos base (`files_any`/`files_all`), extensiones, dependencias de `package.json`, coincidencia de contenido (`content_matches`), indicadores estructurales (`strong_indicators`) y reglas de descarte (`anti_indicators`).
+- **Detección Dinámica y Extensible de Stacks**: Motor declarativo (`assets/stacks/<stack-id>/manifest.json`) que escanea y clasifica cualquier repositorio o microservicio según archivos base (`files_any`/`files_all`), extensiones, dependencias de `package.json`, coincidencia de contenido (`content_matches`), indicadores estructurales (`strong_indicators`) y reglas de descarte (`anti_indicators`).
   - **Catálogo Activo (10 Stacks)**:
     - *Backend & Servicios*: **Golang Hexagonal** (`golang-hexagonal`), **.NET Hexagonal** (`dotnet-hexagonal`), **Rust Hexagonal** (`rust-hexagonal`), **Spring Boot Hexagonal** (`springboot-hexagonal`), **NestJS Hexagonal** (`nestjs-hexagonal`), y **Python Data Product** (`python-dataproduct`).
     - *Web & Frontend*: **Angular Product** (`angular-product`) y **Next.js Product** (`nextjs-product`).
     - *Mobile Nativo*: **iOS SwiftUI Clean Architecture** (`ios-swiftui-clean`) y **Android Jetpack Compose Clean Architecture** (`android-compose-clean`).
-  - Extensible: cualquier nuevo stack se soporta simplemente creando `stacks/<nuevo-stack>/manifest.json` sin tocar código Python.
+  - Extensible: cualquier nuevo stack se soporta simplemente creando `assets/stacks/<nuevo-stack>/manifest.json` sin tocar código Python.
 - **Arquitectura y Paridad Total Multi-LLM**:
   - **Triple espejo de reglas**: `.claude/rules/` (Claude Code), `.agents/rules/` (OpenAI Codex, Hermes, Grok, Kimi) y `.gemini/rules/` (Google Gemini CLI, Antigravity AGY).
   - **Distribución dual de skills**: `.claude/skills/` y `.agents/skills/` bajo el estándar abierto Agent Skills (YAML frontmatter con `name` y `description`).
@@ -286,7 +286,7 @@ harness-flow/
 │   ├── hub.py                        <- Integración con Memory Hub Postgres
 │   ├── vault.py                      <- Generación del vault de Obsidian en docs/vault/
 │   └── atlassian.py                  <- Sincronización con Jira y Confluence
-├── stacks/                           <- Stacks tecnológicos declarativos (manifests, rules, skills, checkers)
+├── assets/stacks/                           <- Stacks tecnológicos declarativos (manifests, rules, skills, checkers)
 │   ├── golang-hexagonal/             <- Arquitectura hexagonal Go, 4 rules, 9 skills, check-architecture.py
 │   ├── angular-product/              <- Angular 17+ zoneless, 6 rules, 31 skills, check-architecture.mjs
 │   ├── dotnet-hexagonal/             <- Clean Architecture C# 13/.NET 10, 4 rules, 9 skills, check-architecture.py

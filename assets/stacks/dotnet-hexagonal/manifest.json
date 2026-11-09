@@ -99,7 +99,7 @@
   },
   "runners": {
     "test_command": "dotnet test",
-    "skills_validator": "node stacks/dotnet-hexagonal/scripts/validate-agent-skills.mjs"
+    "skills_validator": "node assets/stacks/dotnet-hexagonal/scripts/validate-agent-skills.mjs"
   },
   "documentation": {
     "official_docs": "https://learn.microsoft.com/en-us/dotnet/",
