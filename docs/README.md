@@ -8,7 +8,7 @@ Bienvenido al directorio de documentación técnica y memorias de arquitectura d
 
 | Documento | Propósito y Alcance | Audiencia Principal |
 | :--- | :--- | :--- |
-| [`memoria-tecnica-implementaciones.md`](memoria-tecnica-implementaciones.md) | **Memoria técnica maestra** que documenta exhaustivamente todos los hitos implementados: stacks (.NET, Rust), metodologías (Karpathy/STE100, DDIA, Ousterhout, GoF/Fowler, McConnell, OWASP/ZAP) y auditoría de los 8 stacks CALPIL. | Arquitectos, Líderes Técnicos e Ingenieros de Plataforma |
+| [`memoria-tecnica-implementaciones.md`](memoria-tecnica-implementaciones.md) | **Memoria técnica maestra** que documenta exhaustivamente todos los hitos implementados: stacks (.NET, Rust, iOS, Android), metodologías (Karpathy/STE100, DDIA, Ousterhout, GoF/Fowler, McConnell, OWASP/ZAP) y auditoría de los 10 stacks CALPIL. | Arquitectos, Líderes Técnicos e Ingenieros de Plataforma |
 | [`patrones-de-diseno-y-raiz-de-composicion.md`](patrones-de-diseno-y-raiz-de-composicion.md) | **Guía de Patrones de Diseño y Raíz de Composición**: Mapeo dialéctico de patrones GoF (creacionales, estructurales y de comportamiento) en capas hexagonales y clarificación de la inyección en `main`. | Diseñadores de Arquitectura, Implementers y Revisores |
 | [`principios-karpathy-ste100-harness-flow.md`](principios-karpathy-ste100-harness-flow.md) | Informe especializado sobre los **7 principios de Andrej Karpathy** y la norma aeroespacial **ASD-STE100** para comunicación de alta densidad y micro-reportes. | Implementers, Revisores y Diseñadores de Prompts |
 | [`explicacion-y-diagnostico.md`](explicacion-y-diagnostico.md) | **Diagnóstico de salud y auditoría estructural** del arnés: verificación de gates, postmerge medido, scripts neutralizados y telemetría de procesos CBM. | Mantenedores del arnés y Administradores de Infraestructura |
@@ -37,8 +37,9 @@ flowchart TD
     H14["<b>Hito 14: Seguridad Web OWASP, CLASP y ZAP</b><br/>OWASP Top 10, Shift-Left CLASP, casos de abuso, barricadas y escaneo dinámico DAST"]
     H15["<b>Hito 15: Design Patterns por Fase (GoF)</b><br/>Lectura cerrada capítulos 1 a 6, blanco de refactorización y composición en main"]
     H16["<b>Hito 16: Paridad Total de Rules Multi-LLM</b><br/>Espejado en .agents/rules/, .gemini/rules/, .claude/rules/ y síntesis en AGENTS.md"]
+    H17["<b>Hito 17: Stacks Mobile iOS & Android</b><br/>SwiftUI y Compose Clean Architecture, 4 rules, 9 skills, check-architecture.py y paridad multi-LLM"]
 
-    H1 --> H2 --> H3 --> H4 --> H5 --> H6 --> H7 --> H8 --> H9 --> H10 --> H11 --> H12 --> H13 --> H14 --> H15 --> H16
+    H1 --> H2 --> H3 --> H4 --> H5 --> H6 --> H7 --> H8 --> H9 --> H10 --> H11 --> H12 --> H13 --> H14 --> H15 --> H16 --> H17
 ```
 
 ---
@@ -63,7 +64,7 @@ Los documentos de `docs/` complementan y fundamentan las guías operativas que l
 
 ---
 
-## 4. Estado de los 8 Stacks Tecnológicos
+## 4. Estado de los 10 Stacks Tecnológicos
 
 Todos los stacks se encuentran auditados, normalizados y gobernados mediante sus correspondientes manifiestos, reglas modulares, habilidades y verificadores ejecutables:
 
@@ -75,3 +76,5 @@ Todos los stacks se encuentran auditados, normalizados y gobernados mediante sus
 6. [`stacks/springboot-hexagonal/`](../stacks/springboot-hexagonal/): Spring Boot 3 Java, arquitectura hexagonal, `check-architecture.py`.
 7. [`stacks/nestjs-hexagonal/`](../stacks/nestjs-hexagonal/): NestJS TypeScript, módulos desacoplados, `check-architecture.py`.
 8. [`stacks/python-dataproduct/`](../stacks/python-dataproduct/): Python Data Product, FastAPI, Polars, `check-architecture.py`.
+9. [`stacks/ios-swiftui-clean/`](../stacks/ios-swiftui-clean/): Swift 6, SwiftUI, Swift Package Manager (SPM) modular (`CalpilDomain`, `CalpilData`, `CalpilUI`, `CalpilApp`), `check-architecture.py`.
+10. [`stacks/android-compose-clean/`](../stacks/android-compose-clean/): Kotlin 2.0+, Jetpack Compose, Material 3, Clean Architecture (`domain`, `data`, `presentation`, `core`), `check-architecture.py`.

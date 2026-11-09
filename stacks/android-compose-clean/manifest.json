@@ -1,0 +1,106 @@
+{
+  "id": "android-compose-clean",
+  "name": "CALPIL Android Compose Clean Architecture Stack",
+  "version": "1.0.0",
+  "language": "kotlin",
+  "framework": "jetpack-compose",
+  "architecture": "clean-architecture",
+  "description": "Stack mobile Android (Kotlin 2.0+ / Coroutines / Flow) con Clean Architecture (domain puro sin dependencias de Android framework ni Compose, data con repositorios InMemory y DTOs RFC 7807, presentation con Jetpack Compose y ViewModels UDF, core con temas M3, y CalpilApplication como Composition Root).",
+  "detection": {
+    "files_any": [
+      "settings.gradle.kts",
+      "build.gradle.kts",
+      "AndroidManifest.xml"
+    ],
+    "extensions": [
+      ".kt",
+      ".kts"
+    ],
+    "strong_indicators": [
+      "app/build.gradle.kts",
+      "gradle/libs.versions.toml",
+      "app/src/main/AndroidManifest.xml",
+      "domain",
+      "presentation"
+    ],
+    "content_matches": {
+      "app/build.gradle.kts": [
+        "androidx.compose",
+        "com.android.application"
+      ]
+    },
+    "anti_indicators": [
+      "Package.swift",
+      "*.xcodeproj",
+      "go.mod",
+      "pom.xml",
+      "package.json",
+      "Cargo.toml",
+      "*.sln"
+    ]
+  },
+  "normative": {
+    "rules": [
+      "architecture.md",
+      "dependencies.md",
+      "security.md",
+      "testing.md"
+    ],
+    "skills": [
+      "add-data-source",
+      "add-feature",
+      "add-screen",
+      "architecture-review",
+      "debug-targeted",
+      "dependency-review",
+      "prepare-release",
+      "security-review",
+      "write-tests"
+    ],
+    "architecture_constraints": {
+      "domain_purity": {
+        "path_pattern": "features/*/domain/**",
+        "forbidden_imports": [
+          "android.",
+          "androidx.compose.",
+          "androidx.room.",
+          "androidx.lifecycle.",
+          "com.calpil.template.features.*.data.",
+          "com.calpil.template.features.*.presentation."
+        ],
+        "rationale": "El paquete domain debe ser Kotlin puro, sin dependencias de Android framework, Jetpack Compose, persistencia ni presentación."
+      },
+      "layer_boundaries": {
+        "presentation_isolation": "presentation no debe importar data.dto ni data.repository directamente (solo domain)",
+        "data_isolation": "data implementa interfaces de domain y mapea DTOs sin exponerlos al exterior"
+      },
+      "composition_root": {
+        "required_entrypoint": "CalpilApplication.kt",
+        "rationale": "CalpilApplication es el Composition Root que inicializa los repositorios de datos y los inyecta en el flujo de la aplicación."
+      }
+    }
+  },
+  "runners": {
+    "test_command": "./gradlew test",
+    "arch_command": "python3 scripts/check-architecture.py",
+    "skills_validator": "node scripts/validate-agent-skills.mjs"
+  },
+  "documentation": {
+    "official_docs": "https://developer.android.com/docs",
+    "security_advisories": "https://source.android.com/security/bulletin",
+    "context7": {
+      "library_id": "/google/android",
+      "ecosystem": "gradle",
+      "suggested_queries": [
+        "Jetpack Compose UI patterns and state",
+        "Kotlin Coroutines StateFlow and SharedFlow",
+        "Android Clean Architecture UDF"
+      ]
+    }
+  },
+  "security_audit": {
+    "command": "./gradlew dependencyCheckAnalyze",
+    "advisory_feed": "https://source.android.com/security/bulletin",
+    "minimum_version": "2.0.0"
+  }
+}

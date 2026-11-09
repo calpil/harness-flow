@@ -560,6 +560,28 @@ def auditar_seguridad_y_versiones(
                     if int(detected_edition) < int(min_version):
                         warnings.append(f"Edición de Rust en {cargo_toml.relative_to(repo)} ({detected_edition}) es inferior a la mínima recomendada ({min_version})")
                     break
+        elif stack_id == "ios-swiftui-clean":
+            pkg_file = repo / "Package.swift"
+            if pkg_file.exists():
+                txt = pkg_file.read_text(encoding="utf-8", errors="ignore")
+                m = re.search(r"swift-tools-version:\s*([0-9.]+)", txt)
+                if m:
+                    det_ver = m.group(1)
+                    det_parts = tuple(int(x) for x in re.findall(r"\d+", det_ver))
+                    min_parts = tuple(int(x) for x in re.findall(r"\d+", min_version))
+                    if det_parts < min_parts:
+                        warnings.append(f"Versión de Swift en Package.swift ({det_ver}) es inferior a la mínima recomendada ({min_version})")
+        elif stack_id == "android-compose-clean":
+            versions_file = repo / "gradle" / "libs.versions.toml"
+            if versions_file.exists():
+                txt = versions_file.read_text(encoding="utf-8", errors="ignore")
+                m = re.search(r'kotlin\s*=\s*["\']([0-9.]+)["\']', txt)
+                if m:
+                    det_ver = m.group(1)
+                    det_parts = tuple(int(x) for x in re.findall(r"\d+", det_ver))
+                    min_parts = tuple(int(x) for x in re.findall(r"\d+", min_version))
+                    if det_parts < min_parts:
+                        warnings.append(f"Versión de Kotlin en libs.versions.toml ({det_ver}) es inferior a la mínima recomendada ({min_version})")
 
     # 3. Escaneo dinámico DAST (OWASP ZAP) si fue solicitado
     dast_info = None
@@ -855,6 +877,80 @@ def generar_plan_refactor(repo: Path, stack_id: str | None = None) -> dict[str, 
                     "description": "Reemplazar thread::sleep o tokio::time::sleep en tests con mock clock o sincronización determinista."
                 })
 
+    elif stack_id == "ios-swiftui-clean":
+        has_app = any("app.swift" in p.name.lower() for p in repo.glob("**/*.swift"))
+        if not has_app:
+            steps.append({
+                "step": 1,
+                "title": "Crear Composition Root canónico (CalpilApp.swift)",
+                "action": "scaffold",
+                "target": "Sources/CalpilApp/CalpilApp.swift",
+                "description": "Centralizar el punto de entrada de la aplicación, cableado de adaptadores e inyección de dependencias en CalpilApp.swift."
+            })
+        has_domain = any("calpildomain" in p.name.lower() or "domain" in p.name.lower() for p in repo.glob("Sources/*")) or any("domain" in p.name.lower() for p in repo.glob("*"))
+        if not has_domain:
+            steps.append({
+                "step": 2,
+                "title": "Separar targets modulares (CalpilDomain, CalpilData, CalpilUI, CalpilApp)",
+                "action": "reorganize",
+                "target": "Sources/(CalpilDomain|CalpilData|CalpilUI|CalpilApp)",
+                "description": "Aislar entidades en CalpilDomain (Swift puro), adaptadores en CalpilData y vistas en CalpilUI."
+            })
+        for err in diag.get("architecture_errors", []):
+            if "Domain no debe" in err or "dependencia externa" in err:
+                steps.append({
+                    "step": len(steps) + 1,
+                    "title": "Desacoplar dependencias impuras en capa Domain",
+                    "action": "refactor_domain",
+                    "target": err.split(":")[0],
+                    "description": f"Extraer frameworks visuales (SwiftUI/UIKit) o persistencia a adaptadores externos: {err}"
+                })
+            elif "UI no debe importar" in err:
+                steps.append({
+                    "step": len(steps) + 1,
+                    "title": "Invertir dependencia en UI consumiendo protocolos de Domain",
+                    "action": "invert_dependency",
+                    "target": err.split(":")[0],
+                    "description": f"CalpilUI debe depender de protocolos de CalpilDomain y no directamente de adaptadores de CalpilData: {err}"
+                })
+
+    elif stack_id == "android-compose-clean":
+        has_app = any("application.kt" in p.name.lower() for p in repo.glob("**/*.kt")) or any("mainactivity.kt" in p.name.lower() for p in repo.glob("**/*.kt"))
+        if not has_app:
+            steps.append({
+                "step": 1,
+                "title": "Crear Composition Root canónico (CalpilApplication.kt)",
+                "action": "scaffold",
+                "target": "app/src/main/java/com/calpil/template/CalpilApplication.kt",
+                "description": "Centralizar la inicialización de la aplicación e inyección de dependencias en CalpilApplication.kt."
+            })
+        has_domain = any("domain" in p.parts for p in repo.glob("app/src/main/**"))
+        if not has_domain:
+            steps.append({
+                "step": 2,
+                "title": "Organizar paquetes según Clean Architecture (domain, data, presentation, core)",
+                "action": "reorganize",
+                "target": "app/src/main/java/.../(domain|data|presentation)",
+                "description": "Aislar entidades en domain (Kotlin puro), DTOs y repositorios en data, y pantallas en presentation."
+            })
+        for err in diag.get("architecture_errors", []):
+            if "Domain no debe" in err:
+                steps.append({
+                    "step": len(steps) + 1,
+                    "title": "Desacoplar dependencias de Android framework en Domain",
+                    "action": "refactor_domain",
+                    "target": err.split(":")[0],
+                    "description": f"El módulo domain debe ser Kotlin puro sin dependencias de Android SDK: {err}"
+                })
+            elif "Presentation no debe importar" in err:
+                steps.append({
+                    "step": len(steps) + 1,
+                    "title": "Invertir dependencia consumiendo casos de uso de Domain",
+                    "action": "invert_dependency",
+                    "target": err.split(":")[0],
+                    "description": f"Presentation debe consumir casos de uso y modelos de Domain, sin acceder a DTOs ni DAOs directamente: {err}"
+                })
+
     return {
         "needed": True,
         "stack": stack_id,
@@ -1041,6 +1137,97 @@ async fn health_handler() -> Json<Value> {
 }
 """, encoding="utf-8")
             creados.append(str(main_rs.relative_to(repo)))
+
+    elif stack_id == "ios-swiftui-clean":
+        carpetas = [
+            repo / "Sources" / "CalpilDomain" / "Models",
+            repo / "Sources" / "CalpilDomain" / "Repositories",
+            repo / "Sources" / "CalpilDomain" / "UseCases",
+            repo / "Sources" / "CalpilDomain" / "Errors",
+            repo / "Sources" / "CalpilData" / "Repositories",
+            repo / "Sources" / "CalpilData" / "Network",
+            repo / "Sources" / "CalpilData" / "DTOs",
+            repo / "Sources" / "CalpilUI" / "Features",
+            repo / "Sources" / "CalpilUI" / "Core",
+            repo / "Sources" / "CalpilApp",
+            repo / "Tests" / "CalpilDomainTests",
+            repo / "Tests" / "CalpilDataTests",
+            repo / "Tests" / "CalpilPresentationTests",
+        ]
+        for c in carpetas:
+            if not c.exists():
+                c.mkdir(parents=True, exist_ok=True)
+                creados.append(str(c.relative_to(repo)))
+
+        package_swift = repo / "Package.swift"
+        if not package_swift.exists():
+            package_swift.write_text("""// swift-tools-version: 6.0
+import PackageDescription
+
+let package = Package(
+    name: "CalpilApp",
+    platforms: [.iOS(.v17), .macOS(.v14)],
+    products: [
+        .library(name: "CalpilDomain", targets: ["CalpilDomain"]),
+        .library(name: "CalpilData", targets: ["CalpilData"]),
+        .library(name: "CalpilUI", targets: ["CalpilUI"]),
+    ],
+    targets: [
+        .target(name: "CalpilDomain"),
+        .target(name: "CalpilData", dependencies: ["CalpilDomain"]),
+        .target(name: "CalpilUI", dependencies: ["CalpilDomain"]),
+        .target(name: "CalpilApp", dependencies: ["CalpilDomain", "CalpilData", "CalpilUI"]),
+        .testTarget(name: "CalpilDomainTests", dependencies: ["CalpilDomain"]),
+    ]
+)
+""", encoding="utf-8")
+            creados.append(str(package_swift.relative_to(repo)))
+
+        app_swift = repo / "Sources" / "CalpilApp" / "CalpilApp.swift"
+        if not app_swift.exists():
+            app_swift.write_text("""import SwiftUI
+import CalpilDomain
+import CalpilData
+import CalpilUI
+
+@main
+struct CalpilApp: App {
+    var body: some Scene {
+        WindowGroup {
+            Text("CALPIL iOS SwiftUI Clean Architecture")
+        }
+    }
+}
+""", encoding="utf-8")
+            creados.append(str(app_swift.relative_to(repo)))
+
+    elif stack_id == "android-compose-clean":
+        carpetas = [
+            repo / "app" / "src" / "main" / "java" / "com" / "calpil" / "template" / "core" / "ui" / "theme",
+            repo / "app" / "src" / "main" / "java" / "com" / "calpil" / "template" / "core" / "network",
+            repo / "app" / "src" / "main" / "java" / "com" / "calpil" / "template" / "features" / "workitems" / "domain" / "model",
+            repo / "app" / "src" / "main" / "java" / "com" / "calpil" / "template" / "features" / "workitems" / "domain" / "repository",
+            repo / "app" / "src" / "main" / "java" / "com" / "calpil" / "template" / "features" / "workitems" / "domain" / "usecases",
+            repo / "app" / "src" / "main" / "java" / "com" / "calpil" / "template" / "features" / "workitems" / "data" / "repository",
+            repo / "app" / "src" / "main" / "java" / "com" / "calpil" / "template" / "features" / "workitems" / "presentation",
+            repo / "app" / "src" / "test" / "java" / "com" / "calpil" / "template",
+        ]
+        for c in carpetas:
+            if not c.exists():
+                c.mkdir(parents=True, exist_ok=True)
+                creados.append(str(c.relative_to(repo)))
+
+        app_kt = repo / "app" / "src" / "main" / "java" / "com" / "calpil" / "template" / "CalpilApplication.kt"
+        if not app_kt.exists():
+            app_kt.write_text("""package com.calpil.template
+
+class CalpilApplication {
+    fun onCreate() {
+        // Composition Root: inicialización de dependencias
+    }
+}
+""", encoding="utf-8")
+            creados.append(str(app_kt.relative_to(repo)))
 
     return creados
 

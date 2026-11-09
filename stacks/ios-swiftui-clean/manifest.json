@@ -1,0 +1,107 @@
+{
+  "id": "ios-swiftui-clean",
+  "name": "CALPIL iOS SwiftUI Clean Architecture Stack",
+  "version": "1.0.0",
+  "language": "swift",
+  "framework": "swiftui",
+  "architecture": "clean-architecture",
+  "description": "Stack mobile iOS (Swift 6 / 5.10) con Clean Architecture modularizada por SPM (CalpilDomain puro sin SwiftUI/UIKit/red, CalpilData con adaptadores InMemory y HTTP RFC 7807, CalpilUI con SwiftUI y ViewModels @MainActor, y CalpilApp como Composition Root).",
+  "detection": {
+    "files_any": [
+      "Package.swift",
+      "*.xcodeproj",
+      "*.xcworkspace"
+    ],
+    "extensions": [
+      ".swift"
+    ],
+    "strong_indicators": [
+      "Sources/CalpilDomain",
+      "Sources/CalpilData",
+      "Sources/CalpilUI",
+      "Sources/CalpilApp",
+      "Package.swift"
+    ],
+    "content_matches": {
+      "Package.swift": [
+        "swift-tools-version",
+        "Package"
+      ]
+    },
+    "anti_indicators": [
+      "build.gradle.kts",
+      "build.gradle",
+      "go.mod",
+      "pom.xml",
+      "package.json",
+      "Cargo.toml",
+      "*.sln"
+    ]
+  },
+  "normative": {
+    "rules": [
+      "architecture.md",
+      "dependencies.md",
+      "security.md",
+      "testing.md"
+    ],
+    "skills": [
+      "add-data-source",
+      "add-feature",
+      "add-screen",
+      "architecture-review",
+      "debug-targeted",
+      "dependency-review",
+      "prepare-release",
+      "security-review",
+      "write-tests"
+    ],
+    "architecture_constraints": {
+      "domain_purity": {
+        "path_pattern": "Sources/CalpilDomain/**",
+        "forbidden_imports": [
+          "SwiftUI",
+          "UIKit",
+          "AppKit",
+          "CoreData",
+          "SwiftData",
+          "CalpilUI",
+          "CalpilData"
+        ],
+        "rationale": "CalpilDomain debe ser Swift puro; sin frameworks visuales, persistencia externa ni capas de adaptadores."
+      },
+      "layer_boundaries": {
+        "ui_isolation": "CalpilUI no debe importar CalpilData directamente (solo consume puertos de CalpilDomain)",
+        "data_isolation": "CalpilData implementa puertos de CalpilDomain y no conoce detalles de CalpilUI",
+        "domain_isolation": "CalpilDomain no depende de ninguna otra capa"
+      },
+      "composition_root": {
+        "required_entrypoint": "CalpilApp.swift",
+        "rationale": "CalpilApp es el Composition Root único donde se ensamblan los adaptadores de datos y se inyectan en las vistas de UI."
+      }
+    }
+  },
+  "runners": {
+    "test_command": "swift test",
+    "arch_command": "python3 scripts/check-architecture.py",
+    "skills_validator": "node scripts/validate-agent-skills.mjs"
+  },
+  "documentation": {
+    "official_docs": "https://developer.apple.com/documentation/swift",
+    "security_advisories": "https://support.apple.com/en-us/HT201222",
+    "context7": {
+      "library_id": "/apple/swift",
+      "ecosystem": "swift",
+      "suggested_queries": [
+        "Swift Concurrency async await and actors",
+        "SwiftUI State and View lifecycle",
+        "Swift Package Manager modular architecture"
+      ]
+    }
+  },
+  "security_audit": {
+    "command": "swift package audit",
+    "advisory_feed": "https://github.com/swiftlang/swift-package-manager",
+    "minimum_version": "6.0"
+  }
+}

@@ -19,6 +19,8 @@ class TestStackManager(unittest.TestCase):
         self.sb_template = self.calpil_root / "calpil-springboot-hexagonal-template"
         self.nest_template = self.calpil_root / "calpil-nestjs-hexagonal-template"
         self.py_template = self.calpil_root / "calpil-python-dataproduct-template"
+        self.ios_template = self.calpil_root / "calpil-ios-swiftui-template"
+        self.android_template = self.calpil_root / "calpil-android-compose-template"
 
     def tearDown(self):
         shutil.rmtree(self.tmpdir, ignore_errors=True)
@@ -34,6 +36,22 @@ class TestStackManager(unittest.TestCase):
         self.assertIn("springboot-hexagonal", ids)
         self.assertIn("nestjs-hexagonal", ids)
         self.assertIn("python-dataproduct", ids)
+        self.assertIn("ios-swiftui-clean", ids)
+        self.assertIn("android-compose-clean", ids)
+
+    def test_detectar_ios_swiftui_clean(self):
+        if self.ios_template.exists():
+            res = stack.detectar_stack_directorio(self.ios_template)
+            self.assertEqual(res["stack"], "ios-swiftui-clean")
+            self.assertGreaterEqual(res["confidence"], 80)
+            self.assertIn("Package.swift", res["indicators"])
+
+    def test_detectar_android_compose_clean(self):
+        if self.android_template.exists():
+            res = stack.detectar_stack_directorio(self.android_template)
+            self.assertEqual(res["stack"], "android-compose-clean")
+            self.assertGreaterEqual(res["confidence"], 80)
+            self.assertTrue(any("gradle" in ind for ind in res["indicators"]))
 
     def test_detectar_golang_hexagonal(self):
         if self.go_template.exists():
@@ -171,6 +189,88 @@ class TestStackManager(unittest.TestCase):
             self.assertTrue(diag_py["compliant"])
             self.assertTrue(diag_py["architecture_ok"])
             self.assertTrue(diag_py["rules_ok"])
+
+        if self.ios_template.exists():
+            diag_ios = stack.verificar_cumplimiento(self.ios_template)
+            self.assertTrue(diag_ios["compliant"])
+            self.assertTrue(diag_ios["architecture_ok"])
+            self.assertTrue(diag_ios["rules_ok"])
+
+        if self.android_template.exists():
+            diag_android = stack.verificar_cumplimiento(self.android_template)
+            self.assertTrue(diag_android["compliant"])
+            self.assertTrue(diag_android["architecture_ok"])
+            self.assertTrue(diag_android["rules_ok"])
+
+    def test_check_architecture_ios_violations(self):
+        # Probar que el checker detecta violaciones en iOS SwiftUI
+        import importlib.util
+        spec = importlib.util.spec_from_file_location(
+            "check_ios",
+            str(stack.STACKS_DIR / "ios-swiftui-clean" / "scripts" / "check-architecture.py")
+        )
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+
+        bad_repo = self.tmpdir / "bad-ios"
+        bad_repo.mkdir()
+        (bad_repo / "Sources" / "CalpilDomain").mkdir(parents=True)
+        (bad_repo / "Sources" / "CalpilDomain" / "Entity.swift").write_text(
+            'import SwiftUI\nimport CalpilData\npublic struct Entity {}',
+            encoding="utf-8"
+        )
+        (bad_repo / "Sources" / "CalpilUI").mkdir(parents=True)
+        (bad_repo / "Sources" / "CalpilUI" / "View.swift").write_text(
+            'import CalpilData\npublic struct SomeView {}',
+            encoding="utf-8"
+        )
+        (bad_repo / "Tests" / "CalpilTests").mkdir(parents=True)
+        (bad_repo / "Tests" / "CalpilTests" / "AppTests.swift").write_text(
+            'import Foundation\nfunc testSleep() { Thread.sleep(forTimeInterval: 1) }',
+            encoding="utf-8"
+        )
+
+        errors, warnings = mod.check_ios_architecture(bad_repo)
+        self.assertGreaterEqual(len(errors), 3)
+        self.assertTrue(any("Composition Root ausente" in e for e in errors))
+        self.assertTrue(any("SwiftUI" in e for e in errors))
+        self.assertTrue(any("UI no debe importar la capa de datos directamente" in e for e in errors))
+        self.assertTrue(any("sleep prohibido" in e for e in errors))
+
+    def test_check_architecture_android_violations(self):
+        # Probar que el checker detecta violaciones en Android Compose
+        import importlib.util
+        spec = importlib.util.spec_from_file_location(
+            "check_android",
+            str(stack.STACKS_DIR / "android-compose-clean" / "scripts" / "check-architecture.py")
+        )
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+
+        bad_repo = self.tmpdir / "bad-android"
+        bad_repo.mkdir()
+        (bad_repo / "features" / "sample" / "domain").mkdir(parents=True)
+        (bad_repo / "features" / "sample" / "domain" / "Entity.kt").write_text(
+            'package com.calpil.sample.domain\nimport androidx.compose.runtime.Composable\nimport com.calpil.sample.data.dto.SomeDto\nclass Entity',
+            encoding="utf-8"
+        )
+        (bad_repo / "features" / "sample" / "presentation").mkdir(parents=True)
+        (bad_repo / "features" / "sample" / "presentation" / "Screen.kt").write_text(
+            'package com.calpil.sample.presentation\nimport com.calpil.sample.data.dto.SomeDto\nclass Screen',
+            encoding="utf-8"
+        )
+        (bad_repo / "features" / "sample" / "src" / "test").mkdir(parents=True)
+        (bad_repo / "features" / "sample" / "src" / "test" / "SampleTest.kt").write_text(
+            'package com.calpil.sample\nclass SampleTest { fun test() { Thread.sleep(100) } }',
+            encoding="utf-8"
+        )
+
+        errors, warnings = mod.check_android_architecture(bad_repo)
+        self.assertGreaterEqual(len(errors), 3)
+        self.assertTrue(any("Composition Root ausente" in e for e in errors))
+        self.assertTrue(any("androidx.compose." in e for e in errors))
+        self.assertTrue(any("Presentation no debe importar detalles de data directamente" in e for e in errors))
+        self.assertTrue(any("sleep prohibido" in e for e in errors))
 
     def test_check_architecture_dotnet_violations(self):
         # Probar que el checker detecta violaciones en .NET
@@ -310,6 +410,56 @@ class TestStackManager(unittest.TestCase):
             self.assertEqual(res_rust["context7_library"], "/tokio-rs/axum")
             self.assertEqual(res_rust["minimum_version"], "2021")
             self.assertIn("cargo audit", res_rust["audit_command"])
+
+        if self.ios_template.exists():
+            res_ios = stack.auditar_seguridad_y_versiones(self.ios_template)
+            self.assertEqual(res_ios["stack"], "ios-swiftui-clean")
+            self.assertEqual(res_ios["context7_library"], "/apple/swift")
+            self.assertEqual(res_ios["minimum_version"], "6.0")
+            self.assertIn("swift package audit", res_ios["audit_command"])
+
+        if self.android_template.exists():
+            res_and = stack.auditar_seguridad_y_versiones(self.android_template)
+            self.assertEqual(res_and["stack"], "android-compose-clean")
+            self.assertEqual(res_and["context7_library"], "/google/android")
+            self.assertEqual(res_and["minimum_version"], "2.0.0")
+            self.assertIn("./gradlew dependencyCheckAnalyze", res_and["audit_command"])
+
+    def test_refactorizar_plan_y_scaffolding_ios(self):
+        ios_repo = self.tmpdir / "unstructured-ios"
+        ios_repo.mkdir()
+        (ios_repo / "Package.swift").write_text('// swift-tools-version: 6.0\nimport PackageDescription\n', encoding="utf-8")
+
+        plan = stack.generar_plan_refactor(ios_repo)
+        self.assertTrue(plan["needed"])
+        self.assertGreaterEqual(len(plan["steps"]), 1)
+        self.assertTrue(any("Composition Root" in s["title"] for s in plan["steps"]))
+
+        creados = stack.ejecutar_scaffolding(ios_repo)
+        self.assertIn("Sources/CalpilApp/CalpilApp.swift", creados)
+        self.assertTrue((ios_repo / "Sources" / "CalpilApp" / "CalpilApp.swift").exists())
+        self.assertTrue((ios_repo / "Sources" / "CalpilDomain").exists())
+        self.assertTrue((ios_repo / "Sources" / "CalpilData").exists())
+        self.assertTrue((ios_repo / "Sources" / "CalpilUI").exists())
+        self.assertTrue((ios_repo / "Tests" / "CalpilDomainTests").exists())
+
+    def test_refactorizar_plan_y_scaffolding_android(self):
+        and_repo = self.tmpdir / "unstructured-android"
+        and_repo.mkdir()
+        (and_repo / "settings.gradle.kts").write_text('rootProject.name = "MyAndroidApp"\n', encoding="utf-8")
+
+        plan = stack.generar_plan_refactor(and_repo)
+        self.assertTrue(plan["needed"])
+        self.assertGreaterEqual(len(plan["steps"]), 1)
+        self.assertTrue(any("Composition Root" in s["title"] for s in plan["steps"]))
+
+        creados = stack.ejecutar_scaffolding(and_repo)
+        self.assertIn("app/src/main/java/com/calpil/template/CalpilApplication.kt", creados)
+        self.assertTrue((and_repo / "app" / "src" / "main" / "java" / "com" / "calpil" / "template" / "CalpilApplication.kt").exists())
+        self.assertTrue((and_repo / "app" / "src" / "main" / "java" / "com" / "calpil" / "template" / "core").exists())
+        self.assertTrue((and_repo / "app" / "src" / "main" / "java" / "com" / "calpil" / "template" / "features" / "workitems" / "domain").exists())
+        self.assertTrue((and_repo / "app" / "src" / "main" / "java" / "com" / "calpil" / "template" / "features" / "workitems" / "data").exists())
+        self.assertTrue((and_repo / "app" / "src" / "main" / "java" / "com" / "calpil" / "template" / "features" / "workitems" / "presentation").exists())
 
     def test_auditar_dast_zap(self):
         if self.go_template.exists():

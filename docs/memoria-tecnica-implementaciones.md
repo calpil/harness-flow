@@ -531,13 +531,45 @@ Se erradicó la asimetría de reglas hacia Claude Code implementando paridad nat
 
 ---
 
-## 19. Estado de Verificación y Métricas de Calidad
+## 19. Hito 17: Stacks Mobile iOS SwiftUI y Android Jetpack Compose con Clean Architecture y Paridad Multi-LLM
 
-* **Batería de Pruebas Automatizadas**: 282 tests de flujo core, producto, stack, gates, auditoría y documentación ejecutados pasando al 100%:
-  ```bash
-  PYTHONPATH=scripts:tests python3 -m unittest tests/test_producto.py tests/test_stack.py tests/test_estado.py tests/test_spec_acs.py tests/test_review_rondas.py tests/test_auditoria_tres.py tests/test_documentacion.py tests/test_clrs_algoritmos.py tests/test_prd_sdd_flujo.py tests/test_contexto.py tests/test_enmienda.py
-  # Ran 282 tests in 27.517s - OK
-  ```
-* **Validación de Habilidades de Agentes**: 100% de las habilidades validadas en todos los stacks con `validate-agent-skills.mjs`.
-* **Verificación de Arquitectura en las 8 Plantillas Reales de CALPIL**:
-  * 8/8 plantillas evaluadas como **COMPLIANT** (Rules OK, Skills OK, Arquitectura OK).
+Se incorporó soporte oficial, gobernanza y validación automática para desarrollo móvil nativo mediante dos nuevos stacks: **iOS SwiftUI Clean Architecture** (`ios-swiftui-clean`) y **Android Jetpack Compose Clean Architecture** (`android-compose-clean`), manteniendo paridad multi-LLM total para Claude Code, OpenAI Codex, Google Antigravity (AGY), Gemini CLI, Hermes, Grok y Kimi Code:
+
+### Stacks Definidos:
+* [`stacks/ios-swiftui-clean/`](../stacks/ios-swiftui-clean/):
+  - **Tecnología**: Swift 6, SwiftUI, Swift Package Manager (SPM) modular.
+  - **Capas Canónicas**: `Sources/CalpilDomain` (Swift puro sin UIKit ni SwiftUI), `Sources/CalpilData` (adaptadores de red y persistencia), `Sources/CalpilUI` (vistas y componentes declarativos) y `Sources/CalpilApp` (Composition Root centralizado con `@main`).
+  - **Reglas Modulares (4)**: `architecture.md`, `dependencies.md`, `security.md`, `testing.md`.
+  - **Skills Especializadas (9)**: `add-data-source`, `add-feature`, `add-screen`, `architecture-review`, `debug-targeted`, `dependency-review`, `prepare-release`, `security-review`, `write-tests`.
+  - **Verificador de Arquitectura AST/Regex**: [`stacks/ios-swiftui-clean/scripts/check-architecture.py`](../stacks/ios-swiftui-clean/scripts/check-architecture.py).
+  - **Auditoría & Context7**: Context7 `/apple/swift`, docs oficiales Swift/Apple, `swift package audit`.
+* [`stacks/android-compose-clean/`](../stacks/android-compose-clean/):
+  - **Tecnología**: Kotlin 2.0+, Jetpack Compose, Material 3, Gradle Version Catalogs (`libs.versions.toml`).
+  - **Capas Canónicas**: `domain` (Kotlin puro sin dependencias de `android.*`, Compose o Room), `data` (DTOs, DAOs, Room y repositorios), `presentation` (composables y ViewModels que consumen casos de uso de Domain sin acoplarse a DTOs de datos), `core` (UI theme y utilidades compartidas) y Composition Root en `CalpilApplication.kt` o `MainActivity.kt`.
+  - **Reglas Modulares (4)**: `architecture.md`, `dependencies.md`, `security.md`, `testing.md`.
+  - **Skills Especializadas (9)**: `add-data-source`, `add-feature`, `add-screen`, `architecture-review`, `debug-targeted`, `dependency-review`, `prepare-release`, `security-review`, `write-tests`.
+  - **Verificador de Arquitectura AST/Regex**: [`stacks/android-compose-clean/scripts/check-architecture.py`](../stacks/android-compose-clean/scripts/check-architecture.py).
+  - **Auditoría & Context7**: Context7 `/google/android`, docs oficiales Android Developers, `./gradlew dependencyCheckAnalyze`.
+
+### Principios y Mecanismos Integrados:
+1. **Reglas de Detección Dinámica**:
+   - `ios-swiftui-clean`: Detección por `Package.swift`, targets `CalpilDomain`/`CalpilData`/`CalpilUI`/`CalpilApp` y exclusión de anti-indicadores de backend/web.
+   - `android-compose-clean`: Detección por `settings.gradle.kts`, `app/build.gradle.kts`, `gradle/libs.versions.toml`, `AndroidManifest.xml` y exclusión de anti-indicadores de otros ecosistemas.
+2. **Validadores de Arquitectura Host-Agnósticos**:
+   - Ejecutados en Python puro sin requerir Xcode ni Android SDK en el entorno del host o CI/CD.
+   - Validan pureza de dominio, aislamiento de capas de presentación/UI, detección de Composition Root y determinismo en tests (bloqueo de `Task.sleep` o `Thread.sleep`).
+3. **Scaffolding y Planes de Refactorización Vertical**:
+   - `stack.py refactorizar --scaffold` genera la estructura modular completa y los puntos de entrada canónicos (`CalpilApp.swift` y `CalpilApplication.kt`).
+4. **Validación de Cumplimiento sobre Plantillas CALPIL**:
+   - Ambas plantillas reales en `/Users/alan/Documents/Git/CALPIL` evaluadas con 100% de cumplimiento:
+     - `calpil-ios-swiftui-template`: `compliant=True`, `architecture_ok=True`, `rules_ok=True`, `skills_ok=True`.
+     - `calpil-android-compose-template`: `compliant=True`, `architecture_ok=True`, `rules_ok=True`, `skills_ok=True`.
+
+---
+
+## 20. Estado de Verificación y Métricas de Calidad
+
+* **Batería de Pruebas Automatizadas**: 286 tests de flujo core, producto, stack, gates, auditoría y documentación ejecutados pasando al 100% (incluyendo los 28 tests de validación exhaustiva de stacks en `tests/test_stack.py`).
+* **Validación de Habilidades de Agentes**: 100% de las habilidades validadas en los 10 stacks con `validate-agent-skills.mjs`.
+* **Verificación de Arquitectura en las 10 Plantillas Reales de CALPIL**:
+  * 10/10 plantillas evaluadas como **COMPLIANT** (Rules OK, Skills OK, Arquitectura OK): Golang Hexagonal, Angular Product, .NET Hexagonal, Rust Hexagonal, Next.js Product, Spring Boot Hexagonal, NestJS Hexagonal, Python Data Product, iOS SwiftUI Clean Architecture y Android Jetpack Compose Clean Architecture.
