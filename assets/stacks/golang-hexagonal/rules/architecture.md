@@ -21,3 +21,4 @@ globs: ["internal/**", "cmd/**"]
 - **Capa Platform y Composition Root (`internal/platform/**`, `cmd/server/main.go`):**
   - Configuración, middlewares transversales (Correlation ID, structured logging, recovery) y health checks.
   - `cmd/server/main.go` es el único punto autorizado para instanciar y cablear adapters con use cases.
+- **Adopción progresiva:** un servicio existente sin `internal/` no se reestructura; `check-architecture.py` lo avisa y declara que no midió los límites. Los módulos nuevos nacen en `internal/<modulo>/{domain,application,adapter}`, y dentro de `internal/` estas reglas son error. La composition root en `cmd/` se exige siempre.

@@ -6,6 +6,12 @@ Verifica:
 2. Aislamiento de Application: internal/*/application/** sin imports de adapter.
 3. Tests deterministas: sin llamadas a time.Sleep en tests unitarios.
 4. Composition Root: existencia de cmd/server/main.go o cmd/*/main.go.
+
+Adopcion progresiva: un servicio sin `internal/` no es un error. Lo existente no
+se mueve y los modulos nuevos nacen en internal/<modulo>/{domain,application,adapter}.
+Sin `internal/` las reglas 1 a 3 no tienen donde medirse: sale un aviso y el
+verde dice que esos limites NO se midieron. Con `internal/`, siguen siendo error.
+La composition root se exige siempre.
 """
 from __future__ import annotations
 
@@ -61,8 +67,10 @@ def check_golang_architecture(root_dir: Path) -> tuple[list[str], list[str]]:
 
     # 2. Internal layers
     internal_dir = root_dir / "internal"
-    if not internal_dir.exists():
-        errors.append("Directorio 'internal/' ausente: los límites hexagonales deben residir bajo 'internal/'")
+    if not internal_dir.is_dir():
+        warnings.append("Directorio 'internal/' ausente (adopción progresiva): pureza de dominio, "
+                        "aislamiento de application y tests deterministas NO se midieron. "
+                        "Los módulos nuevos nacen en 'internal/<modulo>/{domain,application,adapter}'")
         return errors, warnings
 
     for go_file in root_dir.glob("internal/**/*.go"):
@@ -123,6 +131,12 @@ def main() -> None:
         for e in errors:
             print(f"  - {e}", file=sys.stderr)
         sys.exit(1)
+
+    if not (repo_path / "internal").is_dir():
+        # Un conteo parcial nunca se reporta como total: sin internal/ solo se midio la composition root.
+        print(f"[ARCH-OK] Composition root verificada en {repo_path.name}. "
+              "Sin 'internal/': límites hexagonales NO medidos.")
+        sys.exit(0)
 
     print(f"[ARCH-OK] Arquitectura hexagonal en Go verificada correctamente en {repo_path.name}.")
     sys.exit(0)

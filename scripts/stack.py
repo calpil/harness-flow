@@ -179,32 +179,74 @@ def detectar_stack_directorio(repo: Path) -> dict[str, Any]:
 
 def detectar_todos_los_destinos(root: Path) -> list[dict[str, Any]]:
     """Detecta stacks en la raiz o en microservicios declarados en multi-repo."""
-    resultados = []
-    # 1. Si hay harness/grafos.json
-    grafos_file = root / "harness" / "grafos.json"
-    raices = []
-    if grafos_file.exists():
-        try:
-            data = json.loads(grafos_file.read_text(encoding="utf-8"))
-            raices = [root / r for r in data.get("raices", []) if (root / r).exists()]
-        except Exception:
-            pass
+    # 1. Raices declaradas en harness/grafos.json
+    declaradas = _raices_declaradas(root)
 
-    # 2. Si no hay grafos.json, buscar subdirectorios inmediatos que tengan git o stack markers
-    if not raices:
-        for item in root.iterdir():
-            if item.is_dir() and not item.name.startswith((".", "harness", "docs", "graphify")):
-                if (item / "go.mod").exists() or (item / "angular.json").exists() or (item / "package.json").exists() or (item / ".git").exists():
-                    raices.append(item)
+    # 2. Si no hay ninguna, los subdirectorios inmediatos que sean repos; si tampoco, la raiz
+    if not declaradas:
+        raices = _subrepos(root) or [root]
+        return [detectar_stack_directorio(r) for r in raices]
 
-    if not raices:
-        raices = [root]
+    # 3. Una raiz declarada puede ser un repo o una carpeta que agrupa microservicios
+    #    (~/GolandProjects/<proyecto>/ms-*): si no tiene stack propio, se recorren sus repos.
+    resultados: list[dict[str, Any]] = []
+    vistas: set[Path] = set()
 
-    for r in raices:
+    def agregar(res: dict[str, Any]) -> None:
+        ruta = Path(res["path"])
+        if ruta not in vistas:
+            vistas.add(ruta)
+            resultados.append(res)
+
+    for r in declaradas:
         res = detectar_stack_directorio(r)
-        resultados.append(res)
+        subrepos = _subrepos(r) if res["stack"] == "generico" else []
+        if not subrepos:
+            agregar(res)
+        for sub in subrepos:
+            agregar(detectar_stack_directorio(sub))
 
     return resultados
+
+
+_MARCAS_DE_REPO = ("go.mod", "angular.json", "package.json", ".git")
+
+
+def _subrepos(carpeta: Path) -> list[Path]:
+    """Subdirectorios inmediatos que son un repo o traen marcadores de stack."""
+    return sorted(
+        item for item in carpeta.iterdir()
+        if item.is_dir() and not item.name.startswith((".", "harness", "docs", "graphify"))
+        and any((item / marca).exists() for marca in _MARCAS_DE_REPO)
+    )
+
+
+def _raices_declaradas(root: Path) -> list[Path]:
+    """Raices de harness/grafos.json que existen en disco.
+
+    El formato es el de `comun.grafos_config`: objetos `{"nombre", "path"}`, con
+    `path` relativo a la raiz, absoluto o con `~`. Se aceptan tambien strings.
+    Leerlas como strings rompia con TypeError, que se tragaba: el diagnostico
+    caia a los subdirectorios de la raiz y nunca veia los microservicios.
+    """
+    grafos_file = root / "harness" / "grafos.json"
+    if not grafos_file.is_file():
+        return []
+    try:
+        data = json.loads(grafos_file.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    entradas = data.get("raices") if isinstance(data, dict) else None
+    raices: list[Path] = []
+    for entrada in entradas if isinstance(entradas, list) else []:
+        valor = entrada.get("path") if isinstance(entrada, dict) else entrada
+        if not isinstance(valor, str) or not valor:
+            continue
+        ruta = Path(valor).expanduser()
+        ruta = (ruta if ruta.is_absolute() else root / ruta).resolve()
+        if ruta.is_dir() and ruta not in raices:
+            raices.append(ruta)
+    return raices
 
 
 # ---------------------------------------------------------------------------
