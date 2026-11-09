@@ -150,6 +150,33 @@ class ComponentesTests(unittest.TestCase):
                 self.assertIn("--powershell", texto)
                 self.assertIn("Invoke-Expression", texto)
 
+    def test_los_argumentos_posicionales_son_base_cero(self):
+        """En Claude Code `$N` abrevia `$ARGUMENTS[N]`: `$0` es el primer argumento.
+
+        Los comandos usaban `$1` como id de la feature. Con `/harness-flow:cierre
+        12 develop` el modelo recibia "feature develop" y el 12 desaparecia del
+        prompt; con un solo argumento `$1` quedaba literal y el shell lo expandia
+        a vacio. La forma larga no se confunde con el `$0`/`$1` del shell.
+        """
+        for md in sorted((RAIZ / "commands").glob("*.md")):
+            texto = md.read_text(encoding="utf-8")
+            pista = frontmatter(md).get("argument-hint", "")
+            with self.subTest(comando=md.name):
+                self.assertEqual([], re.findall(r"\$\d", texto),
+                                 "usa $ARGUMENTS[N], no la abreviatura $N")
+                usados = {int(n) for n in re.findall(r"\$ARGUMENTS\[(\d+)\]", texto)}
+                if not pista:
+                    self.assertEqual(set(), usados, "sin argument-hint no hay argumentos")
+                    continue
+                self.assertIn(0, usados, "el primer argumento es $ARGUMENTS[0]")
+                self.assertLess(max(usados), len(pista.split()),
+                                f"indice fuera de lo que declara argument-hint: {pista}")
+
+    def test_implementar_ve_todos_los_argumentos(self):
+        """`--pair` es el segundo argumento: sin `$ARGUMENTS` suelto no llega al modelo."""
+        texto = (RAIZ / "commands" / "implementar.md").read_text(encoding="utf-8")
+        self.assertRegex(texto, r"\$ARGUMENTS(?!\[)")
+
     def test_cada_llamada_a_un_script_trae_su_eval(self):
         """En Claude Code $PY y $H no sobreviven entre llamadas Bash."""
         for md in sorted((RAIZ / "commands").glob("*.md")):

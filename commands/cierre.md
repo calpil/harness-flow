@@ -7,7 +7,7 @@ effort: xhigh
 
 # harness-flow: cierre
 
-Cierra la feature `$1` hacia `$2`. Si no te dieron rama destino, **preguntale al
+Cierra la feature `$ARGUMENTS[0]` hacia `$ARGUMENTS[1]`. Si no te dieron rama destino, **preguntale al
 usuario a que rama integra**: el gate se niega sin `--to` y adivinarla es
 exactamente lo que no debe pasar.
 
@@ -22,7 +22,7 @@ exactamente lo que no debe pasar.
 ## 1. Verify en el arbol correcto
 
 ```bash
-eval "$(python3 "${CLAUDE_PLUGIN_ROOT}/scripts/entorno.py" --shell)" && "$PY" "$H/gate.py" verify --feature $1
+eval "$(python3 "${CLAUDE_PLUGIN_ROOT}/scripts/entorno.py" --shell)" && "$PY" "$H/gate.py" verify --feature $ARGUMENTS[0]
 ```
 
 `verify` corre en el WORKTREE de la feature. Si el worktree declarado no existe,
@@ -58,7 +58,7 @@ Pregunta primero si la raiz es multi-repo sin `.git` (registro estricto, cierre
 `${CLAUDE_PLUGIN_ROOT}/references/multirepo.md` y no se improvisa.
 
 ```bash
-eval "$(python3 "${CLAUDE_PLUGIN_ROOT}/scripts/entorno.py" --shell)" && "$PY" "$H/gate.py" close --feature $1 --status done --to $2 --leccion <clase>
+eval "$(python3 "${CLAUDE_PLUGIN_ROOT}/scripts/entorno.py" --shell)" && "$PY" "$H/gate.py" close --feature $ARGUMENTS[0] --status done --to $ARGUMENTS[1] --leccion <clase>
 ```
 
 Si la feature BORRO tests a proposito (retiro de una integracion, un spec movido),
@@ -103,7 +103,7 @@ Si aparecen rojos nuevos: ficha el choque, no bajes la asercion que lo detecto.
 ## 5. Comprueba que el merge existe
 
 ```bash
-git -C <ruta> log --oneline -1 $2
+git -C <ruta> log --oneline -1 $ARGUMENTS[1]
 ```
 
 El mensaje de un script no es evidencia de que el merge ocurrio. Y un `15/15 en
@@ -122,7 +122,7 @@ medible y esperale el SI antes de pasar `--yes`. Diseno completo:
 garantias en `references/multirepo.md`, seccion "Cierre historico".
 
 ```bash
-eval "$(python3 "${CLAUDE_PLUGIN_ROOT}/scripts/entorno.py" --shell)" && "$PY" "$H/gate.py" close --feature $1 --status done --to $2 \
+eval "$(python3 "${CLAUDE_PLUGIN_ROOT}/scripts/entorno.py" --shell)" && "$PY" "$H/gate.py" close --feature $ARGUMENTS[0] --status done --to $ARGUMENTS[1] \
   --integrated --historico --yes --motivo "<por que no hay base medible>" --leccion <clase> [--retirados <json>]
 ```
 

@@ -7,7 +7,8 @@ effort: xhigh
 
 # harness-flow: implementar (rol implementer)
 
-Implementa la feature `$1`. 
+Implementa la feature `$ARGUMENTS[0]`. Argumentos recibidos: `$ARGUMENTS` (si
+incluyen `--pair`, aplica el modo Pair de la seccion 5b).
 
 **Activación Automática de Modo Pair en Stacks Tecnológicos (Angular / Golang / .NET / Stacks Normativos):**
 Si el brief (`contexto.py brief`) detecta un stack tecnológico normativo (ej. Golang Hexagonal, Angular Product, .NET Hexagonal), o si el usuario pasa `--pair` o pide modo pair, **el modo Pair interactivo se activa de forma automática**. En este modo no se delega a ciegas a un subagente sin visibilidad: tú ejecutas como **Driver** en el worktree y el usuario actúa como **Navigator**.
@@ -38,18 +39,18 @@ Para repositorios genéricos sin stack normativo detectado y sin `--pair`, se ut
 ## 1. Gate del spec
 
 ```bash
-eval "$(python3 "${CLAUDE_PLUGIN_ROOT}/scripts/entorno.py" --shell)" && "$PY" "$H/gate.py" check-spec --feature $1
+eval "$(python3 "${CLAUDE_PLUGIN_ROOT}/scripts/entorno.py" --shell)" && "$PY" "$H/gate.py" check-spec --feature $ARGUMENTS[0]
 ```
 
 Con exit distinto de 0 no se implementa: el spec no esta aprobado o cambio
-despues del sello. Vuelve a `/harness-flow:spec $1`.
+despues del sello. Vuelve a `/harness-flow:spec $ARGUMENTS[0]`.
 
 ## 2. Worktree
 
 Si la feature aun no tiene `worktree` en `harness/feature_list.json`, crealo:
 
 ```bash
-eval "$(python3 "${CLAUDE_PLUGIN_ROOT}/scripts/entorno.py" --shell)" && "$PY" "$H/worktree.py" start --feature $1
+eval "$(python3 "${CLAUDE_PLUGIN_ROOT}/scripts/entorno.py" --shell)" && "$PY" "$H/worktree.py" start --feature $ARGUMENTS[0]
 ```
 
 Anota la ruta que imprime. En una raiz multi-repo sin `.git`, el arbol se
@@ -58,7 +59,7 @@ declara con `worktree.py register`; ver `references/multirepo.md`.
 ## 3. Brief
 
 ```bash
-eval "$(python3 "${CLAUDE_PLUGIN_ROOT}/scripts/entorno.py" --shell)" && "$PY" "$H/contexto.py" brief --feature $1
+eval "$(python3 "${CLAUDE_PLUGIN_ROOT}/scripts/entorno.py" --shell)" && "$PY" "$H/contexto.py" brief --feature $ARGUMENTS[0]
 ```
 
 Si dice que el contexto esta vencido, refresca con `contexto.py refrescar`
@@ -87,7 +88,7 @@ Tool `Agent` con `subagent_type: "harness-flow:implementer"` y `effort` con el
 nivel del paso 4. En el prompt, una linea de goal, la ruta del spec, la del
 worktree y la salida ENTERA del paso 3:
 
-> Implementa la feature #$1. Spec: `docs/spec-feature-$1-<slug>.md`.
+> Implementa la feature #$ARGUMENTS[0]. Spec: `docs/spec-feature-$ARGUMENTS[0]-<slug>.md`.
 > Worktree: `<ruta>`. Brief: <salida de contexto.py brief>
 
 - **Pasa `effort`, nunca `model`.** El `effort` de la invocacion le gana al del
@@ -97,7 +98,7 @@ worktree y la salida ENTERA del paso 3:
   quitaria el foco en el spec aprobado.
 - El subagente no puede preguntarle al usuario. Si vuelve con una pregunta
   sobre el spec, llevala tu al chat. Si la respuesta cambia un AC, es una
-  enmienda (`/harness-flow:spec $1`, seccion 4), no una instruccion nueva al
+  enmienda (`/harness-flow:spec $ARGUMENTS[0]`, seccion 4), no una instruccion nueva al
   implementer.
 
 ### 5b. Modo Pair interactivo (`--pair`: Driver = IA, Navigator = humano)
@@ -133,11 +134,11 @@ Si los argumentos incluyen `--pair` (o el usuario pidio modo pair, estilo `/pair
 4. **Chequeo y Commits:** con toda la lista en verde, verifica con el usuario los
    AC de verificacion manual, **sugiere** refactors sin aplicarlos solo (solo en
    verde), y **sugiere el mensaje de commit** separando funcionalidad y refactor
-   para commitear en el worktree con su OK y escribir `docs/impl-$1.md`.
+   para commitear en el worktree con su OK y escribir `docs/impl-$ARGUMENTS[0].md`.
 
 ## 6. Contrasta la evidencia
 
-Cuando vuelva, abre `docs/impl-$1.md` en la raiz. Es un autoinforme:
+Cuando vuelva, abre `docs/impl-$ARGUMENTS[0].md` en la raiz. Es un autoinforme:
 
 - hay una seccion `## AC-n` por CADA AC del spec, con cita `archivo:linea`;
 - las citas existen en el WORKTREE y dicen lo que la seccion afirma (abre al
@@ -153,5 +154,5 @@ hallazgo concreto y el mismo `effort`) antes de pasar al review.
 
 ## 7. Siguiente paso
 
-`/harness-flow:review $1`. El revisor es otro subagente, aislado y en Opus 5.5:
+`/harness-flow:review $ARGUMENTS[0]`. El revisor es otro subagente, aislado y en Opus 5.5:
 no le cuentes lo que hizo el implementer.

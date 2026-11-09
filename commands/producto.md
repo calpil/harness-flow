@@ -7,7 +7,7 @@ effort: xhigh
 
 # harness-flow: producto (rol producto)
 
-Redacta el documento `$1` (`prd` o `sdd`) ANTES de que existan features en el
+Redacta el documento `$ARGUMENTS[0]` (`prd` o `sdd`) ANTES de que existan features en el
 backlog, o cuando el usuario pide cambiarlo. Si no te dijeron cual, pregunta.
 Si `/harness-flow:estado` ya muestra `prd:`/`sdd:` aprobados y nadie pidio
 cambiarlos, este rol no corre: pasa a `/harness-flow:spec`.
@@ -24,7 +24,7 @@ cambiarlos, este rol no corre: pasa a `/harness-flow:spec`.
 
 - **Nunca escribes `docs/prd/**` ni `docs/sdd.md` a mano.** Son del usuario y
   `gate.py check` marca en rojo cualquier edicion de agente fuera de contrato.
-  Tu archivo es `docs/borrador-$1.md`, que no esta protegido.
+  Tu archivo es `docs/borrador-$ARGUMENTS[0].md`, que no esta protegido.
 - El bloque `<!-- harness-flow:features -->` no va en el borrador: lo mantiene
   `documentacion.py sync` al cerrar cada feature. Con ese bloque, `aprobar` se niega.
 - Cada seccion lleva contenido real. Las guias `<!-- -->` de la plantilla se
@@ -58,10 +58,10 @@ Para una pregunta puntual sobre el codigo, `graphify query "<pregunta>" --graph 
 ## 2. Borrador
 
 ```bash
-eval "$(python3 "${CLAUDE_PLUGIN_ROOT}/scripts/entorno.py" --shell)" && "$PY" "$H/producto.py" borrador --doc $1
+eval "$(python3 "${CLAUDE_PLUGIN_ROOT}/scripts/entorno.py" --shell)" && "$PY" "$H/producto.py" borrador --doc $ARGUMENTS[0]
 ```
 
-Crea `docs/borrador-$1.md` desde `${CLAUDE_PLUGIN_ROOT}/templates/$1.md`, o
+Crea `docs/borrador-$ARGUMENTS[0].md` desde `${CLAUDE_PLUGIN_ROOT}/templates/$ARGUMENTS[0].md`, o
 desde el cuerpo manual que ya tenga el destino (para cambiar un documento
 existente sin perder lo que el usuario escribio). Si el borrador ya existe, no
 lo toca. Rellenalo con las tools de archivo.
@@ -103,11 +103,11 @@ Este paso es del USUARIO, no tuyo.
 3. Solo con un SI explicito:
 
 ```bash
-eval "$(python3 "${CLAUDE_PLUGIN_ROOT}/scripts/entorno.py" --shell)" && "$PY" "$H/producto.py" aprobar --doc $1 --yes
+eval "$(python3 "${CLAUDE_PLUGIN_ROOT}/scripts/entorno.py" --shell)" && "$PY" "$H/producto.py" aprobar --doc $ARGUMENTS[0] --yes
 ```
 
 Copia el cuerpo a `docs/prd/PRD-master.md` o `docs/sdd.md` conservando el bloque
-generado si ya existia, y sella `documentos.$1` en `harness/feature_list.json`.
+generado si ya existia, y sella `documentos.$ARGUMENTS[0]` en `harness/feature_list.json`.
 Nunca lo corras por tu cuenta ni "para agilizar": el script se niega sin
 `--yes`, y `--yes` significa que el usuario dijo que si, no que tu lo asumiste.
 

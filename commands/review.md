@@ -10,7 +10,7 @@ effort: xhigh
 
 # harness-flow: review (rol reviewer)
 
-Review de la feature `$1`. **El review no lo haces tu.** Un revisor que recuerda
+Review de la feature `$ARGUMENTS[0]`. **El review no lo haces tu.** Un revisor que recuerda
 haber escrito el codigo se aprueba solo; uno que solo ve spec + diff, no.
 
 > **Shell.** Cada llamada Bash abre un shell nuevo: `$PY` y `$H` no sobreviven,
@@ -24,7 +24,7 @@ haber escrito el codigo se aprueba solo; uno que solo ve spec + diff, no.
 ## 1. Arma el briefing
 
 ```bash
-eval "$(python3 "${CLAUDE_PLUGIN_ROOT}/scripts/entorno.py" --shell)" && "$PY" "$H/revision.py" --feature $1 --briefing
+eval "$(python3 "${CLAUDE_PLUGIN_ROOT}/scripts/entorno.py" --shell)" && "$PY" "$H/revision.py" --feature $ARGUMENTS[0] --briefing
 ```
 
 Esa salida es el paquete completo: rol, arbol a revisar, AC, formato del acta,
@@ -42,7 +42,7 @@ Usa la tool `Agent` con `subagent_type: "harness-flow:revisor"` y `effort` con
 ese nivel, pegando la salida ENTERA del paso 1 en el prompt, y arriba una linea
 de goal:
 
-> Revisa la feature #$1 y escribe `docs/review-$1.md`.
+> Revisa la feature #$ARGUMENTS[0] y escribe `docs/review-$ARGUMENTS[0].md`.
 
 Reglas de esta delegacion:
 
@@ -59,12 +59,12 @@ Reglas de esta delegacion:
   tiene que saberlo.
 
   ```bash
-  eval "$(python3 "${CLAUDE_PLUGIN_ROOT}/scripts/entorno.py" --shell)" && "$PY" "$H/revision.py" --feature $1
+  eval "$(python3 "${CLAUDE_PLUGIN_ROOT}/scripts/entorno.py" --shell)" && "$PY" "$H/revision.py" --feature $ARGUMENTS[0]
   ```
 
 ## 3. Lee el acta tu mismo
 
-Cuando vuelva, abre `docs/review-$1.md`. El veredicto del subagente es un
+Cuando vuelva, abre `docs/review-$ARGUMENTS[0].md`. El veredicto del subagente es un
 autoinforme, igual que la evidencia del implementer. Antes de sellar:
 
 - cada fila cita un `archivo:linea` que **existe** y dice lo que la fila afirma;
@@ -76,7 +76,7 @@ Si una fila no aguanta, no selles: devuelve el hallazgo.
 ## 4. Sella
 
 ```bash
-eval "$(python3 "${CLAUDE_PLUGIN_ROOT}/scripts/entorno.py" --shell)" && "$PY" "$H/gate.py" revision --feature $1 --veredicto approved|changes_requested|blocked
+eval "$(python3 "${CLAUDE_PLUGIN_ROOT}/scripts/entorno.py" --shell)" && "$PY" "$H/gate.py" revision --feature $ARGUMENTS[0] --veredicto approved|changes_requested|blocked
 ```
 
 El script estampa la firma completa (veredicto · fecha ISO · autor · `estampado

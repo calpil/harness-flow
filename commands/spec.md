@@ -7,7 +7,7 @@ effort: xhigh
 
 # harness-flow: spec (rol leader)
 
-Escribe el spec de la feature `$1` ANTES de tocar codigo. Si no te dieron id,
+Escribe el spec de la feature `$ARGUMENTS[0]` ANTES de tocar codigo. Si no te dieron id,
 pregunta cual, o corre `/harness-flow:estado` para listarlas.
 
 > **Shell.** Cada llamada Bash abre un shell nuevo: `$PY` y `$H` no sobreviven,
@@ -21,7 +21,7 @@ pregunta cual, o corre `/harness-flow:estado` para listarlas.
 ## 1. Contexto antes de leer archivos a ciegas
 
 ```bash
-eval "$(python3 "${CLAUDE_PLUGIN_ROOT}/scripts/entorno.py" --shell)" && "$PY" "$H/contexto.py" brief --feature $1
+eval "$(python3 "${CLAUDE_PLUGIN_ROOT}/scripts/entorno.py" --shell)" && "$PY" "$H/contexto.py" brief --feature $ARGUMENTS[0]
 ```
 
 Para consultas puntuales de estructura (quien llama a X, impacto de un cambio) usa
@@ -55,7 +55,7 @@ Las lecciones se leen **antes** de disenar, no despues de romper algo.
 
 ## 2. Escribe el spec
 
-`docs/spec-feature-$1-<slug>.md`, con `Estado: draft`, siguiendo
+`docs/spec-feature-$ARGUMENTS[0]-<slug>.md`, con `Estado: draft`, siguiendo
 `${CLAUDE_PLUGIN_ROOT}/templates/spec.md`. Lo que no es negociable:
 
 - AC numerados `AC-1`, `AC-2`, … sin saltos, en Given/When/Then o formato directo, cada uno
@@ -87,7 +87,7 @@ Las lecciones se leen **antes** de disenar, no despues de romper algo.
   codigo. Crea el worktree ANTES de sellar el spec:
 
   ```bash
-  eval "$(python3 "${CLAUDE_PLUGIN_ROOT}/scripts/entorno.py" --shell)" && "$PY" "$H/worktree.py" start --feature $1
+  eval "$(python3 "${CLAUDE_PLUGIN_ROOT}/scripts/entorno.py" --shell)" && "$PY" "$H/worktree.py" start --feature $ARGUMENTS[0]
   ```
 - Si la feature trae migracion numerada, **reserva el numero contra la rama de
   integracion**, no contra el worktree: cada rama ve "el siguiente libre" en un
@@ -102,7 +102,7 @@ Este paso es del USUARIO, no tuyo.
 3. Solo con un SI explicito:
 
 ```bash
-eval "$(python3 "${CLAUDE_PLUGIN_ROOT}/scripts/entorno.py" --shell)" && "$PY" "$H/gate.py" approve-spec --feature $1 --yes
+eval "$(python3 "${CLAUDE_PLUGIN_ROOT}/scripts/entorno.py" --shell)" && "$PY" "$H/gate.py" approve-spec --feature $ARGUMENTS[0] --yes
 ```
 
 Nunca corras eso por tu cuenta ni "para agilizar". El script se niega sin
@@ -123,20 +123,20 @@ re-aprueba con su SI.
 
 ## 4. Enmienda: el spec ya tiene trabajo encima
 
-Si ya existe `docs/impl-$1.md`, `docs/review-$1.md` o un verify, `approve-spec`
+Si ya existe `docs/impl-$ARGUMENTS[0].md`, `docs/review-$ARGUMENTS[0].md` o un verify, `approve-spec`
 se niega a re-sellar el spec cambiado: eso es una enmienda.
 
-1. Escribe `docs/propuesta-$1-enmienda-<slug>.md` desde
+1. Escribe `docs/propuesta-$ARGUMENTS[0]-enmienda-<slug>.md` desde
    `${CLAUDE_PLUGIN_ROOT}/templates/enmienda.md` (por que, cambios al spec, lo
    que NO cambia) y aplica los cambios al spec. La seccion
    `## Enmiendas posteriores a la aprobacion` la escribe el gate, no tu.
 2. MUESTRA la propuesta y el spec cambiado, PREGUNTA, y solo con un SI explicito:
 
 ```bash
-eval "$(python3 "${CLAUDE_PLUGIN_ROOT}/scripts/entorno.py" --shell)" && "$PY" "$H/gate.py" enmienda --feature $1 --propuesta docs/propuesta-$1-enmienda-<slug>.md --yes
+eval "$(python3 "${CLAUDE_PLUGIN_ROOT}/scripts/entorno.py" --shell)" && "$PY" "$H/gate.py" enmienda --feature $ARGUMENTS[0] --propuesta docs/propuesta-$ARGUMENTS[0]-enmienda-<slug>.md --yes
 ```
 
 Se niega si el spec cambio un AC que la propuesta no nombra: el usuario aprobo
 la propuesta, no el diff. Despues, el review y el verify anteriores ya no valen
-para cerrar: lanza un review nuevo (`/harness-flow:review $1`) y vuelve a correr
+para cerrar: lanza un review nuevo (`/harness-flow:review $ARGUMENTS[0]`) y vuelve a correr
 verify.
