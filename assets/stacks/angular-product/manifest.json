@@ -87,6 +87,28 @@
     "arch_command": "node scripts/check-architecture.mjs",
     "skills_validator": "node assets/stacks/angular-product/scripts/validate-agent-skills.mjs"
   },
+  "layout": {
+    "codigo": [
+      "**/src/app/**/*.ts"
+    ],
+    "excluir": [
+      "**/*.spec.ts",
+      "**/src/app/testing/**",
+      "**/node_modules/**"
+    ],
+    "normalizado": [
+      "**/src/app/*.ts",
+      "**/src/app/core/**",
+      "**/src/app/shared/**",
+      "**/src/app/features/*/domain/**",
+      "**/src/app/features/*/application/**",
+      "**/src/app/features/*/data-access/**",
+      "**/src/app/features/*/ui/**",
+      "**/src/app/features/*/index.ts",
+      "**/src/app/features/*/*.routes.ts"
+    ],
+    "unidad_tras": "features"
+  },
   "documentation": {
     "official_docs": "https://angular.dev",
     "security_advisories": "https://github.com/angular/angular/security/advisories",

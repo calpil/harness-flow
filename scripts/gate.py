@@ -66,7 +66,31 @@ def cmd_check(args) -> None:
         r.fallo(str(exc), "corrigelo en harness/feature_list.json")
     _check_rutas_protegidas(p, rules, r, data)
     _check_aislamiento(abiertas, r, p, rules)
+    _check_arquitectura(p, r)
     r.salir()
+
+
+def _check_arquitectura(p, r) -> None:
+    """El trinquete, visto desde los checkouts del proyecto.
+
+    Aqui es un aviso y no un bloqueo: un checkout parado en una rama anterior a
+    la ultima normalizacion trae mas codigo heredado que la base y no es una
+    violacion. El bloqueo exacto es el de `close`, que mide cada feature contra
+    su propio commit base.
+    """
+    import arquitectura
+    if not arquitectura.modo_trinquete(p):
+        return
+    res = arquitectura.evaluar_global(p, arquitectura.cargar_base(p))
+    for x in res["fallos"]:
+        r.aviso(f"arquitectura: {x}",
+                "si el checkout esta al dia, alguien agrego codigo heredado fuera del proceso: "
+                "arquitectura.py check")
+    for x in res["avisos"]:
+        r.aviso(f"arquitectura: {x}")
+    if not res["fallos"]:
+        u, a = arquitectura.restantes(arquitectura.cargar_base(p))
+        r.ok(f"arquitectura: lo heredado no crecio ({u} unidades, {a} archivos en la base)")
 
 
 def _check_feature(p, f, rules, r) -> None:
@@ -422,13 +446,21 @@ def cmd_approve_spec(args) -> None:
     acs = _acs_sellables(text)
 
     # require_stack_normativo: la Feature #0 de normalización arquitectónica debe cerrarse antes de features de negocio
+    # Con el trinquete adoptado (arquitectura.py) la #0 deja de ser un muro: lo heredado se
+    # mide y solo puede bajar, y lo que frena es la cuota de normalizacion.
+    import arquitectura
     f0 = next((x for x in data.get("features", []) if str(x.get("id")) == "0"), None)
-    if f0 and f0.get("status") != "done" and str(f.get("id")) != "0":
+    if (f0 and f0.get("status") != "done" and str(f.get("id")) != "0"
+            and not arquitectura.modo_trinquete(p)):
         sys.exit(f"[!!] require_stack_normativo: la Feature #0 ({f0.get('name')}) esta en estado '{f0.get('status')}'.\n"
                  f"     El codigo existente contiene violaciones arquitectonicas que deben normalizarse primero.\n"
                  f"     1. gate.py approve-spec --feature 0 --yes\n"
                  f"     2. worktree.py start --feature 0 (resuelve las violaciones con TDD)\n"
                  f"     3. gate.py close --feature 0")
+
+    cuota = arquitectura.cuota_bloquea(p, data, f)
+    if cuota:
+        sys.exit(f"[!!] {cuota}")
 
     pendientes = _docs_pendientes(p, data, f)
     if pendientes:
@@ -451,6 +483,7 @@ def cmd_approve_spec(args) -> None:
     sp.write_text(text, encoding="utf-8")
 
     _registrar_sello(p, f, sp, text, quien, cuando)
+    arquitectura.registrar_aprobacion(p, data, f)
     save_backlog(p, data)
     bitacora(p, f"spec #{f['id']} approved por {quien} ({len(acs)} AC)")
     print(f"[ok] spec #{f['id']} aprobado y sellado. AC: {', '.join(acs)}")
@@ -1168,6 +1201,13 @@ def cmd_close(args) -> None:
                     f"la leccion '{args.leccion}' no existe como skill "
                     "(creala antes de cerrar: skill_manage en Hermes; SKILL.md en Claude Code, GPT o Grok)")
 
+    if args.status == "done":
+        # Trinquete de arquitectura: lo heredado no crece y lo muy tocado se normaliza.
+        import arquitectura
+        fallos_arq, avisos_arq = arquitectura.fallos_de_cierre(p, data, f)
+        fallos.extend(f"arquitectura: {x}" for x in fallos_arq)
+        avisos_cierre.extend(f"arquitectura: {x}" for x in avisos_arq)
+
     if fallos:
         print(f"[!!] close #{fid} BLOQUEADO por {len(fallos)} regla(s):")
         for x in fallos:
@@ -1222,6 +1262,9 @@ def cmd_close(args) -> None:
             if args.nota:
                 f["note"] = args.nota
             progress_archivado = archivar_progress_actual(p, f) if args.status == "done" else None
+            if args.status == "done":
+                import arquitectura
+                arquitectura.al_cerrar(p, data, f)
             save_backlog(p, data)
             docs_sincronizados = []
             if args.status == "done":

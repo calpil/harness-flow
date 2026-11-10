@@ -70,7 +70,9 @@ def cmd_start(args) -> None:
     fid, slug = f["id"], slugify(f.get("name", ""))
 
     f0 = next((x for x in data.get("features", []) if str(x.get("id")) == "0"), None)
-    if f0 and f0.get("status") != "done" and str(fid) != "0":
+    # Con el trinquete adoptado (arquitectura.py) la #0 ya no es un muro.
+    if (f0 and f0.get("status") != "done" and str(fid) != "0"
+            and not (p["harness"] / "arquitectura-base.json").is_file()):
         sys.exit(f"[!!] require_stack_normativo: la Feature #0 ({f0.get('name')}) esta en estado '{f0.get('status')}'.\n"
                  f"     No puedes arrancar features de negocio antes de normalizar el codigo existente.\n"
                  f"     Ejecuta primero: worktree.py start --feature 0")

@@ -78,6 +78,26 @@
     "race_command": "go test -race ./...",
     "skills_validator": "node assets/stacks/golang-hexagonal/scripts/validate-agent-skills.mjs"
   },
+  "layout": {
+    "codigo": [
+      "**/*.go"
+    ],
+    "excluir": [
+      "**/*_test.go",
+      "vendor/**",
+      "**/testdata/**",
+      "**/node_modules/**"
+    ],
+    "normalizado": [
+      "cmd/**",
+      "internal/platform/**",
+      "internal/config/**",
+      "internal/shared/**",
+      "internal/*/domain/**",
+      "internal/*/application/**",
+      "internal/*/adapter/**"
+    ]
+  },
   "documentation": {
     "official_docs": "https://go.dev/doc/",
     "security_advisories": "https://pkg.go.dev/vuln/",

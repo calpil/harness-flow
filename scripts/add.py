@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Alta de feature en el backlog y creacion del spec en draft.
 
-  add.py --name "cobro idempotente" [--kind bug|task] [--microservicio a --microservicio b]
+  add.py --name "cobro idempotente" [--kind bug|task|normalizacion] [--microservicio a --microservicio b]
          [--prd docs/prd/PRD-master.md] [--candidata F-1] [--requiere F-1]
 """
 from __future__ import annotations
@@ -30,7 +30,7 @@ def main() -> None:
     import producto
     ap = argparse.ArgumentParser()
     ap.add_argument("--name", required=True)
-    ap.add_argument("--kind", choices=["feature", "bug", "task"], default="feature")
+    ap.add_argument("--kind", choices=["feature", "bug", "task", "normalizacion"], default="feature")
     ap.add_argument("--microservicio", action="append", default=[])
     ap.add_argument("--prd")
     ap.add_argument("--candidata", help="la F-n de '## Features candidatas' del PRD que origina la feature")

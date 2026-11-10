@@ -246,6 +246,7 @@ no es evidencia de integración. Para publicar en Atlassian se requiere
 | `gate.py close --feature <id> --status done --to <rama>` | Todas las reglas activas |
 | `postmerge_medido.py base --repo <r> --guardar <j>` | Foto medida de los rojos ANTES del merge |
 | `postmerge_medido.py check --repo <r> --base <j>` | Rojos NUEVOS, build roto o tests desaparecidos (exit 2) |
+| `arquitectura.py check [--feature <id>]` | Trinquete de arquitectura: lo heredado no crece; `close` lo corre solo. Ver `references/arquitectura-heredada.md` |
 | `postmerge_terraform.py base\|check ...` | Destinos Terraform (fmt, validate, `terraform test`); `close` lo despacha solo, ver `references/multirepo.md#contrato-terraform-fmt-validate-y-terraform-test` |
 
 **Despues de cada `close ... --to <rama>`, corre `postmerge_medido.py`** (Go; en
@@ -297,6 +298,8 @@ Harness Flow integra un motor declarativo y extensible de detección y gobierno 
 | `$PY "$H/stack.py" stacks` | Lista los stacks tecnológicos soportados |
 
 **Auto-Normalización Temprana y Prioridad Arquitectónica (Feature #0):** Al arrancar la sesión (`estado.py`), el arnés evalúa automáticamente el repositorio: si faltan reglas modulares o skills, las auto-instala inmediatamente (Nivel 1). Si el código fuente tiene violaciones arquitectónicas reportadas por `check-architecture.py` (Nivel 2), crea automáticamente la **Feature #0** en el backlog y bloquea todas las features de negocio (`requiere: [0]`) en `approve-spec` y `worktree.py start` hasta que el código quede normalizado. La normalización solo agrega lo que falta: no reemplaza un `AGENTS.md` que ya existe ni reinstala las skills de `rules.stack_skills_excluidas`.
+
+**Proyecto con mucho código heredado (trinquete):** la Feature #0 como muro no escala cuando casi todo el código es anterior al arnés. `$PY "$H/arquitectura.py" inventario` mide cuánto vive fuera de la norma del stack y `adoptar --yes` (decisión del USUARIO) lo sella como base: desde ahí lo heredado solo puede bajar, el código nuevo nace dentro de la norma, un archivo heredado muy modificado se normaliza en la misma feature, y cada 3 features de negocio se exige una `--kind normalizacion`. Con la base sellada la #0 deja de bloquear. Detalle en [`references/arquitectura-heredada.md`](references/arquitectura-heredada.md).
 
 ### Actualización Continua y Seguridad: Context7 y Documentación Oficial
 Para garantizar que toda implementación use versiones actualizadas, APIs no deprecadas y esté protegida contra vulnerabilidades:
@@ -432,6 +435,7 @@ Python. Si no hay revisor aislado, puedes revisar localmente con
 | [`references/multirepo.md`](references/multirepo.md) | raiz multi-repo sin `.git`: registro, `--integrated`, postmerge medido |
 | [`references/contexto.md`](references/contexto.md) | varias raices de grafo, el parte de `refrescar`, algo del contexto no cuadra |
 | [`references/lecciones-del-arnes.md`](references/lecciones-del-arnes.md) | **antes de tocar o escribir un gate** |
+| [`references/arquitectura-heredada.md`](references/arquitectura-heredada.md) | proyecto con mucho código anterior al arnés: trinquete, base, cuota de normalización, `arquitectura.py` |
 | [`references/hosts.md`](references/hosts.md) | raíces de skills y creación de lecciones por host |
 | [`references/hub.md`](references/hub.md) | esquema del hub, `derivar-graphify`, credenciales |
 | [`references/obsidian.md`](references/obsidian.md) | que genera el vault, config sembrada, `--con-grafo` |

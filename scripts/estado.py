@@ -64,6 +64,13 @@ def main() -> None:
             print("   stacks: " + ", ".join(partes_st))
     except Exception as exc:
         pass
+    try:
+        import arquitectura
+        linea_arq = arquitectura.resumen(p, data)
+        if linea_arq:
+            print(f"   arquitectura: {linea_arq}")
+    except (Exception, SystemExit) as exc:
+        print(f"   arquitectura: [!] no se pudo evaluar: {exc}")
     faltan_docs: list[str] = []
     try:
         import producto

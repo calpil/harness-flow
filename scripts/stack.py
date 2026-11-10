@@ -1445,7 +1445,10 @@ def auto_normalizar_y_asegurar_cumplimiento(
                 f"{target_path.name} [{stack_id}]: {err}" for err in diag["architecture_errors"]
             ])
 
-            if data is not None and p_paths is not None:
+            # Con el trinquete adoptado (arquitectura.py) lo heredado se mide y solo baja:
+            # no se crea la #0 ni se bloquea el backlog entero.
+            if (data is not None and p_paths is not None
+                    and not (p_paths["harness"] / "arquitectura-base.json").is_file()):
                 feats = data.get("features", [])
                 f0 = next((x for x in feats if str(x.get("id")) == "0"), None)
 
