@@ -167,6 +167,8 @@ class ComponentesTests(unittest.TestCase):
         """
         for md in sorted((RAIZ / "commands").glob("*.md")):
             texto = md.read_text(encoding="utf-8")
+            if "```bash" not in texto:
+                continue  # sin llamadas de shell (usar-opus, usar-fable) no hay forma que documentar
             with self.subTest(comando=md.name):
                 self.assertIn("--powershell", texto)
                 self.assertIn("Invoke-Expression", texto)

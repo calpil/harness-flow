@@ -43,13 +43,20 @@ eval "$(python3 "${CLAUDE_PLUGIN_ROOT}/scripts/entorno.py" --shell)" && "$PY" "$
 Despues compara lo elegido con TU sesion. Tu modelo es el que dice tu system
 prompt; el esfuerzo de la sesion lo imprime el script.
 
-- **Coinciden**: sigue con el paso 1.
-- **No coinciden**: DETENTE. Un comando no puede cambiar el modelo de la
-  sesion: solo el usuario, con `/model`. Dile que escriba `/model fable` o
-  `/model opus` (y `/effort <nivel>` si el script lo pide) y que vuelva a
-  invocar este comando. No sigas el rol en otro modelo.
-- **Sin usuario a quien preguntar** (`claude -p`): usa lo ya elegido; si no hay
-  nada elegido, sigue con el modelo de la sesion y dilo en una linea.
+- **Coinciden modelo y esfuerzo**: sigue con el paso 1.
+- **No coincide alguno**: aplica la eleccion tu mismo, sin pedirle nada al
+  usuario. Invoca con la tool `Skill` el comando `harness-flow:usar-opus` o
+  `harness-flow:usar-fable`: fija ese modelo y su esfuerzo para el resto de
+  este turno. Dilo en una linea (`Leader: Opus 5.5 / xhigh, elegido por el
+  usuario`) y sigue con el paso 1. NO le pidas `/model` ni `/effort`.
+- **El comando no se aplico** (tras invocarlo tu system prompt sigue en otro
+  modelo, o tu host no tiene la tool `Skill`): entonces si DETENTE y pide al
+  usuario `/model fable` u `/model opus` y que vuelva a invocar este comando.
+  No sigas el rol en otro modelo sin decirlo.
+- **Sin usuario a quien preguntar** (`claude -p`): ahi el comando de fijar
+  modelo no se aplica. Usa lo ya elegido solo para decirlo: sigue con el modelo
+  de la sesion y avisa en una linea si no es el elegido. Quien lanza la sesion
+  fija el modelo con `--model` y `--effort`.
 
 Por que no va fijo en el frontmatter y que hacen los demas roles:
 `${CLAUDE_PLUGIN_ROOT}/references/modelos.md` ("Fable 5.2 u Opus 5.5").

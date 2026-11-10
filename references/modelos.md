@@ -155,15 +155,29 @@ Por que hay que preguntar y no basta el frontmatter:
 - El `model` de un comando es fijo. Con `claude-opus-5-5` escrito ahi, invocar
   `/harness-flow:spec` pasaba el turno a Opus aunque la sesion estuviera en
   Fable. Por eso `producto.md` y `spec.md` van en `model: inherit`, sin `effort`.
-- Ningun comando puede cambiar el modelo de la sesion: solo el usuario, con
-  `/model`. Si lo elegido no coincide con la sesion, el rol se DETIENE y pide
-  `/model fable` u `/model opus` (y `/effort <nivel>`), y que se vuelva a
-  invocar. No sigue en otro modelo.
+- Si lo elegido no coincide con la sesion, el rol lo aplica solo: invoca
+  `/harness-flow:usar-opus` o `/harness-flow:usar-fable`, dos comandos que
+  solo fijan modelo y esfuerzo en su frontmatter. Eso vale para el resto del
+  turno; el usuario no escribe `/model` ni `/effort`. Al siguiente mensaje del
+  usuario la sesion vuelve a su modelo: si el rol sigue redactando, vuelve a
+  invocarlo; para sellar con el gate no hace falta. Es lo mismo que hacia el
+  `model` fijo de antes, que tambien valia solo para el turno de la invocacion.
+- Cambiar de modelo a mitad de sesion relee el contexto sin cache (la cache es
+  por modelo). Con la sesion ya en el modelo elegido no se invoca nada.
+- Si el comando no se aplica, el rol se DETIENE y pide `/model`. No sigue en
+  otro modelo sin decirlo.
 - El modelo de la sesion lo sabe el propio agente por su system prompt; el
   esfuerzo lo lee `modelo.py` de `CLAUDE_EFFORT`. Si esa variable no esta, el
   script lo dice en vez de afirmar que coincide.
-- Sin usuario a quien preguntar (`claude -p`): vale lo ya elegido; si no hay
-  nada, el rol sigue con el modelo de la sesion y lo dice.
+- Sin usuario a quien preguntar (`claude -p`): ahi invocar el comando NO
+  cambia el modelo. Quien lanza la sesion lo fija con `--model` y `--effort`;
+  el rol sigue con el de la sesion y avisa si no es el elegido.
+
+Comprobado el 2026-11-10 con Claude Code 2.1.321. En una sesion interactiva en
+Fable 5.2, invocar con la tool `Skill` un comando con `model: claude-opus-5-5`
+paso el resto del turno a Opus 5.5 y el turno siguiente volvio a Fable. En
+`claude -p`, la misma invocacion dejo todos los mensajes en `claude-fable-5-2`
+(`modelUsage` y el `model` de cada mensaje del stream).
 
 Cierre y Revisor siguen en Opus 5.5, y el Implementer en Sonnet 5.5: fue la
 decision del usuario al agregar Fable, y Revisor y Cierre conservan `xhigh`.

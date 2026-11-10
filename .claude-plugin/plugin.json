@@ -25,7 +25,9 @@
     "./commands/spec.md",
     "./commands/implementar.md",
     "./commands/review.md",
-    "./commands/cierre.md"
+    "./commands/cierre.md",
+    "./commands/usar-opus.md",
+    "./commands/usar-fable.md"
   ],
   "agents": [
     "./agents/revisor.md",

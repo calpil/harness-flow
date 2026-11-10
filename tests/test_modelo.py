@@ -82,8 +82,7 @@ class ScriptTests(unittest.TestCase):
     def test_dice_si_el_esfuerzo_de_la_sesion_coincide(self):
         self.assertIn("(coincide)", self.modelo("elegir", "--feature", "7", "--modelo", "fable").stdout)
         mal = self.modelo("elegir", "--feature", "7", "--modelo", "opus").stdout   # sesion en high
-        self.assertIn("NO coincide", mal)
-        self.assertIn("/effort xhigh", mal)
+        self.assertIn("NO coincide con xhigh", mal)
 
     def test_xhigh_con_fable_no_es_un_error_pero_se_avisa(self):
         salida = self.modelo("elegir", "--feature", "7", "--modelo", "fable", effort="xhigh").stdout
@@ -96,10 +95,14 @@ class ScriptTests(unittest.TestCase):
         self.assertNotIn("(coincide)", salida)
         self.assertIn("no se pudo leer", salida)
 
-    def test_pide_detenerse_y_usar_model_si_la_sesion_es_otra(self):
-        salida = self.modelo("elegir", "--feature", "7", "--modelo", "fable").stdout
-        self.assertIn("DETENTE", salida)
-        self.assertIn("/model fable", salida)
+    def test_manda_a_aplicar_la_eleccion_y_no_a_pedirsela_al_usuario(self):
+        """Si elige Opus, Opus va en xhigh: no hay nada mas que preguntarle."""
+        for alias in ("fable", "opus"):
+            salida = self.modelo("elegir", "--feature", "7", "--modelo", alias).stdout
+            with self.subTest(modelo=alias):
+                self.assertIn(f"/harness-flow:usar-{alias}", salida)
+                self.assertIn("no le pidas /model ni /effort", salida)
+                self.assertNotIn("DETENTE", salida)
 
     def test_el_rol_producto_elige_por_documento(self):
         self.assertEqual(3, self.modelo("ver", "--doc", "prd").returncode)
@@ -144,22 +147,41 @@ class ComandosTests(unittest.TestCase):
                 self.assertLess(texto.index("## 0. Modelo del rol"), texto.index("## 1. "),
                                 "se elige antes de empezar el rol")
 
-    def test_si_la_sesion_no_coincide_el_rol_se_detiene(self):
+    def test_si_la_sesion_no_coincide_el_rol_aplica_la_eleccion_solo(self):
+        """Elegir Opus no puede terminar en "escribe /model opus y /effort xhigh"."""
         for nombre in self.ELIGEN:
             texto = (RAIZ / "commands" / nombre).read_text(encoding="utf-8")
             with self.subTest(comando=nombre):
-                self.assertIn("DETENTE", texto)
-                self.assertIn("/model fable", texto)
-                self.assertIn("No sigas el rol en otro modelo", texto)
+                self.assertIn("harness-flow:usar-opus", texto)
+                self.assertIn("harness-flow:usar-fable", texto)
+                self.assertIn("NO le pidas `/model` ni `/effort`", texto)
+                aplica, detiene = texto.index("aplica la eleccion tu mismo"), texto.index("DETENTE")
+                self.assertLess(aplica, detiene, "detenerse es solo si no se pudo aplicar")
+
+    def test_los_comandos_que_fijan_modelo_traen_el_modelo_y_el_esfuerzo_de_la_eleccion(self):
+        esperado = {"usar-opus.md": ("claude-opus-5-5", "xhigh"), "usar-fable.md": ("claude-fable-5-2", "high")}
+        for nombre, (modelo, effort) in esperado.items():
+            fm = frontmatter(RAIZ / "commands" / nombre)
+            with self.subTest(comando=nombre):
+                self.assertEqual(modelo, fm.get("model", "").strip())
+                self.assertEqual(effort, fm.get("effort", "").strip())
+                self.assertNotIn("user-invocable", fm, "debe comportarse como los comandos ya probados")
+
+    def test_los_comandos_que_fijan_modelo_estan_declarados_en_el_plugin(self):
+        manifiesto = json.loads((RAIZ / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8"))
+        for nombre in ("usar-opus.md", "usar-fable.md"):
+            self.assertIn(f"./commands/{nombre}", manifiesto["commands"])
 
     def test_los_demas_roles_siguen_fijos(self):
         """Decision del usuario: solo eligen Producto y Leader."""
         esperado = {"cierre.md": "claude-opus-5-5", "review.md": "claude-opus-5-5",
                     "implementar.md": "claude-opus-5-5", "estado.md": "claude-haiku-5-5"}
         for nombre, modelo in esperado.items():
+            texto = (RAIZ / "commands" / nombre).read_text(encoding="utf-8")
             with self.subTest(comando=nombre):
                 self.assertEqual(modelo, frontmatter(RAIZ / "commands" / nombre).get("model", "").strip())
-                self.assertNotIn("modelo.py", (RAIZ / "commands" / nombre).read_text(encoding="utf-8"))
+                self.assertNotIn("modelo.py", texto)
+                self.assertNotIn("usar-fable", texto)
         self.assertEqual("claude-opus-5-5", frontmatter(RAIZ / "agents" / "revisor.md")["model"].strip())
         self.assertEqual("claude-sonnet-5-5", frontmatter(RAIZ / "agents" / "implementer.md")["model"].strip())
 

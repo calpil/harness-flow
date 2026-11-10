@@ -11,8 +11,9 @@ y los turnos siguientes de ese rol lo reutilizan en vez de volver a preguntar.
 Por que un script y no una linea en el comando: el `model` del frontmatter de
 un comando es fijo, y ningun comando puede cambiar el modelo de la sesion; solo
 el usuario, con /model. Aqui se guarda lo que eligio y se dice con que modelo y
-esfuerzo tiene que estar la sesion; si no coincide, el rol se detiene y se lo
-pide. Los demas roles no pasan por aqui: Cierre y Revisor van en Opus 5.5 y el
+esfuerzo tiene que correr el rol; si la sesion no coincide, el rol lo aplica por
+el turno con /harness-flow:usar-opus o usar-fable, sin pedirle nada al usuario.
+Los demas roles no pasan por aqui: Cierre y Revisor van en Opus 5.5 y el
 Implementer en Sonnet 5.5 (references/modelos.md).
 """
 from __future__ import annotations
@@ -66,9 +67,10 @@ def _instrucciones(alias: str) -> list[str]:
         lineas.append("esfuerzo de la sesion: xhigh (solo se justifica ante un riesgo concreto; "
                       "si no lo hay, pide /effort high)")
     else:
-        lineas.append(f"esfuerzo de la sesion: {sesion} (NO coincide: pide /effort {m['effort']})")
-    lineas.append(f"si la sesion no esta en {m['nombre']}: DETENTE y pide al usuario `/model {alias}`"
-                  f" (y `/effort {m['effort']}` si hace falta), y que vuelva a invocar el comando")
+        lineas.append(f"esfuerzo de la sesion: {sesion} (NO coincide con {m['effort']})")
+    lineas.append(f"si la sesion no esta en {m['nombre']} con esfuerzo {m['effort']}: aplicalo tu, "
+                  f"invocando /harness-flow:usar-{alias} (fija modelo y esfuerzo por este turno); "
+                  "no le pidas /model ni /effort al usuario")
     return lineas
 
 
