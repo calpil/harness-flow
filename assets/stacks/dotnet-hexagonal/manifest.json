@@ -101,6 +101,28 @@
     "test_command": "dotnet test",
     "skills_validator": "node assets/stacks/dotnet-hexagonal/scripts/validate-agent-skills.mjs"
   },
+  "layout": {
+    "codigo": [
+      "**/*.cs"
+    ],
+    "excluir": [
+      "tests/**",
+      "**/*Tests/**",
+      "**/bin/**",
+      "**/obj/**"
+    ],
+    "normalizado": [
+      "src/*.Domain/**",
+      "src/*.Application/**",
+      "src/*.Infrastructure/**",
+      "src/*.WebApi/**",
+      "src/Domain/**",
+      "src/Application/**",
+      "src/Infrastructure/**",
+      "src/WebApi/**",
+      "src/Program.cs"
+    ]
+  },
   "documentation": {
     "official_docs": "https://learn.microsoft.com/en-us/dotnet/",
     "security_advisories": "https://github.com/dotnet/announcements/issues?q=is%3Aissue+label%3ASecurity",

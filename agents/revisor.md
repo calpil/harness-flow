@@ -62,12 +62,14 @@ evidencia y el codigo tu mismo.
   valor esperado copiando la misma logica que el codigo de produccion, o solo mide
   mocks internos sin comprobar el efecto en la costura declarada), ese AC es
   `falla`.
-- **Auditoria de limites de arquitectura del stack.** Si el briefing indica un stack
-  normativo (Golang Hexagonal o Angular Product), verifica rigurosamente los limites
-  de capas en el diff. Cualquier infraccion (ej. domain Go importando frameworks/SQL,
-  domain Angular importando `@angular`, application Go importando adapters, UI Angular
-  importando `data-access` directo, o tests deterministas usando `time.Sleep`) DEBE
-  ser clasificada como hallazgo **bloqueante** o **mayor**.
+- **Auditoria de limites de arquitectura del stack.** El briefing anuncia la normativa de
+  CADA stack que la feature toca, con los repos donde aplica. Vale para cualquier stack:
+  lee las reglas de ese stack en el repo (`.claude/rules/`, `.agents/rules/` o
+  `.gemini/rules/`) y verifica rigurosamente los limites de capas en el diff. Cualquier
+  infraccion (dominio que importa frameworks, transporte o persistencia; aplicacion que
+  importa adaptadores; presentacion que salta los puertos; tests que duermen el hilo)
+  DEBE ser clasificada como hallazgo **bloqueante** o **mayor**. No juzgues un repo con
+  las reglas del stack de otro.
 - **Auditoria de versiones y seguridad (Context7 / Oficial).** Verifica que el diff no
   introduzca dependencias desactualizadas con vulnerabilidades conocidas (CVEs) ni
   utilice APIs marcadas como `@deprecated`. Contrasta librerías o APIs nuevas contra

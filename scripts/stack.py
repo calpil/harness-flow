@@ -209,15 +209,30 @@ def detectar_todos_los_destinos(root: Path) -> list[dict[str, Any]]:
     return resultados
 
 
-_MARCAS_DE_REPO = ("go.mod", "angular.json", "package.json", ".git")
+def _marcas_de_repo() -> list[str]:
+    """Archivos que delatan un repo: `.git` y los `files_any` de TODOS los stacks.
+
+    Antes era una lista fija (go.mod, angular.json, package.json): un servicio
+    Rust, .NET o Python dentro de una carpeta de microservicios no se veia.
+    """
+    marcas = {".git", "package.json"}
+    for manifest in listar_stacks_disponibles():
+        marcas.update(x for x in manifest.get("detection", {}).get("files_any", []) if isinstance(x, str))
+    return sorted(marcas)
 
 
 def _subrepos(carpeta: Path) -> list[Path]:
-    """Subdirectorios inmediatos que son un repo o traen marcadores de stack."""
+    """Subdirectorios inmediatos que son un repo o traen marcadores de algun stack."""
+    marcas = _marcas_de_repo()
+
+    def es_repo(item: Path) -> bool:
+        return any(next(item.glob(m), None) is not None if "*" in m else (item / m).exists()
+                   for m in marcas)
+
     return sorted(
         item for item in carpeta.iterdir()
         if item.is_dir() and not item.name.startswith((".", "harness", "docs", "graphify"))
-        and any((item / marca).exists() for marca in _MARCAS_DE_REPO)
+        and es_repo(item)
     )
 
 

@@ -1094,6 +1094,87 @@ def _relacionados(p: dict, data: dict, f: dict, micros: list[str],
     return L
 
 
+def _repos_de_la_feature(p: dict, f: dict, micros: list[str]) -> tuple[list[tuple[str, Path]], list[str]]:
+    """([(nombre, ruta)], microservicios sin repo localizable). El primero es el arbol de la feature."""
+    import stack
+    raiz = p["root"]
+    principal = raiz
+    wt = f.get("worktree")
+    if wt and (raiz / wt).exists():
+        principal = raiz / wt
+    repos: list[tuple[str, Path]] = [(principal.name, principal.resolve())]
+
+    def agregar(nombre: str, ruta: Path) -> None:
+        ruta = ruta.resolve()
+        if ruta.is_dir() and all(ruta != r for _, r in repos):
+            repos.append((nombre, ruta))
+
+    for fila in (f.get("multi_repo") or {}).get("repos", []):
+        arbol = Path(str(fila.get("worktree") or fila.get("repo") or ""))
+        if str(arbol) not in ("", "."):
+            agregar(str(fila.get("microservicio") or arbol.name), arbol)
+    # Los microservicios se declaran por nombre: se buscan entre los repos del proyecto
+    # (raices de harness/grafos.json incluidas), que pueden vivir fuera de la raiz.
+    por_nombre = {Path(d["path"]).name: Path(d["path"]) for d in stack.detectar_todos_los_destinos(raiz)}
+    sin_repo = []
+    for m in micros:
+        nombre = m.split("/")[-1]
+        ruta = por_nombre.get(nombre) or (raiz / nombre if (raiz / nombre).is_dir() else None)
+        if ruta is None:
+            sin_repo.append(m)
+        elif ruta.resolve() != raiz.resolve() or principal == raiz:
+            agregar(nombre, ruta)
+    return repos, sin_repo
+
+
+def _lineas_stack(p: dict, data: dict, f: dict, micros: list[str]) -> list[str]:
+    import stack
+    repos, sin_repo = _repos_de_la_feature(p, f, micros)
+    L: list[str] = []
+    vistos: set[str] = set()
+    otros: list[str] = []
+    detectados = [(nombre, ruta, stack.detectar_stack_directorio(ruta)) for nombre, ruta in repos]
+    normativos = [x for x in detectados if x[2]["stack"] != "generico"]
+    for i, (nombre, ruta, det) in enumerate(normativos):
+        sid = det["stack"]
+        normativa = stack.cargar_manifest(sid).get("normative", {})
+        reglas = normativa.get("rules", [])
+        excluidas = stack.skills_excluidas(data.get("rules"), sid)
+        skills = [x for x in normativa.get("skills", []) if x not in excluidas]
+        if i == 0:
+            L.append("")
+            # El primero con stack normativo: el arbol de la feature o, si la raiz
+            # no tiene stack propio, el primer microservicio que si lo tiene.
+            donde = "" if ruta == repos[0][1] else f" · en {nombre}"
+            L.append(f"stack detectado: {det['name']} ({sid}, confianza {det['confidence']}%){donde}")
+            L.append("modo pair interactivo: ACTIVADO AUTOMÁTICAMENTE por normativa de stack")
+            if reglas:
+                L.append("reglas del stack: " + ", ".join(reglas))
+            if skills:
+                L.append("skills del stack: " + ", ".join(skills[:6]) + ("..." if len(skills) > 6 else ""))
+            vistos.add(sid)
+            continue
+        otros.append(f"  {nombre}: {det['name']} ({sid}) · {ruta}")
+        if sid in vistos:
+            otros.append(f"      mismas reglas y skills de {sid} que arriba")
+        else:
+            vistos.add(sid)
+            if reglas:
+                otros.append("      reglas: " + ", ".join(reglas))
+            if skills:
+                otros.append("      skills: " + ", ".join(skills[:12]) + (f"... ({len(skills)})" if len(skills) > 12 else ""))
+        if not any((ruta / d / "rules").is_dir() for d in (".claude", ".agents", ".gemini")):
+            otros.append(f"      [!] reglas y skills del stack NO instaladas en ese repo: stack.py normalizar --repo {ruta}")
+    if otros:
+        L.append("")
+        L.append("otros repos de la feature con stack normativo (cada uno con SUS reglas y skills):")
+        L += otros
+    if sin_repo:
+        L.append(f"[i] microservicios declarados sin repo localizable: {', '.join(sin_repo)} "
+                 "(su stack NO se detecto)")
+    return L
+
+
 def cmd_brief(args) -> None:
     p = paths()
     data = load_backlog(p)
@@ -1140,32 +1221,13 @@ def cmd_brief(args) -> None:
     L.append("rutas protegidas (NO editar): " +
              ", ".join(data["rules"].get("rutas_protegidas", [])))
 
-    # Deteccion de stack y normativa tecnologica (CALPIL)
+    # Stack y normativa de CADA repo que la feature declara. Antes se detectaba uno
+    # solo (el arbol de la feature): en un proyecto con el front en la raiz y los
+    # servicios fuera de ella, el brief anunciaba un stack y callaba los demas.
     try:
-        import stack
-        target_dir = p["root"]
-        if f.get("worktree") and (p["root"] / f["worktree"]).exists():
-            target_dir = p["root"] / f["worktree"]
-        elif micros:
-            for m in micros:
-                cand = p["root"] / m.split("/")[-1]
-                if cand.exists():
-                    target_dir = cand
-                    break
-        det_stack = stack.detectar_stack_directorio(target_dir)
-        if det_stack["stack"] != "generico":
-            L.append("")
-            L.append(f"stack detectado: {det_stack['name']} ({det_stack['stack']}, confianza {det_stack['confidence']}%)")
-            L.append("modo pair interactivo: ACTIVADO AUTOMÁTICAMENTE por normativa de stack")
-            manifest_st = stack.cargar_manifest(det_stack["stack"])
-            st_rules = manifest_st.get("normative", {}).get("rules", [])
-            st_skills = manifest_st.get("normative", {}).get("skills", [])
-            if st_rules:
-                L.append("reglas del stack: " + ", ".join(st_rules))
-            if st_skills:
-                L.append("skills del stack: " + ", ".join(st_skills[:6]) + ("..." if len(st_skills) > 6 else ""))
-    except Exception:
-        pass
+        L += _lineas_stack(p, data, f, micros)
+    except Exception as exc:
+        L.append(f"[!] no se pudo detectar el stack de la feature: {exc}")
 
     # Lo que el PRD/SDD dice de esta feature; el revisor no lo recibe por la
     # misma razon que no recibe los relacionados.

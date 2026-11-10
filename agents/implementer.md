@@ -91,7 +91,17 @@ detente; no los busques ni los inventes.
        - Despliegue independiente: ante cambios de contrato, aplica Expand-Contract para no romper a consumidores existentes.
      - Separa los commits funcionales (`feat:`/`fix:`) de los de refactor puro (`refactor:`). Los tests existentes NO se modifican durante el refactor.
 - **Cumplimiento estricto de la normativa del stack tecnológico:**
-  Si el brief indica un stack normativo (ej. Golang Hexagonal o Angular Product):
+  El brief anuncia el stack de CADA repo de la feature, con sus reglas y sus skills. Vale para
+  cualquier stack, no solo para los de los ejemplos de abajo:
+  - Antes de escribir en un repo, lee las reglas de SU stack, instaladas en ese repo
+    (`.claude/rules/`, `.agents/rules/` o `.gemini/rules/`: `architecture.md`, `dependencies.md`,
+    `security.md`, `testing.md`). Esas reglas mandan sobre cualquier ejemplo de este archivo.
+  - Usa las skills del stack instaladas en ese repo (`.claude/skills/` o `.agents/skills/`) para
+    la tarea que corresponda (`add-feature`, `write-tests`, `architecture-review`...).
+  - Si el brief avisa que las reglas y skills NO están instaladas en un repo, o que un
+    microservicio declarado no tiene repo localizable, dilo y detente: no adivines la norma.
+  - Un repo con otro stack se rige por sus propias reglas: no apliques las de un stack a otro.
+  Dos ejemplos de lo que esas reglas fijan:
   - **Golang Hexagonal:**
     - Capa `domain/` (`internal/*/domain/**`): Go estándar puro. PROHIBIDO importar `net/http`, `chi`, `pgx`, `sql`, frameworks.
     - Capa `application/`: solo depende de domain y puertos propios (`ports/in.go`, `ports/out.go`). Nunca importa adaptadores.

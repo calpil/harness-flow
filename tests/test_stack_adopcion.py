@@ -210,6 +210,20 @@ class DestinosDeGrafosTests(Base):
         rutas = {Path(d["path"]) for d in stack.detectar_todos_los_destinos(front)}
         self.assertEqual({micros / "ms-pagos"}, rutas)
 
+    def test_los_microservicios_de_cualquier_stack_se_ven(self):
+        """La lista de marcadores era fija (go.mod, angular.json, package.json): un
+        servicio Rust, .NET o Python dentro de la carpeta no se detectaba."""
+        front, micros = self._proyecto(lambda m: [{"nombre": "micros", "path": str(m)}])
+        escribir(micros / "ms-motor" / "Cargo.toml", "[package]\nname = 'ms-motor'\n")
+        escribir(micros / "ms-motor" / "src" / "main.rs", "fn main() {}\n")
+        escribir(micros / "ms-datos" / "pyproject.toml",
+                 "[project]\nname = 'ms-datos'\ndependencies = ['fastapi', 'polars']\n")
+        escribir(micros / "ms-legado" / "Legado.sln", "Microsoft Visual Studio Solution File\n")
+        por_ruta = {Path(d["path"]): d["stack"] for d in stack.detectar_todos_los_destinos(front)}
+        self.assertEqual("rust-hexagonal", por_ruta[micros / "ms-motor"])
+        self.assertEqual("python-dataproduct", por_ruta[micros / "ms-datos"])
+        self.assertIn(micros / "ms-legado", por_ruta, "un marcador con comodin (*.sln) tambien cuenta")
+
     def test_una_raiz_no_se_repite(self):
         front, micros = self._proyecto(lambda m: [
             {"path": str(m)}, {"path": str(m / "ms-pagos")}])

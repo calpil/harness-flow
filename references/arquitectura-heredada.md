@@ -29,6 +29,11 @@ Se agrupan en **unidades**: el directorio del archivo, o el modulo si el stack
 declara `unidad_tras`. En los patrones `*` no cruza `/` y `**/` cruza cero o mas
 directorios. Un stack sin `layout` no se mide, y los comandos lo dicen.
 
+Los diez stacks del catalogo declaran su `layout`, y la plantilla oficial de cada
+uno mide cero codigo heredado: la plantilla ES la norma, asi que un layout que la
+marcara como heredada estaria mal. Un stack nuevo necesita su bloque `layout`
+para entrar al trinquete; sin el, sus repos quedan fuera de la base.
+
 ## Adoptarlo
 
 ```bash

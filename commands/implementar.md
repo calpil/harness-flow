@@ -10,7 +10,7 @@ effort: xhigh
 Implementa la feature `$ARGUMENTS[0]`. Argumentos recibidos: `$ARGUMENTS` (si
 incluyen `--pair`, aplica el modo Pair de la seccion 5b).
 
-**Activación Automática de Modo Pair en Stacks Tecnológicos (Angular / Golang / .NET / Stacks Normativos):**
+**Activación Automática de Modo Pair en cualquier stack normativo:**
 Si el brief (`contexto.py brief`) detecta un stack tecnológico normativo (ej. Golang Hexagonal, Angular Product, .NET Hexagonal), o si el usuario pasa `--pair` o pide modo pair, **el modo Pair interactivo se activa de forma automática**. En este modo no se delega a ciegas a un subagente sin visibilidad: tú ejecutas como **Driver** en el worktree y el usuario actúa como **Navigator**.
 
 **Protocolo de Intervención con Preguntas de Formulario:**

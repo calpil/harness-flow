@@ -58,5 +58,28 @@
   },
   "runners": {
     "test_command": "pytest -q"
+  },
+  "layout": {
+    "codigo": [
+      "src/**/*.py"
+    ],
+    "excluir": [
+      "**/tests/**",
+      "**/test_*.py",
+      "**/conftest.py"
+    ],
+    "normalizado": [
+      "src/**/domain/**",
+      "src/**/application/**",
+      "src/**/adapters/**",
+      "src/**/sources/**",
+      "src/**/transformations/**",
+      "src/**/ports/**",
+      "src/**/main.py",
+      "src/**/app.py",
+      "src/**/__init__.py",
+      "src/**/platform/**",
+      "src/**/server.py"
+    ]
   }
 }

@@ -100,7 +100,101 @@ class LayoutTests(unittest.TestCase):
         self.assertFalse(lay.en_alcance("projects/shared-ui/src/lib/boton.ts"))
 
     def test_un_stack_sin_layout_no_se_puede_medir(self):
-        self.assertIsNone(arquitectura.layout_de("python-dataproduct"))
+        """Un stack nuevo que aun no declara su norma: no se mide, y no pasa por verde."""
+        original = stack.cargar_manifest
+        stack.cargar_manifest = lambda sid: {"id": sid, "name": "Stack sin layout"}
+        try:
+            self.assertIsNone(arquitectura.layout_de("stack-nuevo"))
+        finally:
+            stack.cargar_manifest = original
+
+
+PLANTILLAS = Path("/Users/alan/Documents/Git/CALPIL")
+# stack -> (plantilla, rutas heredadas, rutas dentro de la norma, rutas fuera del alcance)
+STACKS = {
+    "golang-hexagonal": ("calpil-golang-hexagonal-template",
+                         ["handlers/pago.go", "main.go"],
+                         ["internal/pagos/domain/pago.go", "cmd/server/main.go"],
+                         ["handlers/pago_test.go"]),
+    "angular-product": ("calpil-angular-product-template",
+                        ["src/app/features/pagos/lista/lista.component.ts", "src/app/pages/home.ts"],
+                        ["src/app/features/pagos/ui/lista.component.ts", "src/app/app.routes.ts"],
+                        ["src/app/features/pagos/lista.spec.ts"]),
+    "dotnet-hexagonal": ("calpil-dotnet-hexagonal-template",
+                         ["src/Services/PagoService.cs", "Controllers/PagosController.cs"],
+                         ["src/Acme.Pagos.Domain/Pago.cs", "src/Acme.Pagos.WebApi/Program.cs"],
+                         ["tests/Acme.Pagos.Tests/PagoTests.cs"]),
+    "rust-hexagonal": ("calpil-rust-hexagonal-template",
+                       ["src/handlers/pagos.rs", "crates/utils/src/lib.rs"],
+                       ["crates/domain/src/pago.rs", "src/main.rs"],
+                       ["tests/api.rs"]),
+    "nextjs-product": ("calpil-nextjs-product-template",
+                       ["src/features/pagos/PagoList.tsx", "src/utils/fechas.ts"],
+                       ["src/features/pagos/ui/PagoList.tsx", "src/app/page.tsx"],
+                       ["src/features/pagos/ui/PagoList.test.tsx"]),
+    "springboot-hexagonal": ("calpil-springboot-hexagonal-template",
+                             ["src/main/java/cl/acme/pagos/PagoService.java",
+                              "src/main/java/cl/acme/pagos/service/PagoService.java"],
+                             ["src/main/java/cl/acme/pagos/domain/Pago.java",
+                              "src/main/java/cl/acme/pagos/adapter/in/web/PagoController.java",
+                              "src/main/java/cl/acme/AcmeApplication.java"],
+                             ["src/test/java/cl/acme/pagos/PagoTest.java"]),
+    "nestjs-hexagonal": ("calpil-nestjs-hexagonal-template",
+                         ["src/pagos/pagos.service.ts", "src/pagos/pagos.controller.ts"],
+                         ["src/pagos/domain/pago.ts", "src/pagos/pagos.module.ts", "src/main.ts"],
+                         ["src/pagos/pagos.service.spec.ts"]),
+    "python-dataproduct": ("calpil-python-dataproduct-template",
+                           ["src/acme/utils.py", "src/acme/servicios/pagos.py"],
+                           ["src/acme/domain/pago.py", "src/acme/main.py"],
+                           ["src/acme/tests/test_pago.py"]),
+    "ios-swiftui-clean": ("calpil-ios-swiftui-template",
+                          ["Sources/Helpers/Fechas.swift"],
+                          ["Sources/AcmeDomain/Pago.swift", "Sources/AcmeUI/PagoView.swift"],
+                          ["Tests/AcmeTests/PagoTests.swift"]),
+    "android-compose-clean": ("calpil-android-compose-template",
+                              ["app/src/main/java/cl/acme/pagos/PagoActivity.kt"],
+                              ["app/src/main/java/cl/acme/features/pagos/domain/Pago.kt",
+                               "app/src/main/java/cl/acme/MainActivity.kt"],
+                              ["app/src/test/java/cl/acme/PagoTest.kt"]),
+}
+
+
+class CadaStackTests(unittest.TestCase):
+    """El trinquete vale para cualquier stack: todos declaran su norma, y no es una norma vacia."""
+
+    def test_todos_los_stacks_del_catalogo_declaran_layout(self):
+        ids = sorted(m["id"] for m in stack.listar_stacks_disponibles())
+        self.assertEqual(sorted(STACKS), ids, "un stack nuevo necesita su fila en STACKS")
+        for sid in ids:
+            with self.subTest(stack=sid):
+                self.assertIsNotNone(arquitectura.layout_de(sid), f"{sid} no declara layout")
+
+    def test_el_codigo_fuera_de_la_norma_es_heredado_en_cada_stack(self):
+        for sid, (_, heredadas, normalizadas, fuera) in STACKS.items():
+            lay = arquitectura.layout_de(sid)
+            for ruta in heredadas:
+                with self.subTest(stack=sid, heredada=ruta):
+                    self.assertTrue(lay.heredado(ruta))
+            for ruta in normalizadas:
+                with self.subTest(stack=sid, normalizada=ruta):
+                    self.assertTrue(lay.en_alcance(ruta), "debe contar como codigo")
+                    self.assertFalse(lay.heredado(ruta))
+            for ruta in fuera:
+                with self.subTest(stack=sid, fuera=ruta):
+                    self.assertFalse(lay.en_alcance(ruta))
+
+    def test_la_plantilla_oficial_de_cada_stack_no_tiene_codigo_heredado(self):
+        """La plantilla ES la norma: si el layout la marca como heredada, el layout esta mal."""
+        for sid, (plantilla, *_ ) in STACKS.items():
+            repo = PLANTILLAS / plantilla
+            if not repo.is_dir():
+                continue  # la plantilla no esta en esta maquina
+            with self.subTest(stack=sid):
+                lay = arquitectura.layout_de(sid)
+                rutas = arquitectura.rutas_en_disco(repo)
+                self.assertGreater(sum(1 for r in rutas if lay.en_alcance(r)), 0,
+                                   "el layout no reconoce codigo en la plantilla: no mide nada")
+                self.assertEqual({}, arquitectura.heredados_por_unidad(lay, rutas))
 
 
 class Proyecto(unittest.TestCase):

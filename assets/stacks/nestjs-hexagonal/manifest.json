@@ -61,5 +61,27 @@
   },
   "runners": {
     "test_command": "npm test"
+  },
+  "layout": {
+    "codigo": [
+      "src/**/*.ts"
+    ],
+    "excluir": [
+      "**/*.spec.ts",
+      "**/*.e2e-spec.ts",
+      "**/*.d.ts",
+      "**/node_modules/**"
+    ],
+    "normalizado": [
+      "src/**/domain/**",
+      "src/**/application/**",
+      "src/**/adapter/**",
+      "src/**/infrastructure/**",
+      "src/**/*.module.ts",
+      "src/main.ts",
+      "src/platform/**",
+      "src/bootstrap/**",
+      "src/scripts/**"
+    ]
   }
 }

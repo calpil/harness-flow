@@ -103,5 +103,17 @@
     "command": "swift package audit",
     "advisory_feed": "https://github.com/swiftlang/swift-package-manager",
     "minimum_version": "6.0"
+  },
+  "layout": {
+    "codigo": [
+      "Sources/**/*.swift"
+    ],
+    "excluir": [],
+    "normalizado": [
+      "Sources/*Domain/**",
+      "Sources/*Data/**",
+      "Sources/*UI/**",
+      "Sources/*App/**"
+    ]
   }
 }

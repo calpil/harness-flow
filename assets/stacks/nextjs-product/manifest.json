@@ -85,5 +85,39 @@
   "runners": {
     "test_command": "npm test",
     "skills_validator": "node scripts/validate-agent-skills.mjs"
+  },
+  "layout": {
+    "codigo": [
+      "src/**/*.ts",
+      "src/**/*.tsx",
+      "app/**/*.ts",
+      "app/**/*.tsx"
+    ],
+    "excluir": [
+      "**/*.test.ts",
+      "**/*.test.tsx",
+      "**/*.spec.ts",
+      "**/*.spec.tsx",
+      "**/__tests__/**",
+      "**/*.d.ts",
+      "**/node_modules/**"
+    ],
+    "normalizado": [
+      "src/app/**",
+      "app/**",
+      "src/components/**",
+      "src/server/**",
+      "src/*.ts",
+      "src/features/*/domain/**",
+      "src/features/*/application/**",
+      "src/features/*/infrastructure/**",
+      "src/features/*/ui/**",
+      "src/features/*/index.ts",
+      "src/features/*/demo/**",
+      "src/shared/**",
+      "src/types/**",
+      "src/data/**"
+    ],
+    "unidad_tras": "features"
   }
 }

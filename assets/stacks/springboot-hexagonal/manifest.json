@@ -64,5 +64,20 @@
   "runners": {
     "test_command": "./mvnw test",
     "verify_arch": "./mvnw test -Dtest=*ArchitectureTest"
+  },
+  "layout": {
+    "codigo": [
+      "src/main/java/**/*.java"
+    ],
+    "excluir": [],
+    "normalizado": [
+      "src/main/java/**/domain/**",
+      "src/main/java/**/application/**",
+      "src/main/java/**/adapter/in/**",
+      "src/main/java/**/adapter/out/**",
+      "src/main/java/**/platform/**",
+      "src/main/java/**/configuration/**",
+      "src/main/java/**/*Application.java"
+    ]
   }
 }

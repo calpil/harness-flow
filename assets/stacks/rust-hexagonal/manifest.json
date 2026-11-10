@@ -110,6 +110,28 @@
     "test_command": "cargo test",
     "skills_validator": "node assets/stacks/rust-hexagonal/scripts/validate-agent-skills.mjs"
   },
+  "layout": {
+    "codigo": [
+      "**/*.rs"
+    ],
+    "excluir": [
+      "target/**",
+      "**/tests/**",
+      "**/benches/**"
+    ],
+    "normalizado": [
+      "crates/domain/**",
+      "crates/application/**",
+      "crates/infrastructure/**",
+      "crates/api/**",
+      "src/domain/**",
+      "src/application/**",
+      "src/infrastructure/**",
+      "src/api/**",
+      "src/main.rs",
+      "src/lib.rs"
+    ]
+  },
   "documentation": {
     "official_docs": "https://doc.rust-lang.org/",
     "security_advisories": "https://rustsec.org/advisories/",

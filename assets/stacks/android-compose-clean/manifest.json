@@ -102,5 +102,22 @@
     "command": "./gradlew dependencyCheckAnalyze",
     "advisory_feed": "https://source.android.com/security/bulletin",
     "minimum_version": "2.0.0"
+  },
+  "layout": {
+    "codigo": [
+      "**/src/main/**/*.kt"
+    ],
+    "excluir": [
+      "**/build/**"
+    ],
+    "normalizado": [
+      "**/features/*/domain/**",
+      "**/features/*/data/**",
+      "**/features/*/presentation/**",
+      "**/core/**",
+      "**/*Application.kt",
+      "**/MainActivity.kt"
+    ],
+    "unidad_tras": "features"
   }
 }

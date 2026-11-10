@@ -230,29 +230,42 @@ Reglas:
 - Aplica Code Review pragmático (Gergely Orosz): cero nitpicking de formato o estilo cosmético; enfoca la auditoría en corrección de negocio (ACs cumplidos), casos borde, seguridad y arquitectura; sugerencias van a '## Observaciones' y NO abren otra ronda.
 - No modifiques codigo. Solo lees y escribes {rp.name}.
 """)
-    # Normativa del stack tecnologico (CALPIL)
+    # Normativa de CADA stack que la feature toca: un repo por linea, y las reglas
+    # una vez por stack. Antes se anunciaba solo el del arbol de la feature.
     try:
+        import contexto
         import stack
-        target_path = wt if wt else p["root"]
-        det_st = stack.detectar_stack_directorio(target_path)
-        if det_st["stack"] != "generico":
-            manifest = stack.cargar_manifest(det_st["stack"])
-            constraints = manifest.get("normative", {}).get("architecture_constraints", {})
+        from comun import micros_declarados
+        repos, _ = contexto._repos_de_la_feature(p, f, micros_declarados(f))
+        if wt and all(Path(wt).resolve() != r for _, r in repos):
+            repos.insert(0, (Path(wt).name, Path(wt).resolve()))
+        por_stack: dict[str, list[str]] = {}
+        confianza: dict[str, int] = {}
+        for nombre, ruta in repos:
+            det_st = stack.detectar_stack_directorio(ruta)
+            if det_st["stack"] != "generico":
+                por_stack.setdefault(det_st["stack"], []).append(nombre)
+                confianza.setdefault(det_st["stack"], det_st["confidence"])
+        for sid, nombres in por_stack.items():
+            manifest = stack.cargar_manifest(sid)
+            normativa = manifest.get("normative", {})
             print(f"Normativa de Arquitectura del Stack ({manifest['name']}):\n"
-                  f"- Stack detectado: {det_st['stack']} (confianza: {det_st['confidence']}%)\n"
+                  f"- Stack detectado: {sid} (confianza: {confianza[sid]}%) en: {', '.join(nombres)}\n"
                   "- Reglas arquitectonicas obligatorias que DEBES auditar en el diff:")
-            for ck, cv in constraints.items():
+            for ck, cv in normativa.get("architecture_constraints", {}).items():
                 if isinstance(cv, dict):
                     print(f"  * {ck}: {cv.get('rationale', '')}")
                 else:
                     print(f"  * {ck}: {cv}")
-            print("- AUDITORIA OBLIGATORIA: Cualquier violacion a los limites de capas del stack\n"
-                  "  (ej. domain Go importando transporte/sql/frameworks, domain Angular importando @angular,\n"
-                  "  o bypass de puertos) DEBE clasificarse como hallazgo BLOQUEANTE o MAYOR.")
+            reglas = normativa.get("rules", [])
+            if reglas:
+                print(f"- Reglas completas del stack, instaladas en cada repo (.claude/rules, .agents/rules\n"
+                      f"  o .gemini/rules): {', '.join(reglas)}. Leelas: mandan sobre cualquier ejemplo.")
+            print("- AUDITORIA OBLIGATORIA: Cualquier violacion a los limites de capas de ESTE stack\n"
+                  "  (dominio que importa frameworks, transporte o persistencia; aplicacion que importa\n"
+                  "  adaptadores; bypass de puertos) DEBE clasificarse como hallazgo BLOQUEANTE o MAYOR.")
             doc_cfg = manifest.get("documentation", {})
-            sec_cfg = manifest.get("security_audit", {})
-            context7_cfg = doc_cfg.get("context7", {})
-            lib_id = context7_cfg.get("library_id", "")
+            lib_id = doc_cfg.get("context7", {}).get("library_id", "")
             print("- AUDITORIA DE VERSIONES Y SEGURIDAD: Verifica que no se introduzcan librerias\n"
                   f"  con CVEs conocidos o APIs deprecadas. Valida con Context7 (lib: '{lib_id}') o\n"
                   f"  documentacion oficial ({doc_cfg.get('official_docs', '')}).\n")
