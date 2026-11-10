@@ -278,10 +278,14 @@ def sin_baja(base: dict, medidos_ahora, paquetes_ahora, declarados) -> list[str]
     faltan = [f"{p}::{t}" for p, t in sorted(antes - set(medidos_ahora))
               if not any(len(d) == 2 and d[0] == p and (t == d[1] or t.startswith(d[1] + "/"))
                          for d in declarados)]
-    # Con tests medidos, un paquete ausente ya aparece por sus tests; sin ellos,
-    # no hay baja que lo cubra.
+    # Con tests medidos, un paquete ausente ya aparece por sus tests. Uno que
+    # REGISTRO tests pero ninguno medido (todos skip) bloquea: no hay baja que lo
+    # cubra y es la firma de una suite escondida. Uno sin NINGUN test registrado
+    # en la base (sin archivos de test) puede desaparecer: no pierde cobertura
+    # (p.ej. el paquete raiz de un micro cuyo main pasa a cmd/server).
+    registrados = {r["Package"] for r in base["resultados"]}
     faltan += [f"{pkg} (paquete)" for pkg in sorted(set(base["paquetes"]) - set(paquetes_ahora))
-               if not any(p == pkg for p, _ in antes)]
+               if not any(p == pkg for p, _ in antes) and pkg in registrados]
     return faltan
 
 
