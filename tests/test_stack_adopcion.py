@@ -97,6 +97,143 @@ class GoAdopcionProgresivaTests(Base):
         self.assertIn("Composition Root ausente", r.stderr)
 
 
+class GoHuecosDelVerificadorTests(Base):
+    """Huecos que dejaron pasar dos mayores de una normalizacion real (ms-order-service #160).
+
+    1. Un `application` que importaba un paquete de `internal/platform` que trae net/http
+       y JWT: el verificador solo buscaba '/adapter' en application.
+    2. `time.Sleep` renombrado a un helper `Pausa` (`<-time.After(d)`) en
+       `internal/platform/testsupport`: platform no se medía y la pausa no era Sleep.
+    3. `import alias "x"` / `import _ "x"` de una línea no se leían.
+    """
+
+    def _servicio(self) -> Path:
+        repo = self.tmp / "ms-x"
+        escribir(repo / "go.mod", "module example.com/x\n\ngo 1.21\n")
+        escribir(repo / "cmd" / "server" / "main.go", "package main\nfunc main() {}\n")
+        escribir(repo / "internal" / "pedidos" / "domain" / "pedido.go", "package domain\n")
+        return repo
+
+    def test_alias_de_una_linea_en_domain_es_error(self):
+        repo = self._servicio()
+        escribir(repo / "internal" / "pedidos" / "domain" / "web.go",
+                 'package domain\n\nimport web "net/http"\n\nvar _ = web.StatusOK\n')
+        r = correr(CHECK_GO, repo)
+        self.assertEqual(1, r.returncode, r.stdout)
+        self.assertIn("domain no permite dependencia externa 'net/http'", r.stderr)
+
+    def test_import_en_blanco_de_una_linea_en_application_es_error(self):
+        repo = self._servicio()
+        escribir(repo / "internal" / "pedidos" / "application" / "svc.go",
+                 'package application\n\nimport _ "github.com/jackc/pgx/v5"\n')
+        r = correr(CHECK_GO, repo)
+        self.assertEqual(1, r.returncode, r.stdout)
+        self.assertIn("application no permite dependencia externa 'github.com/jackc/pgx/v5'", r.stderr)
+
+    def test_application_con_net_http_directo_es_error(self):
+        repo = self._servicio()
+        escribir(repo / "internal" / "pedidos" / "application" / "svc.go",
+                 'package application\n\nimport (\n\t"net/http"\n)\n\nvar _ = http.StatusOK\n')
+        r = correr(CHECK_GO, repo)
+        self.assertEqual(1, r.returncode, r.stdout)
+        self.assertIn("application no permite dependencia externa 'net/http'", r.stderr)
+
+    def test_application_que_trae_net_http_por_platform_es_error(self):
+        repo = self._servicio()
+        escribir(repo / "internal" / "platform" / "httpx" / "httpx.go",
+                 'package httpx\n\nimport "net/http"\n\nfunc Rol(r *http.Request) string { return "" }\n')
+        escribir(repo / "internal" / "pedidos" / "application" / "cotizador.go",
+                 'package application\n\nimport "example.com/x/internal/platform/httpx"\n\nvar _ = httpx.Rol\n')
+        r = correr(CHECK_GO, repo)
+        self.assertEqual(1, r.returncode, r.stdout)
+        self.assertIn("internal/pedidos/application: application trae 'net/http' de forma transitiva "
+                      "(por 'example.com/x/internal/platform/httpx')", r.stderr)
+
+    def test_tipo_de_valor_que_implementa_valuer_no_es_persistencia(self):
+        """Falso positivo real: github.com/google/uuid importa database/sql/driver."""
+        repo = self._servicio()
+        escribir(repo / "internal" / "shared" / "ids" / "ids.go",
+                 'package ids\n\nimport "database/sql/driver"\n\n'
+                 'type ID string\n\nfunc (i ID) Value() (driver.Value, error) { return string(i), nil }\n')
+        escribir(repo / "internal" / "pedidos" / "application" / "svc.go",
+                 'package application\n\nimport "example.com/x/internal/shared/ids"\n\nvar _ ids.ID\n')
+        r = correr(CHECK_GO, repo)
+        self.assertEqual(0, r.returncode, r.stderr)
+        self.assertIn("verificada correctamente", r.stdout)
+
+    def test_application_que_trae_database_sql_por_platform_es_error(self):
+        repo = self._servicio()
+        escribir(repo / "internal" / "platform" / "db" / "db.go",
+                 'package db\n\nimport "database/sql"\n\nvar _ *sql.DB\n')
+        escribir(repo / "internal" / "pedidos" / "application" / "svc.go",
+                 'package application\n\nimport "example.com/x/internal/platform/db"\n')
+        r = correr(CHECK_GO, repo)
+        self.assertEqual(1, r.returncode, r.stdout)
+        self.assertIn("application trae 'database/sql' de forma transitiva", r.stderr)
+
+    def test_sleep_en_un_test_de_platform_es_error(self):
+        repo = self._servicio()
+        escribir(repo / "internal" / "platform" / "jwtauth" / "jwks_test.go",
+                 'package jwtauth\n\nimport (\n\t"testing"\n\t"time"\n)\n\n'
+                 'func TestX(t *testing.T) {\n\ttime.Sleep(20 * time.Millisecond)\n}\n')
+        r = correr(CHECK_GO, repo)
+        self.assertEqual(1, r.returncode, r.stdout)
+        self.assertIn("internal/platform/jwtauth/jwks_test.go:9: uso de time.Sleep prohibido", r.stderr)
+
+    def test_pausa_renombrada_en_testsupport_es_error(self):
+        repo = self._servicio()
+        escribir(repo / "internal" / "platform" / "testsupport" / "db.go",
+                 'package testsupport\n\nimport "time"\n\n'
+                 'func Pausa(d time.Duration) {\n\t<-time.After(d)\n}\n')
+        r = correr(CHECK_GO, repo)
+        self.assertEqual(1, r.returncode, r.stdout)
+        self.assertIn("internal/platform/testsupport/db.go:6: '<-time.After(...)' suelto es una pausa fija", r.stderr)
+
+    def test_timeout_en_un_select_no_es_pausa(self):
+        repo = self._servicio()
+        escribir(repo / "internal" / "pedidos" / "domain" / "x_test.go",
+                 'package domain\n\nimport (\n\t"testing"\n\t"time"\n)\n\n'
+                 'func TestX(t *testing.T) {\n\tc := make(chan int, 1)\n\tc <- 1\n\tselect {\n'
+                 '\tcase <-c:\n\tcase <-time.After(time.Second):\n\t\tt.Fatal("timeout")\n\t}\n}\n')
+        r = correr(CHECK_GO, repo)
+        self.assertEqual(0, r.returncode, r.stderr)
+
+    def test_sleep_en_un_test_de_cmd_es_error_con_internal(self):
+        repo = self._servicio()
+        escribir(repo / "cmd" / "server" / "main_test.go",
+                 'package main\n\nimport (\n\t"testing"\n\t"time"\n)\n\n'
+                 'func TestX(t *testing.T) { time.Sleep(time.Millisecond) }\n')
+        r = correr(CHECK_GO, repo)
+        self.assertEqual(1, r.returncode, r.stdout)
+        self.assertIn("cmd/server/main_test.go:8: uso de time.Sleep prohibido", r.stderr)
+
+    def test_sin_internal_las_esperas_siguen_sin_medirse(self):
+        """Adopcion progresiva: un repo legado sin internal/ no empieza a fallar por sus tests."""
+        repo = self.tmp / "ms-legado"
+        escribir(repo / "go.mod", "module example.com/legado\n")
+        escribir(repo / "cmd" / "server" / "main.go", "package main\nfunc main() {}\n")
+        escribir(repo / "handlers" / "h_test.go",
+                 'package handlers\n\nimport (\n\t"testing"\n\t"time"\n)\n\n'
+                 'func TestX(t *testing.T) { time.Sleep(time.Millisecond) }\n')
+        r = correr(CHECK_GO, repo)
+        self.assertEqual(0, r.returncode, r.stderr)
+        self.assertIn("tests deterministas NO se midieron", r.stderr)
+
+    def test_limpio_con_go_mide_lo_transitivo(self):
+        r = correr(CHECK_GO, self._servicio())
+        self.assertEqual(0, r.returncode, r.stderr)
+        self.assertIn("verificada correctamente", r.stdout)
+
+    def test_sin_toolchain_go_el_verde_dice_que_no_midio_lo_transitivo(self):
+        """Un conteo parcial nunca se reporta como total."""
+        r = subprocess.run([sys.executable, str(CHECK_GO), "--repo", str(self._servicio())],
+                           capture_output=True, text=True, timeout=60, env={"PATH": "/usr/bin:/bin"})
+        self.assertEqual(0, r.returncode, r.stderr)
+        self.assertIn("transitivas de domain/application NO medidas (sin toolchain Go", r.stderr)
+        self.assertIn("NO se midieron", r.stdout)
+        self.assertNotIn("verificada correctamente", r.stdout)
+
+
 class AngularWorkspaceTests(Base):
     def _app(self, ws: Path, raiz: str, con_rutas: bool = True, dominio: str = "export const x = 1;\n"):
         base = ws / raiz / "src" / "app"
