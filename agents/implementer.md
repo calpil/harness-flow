@@ -118,7 +118,7 @@ detente; no los busques ni los inventes.
   - **Definir Errores Fuera de la Existencia:** Modela casos límite ordinarios (colecciones vacías, borrado idempotente) como flujos normales de negocio sin lanzar excepciones técnicas innecesarias.
   - **Comentarios de Abstracción Superior:** Documenta contratos, invariantes e intenciones (*what/why*); PROHIBIDO parafrasear la sintaxis del código (*how*).
 - **Actualización con Context7 y Documentación Oficial:**
-  Antes de escribir código o agregar dependencias externas, consulta Context7 (herramientas MCP `resolve-library-id`/`query-docs` o sufijo `'use context7'`) o la documentación oficial mediante búsqueda para verificar sintaxis vigente, APIs no deprecadas y patrones idiomáticos actuales. Corre el escáner de vulnerabilidades del stack (`govulncheck`, `npm audit`, etc.) para asegurar cero vulnerabilidades de severidad crítica/alta.
+  Antes de escribir código o agregar dependencias externas, consulta Context7 (herramientas MCP `resolve-library-id`/`query-docs` o sufijo `'use context7'`) o la documentación oficial mediante búsqueda para verificar sintaxis vigente, APIs no deprecadas y patrones idiomáticos actuales. Si en tu host no hay Context7 ni acceso web, dilo en la evidencia en vez de dar la verificación por hecha (cómo conectarlo por host: `references/context7-documentacion-oficial.md`). Corre el escáner de vulnerabilidades del stack (`govulncheck`, `npm audit`, etc.) para asegurar cero vulnerabilidades de severidad crítica/alta.
 - **Las 5 paradas inmediatas (estilo `/pair` de `hola-ai`):**
   1. **Decision de diseno fuera del plan/spec:** si necesitas decidir algo que el
      spec/SDD no fija, detente y devuelve la pregunta.

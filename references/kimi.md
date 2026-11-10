@@ -20,7 +20,7 @@ desde fuera con `kimi -p "/plugins install <ruta-del-clone>"`.
 Con el plugin habilitado, `agents/revisor.md` y `agents/implementer.md` quedan
 registrados como agentes y la tool `Agent` acepta `subagent_type: "revisor"` e
 `implementer`. El frontmatter de `revisor.md`
-(`model: claude-opus-5-5`, `tools: Read, Grep, Glob, Bash, Write, mcp__codebase-memory-mcp__*`)
+(`model: claude-opus-5-5`, `tools: Read, Grep, Glob, Bash, Write, WebFetch, WebSearch, mcp__codebase-memory-mcp__*, mcp__context7__*, mcp__claude_ai_Context7__*`)
 y de `implementer.md` cargan sin romper: Kimi ignora `model` (campo de Claude Code)
 y acepta `tools` separado por comas.
 

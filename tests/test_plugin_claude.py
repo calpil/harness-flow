@@ -98,6 +98,27 @@ class ComponentesTests(unittest.TestCase):
         self.assertIn("mcp__codebase-memory-mcp__*", tools)
         self.assertNotIn("Edit", tools)
 
+    def test_el_revisor_puede_consultar_context7_y_la_documentacion_oficial(self):
+        """Sus instrucciones le piden contrastar versiones y APIs contra Context7 o la
+        documentacion oficial, y la lista de tools no traia ninguna de las dos: la
+        auditoria que se le exigia no la podia hacer."""
+        tools = [t.strip() for t in frontmatter(RAIZ / "agents" / "revisor.md").get("tools", "").split(",")]
+        for tool in ("WebFetch", "WebSearch", "mcp__context7__*", "mcp__claude_ai_Context7__*"):
+            with self.subTest(tool=tool):
+                self.assertIn(tool, tools)
+        self.assertNotIn("Edit", tools, "consultar no le da permiso para tocar codigo")
+        self.assertNotIn("NotebookEdit", tools)
+
+    def test_context7_explica_como_conectarlo_en_cada_host(self):
+        """Solo explicaba Claude Code y Cursor: en los demas hosts no se podia cumplir."""
+        texto = (RAIZ / "references" / "context7-documentacion-oficial.md").read_text(encoding="utf-8")
+        for host, marca in (("Claude Code", "claude mcp add"), ("Codex", "[mcp_servers.context7]"),
+                            ("Gemini CLI", '"httpUrl"'), ("Antigravity", '"serverUrl"'),
+                            ("Grok", "grok mcp add"), ("Hermes", "mcp_servers:"), ("Kimi", "Kimi Code")):
+            with self.subTest(host=host):
+                self.assertIn(marca, texto)
+        self.assertIn("Cuando Context7 no está conectado", texto)
+
     def test_settings_claude_incluye_permisos_de_venv_y_eval(self):
         """Sin ~/.harness-flow/venv/bin/python y eval en allow, cada comando pide permiso."""
         cfg = json.loads((RAIZ / ".claude" / "settings.json").read_text(encoding="utf-8"))

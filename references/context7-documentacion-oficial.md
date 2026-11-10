@@ -33,7 +33,48 @@ Los modelos de lenguaje (LLMs) tienen fechas de corte de entrenamiento fijas (*k
     }
   }
   ```
-* **AGY / Gemini:** Instalar el plugin `context7` desde el marketplace o usar el endpoint HTTP.
+* **GPT / Codex** (`~/.codex/config.toml`):
+  ```toml
+  [mcp_servers.context7]
+  url = "https://mcp.context7.com/mcp"
+  ```
+* **Gemini CLI** (`~/.gemini/settings.json`, dentro de `mcpServers`):
+  ```json
+  { "context7": { "httpUrl": "https://mcp.context7.com/mcp" } }
+  ```
+* **AGY / Antigravity** (su archivo de configuración MCP, dentro de `mcpServers`):
+  ```json
+  { "context7": { "serverUrl": "https://mcp.context7.com/mcp" } }
+  ```
+* **Grok:**
+  ```bash
+  grok mcp add --transport http context7 https://mcp.context7.com/mcp
+  ```
+  Queda en `~/.grok/config.toml` como `[mcp_servers.context7]` con `url = "..."`.
+* **Hermes** (`~/.hermes/config.yaml`):
+  ```yaml
+  mcp_servers:
+    context7:
+      url: https://mcp.context7.com/mcp
+  ```
+* **Kimi Code:** no está verificado en una instalación real. Context7 documenta que cualquier
+  cliente MCP se conecta con la URL de arriba; sigue la guía de servidores MCP de Kimi.
+
+Cada host nombra la clave de la URL a su manera (`url`, `httpUrl`, `serverUrl`): copiar el bloque
+de un host en otro deja el servidor sin conectar y sin error visible. Fuentes: la guía de clientes
+de Context7 (Codex, Gemini CLI, Antigravity) y la documentación de MCP de Grok y de Hermes.
+
+**Clave de API.** Con clave (límites más altos) va en el header `Authorization: Bearer <clave>`:
+`http_headers` en Codex, `headers` en los demás. Es un secreto: va en la configuración personal
+del host, NUNCA en el repo ni en un `AGENTS.md`.
+
+### Cuando Context7 no está conectado
+Reinicia el agente después de configurarlo. Si en un host no está disponible:
+
+1. Usa la documentación oficial del stack (sección 3) por web.
+2. Si tampoco hay acceso web, NO des la verificación por hecha: el implementer lo declara en
+   `docs/impl-<id>.md` y el revisor en `docs/review-<id>.md`, con la lista de dependencias y APIs
+   nuevas que quedaron sin contrastar. Una verificación que no se pudo hacer no cuenta como hecha.
 
 ### Herramientas Expuestas por Context7
 1. `resolve-library-id`: Resuelve el nombre común de un paquete o framework a su ID de repositorio (ej. `Angular` -> `/angular/angular`, `Next.js` -> `/vercel/next.js`, `Go Chi` -> `/go-chi/chi`).
