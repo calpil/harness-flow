@@ -390,6 +390,12 @@ solicita publicar. No inventes el binding ni publiques por defecto; consulta
   ya existía no desciende de la base) y la registra en `base_branch`/`base_sha`;
   `revision.py` diffea contra `merge-base base HEAD`, no `HEAD~1`. `--base <rama>`
   para un caso puntual.
+- **El worktree nace con las dependencias de la raíz enlazadas.** `worktree.py start`
+  enlaza cada directorio de `rules.worktree_enlaces` (por defecto `node_modules`;
+  `[]` lo desactiva) que exista en la raíz y falte en el worktree, y `gate.py verify`
+  repara el enlace antes del primer AC. Nunca pisa lo propio del worktree; si el
+  `.gitignore` no ignora el enlace (`node_modules/` con barra), lo agrega al
+  `info/exclude` local. No enlaces a mano ni corras `npm install` en el worktree.
 - Con features paralelas, usa worktrees independientes para los AC, reserva las migraciones contra la rama de integración y corre la suite completa de destino después de cada cierre. `verify` mide los AC del worktree, no la integración. Reglas y casos límite: [`references/multirepo.md`](references/multirepo.md).
 - El cuerpo manual del PRD, el del SDD y la constitution son del USUARIO. No los reescribas; `documentacion.py sync` solo puede tocar su bloque generado `harness-flow:features`.
 - Aislamiento: una feature sin worktree bloquea a las demás sin worktree.

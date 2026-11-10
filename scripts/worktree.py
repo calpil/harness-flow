@@ -12,8 +12,8 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from comun import (bitacora, bloqueos_feature, get_feature, git, load_backlog, now_iso, paths,  # noqa: E402
-                   save_backlog, slugify)
+from comun import (bitacora, bloqueos_feature, enlazar_dependencias, get_feature, git,  # noqa: E402
+                   load_backlog, now_iso, paths, save_backlog, slugify)
 
 ABIERTOS = ("in_progress", "blocked", "review")
 
@@ -138,6 +138,9 @@ def cmd_start(args) -> None:
     save_backlog(p, data)
     bitacora(p, f"start #{fid} rama={rama} worktree={destino}")
     print(f"[ok] feature #{fid} arrancada\n     rama:     {rama}\n     worktree: {destino}")
+    enlazados = enlazar_dependencias(data, repo, destino)
+    if enlazados:
+        print(f"     enlazado desde la raiz: {', '.join(enlazados)}")
     print("[i]  TRABAJA DENTRO de ese worktree.")
     _contexto(p, fid, args)
 

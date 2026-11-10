@@ -401,6 +401,57 @@ def sig_fresh(path: Path, sig: dict | None) -> bool:
 def now_iso() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
+
+ENLACES_POR_DEFECTO = ("node_modules",)
+
+
+def enlazar_dependencias(data: dict, raiz: Path, destino: Path) -> list[str]:
+    """Enlaza al worktree las dependencias no versionadas de la raiz.
+
+    Un worktree nuevo no trae `node_modules` (esta en .gitignore): sin el, un AC
+    del front cae con exit 1 sin medir nada, y el verify entero hay que repetirlo.
+    `rules.worktree_enlaces` cambia la lista ([] la desactiva). Solo enlaza lo
+    que existe en la raiz y falta en el worktree: nunca pisa lo propio.
+    Devuelve los nombres enlazados; un fallo del SO se avisa y no tumba nada.
+    """
+    nombres = (data.get("rules") or {}).get("worktree_enlaces", ENLACES_POR_DEFECTO)
+    hechos = []
+    for nombre in nombres or ():
+        origen, enlace = raiz / nombre, destino / nombre
+        if not origen.is_dir() or os.path.lexists(enlace):
+            continue
+        try:
+            enlace.symlink_to(origen.resolve(), target_is_directory=True)
+            hechos.append(nombre)
+        except OSError as exc:
+            print(f"[!] no pude enlazar {nombre} en {destino}: {exc}")
+            continue
+        _excluir_si_no_se_ignora(destino, nombre)
+    return hechos
+
+
+def _excluir_si_no_se_ignora(destino: Path, nombre: str) -> None:
+    """`node_modules/` en .gitignore no ignora un ENLACE (git no lo ve como
+    directorio): el worktree quedaria con un `??` y `close` abortaria por arbol
+    sucio. Se agrega al info/exclude local del repo, que no se versiona."""
+    code, _ = git(["check-ignore", "-q", nombre], destino)
+    if code == 0:
+        return
+    code, ruta = git(["rev-parse", "--git-path", "info/exclude"], destino)
+    if code != 0:
+        return
+    exclude = Path(ruta.strip())
+    if not exclude.is_absolute():
+        exclude = destino / exclude
+    linea = f"/{nombre}"
+    previo = exclude.read_text(encoding="utf-8") if exclude.is_file() else ""
+    if linea in previo.splitlines():
+        return
+    exclude.parent.mkdir(parents=True, exist_ok=True)
+    exclude.write_text(previo + ("" if previo.endswith("\n") or not previo else "\n")
+                       + linea + "\n", encoding="utf-8")
+    print(f"[i]  {nombre} agregado a {exclude}: el .gitignore no ignora el enlace")
+
 # --- spec: el AC declarado --------------------------------------------------
 #
 # Una sola gramatica para declarar un AC, la misma que reconoce declara_ac para

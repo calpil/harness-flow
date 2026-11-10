@@ -29,7 +29,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 from comun import (  # noqa: E402
     ENMIENDAS_RE, Reporte, ac_comandos, ac_costuras, acs_faltantes, acs_no_reconocidos,
     avisos_vertical_spec, bitacora, bloqueos_feature, comparar_huellas, cubre_acs,
-    detectar_ciclos_dependencias, enmiendas_posteriores, get_feature, git, impl_path,
+    detectar_ciclos_dependencias, enlazar_dependencias, enmiendas_posteriores, get_feature, git, impl_path,
     load_backlog, n_enmiendas, now_iso, paths, review_path, save_backlog, sello_revision,
     sig_fresh, sign, spec_acs, spec_estado, spec_huella, spec_path,
 )
@@ -917,6 +917,11 @@ def cmd_verify(args) -> None:
         if wt and Path(wt).is_dir():
             cwd = Path(wt)
             print(f"[i]  verify corre en el worktree de #{f['id']}: {cwd}")
+            # Sin node_modules un AC del front cae sin medir nada y el verify
+            # entero se repite: se repara antes de correr el primer AC.
+            enlazados = enlazar_dependencias(data, p["root"], cwd)
+            if enlazados:
+                print(f"[i]  enlazado desde la raiz: {', '.join(enlazados)}")
         elif wt:
             sys.exit(f"[!!] el worktree declarado de #{f['id']} no existe: {wt}\n"
                      "     No corro los AC contra la raiz: mediria otra rama.")
