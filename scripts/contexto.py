@@ -775,7 +775,9 @@ def refrescar(p: dict, *, forzar=False, max_horas=None, con_vault=True,
         elif verboso:
             print(f"   merge-graphs -> {destino.name}: ok")
 
-    if con_hub:
+    if con_hub and os.environ.get("HARNESS_SIN_HUB", "").strip().lower() not in ("", "0", "false", "no"):
+        parte["hub"] = "omitido (HARNESS_SIN_HUB)"   # se dice: no es un ok
+    elif con_hub:
         code, out = _run([sys.executable, str(Path(__file__).parent / "hub.py"),
                           "derivar-graphify"], p["root"])
         parte["hub"] = "ok" if code == 0 else out[-300:]
@@ -934,7 +936,22 @@ def superficie(graph: dict, micros: list[str], tope=12) -> dict:
             "sin_match": [a for a in ambitos if a not in vistos]}
 
 
+TOPE_IMPACTO = 4   # servicios cuyo impacto entra al brief; el resto se nombra
+
+
+def _hub_apagado() -> str | None:
+    """Variable que impide consultar el hub, o None. Los tests y el CI del arnes no
+    deben abrir conexiones a la base real por generar un brief."""
+    for var in ("HARNESS_SIN_HUB", "HARNESS_SIN_CONTEXTO"):
+        if os.environ.get(var, "").strip().lower() not in ("", "0", "false", "no"):
+            return var
+    return None
+
+
 def _impacto_hub(micro: str) -> list[str]:
+    apagado = _hub_apagado()
+    if apagado:
+        return [f"(hub no disponible: no se consulta con {apagado})"]
     code, out = _run([sys.executable, str(Path(__file__).parent / "hub.py"),
                       "impacto", "--microservicio", micro], Path.cwd())
     if code != 0:
@@ -962,9 +979,25 @@ def _impacto_compacto(proyecto: str, micro: str) -> list[str]:
             seccion.append(s[2:].split("[")[0].strip().split("/")[-1])
         elif "no disponible" in s:
             return [f"  [{nombre}] {s}"]
+        elif "no existe en el hub" in s:
+            # No es lo mismo que "nadie depende de el": el hub no lo conoce.
+            return [f"  [{nombre}] NO esta en el hub: su impacto no se conoce (hub.py descubrir --aplicar)"]
     if not rompe and not depende:
         return [f"  [{nombre}] sin dependencias declaradas en el hub"]
     return [f"  [{nombre}] rompe a: {', '.join(rompe) or '-'} | usa: {', '.join(depende) or '-'}"]
+
+
+def _lineas_impacto(proyecto: str, micros: list[str]) -> list[str]:
+    if not micros:
+        return []
+    L = ["", "impacto cross-repo (Memory Hub):"]
+    for m in micros[:TOPE_IMPACTO]:
+        L += _impacto_compacto(proyecto, m)
+    if len(micros) > TOPE_IMPACTO:
+        # Un conteo parcial nunca se reporta como total.
+        L.append(f"  (+{len(micros) - TOPE_IMPACTO} sin consultar: {', '.join(micros[TOPE_IMPACTO:])}; "
+                 "hub.py impacto --microservicio <proyecto>/<servicio>)")
+    return L
 
 
 def _lecciones(data: dict | None = None) -> list[str]:
@@ -1116,6 +1149,9 @@ def _repos_de_la_feature(p: dict, f: dict, micros: list[str]) -> tuple[list[tupl
     # Los microservicios se declaran por nombre: se buscan entre los repos del proyecto
     # (raices de harness/grafos.json incluidas), que pueden vivir fuera de la raiz.
     por_nombre = {Path(d["path"]).name: Path(d["path"]) for d in stack.detectar_todos_los_destinos(raiz)}
+    from comun import servicios_del_proyecto
+    for nombre_servicio, info in servicios_del_proyecto(p).items():
+        por_nombre.setdefault(nombre_servicio, info["path"])   # incluye la raiz por su nombre declarado
     sin_repo = []
     for m in micros:
         nombre = m.split("/")[-1]
@@ -1235,11 +1271,7 @@ def cmd_brief(args) -> None:
         import producto
         L += producto.lineas_brief(p, data, f)
 
-    if micros:
-        L.append("")
-        L.append("impacto cross-repo (Memory Hub):")
-        for m in micros[:4]:
-            L += _impacto_compacto(proyecto, m)
+    L += _lineas_impacto(proyecto, micros)
 
     g = _cargar_grafo(p)
     if g is None:

@@ -86,6 +86,45 @@ def raices_grafo(p: dict) -> list[dict]:
                     "declarada": True})
     return out
 
+def _es_clon(d: Path) -> bool:
+    """Un repo propio o un submodulo; NO un worktree (trabajo en curso de otro repo)."""
+    g = d / ".git"
+    if g.is_dir():
+        return True
+    if g.is_file():
+        try:
+            return "/worktrees/" not in g.read_text(encoding="utf-8", errors="ignore")
+        except OSError:
+            return False
+    return False
+
+
+def servicios_del_proyecto(p: dict) -> dict[str, dict]:
+    """Servicios del proyecto por nombre: {nombre: {"path", "raiz", "es_raiz"}}.
+
+    Salen de los repos reales, no de una convencion de nombres: cada repo dentro
+    de una raiz declarada en harness/grafos.json (o de la raiz del arnes), y la
+    propia raiz cuando es un repo, con el `nombre` que se le declaro. docs/ y
+    harness/ son del proceso; un worktree es trabajo en curso, no un servicio.
+    """
+    try:
+        raices = raices_grafo(p)
+    except SystemExit:
+        raices = [{"nombre": p["root"].name, "path": p["root"]}]
+    servicios: dict[str, dict] = {}
+    for r in raices:
+        raiz = Path(r["path"]).resolve()
+        if not raiz.is_dir():
+            continue
+        for d in sorted(raiz.iterdir()):
+            if (d.is_dir() and not d.name.startswith(".")
+                    and d.name not in ("docs", "harness", "node_modules") and _es_clon(d)):
+                servicios.setdefault(d.name, {"path": d, "raiz": raiz, "es_raiz": False})
+        if (raiz / ".git").exists():
+            servicios.setdefault(str(r["nombre"]), {"path": raiz, "raiz": raiz, "es_raiz": True})
+    return servicios
+
+
 def graph_path(p: dict) -> Path:
     cfg = grafos_config(p)
     if len(cfg.get("raices") or []) > 1:

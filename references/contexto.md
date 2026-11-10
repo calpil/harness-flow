@@ -51,6 +51,9 @@ un `graphify update` real sobre el arbol y tardan minutos. **No** apaga
 `contexto.py refrescar`: un comando explicito que devolviera un parte vacio y en
 verde seria una mentira.
 
+`HARNESS_SIN_HUB=1` impide toda conexion al Memory Hub; con `HARNESS_SIN_CONTEXTO=1`
+el brief tampoco lo consulta. Detalle en `hub.md`.
+
 Cuando se refresca solo:
 
 - `worktree.py start` — antes de que el implementer toque nada: refresca si

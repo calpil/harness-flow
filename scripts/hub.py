@@ -5,7 +5,7 @@ graph_edges), asi que el historico existente se conserva y se sigue usando.
   hub.py mapa
   hub.py descubrir [--aplicar]
   hub.py impacto   --microservicio <proyecto>/<servicio>
-  hub.py vincular  --consumer <a> --target <b> [--tipo DEPENDS_ON]
+  hub.py vincular  --consumer <a> --target <b> [--tipo DEPENDE_DE]
   hub.py registrar --agente <a> --accion <x> --artefacto <f> [--estado ok]
   hub.py derivar-graphify
   hub.py consultar --artefacto <id>
@@ -14,12 +14,13 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from comun import hub_env, now_iso, paths  # noqa: E402
+from comun import hub_env, now_iso, paths, servicios_del_proyecto  # noqa: E402
 
 SERVICE_RE = re.compile(r"(ms-[a-z0-9-]+-service|[a-z0-9-]+-ui)")
 DEP_RELATIONS = {"references", "implements", "shares_data_with",
@@ -30,12 +31,21 @@ CONVENTION_RE = re.compile(
     r"convention|policy|guideline|standard|lint|layout", re.IGNORECASE)
 
 
-def conectar():
+def hub_desactivado() -> bool:
+    """HARNESS_SIN_HUB=1: ningun comando toca la base (CI y tests del arnes)."""
+    return os.environ.get("HARNESS_SIN_HUB", "").strip().lower() not in ("", "0", "false", "no")
+
+
+def conectar(crear_tablas: bool = True):
+    """Conexion al hub. Solo los comandos que escriben crean las tablas: leer no
+    debe exigir permiso de DDL (un usuario de solo lectura puede consultar)."""
+    if hub_desactivado():
+        sys.exit("[!!] hub desactivado por HARNESS_SIN_HUB: no se conecta a la base.")
     try:
         import psycopg
     except ImportError:
-        sys.exit("[!!] falta psycopg. Instala:  uv pip install 'psycopg[binary]'\n"
-                 "     (o pip install 'psycopg[binary]')")
+        sys.exit("[!!] falta psycopg en este interprete. Instalalo donde corresponde a tu host:\n"
+                 "     python3 <skill>/scripts/entorno.py --instalar-deps   (y usa $PY, no python3)")
     e = hub_env()
     faltan = [k for k in ("DB_HOST", "DB_USER", "DB_PASSWORD") if not e.get(k)]
     if faltan:
@@ -45,10 +55,16 @@ def conectar():
     # un espacio, una comilla simple o una barra invertida en la password
     # parte la cadena y psycopg termina leyendo basura (o conectando a otro
     # host). psycopg escapa cada valor por su cuenta.
-    conn = psycopg.connect(
-        host=e["DB_HOST"], port=e["DB_PORT"], dbname=e["DB_NAME"],
-        user=e["DB_USER"], password=e["DB_PASSWORD"],
-        sslmode=e["DB_SSL_MODE"], connect_timeout=20)
+    try:
+        conn = psycopg.connect(
+            host=e["DB_HOST"], port=e["DB_PORT"], dbname=e["DB_NAME"],
+            user=e["DB_USER"], password=e["DB_PASSWORD"],
+            sslmode=e["DB_SSL_MODE"], connect_timeout=20)
+    except getattr(psycopg, "Error", ()) as exc:
+        # Una linea, sin traza: el brief muestra la primera linea de este error.
+        sys.exit(f"[!!] no se pudo conectar al hub: {str(exc).strip().splitlines()[0] if str(exc).strip() else type(exc).__name__}")
+    if not crear_tablas:
+        return conn
     with conn.cursor() as cur:   # mismo DDL que el arnes Rust: IF NOT EXISTS
         cur.execute("""
             CREATE TABLE IF NOT EXISTS graph_nodes (
@@ -97,7 +113,7 @@ def upsert_edge(cur, etype: str, src: str, tgt: str, props: dict | None = None) 
 # --- comandos --------------------------------------------------------------
 
 def cmd_mapa(args) -> None:
-    conn = conectar()
+    conn = conectar(crear_tablas=False)
     e = hub_env()
     with conn.cursor() as cur:
         cur.execute("SELECT id,label,props FROM graph_nodes ORDER BY id")
@@ -129,34 +145,33 @@ def cmd_mapa(args) -> None:
 
 
 def cmd_descubrir(args) -> None:
+    """Servicios del proyecto: los repos de CADA raiz declarada, no solo la del arnes."""
     p = paths()
     project = project_name(p)
-    repos = sorted(d.name for d in p["root"].iterdir()
-                   if d.is_dir() and (d / ".git").exists() and d.name != "harness")
-    if not repos:
-        print("[i]  no se encontraron repos git bajo la raiz")
+    servicios = servicios_del_proyecto(p)
+    if not servicios:
+        print("[i]  no se encontraron repos git en las raices del proyecto")
         return
-    print(f"Microservicios detectados en {project}: {len(repos)}")
-    for r in repos:
-        print(f"   - {r}")
+    print(f"Microservicios detectados en {project}: {len(servicios)}")
+    for nombre, info in servicios.items():
+        print(f"   - {nombre}" + ("  (la raiz)" if info["es_raiz"] else ""))
     if not args.aplicar:
         print("\n[i]  solo lectura. Para registrarlos en el hub: --aplicar")
         return
     conn = conectar()
     with conn.cursor() as cur:
         upsert_node(cur, project, "Proyecto", {"root": str(p["root"])})
-        for r in repos:
-            nid = f"{project}/{r}"
+        for nombre, info in servicios.items():
+            nid = f"{project}/{nombre}"
             upsert_node(cur, nid, "Microservicio",
-                        {"servicio": r, "proyecto": project,
-                         "path": str(p["root"] / r)})
+                        {"servicio": nombre, "proyecto": project, "path": str(info["path"])})
             upsert_edge(cur, "CONTIENE", project, nid)
     conn.commit(); conn.close()
-    print(f"\n[ok] {len(repos)} microservicio(s) registrados en el hub")
+    print(f"\n[ok] {len(servicios)} microservicio(s) registrados en el hub")
 
 
 def cmd_impacto(args) -> None:
-    conn = conectar()
+    conn = conectar(crear_tablas=False)
     target = args.microservicio
     with conn.cursor() as cur:
         cur.execute("SELECT source,type FROM graph_edges WHERE target=%s", (target,))
@@ -211,7 +226,7 @@ def cmd_registrar(args) -> None:
 
 
 def cmd_consultar(args) -> None:
-    conn = conectar()
+    conn = conectar(crear_tablas=False)
     with conn.cursor() as cur:
         cur.execute("SELECT id,label,props FROM graph_nodes WHERE id LIKE %s",
                     (f"%{args.artefacto}%",))
@@ -221,11 +236,52 @@ def cmd_consultar(args) -> None:
     conn.close()
 
 
+def resolver_servicios(p: dict, nodes: dict) -> dict:
+    """id de nodo -> nombre de servicio, usando los repos reales del proyecto.
+
+    Antes solo contaban los nombres `ms-*-service` y `*-ui`: un servicio llamado
+    de otra forma (`front-adr`, `billing-api`) nunca tenia dependencias. Ahora:
+    1. el primer segmento de `source_file` que sea un repo del proyecto;
+    2. si el nodo pertenece a una raiz que ES un repo (el front en la raiz), esa raiz;
+    3. por ultimo, la convencion de nombres de antes, para grafos sin repos conocidos.
+    """
+    servicios = servicios_del_proyecto(p)
+    raiz_por_etiqueta: dict[str, str] = {}
+    for nombre, info in servicios.items():
+        if info["es_raiz"]:
+            ruta = info["path"]
+            # graphify etiqueta cada grafo combinado con <carpeta padre>_<carpeta>.
+            for etiqueta in (nombre, ruta.name, f"{ruta.parent.name}_{ruta.name}"):
+                raiz_por_etiqueta.setdefault(etiqueta, nombre)
+    raices = [n for n, i in servicios.items() if i["es_raiz"]]
+    unica_raiz = raices[0] if len(raices) == 1 else None
+
+    def servicio(n: dict) -> str | None:
+        src = str(n.get("source_file") or "").replace("\\", "/")
+        # La ruta es relativa a su raiz: el servicio es el primer directorio. Con una
+        # ruta absoluta (otra version de graphify) puede estar en cualquier nivel.
+        dirs = [x for x in src.split("/")[:-1] if x]
+        for segmento in (dirs if src.startswith("/") else dirs[:1]):
+            if segmento in servicios and not servicios[segmento]["es_raiz"]:
+                return segmento
+        etiqueta = n.get("repo")
+        if etiqueta in raiz_por_etiqueta:
+            return raiz_por_etiqueta[etiqueta]
+        if etiqueta is None and src and unica_raiz:
+            return unica_raiz  # grafo de una sola raiz: sin etiqueta de repo
+        m = SERVICE_RE.search(src)
+        return m.group(1) if m else None
+
+    return {nid: s for nid, n in nodes.items() if (s := servicio(n))}
+
+
 def cmd_derivar_graphify(args) -> None:
     """graphify-out/graph.json -> dependencias entre microservicios en el hub.
 
-    Misma heuristica que derive.rs: el servicio sale del source_file del nodo,
-    y solo cuentan las relaciones de dependencia que no sean convenciones.
+    Solo cuentan las relaciones de dependencia que no sean convenciones. Las
+    dependencias de origen graphify que ya no estan en el grafo se retiran, pero
+    solo entre servicios que el grafo SI contiene: si un servicio falta en el
+    grafo (raiz sin refrescar, merge a medias) sus aristas no se tocan.
     """
     p = paths(); project = project_name(p)
     if not p["graph"].exists():
@@ -233,14 +289,12 @@ def cmd_derivar_graphify(args) -> None:
         return
     g = json.loads(p["graph"].read_text(encoding="utf-8"))
     nodes = {n.get("id"): n for n in g.get("nodes", [])}
+    de_nodo = resolver_servicios(p, nodes)
+    presentes = {f"{project}/{s}" for s in de_nodo.values()}
 
     def servicio(nid):
-        n = nodes.get(nid)
-        if not n:
-            return None
-        src = n.get("source_file") or ""
-        m = SERVICE_RE.search(str(src).replace("\\", "/"))
-        return f"{project}/{m.group(1)}" if m else None
+        s = de_nodo.get(nid)
+        return f"{project}/{s}" if s else None
 
     pares: dict[tuple[str, str], str] = {}
     for e in g.get("edges", []) or g.get("links", []):
@@ -255,10 +309,11 @@ def cmd_derivar_graphify(args) -> None:
             continue
         pares[(s, t)] = rel.upper()
 
-    if not pares:
+    if not pares and len(presentes) < 2:
         print("[i]  el grafo no revelo dependencias entre microservicios.")
         return
     conn = conectar()
+    retiradas = []
     with conn.cursor() as cur:
         upsert_node(cur, project, "Proyecto", {"graphify": str(p["graph"].parent)})
         for (s, t), rel in pares.items():
@@ -268,10 +323,25 @@ def cmd_derivar_graphify(args) -> None:
                              "proyecto": nid.split("/")[0]})
             upsert_edge(cur, TIPO_DEPENDENCIA, s, t,
                         {"origen": "graphify", "relacion": rel, "at": now_iso()})
+        cur.execute("SELECT source,target FROM graph_edges "
+                    "WHERE type=%s AND props->>'origen'='graphify' AND source LIKE %s",
+                    (TIPO_DEPENDENCIA, f"{project}/%"))
+        for s, t in cur.fetchall():
+            if (s, t) not in pares and s in presentes and t in presentes:
+                cur.execute("DELETE FROM graph_edges WHERE source=%s AND target=%s AND type=%s "
+                            "AND props->>'origen'='graphify'", (s, t, TIPO_DEPENDENCIA))
+                retiradas.append((s, t))
     conn.commit(); conn.close()
-    print(f"[ok] {len(pares)} dependencia(s) derivadas al hub:")
-    for (s, t), rel in sorted(pares.items()):
-        print(f"   {s} --[{rel}]--> {t}")
+    if pares:
+        print(f"[ok] {len(pares)} dependencia(s) derivadas al hub:")
+        for (s, t), rel in sorted(pares.items()):
+            print(f"   {s} --[{rel}]--> {t}")
+    else:
+        print("[i]  el grafo no revelo dependencias entre microservicios.")
+    if retiradas:
+        print(f"[ok] {len(retiradas)} dependencia(s) que ya no estan en el grafo, retiradas del hub:")
+        for s, t in sorted(retiradas):
+            print(f"   {s} -x-> {t}")
 
 
 def main() -> None:
@@ -291,7 +361,15 @@ def main() -> None:
     s = sub.add_parser("consultar"); s.add_argument("--artefacto", required=True)
     s.set_defaults(fn=cmd_consultar)
     sub.add_parser("derivar-graphify").set_defaults(fn=cmd_derivar_graphify)
-    args = ap.parse_args(); args.fn(args)
+    args = ap.parse_args()
+    try:
+        args.fn(args)
+    except Exception as exc:
+        # Un error de la base sale en una linea: el brief muestra la primera.
+        if type(exc).__module__.split(".")[0] != "psycopg":
+            raise
+        linea = str(exc).strip().splitlines()[0] if str(exc).strip() else type(exc).__name__
+        sys.exit(f"[!!] hub: {linea}")
 
 
 if __name__ == "__main__":
