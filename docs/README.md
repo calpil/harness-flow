@@ -39,8 +39,17 @@ flowchart TD
     H16["<b>Hito 16: Paridad Total de Rules Multi-LLM</b><br/>Espejado en .agents/rules/, .gemini/rules/, .claude/rules/ y síntesis en AGENTS.md"]
     H17["<b>Hito 17: Stacks Mobile iOS & Android</b><br/>SwiftUI y Compose Clean Architecture, 4 rules, 9 skills, check-architecture.py y paridad multi-LLM"]
     H18["<b>Hito 18: Neutralidad y Paridad Multi-LLM</b><br/>Neutralización de 56 archivos, detección dinámica de skills y telemetría dual"]
+    H19["<b>Hito 19: Argumentos en Base Cero</b><br/>Los comandos de Claude Code leen $ARGUMENTS[0] y $ARGUMENTS[1]"]
+    H20["<b>Hito 20: Plantillas fuera del Índice de Hermes</b><br/>stacks/ pasa a assets/stacks/; Hermes deja de indexar 153 plantillas"]
+    H21["<b>Hito 21: Verificadores sin Falsos Positivos</b><br/>Workspaces Angular, Go progresivo y raíces de grafos.json"]
+    H22["<b>Hito 22: Normalizar Respeta al Usuario</b><br/>AGENTS.md existente intacto y skills excluidas por proyecto"]
+    H23["<b>Hito 23: Trinquete de Arquitectura</b><br/>Base sellada de código heredado, gate en close y cuota de normalización"]
+    H24["<b>Hito 24: Trinquete y Brief Genéricos</b><br/>Layout en los 10 stacks y stack de cada repo en el brief"]
+    H25["<b>Hito 25: Context7 por Host</b><br/>Herramientas del revisor y conexión en cada agente"]
+    H26["<b>Hito 26: Memory Hub Genérico</b><br/>Servicios por repos reales, purga de dependencias muertas y lectura sin DDL"]
+    H27["<b>Hito 27: Fable 5.2 u Opus 5.5</b><br/>Producto y Leader eligen por formulario; el modelo se aplica por turno"]
 
-    H1 --> H2 --> H3 --> H4 --> H5 --> H6 --> H7 --> H8 --> H9 --> H10 --> H11 --> H12 --> H13 --> H14 --> H15 --> H16 --> H17 --> H18
+    H1 --> H2 --> H3 --> H4 --> H5 --> H6 --> H7 --> H8 --> H9 --> H10 --> H11 --> H12 --> H13 --> H14 --> H15 --> H16 --> H17 --> H18 --> H19 --> H20 --> H21 --> H22 --> H23 --> H24 --> H25 --> H26 --> H27
 ```
 
 ---
@@ -62,6 +71,9 @@ Los documentos de `docs/` complementan y fundamentan las guías operativas que l
 * [`references/comunicacion-ste100-y-prompts.md`](../references/comunicacion-ste100-y-prompts.md): Norma de redacción técnica ASD-STE100 y optimización de prompts de Karpathy.
 * [`references/context7-documentacion-oficial.md`](../references/context7-documentacion-oficial.md): Integración con Context7 MCP, enlaces oficiales por stack y escáneres de seguridad CVE.
 * [`references/vertical-slice.md`](../references/vertical-slice.md): Metodología de desarrollo vertical, costuras públicas y modo Pair interactivo.
+* [`references/arquitectura-heredada.md`](../references/arquitectura-heredada.md): Trinquete de arquitectura para proyectos con código anterior al arnés: inventario, base, cuota de normalización y casos límite.
+* [`references/modelos.md`](../references/modelos.md): Modelo y esfuerzo por rol y proveedor; elección de Fable 5.2 u Opus 5.5 en Producto y Leader.
+* [`references/hub.md`](../references/hub.md): Memory Hub Postgres: qué es un servicio, purga de dependencias y cómo apagarlo en tests.
 
 ---
 

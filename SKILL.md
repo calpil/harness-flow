@@ -286,6 +286,8 @@ Harness Flow integra un motor declarativo y extensible de detección y gobierno 
 - **Spring Boot Hexagonal (`springboot-hexagonal`)**: Java 21 / Spring Boot 3.4 con dominio puro sin dependencias de Spring/JPA y ArchUnit.
 - **NestJS Hexagonal (`nestjs-hexagonal`)**: TypeScript / NestJS modular con Prisma ORM y puertos desacoplados.
 - **Python Data Product (`python-dataproduct`)**: Python 3.14 con FastAPI, Polars/Pydantic y adaptadores de origen/destino.
+- **iOS SwiftUI Clean (`ios-swiftui-clean`)**: Swift con Clean Architecture por módulos SPM (`*Domain` puro, `*Data`, `*UI`, `*App` como Composition Root).
+- **Android Compose Clean (`android-compose-clean`)**: Kotlin y Jetpack Compose con `features/*/(domain|data|presentation)` y `core`.
 - **Stacks Futuros**: cualquier nuevo stack se agrega simplemente creando una carpeta `assets/stacks/<nuevo-stack>/manifest.json` con su bloque `"detection"` (indicadores de archivos, extensiones, dependencias y anti-indicadores); el motor lo detectará y normalizará de forma automática sin tocar código Python. Para que su código heredado se mida (trinquete), el manifest declara además el bloque `"layout"`.
 
 ### Comandos de Stacks

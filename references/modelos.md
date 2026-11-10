@@ -179,6 +179,12 @@ paso el resto del turno a Opus 5.5 y el turno siguiente volvio a Fable. En
 `claude -p`, la misma invocacion dejo todos los mensajes en `claude-fable-5-2`
 (`modelUsage` y el `model` de cada mensaje del stream).
 
+Los dos comandos se probaron en la misma fecha en una sesion interactiva en
+Fable 5.2 con esfuerzo `high`: `/harness-flow:usar-opus` paso el resto del turno
+a `claude-opus-5-5` con el esfuerzo subido, y `/harness-flow:usar-fable`,
+invocado a continuacion, lo devolvio a `claude-fable-5-2` con `high`. Un comando
+agregado al plugin no existe en una sesion ya abierta hasta `/reload-plugins`.
+
 Cierre y Revisor siguen en Opus 5.5, y el Implementer en Sonnet 5.5: fue la
 decision del usuario al agregar Fable, y Revisor y Cierre conservan `xhigh`.
 

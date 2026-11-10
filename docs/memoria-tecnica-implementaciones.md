@@ -592,9 +592,148 @@ Tras incorporar los stacks móviles, una auditoría profunda de interoperabilida
 
 ---
 
-## 21. Estado de Verificación y Métricas de Calidad
+## 21. Hito 19: Argumentos de los Comandos de Claude Code en Base Cero
 
-* **Batería de Pruebas Automatizadas**: 286 tests de flujo core, producto, stack, gates, auditoría y documentación ejecutados pasando al 100% (incluyendo los 28 tests de validación exhaustiva de stacks en `tests/test_stack.py`).
+**Problema.** En Claude Code `$N` abrevia `$ARGUMENTS[N]`, y el índice empieza en cero. Los cinco comandos con argumentos usaban `$1` como id de la feature. Con `/harness-flow:cierre 12 develop` el modelo recibía "feature `develop`" y el `12` desaparecía del prompt; con un solo argumento `$1` quedaba literal y el shell lo expandía a vacío.
+
+**Qué se implementó.**
+1. En [`commands/`](../commands/): `$1` pasó a `$ARGUMENTS[0]` y `$2` a `$ARGUMENTS[1]`. Se usa la forma larga porque `$0` dentro de un bloque bash se confunde con el del shell.
+2. [`commands/implementar.md`](../commands/implementar.md) recibe además `$ARGUMENTS` completo, para que `--pair` (segundo argumento) llegue al modelo.
+3. Regresión en [`tests/test_plugin_claude.py`](../tests/test_plugin_claude.py): ningún comando usa la abreviatura `$N`, y el índice mayor cabe en lo que declara `argument-hint`.
+
+**Cómo se comprobó.** Invocando los comandos con la tool `Skill`: antes `review 777 ZZZ` se expandía a "feature `ZZZ`"; después `implementar 777 --pair` da "feature `777`" y "Argumentos recibidos: `777 --pair`".
+
+---
+
+## 22. Hito 20: Las Plantillas de Stack Dejan de Ser Skills de Hermes
+
+**Problema.** Hermes recorre `~/.hermes/skills` entero y registra como skill propia cada `SKILL.md`. Dentro de una skill solo poda `references/`, `templates/`, `assets/` y `scripts/`. Con `stacks/` en la raíz, las 153 plantillas de los stacks entraban a su índice: `hermes skills list` mostraba 226 skills, 21 de ellas con nombres genéricos (`auto-git-commit`, `springboot`, `adr`) y 132 con la ruta completa como nombre.
+
+**Qué se implementó.**
+1. `stacks/` se movió a [`assets/stacks/`](../assets/stacks/), y `STACKS_DIR` en [`scripts/stack.py`](../scripts/stack.py) apunta ahí.
+2. Se actualizaron las rutas en los manifests y en la documentación.
+3. [`tests/test_indice_hermes.py`](../tests/test_indice_hermes.py) replica el recorrido de Hermes y exige que solo vea la `SKILL.md` de la raíz.
+
+**Cómo se comprobó.** `hermes skills list` bajó de 226 a 73 skills habilitadas. Claude Code nunca cargó esas plantillas.
+
+---
+
+## 23. Hito 21: Verificadores de Stack sin Falsos Positivos en Proyectos Reales
+
+Tres falsos positivos que salieron de un mismo proyecto y valen para cualquiera:
+
+1. **Workspace Angular con varios proyectos.** [`assets/stacks/angular-product/scripts/check-architecture.py`](../assets/stacks/angular-product/scripts/check-architecture.py) medía la raíz, donde no hay `src/app`: dos violaciones falsas y una Feature #0 que bloqueaba el backlog. Ahora, si `angular.json` declara `projects`, verifica cada proyecto de tipo `application` en su propia raíz. El resultado nombra las aplicaciones verificadas y las librerías que no verificó.
+2. **Servicio Go sin `internal/`.** En [`assets/stacks/golang-hexagonal/scripts/check-architecture.py`](../assets/stacks/golang-hexagonal/scripts/check-architecture.py) la ausencia de `internal/` es aviso y no error (adopción progresiva), y el verde dice que los límites hexagonales no se midieron. Dentro de `internal/` las reglas siguen siendo error y la composition root en `cmd/` se exige siempre.
+3. **Raíces de `harness/grafos.json`.** [`scripts/stack.py`](../scripts/stack.py) las leía como texto; el formato real son objetos `{nombre, path}`. El `TypeError` se tragaba y el diagnóstico no veía los microservicios. Ahora las lee bien y, si una raíz es una carpeta que agrupa repos, recorre cada uno.
+
+**Tests.** [`tests/test_stack_adopcion.py`](../tests/test_stack_adopcion.py). Los verificadores se corren como procesos: lo que se mide es el exit code.
+
+---
+
+## 24. Hito 22: `normalizar` Respeta las Decisiones del Usuario
+
+**Problema.** `stack.py normalizar`, que `estado.py` dispara solo en cada arranque de sesión, deshacía dos decisiones del usuario:
+- reemplazaba un `AGENTS.md` existente por la plantilla del stack si el texto no contenía la palabra "CALPIL";
+- reinstalaba las skills del stack que el usuario había quitado por no aplicar al proyecto.
+
+**Qué se implementó** en [`scripts/stack.py`](../scripts/stack.py):
+1. Un `AGENTS.md` que ya existe no se toca; se avisa.
+2. Regla nueva `rules.stack_skills_excluidas` en `harness/feature_list.json`, con la forma `{"<stack-id>": ["<skill>", ...]}`. `normalizar` no instala esas skills y `verificar` no las cuenta como faltantes.
+3. Un valor mal formado detiene la normalización en vez de apagar la regla; un nombre que no existe en el stack sale como aviso.
+4. La CLI lee las reglas del arnés que contiene al repo o, si el repo vive fuera de la raíz, del proyecto desde donde se corre.
+
+**Tests.** [`tests/test_stack_normalizar.py`](../tests/test_stack_normalizar.py).
+
+---
+
+## 25. Hito 23: Trinquete de Arquitectura para Código Heredado
+
+**Problema.** Un proyecto con mucho código anterior al arnés tenía dos opciones malas. La Feature #0 bloqueaba todo el backlog hasta reestructurar todo de una vez; la adopción progresiva no bloqueaba nada y tampoco medía nada, así que lo heredado no convergía y el código nuevo podía nacer fuera de la norma.
+
+**Qué se implementó.** [`scripts/arquitectura.py`](../scripts/arquitectura.py) mide cuánto código vive fuera de la norma del stack, lo sella como base con el SÍ del usuario, y desde ahí solo puede bajar. Es el criterio de `postmerge_medido.py` aplicado a la arquitectura: fallan los rojos nuevos, no la deuda.
+
+| Regla | Dónde se aplica |
+| --- | --- |
+| Ninguna unidad heredada gana archivos y no nacen unidades heredadas | `gate.py close` |
+| Un archivo heredado que la feature cambia en más de `rules.arquitectura_umbral_lineas` líneas (50) sale de lo heredado en esa feature | `gate.py close` |
+| Las violaciones del verificador que no estaban en la base fallan | `gate.py close` |
+| Tras `rules.arquitectura_cuota` (3) features de negocio, hay que cerrar una `--kind normalizacion` mientras quede algo heredado | `gate.py approve-spec` |
+| Una normalización que no vacía ninguna unidad ni baja las violaciones no cierra | `gate.py close` |
+
+Decisiones de diseño:
+- **Cada feature se mide contra su propio commit base**, no contra la base global: dos features paralelas no se pisan cuando una normaliza lo que la otra aún trae.
+- **La Feature #0 deja de ser un muro.** `arquitectura.py adoptar --yes` quita el bloqueo y la conserva como una normalización más; con la base presente, `estado.py`, `approve-spec` y `worktree.py start` dejan de imponerla.
+- **Lo que ya estaba en curso al adoptar queda exento** hasta cerrar; la base absorbe lo que agregue y la bitácora lo registra.
+- **Repos donde la feature no registra árbol** se miden por su checkout contra la base.
+- La base nunca sube sola: `base --yes` se niega si re-sellar la aflojaría; admitirlo es `--ampliar --motivo`.
+
+Comandos: `inventario`, `base`, `adoptar`, `check [--feature]`, `siguiente` (lo más tocado primero) y `eximir`. Guía de uso: [`references/arquitectura-heredada.md`](../references/arquitectura-heredada.md). Tests: [`tests/test_arquitectura.py`](../tests/test_arquitectura.py), con repos git reales en directorios temporales.
+
+---
+
+## 26. Hito 24: Trinquete y Brief Genéricos para Cualquier Stack
+
+1. **Los diez stacks declaran su norma.** Cada `manifest.json` trae un bloque `layout` (`codigo`, `excluir`, `normalizado`, y `unidad_tras` opcional). La plantilla oficial de cada stack mide cero código heredado con su propio layout: la plantilla es la norma.
+2. **El brief anuncia el stack de cada repo de la feature**, con sus reglas y skills, también los que viven fuera de la raíz ([`scripts/contexto.py`](../scripts/contexto.py)). Antes detectaba uno solo. Avisa si las reglas no están instaladas en un repo y si un microservicio declarado no tiene repo localizable.
+3. **El briefing del revisor** trae la normativa una vez por stack, con los repos donde aplica ([`scripts/revision.py`](../scripts/revision.py)).
+4. **`stack.py` reconoce repos de cualquier stack**: los marcadores salen de los `files_any` de todos los manifests, no de una lista fija.
+5. **Las instrucciones del implementer y del revisor** remiten a las reglas del stack de cada repo en vez de nombrar solo Go y Angular.
+
+**Tests.** [`tests/test_brief_stacks.py`](../tests/test_brief_stacks.py) y la clase `CadaStackTests` de [`tests/test_arquitectura.py`](../tests/test_arquitectura.py).
+
+---
+
+## 27. Hito 25: Context7 al Alcance del Revisor y de Cada Host
+
+**Problema.** Las instrucciones del revisor le pedían contrastar versiones y APIs contra Context7 o la documentación oficial, y su lista de herramientas no traía ninguna de las dos. Además, la referencia solo explicaba cómo conectar Context7 en Claude Code y Cursor.
+
+**Qué se implementó.**
+1. [`agents/revisor.md`](../agents/revisor.md) suma Context7 y lectura web, que son de solo consulta; sigue sin poder editar código.
+2. [`references/context7-documentacion-oficial.md`](../references/context7-documentacion-oficial.md) explica la conexión en Codex, Gemini CLI, Antigravity, Grok y Hermes. Cada host nombra distinto la clave de la URL (`url`, `httpUrl`, `serverUrl`); Kimi queda sin verificar.
+3. Si Context7 no está conectado se usa la documentación oficial por web; sin ninguna de las dos, implementer y revisor lo declaran en vez de dar la verificación por hecha.
+
+---
+
+## 28. Hito 26: Memory Hub Genérico por Repos Reales
+
+**Problemas**, vistos contra un hub en uso:
+- `derivar-graphify` solo reconocía servicios llamados `ms-*-service` o `*-ui`.
+- `descubrir` solo miraba la raíz del arnés y registraba worktrees como microservicios.
+- Una dependencia que desaparecía del código seguía en el hub para siempre.
+- El brief decía "sin dependencias" de un servicio que el hub ni conocía.
+- Leer exigía permiso de DDL, y un test podía abrir la base real.
+
+**Qué se implementó** en [`scripts/hub.py`](../scripts/hub.py), [`scripts/comun.py`](../scripts/comun.py) y [`scripts/contexto.py`](../scripts/contexto.py):
+1. `servicios_del_proyecto`: los servicios salen de los repos de cada raíz de `grafos.json`, y de la propia raíz cuando es un repo. Un worktree no es un servicio.
+2. `derivar-graphify` retira las dependencias de origen graphify que ya no están en el grafo, solo entre servicios que el grafo contiene. Las manuales y las de otros proyectos no se tocan.
+3. El brief distingue "NO está en el hub" de "sin dependencias declaradas", y nombra los servicios que no consulta.
+4. `mapa`, `impacto` y `consultar` no ejecutan DDL.
+5. `HARNESS_SIN_HUB=1` impide toda conexión; con `HARNESS_SIN_CONTEXTO=1` el brief tampoco consulta.
+
+**Tests.** [`tests/test_hub.py`](../tests/test_hub.py), con una conexión falsa que registra el SQL. Sobre un grafo real, la lógica anterior y la nueva derivan las mismas dependencias para los nombres convencionales.
+
+---
+
+## 29. Hito 27: Fable 5.2 u Opus 5.5 a Elección del Usuario
+
+**Problema.** Fable estaba excluido, y los comandos fijaban `claude-opus-5-5` en su frontmatter: aunque la sesión estuviera en Fable 5.2, invocar `/harness-flow:spec` pasaba el turno a Opus sin preguntar.
+
+**Qué se implementó.**
+1. Solo Producto y Leader eligen. [`commands/producto.md`](../commands/producto.md) y [`commands/spec.md`](../commands/spec.md) van en `model: inherit`, sin `effort`.
+2. Paso 0 de ambos roles: el usuario elige el modelo en un formulario, una vez por feature (por documento en el rol producto). [`scripts/modelo.py`](../scripts/modelo.py) guarda la elección en el backlog y los turnos siguientes la reutilizan.
+3. Fable 5.2 corre en `high` (`xhigh` solo ante un riesgo concreto) y Opus 5.5 en `xhigh`.
+4. Si la sesión no está en lo elegido, el rol lo aplica solo invocando [`commands/usar-opus.md`](../commands/usar-opus.md) o [`commands/usar-fable.md`](../commands/usar-fable.md), que solo fijan modelo y esfuerzo. Vale para el resto del turno; el usuario no escribe `/model` ni `/effort`.
+5. Cierre y Revisor siguen en Opus 5.5, el Implementer en Sonnet 5.5 y Estado en Haiku 5.5.
+
+**Límites medidos.** El modelo fijado vale por el turno. En `claude -p`, invocar el comando no cambia el modelo: ahí lo fija quien lanza la sesión con `--model` y `--effort`. Detalle en [`references/modelos.md`](../references/modelos.md). Tests: [`tests/test_modelo.py`](../tests/test_modelo.py).
+
+---
+
+## 30. Estado de Verificación y Métricas de Calidad
+
+* **Batería de Pruebas Automatizadas**: 50 archivos de test en `tests/`. La última corrida completa con el árbol limpio (2026-11-09, commit `ea1f7c1`) ejecutó 952 tests: 879 pasaron y 73 fallaron, los 73 por el mismo prerrequisito de entorno. Esos 73 están en `test_frontend_runner.py`, `test_retirados_frontend.py`, `test_frontend_close.py` y `test_cierre_historico.py`, que exigen `HARNESS_TEST_FRONTEND_MODULES` (un `node_modules` con Angular 22 y Vitest 4) y fallan a propósito en vez de omitirse cuando falta. Ningún otro test falla.
+* **Tests agregados en los hitos 19 a 27**: `test_indice_hermes.py`, `test_stack_adopcion.py`, `test_stack_normalizar.py`, `test_arquitectura.py`, `test_brief_stacks.py`, `test_hub.py` y `test_modelo.py`, más casos nuevos en `test_plugin_claude.py`. Cada regresión se comprobó contra el código anterior: falla ahí y pasa con la corrección.
+* **Aislamiento**: los tests no abren el Memory Hub real (`HARNESS_SIN_CONTEXTO=1`, `HARNESS_SIN_HUB=1`), y la lógica de `hub.py` se prueba con una conexión falsa.
 * **Validación de Habilidades de Agentes**: 100% de las habilidades validadas en los 10 stacks con `validate-agent-skills.mjs`.
 * **Verificación de Arquitectura en las 10 Plantillas Reales de CALPIL**:
   * 10/10 plantillas evaluadas como **COMPLIANT** (Rules OK, Skills OK, Arquitectura OK): Golang Hexagonal, Angular Product, .NET Hexagonal, Rust Hexagonal, Next.js Product, Spring Boot Hexagonal, NestJS Hexagonal, Python Data Product, iOS SwiftUI Clean Architecture y Android Jetpack Compose Clean Architecture.
