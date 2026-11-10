@@ -35,6 +35,20 @@ FORBIDDEN_DOMAIN_PREFIXES = [
 
 IMPORT_RE = re.compile(r"""(?:from|import|export\s*\*\s*from)\s*['"]([^'"]+)['"]""")
 
+CAPAS = ("domain", "application", "data-access", "ui")
+
+
+def _feature_y_capa(parts: tuple[str, ...]) -> tuple[str | None, str | None]:
+    """(feature, capa) de una ruta bajo features/: la capa es el PRIMER segmento
+    que sea una capa y la feature, todo lo anterior. Asi se mide una feature
+    nueva anidada en una heredada (`condominios/camaras/ui/...`); antes se
+    tomaba `parts[1]` como capa y esos archivos se saltaban sin medir.
+    Sin capa en la ruta (codigo heredado) devuelve (None, None)."""
+    for i, segmento in enumerate(parts[:-1]):
+        if segmento in CAPAS and i > 0:
+            return "/".join(parts[:i]), segmento
+    return None, None
+
 
 def _aplicaciones(root_dir: Path) -> tuple[list[tuple[str, Path]], list[str], list[str], list[str]]:
     """(aplicaciones [(nombre, src)], librerias, errores, avisos) segun angular.json.
@@ -97,10 +111,8 @@ def _verificar_aplicacion(root_dir: Path, src_dir: Path) -> tuple[list[str], lis
         if len(parts) < 2:
             continue
 
-        feature = parts[0]
-        layer = parts[1]
-
-        if layer not in ("domain", "application", "data-access", "ui"):
+        feature, layer = _feature_y_capa(parts)
+        if layer is None:
             continue
 
         archivo = ts_file.relative_to(root_dir).as_posix()
@@ -128,9 +140,13 @@ def _verificar_aplicacion(root_dir: Path, src_dir: Path) -> tuple[list[str], lis
                     rel_target = target_path.relative_to(features_dir.resolve())
                     target_parts = rel_target.parts
                     if len(target_parts) >= 2:
-                        target_feature = target_parts[0]
-                        target_layer = target_parts[1]
-                        if target_feature != feature:
+                        target_feature, target_layer = _feature_y_capa(target_parts + ("_",))
+                        if target_parts[0] != parts[0]:
+                            # Otra feature de primer nivel, con o sin capas (la regla de siempre).
+                            errors.append(f"{archivo}: acceso directo a otra feature '{target_parts[0]}' ({spec})")
+                        elif target_layer is None:
+                            pass  # codigo heredado sin capas de la misma raiz: no se mide
+                        elif target_feature != feature:
                             errors.append(f"{archivo}: acceso directo a otra feature '{target_feature}' ({spec})")
                         else:
                             # Mismas reglas dentro de la misma feature
