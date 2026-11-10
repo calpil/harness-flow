@@ -1,8 +1,7 @@
 ---
 description: Rol producto de harness-flow — redacta el PRD inicial o el SDD de arquitectura en un borrador sin proteger y lo lleva al ritual de aprobacion del usuario, que lo sella en docs/prd o docs/sdd.md.
 argument-hint: prd|sdd
-model: claude-opus-5-5
-effort: xhigh
+model: inherit
 ---
 
 # harness-flow: producto (rol producto)
@@ -19,6 +18,41 @@ cambiarlos, este rol no corre: pasa a `/harness-flow:spec`.
 > `python` y el prefijo equivalente es
 > `python "${CLAUDE_PLUGIN_ROOT}/scripts/entorno.py" --powershell | Invoke-Expression`,
 > invocando despues con `& $PY ...`. Detalle en `references/claude.md`.
+
+## 0. Modelo del rol (lo elige el usuario)
+
+Este rol corre en Claude Fable 5.2 o en Claude Opus 5.5. Lo decide el USUARIO,
+una vez por documento (`prd` o `sdd`); no lo elijas tu ni lo des por supuesto.
+
+```bash
+eval "$(python3 "${CLAUDE_PLUGIN_ROOT}/scripts/entorno.py" --shell)" && "$PY" "$H/modelo.py" ver --doc $ARGUMENTS[0]
+```
+
+- **Sale con exit 3 (`sin elegir`)**: PREGUNTA en un formulario (tool
+  `AskUserQuestion`), una sola pregunta con dos opciones: `Fable 5.2` (el mas
+  capaz; cuesta el doble por token; esfuerzo `high`) y `Opus 5.5` (el de
+  siempre; esfuerzo `xhigh`). Guarda lo que responda:
+
+  ```bash
+  eval "$(python3 "${CLAUDE_PLUGIN_ROOT}/scripts/entorno.py" --shell)" && "$PY" "$H/modelo.py" elegir --doc $ARGUMENTS[0] --modelo fable|opus
+  ```
+
+- **Ya hay una eleccion**: anunciala en una linea y no vuelvas a preguntar. Si
+  el usuario pide cambiarla, corre `modelo.py elegir` de nuevo.
+
+Despues compara lo elegido con TU sesion. Tu modelo es el que dice tu system
+prompt; el esfuerzo de la sesion lo imprime el script.
+
+- **Coinciden**: sigue con el paso 1.
+- **No coinciden**: DETENTE. Un comando no puede cambiar el modelo de la
+  sesion: solo el usuario, con `/model`. Dile que escriba `/model fable` o
+  `/model opus` (y `/effort <nivel>` si el script lo pide) y que vuelva a
+  invocar este comando. No sigas el rol en otro modelo.
+- **Sin usuario a quien preguntar** (`claude -p`): usa lo ya elegido; si no hay
+  nada elegido, sigue con el modelo de la sesion y dilo en una linea.
+
+Por que no va fijo en el frontmatter y que hacen los demas roles:
+`${CLAUDE_PLUGIN_ROOT}/references/modelos.md` ("Fable 5.2 u Opus 5.5").
 
 ## Lo que no es negociable
 

@@ -112,8 +112,10 @@ tarea antes de iniciar cada rol**, `medium` como base y `high` cuando hay riesgo
 concretos de arquitectura, migracion, concurrencia o requisitos contradictorios.
 Indica el nivel y su motivo en una frase y aplicalo en la invocacion del rol.
 Criterios, resto de roles y configuracion por host: [`references/modelos.md`](references/modelos.md).
-Con Claude 5.5, Producto, Leader y Cierre van fijos en `xhigh`; **el implementer y el
-revisor reciben el effort que la skill elige por tarea**: implementer `high` y
+Con Claude, **Producto y Leader corren en Fable 5.2 (`high`) o en Opus 5.5 (`xhigh`): lo
+elige el USUARIO en un formulario, una vez por feature** (`$PY "$H/modelo.py" ver|elegir`);
+si la sesion esta en otro modelo, el rol se detiene y pide `/model`. Cierre va fijo en
+Opus 5.5 `xhigh`; **el implementer y el revisor reciben el effort que la skill elige por tarea**: implementer `high` y
 `xhigh` ante un riesgo concreto; revisor `xhigh` en la primera ronda y `high` en la
 de seguimiento. Se anuncia igual y se pasa en la invocacion (`effort` de la tool
 `Agent`, o `claude -p --effort`).

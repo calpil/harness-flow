@@ -108,23 +108,65 @@ Fuentes: [esfuerzo de razonamiento](https://developers.openai.com/api/docs/guide
 Con modelos Claude, cada rol corre en la familia 5.5. Producto, Leader, Cierre
 y Estado van fijos en `xhigh`; el implementer y el revisor reciben el nivel que
 elige la sesion coordinadora para cada tarea (ver "Seleccion automatica" mas
-abajo). Fable queda fuera. Los IDs van completos (`claude-opus-5-5`), nunca como alias:
-`opus` cambia de version cuando sale la siguiente, `best` y `default` pueden
-resolver a Fable, y fuera de la API de Anthropic `haiku` es Haiku 4.5, que no
-acepta esfuerzo.
+abajo). En Producto y Leader el usuario elige entre Opus 5.5 y Fable 5.2 (ver
+"Fable 5.2 u Opus 5.5"); los demas roles no usan Fable. Los IDs van completos
+(`claude-opus-5-5`), nunca como alias: `opus` cambia de version cuando sale la
+siguiente, `best` y `default` pueden resolver a Fable, y fuera de la API de
+Anthropic `haiku` es Haiku 4.5, que no acepta esfuerzo.
 
 | Rol | Modelo | Donde se fija en Claude Code | Por que |
 | --- | --- | --- | --- |
-| 0 Producto | `claude-opus-5-5` | `commands/producto.md` | Decide la arquitectura; pocos tokens, mucho peso aguas abajo |
-| 1 Leader | `claude-opus-5-5` | `commands/spec.md` | Un AC mal planteado cuesta dos rondas de review o una enmienda |
+| 0 Producto | `claude-opus-5-5` o `claude-fable-5-2`, a eleccion del usuario | la sesion (`commands/producto.md` va en `inherit`) | Decide la arquitectura; pocos tokens, mucho peso aguas abajo |
+| 1 Leader | `claude-opus-5-5` o `claude-fable-5-2`, a eleccion del usuario | la sesion (`commands/spec.md` va en `inherit`) | Un AC mal planteado cuesta dos rondas de review o una enmienda |
 | 2 Implementer | `claude-sonnet-5-5` | `agents/implementer.md` | Concentra el volumen de tokens a la mitad de precio, y no es el modelo que lo revisa |
 | 3 Revisor | `claude-opus-5-5` | `agents/revisor.md` | Al menos tan capaz como quien implemento |
 | 4 Cierre | `claude-opus-5-5` | `commands/cierre.md` | Merge irreversible y lectura de rojos; pocos tokens, no se ahorra ahi |
 | Estado | `claude-haiku-5-5` | `commands/estado.md` | Lee y cuenta al arrancar, con el contexto aun corto |
 
-Los tres aceptan `low` a `max`. En Producto, Leader, Revisor y Cierre va `xhigh` como
-red de seguridad en sus frontmatters; en `estado.md` se fija `medium` sobre Haiku 5.5
-para dar un arranque instantáneo sin esperas de reasoning innecesarias.
+Todos aceptan `low` a `max`. En Revisor y Cierre va `xhigh` como red de
+seguridad en sus frontmatters; en `estado.md` se fija `medium` sobre Haiku 5.5
+para dar un arranque instantáneo sin esperas de reasoning innecesarias. Producto
+y Leader no fijan esfuerzo: depende del modelo elegido.
+
+### Fable 5.2 u Opus 5.5 (Producto y Leader)
+
+El usuario elige el modelo de estos dos roles en un formulario, una vez por
+feature (por documento, `prd` o `sdd`, en el rol producto, que corre antes de
+que existan features). La eleccion queda en el backlog y los turnos siguientes
+del rol la reutilizan:
+
+```bash
+$PY "$H/modelo.py" ver    --feature <id>        # exit 3 si aun no se eligio
+$PY "$H/modelo.py" elegir --feature <id> --modelo fable|opus
+$PY "$H/modelo.py" ver    --doc prd|sdd
+```
+
+| Modelo | ID | Esfuerzo | Precio por millon de tokens (entrada / salida) |
+| --- | --- | --- | --- |
+| Fable 5.2 | `claude-fable-5-2` | `high`; `xhigh` solo ante un riesgo concreto | $8 / $40 |
+| Opus 5.5 | `claude-opus-5-5` | `xhigh` | $4 / $20 |
+
+Fable se empieza en `high` porque por encima la mejora es desigual y cuesta
+mas; Opus 5.5 trae `medium` por defecto, y estos roles deciden mucho con pocos
+tokens. Los precios son los de la API al 2026-11-03.
+
+Por que hay que preguntar y no basta el frontmatter:
+
+- El `model` de un comando es fijo. Con `claude-opus-5-5` escrito ahi, invocar
+  `/harness-flow:spec` pasaba el turno a Opus aunque la sesion estuviera en
+  Fable. Por eso `producto.md` y `spec.md` van en `model: inherit`, sin `effort`.
+- Ningun comando puede cambiar el modelo de la sesion: solo el usuario, con
+  `/model`. Si lo elegido no coincide con la sesion, el rol se DETIENE y pide
+  `/model fable` u `/model opus` (y `/effort <nivel>`), y que se vuelva a
+  invocar. No sigue en otro modelo.
+- El modelo de la sesion lo sabe el propio agente por su system prompt; el
+  esfuerzo lo lee `modelo.py` de `CLAUDE_EFFORT`. Si esa variable no esta, el
+  script lo dice en vez de afirmar que coincide.
+- Sin usuario a quien preguntar (`claude -p`): vale lo ya elegido; si no hay
+  nada, el rol sigue con el modelo de la sesion y lo dice.
+
+Cierre y Revisor siguen en Opus 5.5, y el Implementer en Sonnet 5.5: fue la
+decision del usuario al agregar Fable, y Revisor y Cierre conservan `xhigh`.
 
 ### Seleccion automatica: implementer y revisor
 
@@ -171,9 +213,10 @@ El frontmatter queda en `xhigh`, el tope de la banda, como red: una invocacion
 que olvida pasar el nivel gasta de mas, pero no revisa ni implementa por debajo
 de lo debido.
 
-Producto, Leader y Cierre no entran en la seleccion: corren en la sesion
-principal, cuyo esfuerzo el modelo no puede cambiar, y gastan pocos tokens para
-lo mucho que deciden.
+Producto, Leader y Cierre no entran en la seleccion automatica: corren en la
+sesion principal, cuyo esfuerzo el modelo no puede cambiar, y gastan pocos
+tokens para lo mucho que deciden. En Producto y Leader el esfuerzo lo fija el
+modelo que eligio el usuario (seccion anterior).
 
 Comprobado el 2026-10-07 con Claude Code 2.1.293, leyendo el `effort` que
 registra la transcripcion: el revisor (frontmatter `xhigh`) lanzado con la tool
@@ -192,8 +235,9 @@ corrieron en `low` y `max`.
   siguiente vuelve al modelo de la sesion. Por eso el implementer es un
   subagente y no un comando: implementar dura muchos turnos. El `effort` de un
   comando de plugin no esta en la tabla del manifiesto; el del subagente si.
-- **Sesion**: fijala en Opus 5.5 con `xhigh` para que los turnos sin comando
-  tambien lo usen. En `~/.claude/settings.json`:
+- **Sesion**: fijala en el modelo con el que trabajas Producto y Leader, para
+  que esos roles no tengan que detenerse a pedir `/model`: Fable 5.2 con `high`
+  u Opus 5.5 con `xhigh`. Ejemplo con Opus, en `~/.claude/settings.json`:
 
   ```json
   { "model": "claude-opus-5-5", "effortLevel": "xhigh" }
@@ -217,7 +261,8 @@ global. Por eso los roles se reparten asi:
 
 | Rol | Como corre en Hermes | Credencial |
 | --- | --- | --- |
-| Producto, Leader, Cierre, Estado | Sesion de Hermes en `claude-opus-5-5` | API key de Console |
+| Producto, Leader | Sesion de Hermes en `claude-opus-5-5` o `claude-fable-5-2`, a eleccion del usuario (`modelo.py`) | API key de Console |
+| Cierre, Estado | Sesion de Hermes en `claude-opus-5-5` | API key de Console |
 | Implementer | `claude -p --agent harness-flow:implementer --effort <nivel>` | Login propio de Claude Code |
 | Revisor | `claude -p --agent harness-flow:revisor --effort <nivel>` | Login propio de Claude Code |
 
@@ -228,7 +273,12 @@ cambia:
 
 ```bash
 hermes -m claude-opus-5-5 --provider anthropic --reasoning xhigh
+hermes -m claude-fable-5-2 --provider anthropic --reasoning high    # si el usuario eligio Fable
 ```
+
+En Hermes la pregunta de Fable u Opus se hace con el formulario del host, se
+guarda igual con `modelo.py elegir`, y cambiar de modelo es relanzar la sesion
+con el `-m` que corresponde.
 
 Hermes manda `thinking: adaptive` y `output_config.effort: xhigh`
 (`agent/anthropic_adapter.py`, `_thinking_kwargs`).
