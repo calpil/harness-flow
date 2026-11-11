@@ -180,8 +180,12 @@ def load_backlog(p: dict) -> dict:
     return d
 
 def save_backlog(p: dict, data: dict) -> None:
-    p["backlog"].write_text(
-        json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    # Escritura atomica: otro gate que lee a mitad de la escritura veria un
+    # JSON truncado.
+    destino = p["backlog"]
+    tmp = destino.with_name(f".{destino.name}.{os.getpid()}.tmp")
+    tmp.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    os.replace(tmp, destino)
 
 def get_feature(data: dict, fid) -> dict:
     for f in data["features"]:

@@ -963,7 +963,13 @@ def cmd_verify(args) -> None:
             f["last_verify"]["fallos"] = fallos
             print("[!!] contexto multi-repo cambio durante verify")
         f["last_verify"].update(context=contexto, report_sig=sign(vp))
-    save_backlog(p, data)
+    # Un verify dura lo que sus suites (horas en una cadena). Reescribir el
+    # backlog cargado al empezar borraba lo que otros gates sellaron mientras
+    # tanto (enmiendas, reviews, cierres): se relee y se toca solo esta medicion.
+    # `enmiendas` queda con las del comienzo: lo sellado despues no esta medido.
+    fresco = load_backlog(p)
+    get_feature(fresco, f["id"])["last_verify"] = f["last_verify"]
+    save_backlog(p, fresco)
     print(f"\n[{'ok' if not fallos else '!!'}] {len(cmds)-fallos}/{len(cmds)} AC en verde -> {vp.name}")
     if sin_comando:
         print(f"[!] {len(sin_comando)}/{len(acs)} AC NO se midieron (sin comando "
