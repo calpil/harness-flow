@@ -20,6 +20,9 @@ import sys
 from pathlib import Path
 from typing import Any
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import copias  # noqa: E402
+
 # Directorio base de stacks en harness-flow
 # Bajo assets/ a proposito: Hermes recorre la skill entera y registra como skill
 # propia cada SKILL.md que encuentra, salvo en references/, templates/, assets/ y
@@ -68,6 +71,13 @@ def evaluar_stack_manifest(manifest: dict[str, Any], repo: Path) -> tuple[int, l
     for anti in detection.get("anti_indicators", []):
         if (repo / anti).exists() or list(repo.glob(anti)):
             return 0, []
+
+    # 1b. Requires any: la senal propia del stack. `build.gradle.kts` lo tiene
+    #     cualquier proyecto Gradle; sin un AndroidManifest.xml no es Android.
+    requeridos = detection.get("requires_any", [])
+    if requeridos and not any((repo / r).exists() or next(repo.glob(r), None) is not None
+                              for r in requeridos):
+        return 0, []
 
     # 2. Files any: al menos uno debe existir si se declaran
     files_any = detection.get("files_any", [])
@@ -179,17 +189,23 @@ def detectar_stack_directorio(repo: Path) -> dict[str, Any]:
 
 
 def detectar_todos_los_destinos(root: Path) -> list[dict[str, Any]]:
-    """Detecta stacks en la raiz o en microservicios declarados en multi-repo."""
-    # 1. Raices declaradas en harness/grafos.json
-    declaradas = _raices_declaradas(root)
+    """Todos los repos del proyecto con su stack: es la lista que se normaliza y se mide.
 
-    # 2. Si no hay ninguna, los subdirectorios inmediatos que sean repos; si tampoco, la raiz
-    if not declaradas:
-        raices = _subrepos(root) or [root]
-        return [detectar_stack_directorio(r) for r in raices]
+    Entran la raiz del arnes, las raices de harness/grafos.json y lo que cuelga de
+    cada una:
 
-    # 3. Una raiz declarada puede ser un repo o una carpeta que agrupa microservicios
-    #    (~/GolandProjects/<proyecto>/ms-*): si no tiene stack propio, se recorren sus repos.
+    - De una carpeta sin stack (agrupa repos: `ms-*`, `frontend/` + `backend/`),
+      sus repos; si ninguno tiene stack, los del nivel siguiente (`apps/web`).
+    - De un repo con stack, las carpetas con OTRO stack que son parte del mismo
+      repo (`api/` Go dentro de un front). Una carpeta del mismo stack es parte
+      del repo, no otro repo. Un clon propio dentro de la raiz (un servicio
+      enlazado) es OTRO repo: no entra solo, lo lista `repos_sin_declarar`.
+
+    Antes la raiz se perdia si no estaba declarada o si una subcarpeta cualquiera
+    traia un `package.json`, y un repo con stack nunca se miraba por dentro: ese
+    codigo quedaba sin reglas, sin skills y sin medir.
+    """
+    root = root.resolve()
     resultados: list[dict[str, Any]] = []
     vistas: set[Path] = set()
 
@@ -199,15 +215,79 @@ def detectar_todos_los_destinos(root: Path) -> list[dict[str, Any]]:
             vistas.add(ruta)
             resultados.append(res)
 
-    for r in declaradas:
-        res = detectar_stack_directorio(r)
-        subrepos = _subrepos(r) if res["stack"] == "generico" else []
+    def recorrer(carpeta: Path) -> None:
+        res = detectar_stack_directorio(carpeta)
+        subrepos = [detectar_stack_directorio(s) for s in _subrepos(carpeta)]
+        if res["stack"] != "generico":
+            agregar(res)
+            for sub in subrepos:
+                if (sub["stack"] not in ("generico", res["stack"])
+                        and not _es_clon_propio(Path(sub["path"]))):
+                    agregar(sub)
+            return
         if not subrepos:
             agregar(res)
         for sub in subrepos:
-            agregar(detectar_stack_directorio(sub))
+            agregar(sub)
+        if not any(s["stack"] != "generico" for s in subrepos):
+            for intermedia in _carpetas(carpeta):
+                for sub in _subrepos(intermedia):
+                    det = detectar_stack_directorio(sub)
+                    if det["stack"] != "generico":
+                        agregar(det)
 
+    recorrer(root)
+    for declarada in _raices_declaradas(root):
+        if declarada != root:
+            recorrer(declarada)
     return resultados
+
+
+def repos_sin_declarar(root: Path) -> list[dict[str, Any]]:
+    """Clones con stack normativo dentro de un repo del proyecto que nadie declaro.
+
+    Un servicio enlazado o clonado dentro de la raiz (`adr-zitadel` dentro del
+    front) es codigo del proyecto, pero es otro repo: el arnes no escribe en el
+    ni lo mide sin que el usuario lo declare en harness/grafos.json. Lo que si
+    hace es decirlo, para que no quede sin norma en silencio.
+    """
+    gobernados = {Path(d["path"]) for d in detectar_todos_los_destinos(root)}
+    hallados: list[dict[str, Any]] = []
+    for d in sorted(gobernados):
+        for sub in _subrepos(d) if d.is_dir() else []:
+            if not _es_clon_propio(sub) or sub.resolve() in gobernados:
+                continue
+            det = detectar_stack_directorio(sub)
+            if det["stack"] != "generico" and all(det["path"] != h["path"] for h in hallados):
+                hallados.append(det)
+    return hallados
+
+
+_CARPETAS_AJENAS = frozenset(("node_modules", "vendor", "dist", "build", "target", "bin", "obj",
+                              "coverage", "tmp", "venv"))
+
+
+def _carpetas(carpeta: Path) -> list[Path]:
+    """Subdirectorios inmediatos donde puede vivir codigo del proyecto."""
+    try:
+        hijos = sorted(carpeta.iterdir())
+    except OSError:
+        return []
+    return [h for h in hijos if h.is_dir() and h.name not in _CARPETAS_AJENAS
+            and not h.name.startswith((".", "harness", "docs", "graphify"))]
+
+
+def _es_clon_propio(carpeta: Path) -> bool:
+    """Un repo git propio o un submodulo; no un worktree de otro repo."""
+    marca = carpeta / ".git"
+    if marca.is_dir():
+        return True
+    if marca.is_file():
+        try:
+            return "/worktrees/" not in marca.read_text(encoding="utf-8", errors="ignore")
+        except OSError:
+            return False
+    return False
 
 
 def _marcas_de_repo() -> list[str]:
@@ -230,11 +310,7 @@ def _subrepos(carpeta: Path) -> list[Path]:
         return any(next(item.glob(m), None) is not None if "*" in m else (item / m).exists()
                    for m in marcas)
 
-    return sorted(
-        item for item in carpeta.iterdir()
-        if item.is_dir() and not item.name.startswith((".", "harness", "docs", "graphify"))
-        and es_repo(item)
-    )
+    return [item for item in _carpetas(carpeta) if es_repo(item)]
 
 
 def _raices_declaradas(root: Path) -> list[Path]:
@@ -376,15 +452,38 @@ def verificar_cumplimiento(repo: Path, stack_id: str | None = None,
     # C. Chequeo de Arquitectura
     arch_ok = True
     arch_errors: list[str] = []
+    arch_avisos: list[str] = []
     arch_script = STACKS_DIR / stack_id / "scripts" / "check-architecture.py"
     if arch_script.exists():
         code, out = _run_cmd([sys.executable, str(arch_script), "--repo", str(repo)])
+        # Lo que el verificador dice que NO midio no se pierde al traducir su exit a un OK.
+        arch_avisos = [line.strip() for line in out.splitlines()
+                       if line.startswith("[WARN]") or "NO medid" in line or "NO se midi" in line]
         if code != 0:
             arch_ok = False
             for line in out.splitlines():
                 if line.startswith("  - "):
                     arch_errors.append(line.strip())
                     findings.append(f"Arquitectura {stack_id}: {line.strip()}")
+    heredado = codigo_fuera_de_la_norma(repo, stack_id)
+
+    # C2. Copias instaladas: viejas (se actualizan) o editadas por el proyecto (se conservan)
+    plan = plan_de_copias(repo, stack_id, excluidas)
+    copias_viejas = [i["rel"] for i in plan if i["estado"] == copias.VIEJA]
+    copias_modificadas = [i["rel"] for i in plan
+                          if i["estado"] == copias.MODIFICADA and i["etiqueta"] != "contrato"]
+    if copias_viejas:
+        findings.append(f"Copias desactualizadas respecto de la plantilla ({len(copias_viejas)}): "
+                        f"{', '.join(copias_viejas[:5])}{'...' if len(copias_viejas) > 5 else ''} "
+                        "(stack.py normalizar las actualiza)")
+    if copias_modificadas:
+        warnings.append(f"{len(copias_modificadas)} copias editadas por el proyecto, distintas de la plantilla: "
+                        f"{', '.join(copias_modificadas[:5])}{'...' if len(copias_modificadas) > 5 else ''}")
+    for nombre in sorted({i["regla"] for i in plan if i.get("alcance")}):
+        alcance = next(i["alcance"] for i in plan if i.get("regla") == nombre and i.get("alcance"))
+        warnings.append(f"{nombre}: el codigo del repo no cabe en los globs de la plantilla "
+                        f"({alcance['sin_cubrir']} archivos, p. ej. {alcance['ejemplo']}); "
+                        f"alcance de este repo: + {', '.join(alcance['agregados'])}")
 
     # D. Multi-LLM Readiness y Paridad
     has_claude_rules = all((rules_claude / r).exists() for r in expected_rules) if expected_rules else True
@@ -423,12 +522,36 @@ def verificar_cumplimiento(repo: Path, stack_id: str | None = None,
         "skills_excluidas": sorted(excluidas),
         "architecture_ok": arch_ok,
         "architecture_errors": arch_errors,
+        "architecture_warnings": arch_avisos,
+        "heredado": heredado,
+        "copias_viejas": copias_viejas,
+        "copias_modificadas": copias_modificadas,
         "multi_llm_ready": multi_llm_ready,
         "full_multi_llm_parity": full_multi_llm_parity,
         "hosts_active": hosts_active,
         "findings": findings,
         "warnings": warnings,
     }
+
+
+def codigo_fuera_de_la_norma(repo: Path, stack_id: str) -> dict[str, Any] | None:
+    """Cuanto codigo del repo vive fuera del layout del stack; None si el stack no declara layout.
+
+    `archivos` en `unidades` carpetas estan en el alcance del layout y fuera de la
+    norma (heredados). `sin_medir` tiene extension de codigo y cae fuera del
+    alcance: el layout no lo mira, y se dice en vez de contarlo como conforme.
+    """
+    import arquitectura  # import tardio: arquitectura importa este modulo
+    try:
+        layout = arquitectura.layout_de(stack_id)
+    except ValueError:
+        return None
+    if layout is None:
+        return None
+    rutas = copias.archivos_versionados(repo)
+    unidades = arquitectura.heredados_por_unidad(layout, rutas)
+    return {"unidades": len(unidades), "archivos": sum(len(v) for v in unidades.values()),
+            "sin_medir": len(arquitectura.fuera_de_alcance(layout, rutas, stack_id))}
 
 
 # ---------------------------------------------------------------------------
@@ -446,12 +569,15 @@ def ruta_skill(nombre: str, stack_id: str | None = None, repo: Path | None = Non
         return None, f"nombre de skill invalido: {nombre!r}"
     if repo is not None:
         repo = repo.resolve()
-        for carpeta in (".claude", ".agents"):
-            ruta = repo / carpeta / "skills" / nombre / "SKILL.md"
-            if ruta.is_file():
-                return ruta, f"copia del repo, {carpeta}/skills"
         if not stack_id and repo.is_dir():
             stack_id = detectar_stack_directorio(repo)["stack"]
+        del_stack = bool(stack_id) and (STACKS_DIR / stack_id / "skills" / nombre / "SKILL.md").is_file()
+        for carpeta in (".claude", ".agents"):
+            ruta = repo / carpeta / "skills" / nombre / "SKILL.md"
+            # Una copia que quedo vieja no le gana a la plantilla vigente.
+            if ruta.is_file() and (not del_stack
+                                   or copia_vigente(repo, stack_id, f"{carpeta}/skills/{nombre}")):
+                return ruta, f"copia del repo, {carpeta}/skills"
     if not stack_id or stack_id == "generico":
         return None, "indica --stack <id> (stack.py stacks los lista) o un --repo con stack detectable"
     if not (STACKS_DIR / stack_id).is_dir():
@@ -470,12 +596,143 @@ def _skills_del_stack(stack_id: str) -> set[str]:
     return {d.name for d in origen.iterdir() if (d / "SKILL.md").is_file()}
 
 
-def normalizar_repositorio(repo: Path, stack_id: str | None = None, dry_run: bool = False,
-                           rules: dict | None = None) -> dict[str, Any]:
-    """Aplica la normativa de CALPIL (copia rules, skills, AGENTS.md, checkers) al repo.
+_ETIQUETA_REGLA = {".claude": "regla", ".agents": "regla compartida", ".gemini": "regla Gemini/AGY"}
+_ETIQUETA_SKILL = {".claude": "skill", ".agents": "skill compartida"}
 
-    Solo agrega lo que falta. No instala las skills de `rules.stack_skills_excluidas`
-    ni reemplaza un AGENTS.md que ya existe: ambos son decisiones del usuario.
+
+def plan_de_copias(repo: Path, stack_id: str, excluidas=frozenset()) -> list[dict[str, Any]]:
+    """Cada copia que el stack pone en el repo, con su estado (copias.FALTA/AL_DIA/VIEJA/MODIFICADA).
+
+    Es la unica lista de lo que se instala: la usan `normalizar` para escribir y
+    `verificar` para decir que quedo viejo. El texto de las reglas que cubren el
+    codigo sale ya ajustado a donde vive el codigo de ESTE repo.
+    """
+    manifest = cargar_manifest(stack_id)
+    origen = STACKS_DIR / stack_id
+    registro = copias.leer_registro(repo)
+    validadores = (sorted(f for f in (origen / "scripts").glob("*") if f.is_file())
+                   if (origen / "scripts").is_dir() else [])
+    codigo = copias.codigo_del_repo(copias.archivos_versionados(repo),
+                                    copias.extensiones_de_codigo(manifest),
+                                    {f"scripts/{v.name}" for v in validadores})
+    cubren = manifest.get("normative", {}).get("rules_cubren_codigo", copias.REGLAS_QUE_CUBREN_CODIGO)
+    plan: list[dict[str, Any]] = []
+
+    def archivo(rel: str, datos: bytes, fue_version, etiqueta: str, **extra) -> None:
+        destino = repo / rel
+        actual = destino.read_bytes() if destino.is_file() else None
+        estado, motivo = copias.estado(copias.huella(actual) if actual is not None else None,
+                                       copias.huella(datos), registro.get(rel),
+                                       lambda: fue_version(actual))
+        plan.append({"rel": rel, "tipo": "archivo", "etiqueta": etiqueta, "estado": estado,
+                     "motivo": motivo, "datos": datos, "huella": copias.huella(datos), **extra})
+
+    for regla in sorted((origen / "rules").glob("*.md")) if (origen / "rules").is_dir() else []:
+        texto, alcance = regla.read_text(encoding="utf-8"), None
+        if regla.name in cubren:
+            texto, alcance = copias.ajustar_alcance(texto, codigo)
+        for carpeta, etiqueta in _ETIQUETA_REGLA.items():
+            archivo(f"{carpeta}/rules/{regla.name}", texto.encode("utf-8"),
+                    lambda actual, regla=regla: copias.fue_version_de_regla(regla, actual),
+                    etiqueta, regla=regla.name, alcance=alcance)
+
+    for skill in sorted((origen / "skills").iterdir()) if (origen / "skills").is_dir() else []:
+        if skill.name in excluidas or not (skill / "SKILL.md").is_file():
+            continue
+        esperado = copias.archivos_de(skill)
+        for carpeta, etiqueta in _ETIQUETA_SKILL.items():
+            rel = f"{carpeta}/skills/{skill.name}"
+            destino = repo / rel
+            actual = copias.archivos_de(destino) if destino.is_dir() else None
+            estado, motivo = copias.estado(
+                copias.huella_arbol(actual) if actual is not None else None,
+                copias.huella_arbol(esperado), registro.get(rel),
+                lambda actual=actual, skill=skill: copias.fue_version_de_carpeta(skill, actual))
+            plan.append({"rel": rel, "tipo": "carpeta", "etiqueta": etiqueta, "estado": estado,
+                         "motivo": motivo, "origen": skill, "huella": copias.huella_arbol(esperado)})
+
+    # AGENTS.md: se genera si falta. Uno que ya existe es del usuario salvo que el
+    # registro pruebe que es el que el arnes genero y nadie lo toco.
+    archivo("AGENTS.md", _generar_agents_md(stack_id, manifest).encode("utf-8"),
+            lambda actual: False, "contrato")
+
+    for validador in validadores:
+        archivo(f"scripts/{validador.name}", validador.read_bytes(),
+                lambda actual, validador=validador: copias.fue_version_de_archivo(validador, actual),
+                "validador", ejecutable=validador.suffix in (".py", ".sh", ".mjs"))
+    return plan
+
+
+# Plan por (repo, stack) de esta ejecucion: el brief pregunta por cada regla y cada skill.
+_planes: dict[tuple[Path, str], list[dict[str, Any]]] = {}
+
+
+def copia_vigente(repo: Path, stack_id: str, rel: str) -> dict[str, Any] | None:
+    """El item del plan para `rel` si la copia del repo sirve para entregarla; None si no.
+
+    Sirve la que esta al dia y la que el proyecto edito (su edicion manda). No
+    sirve la que quedo vieja: ahi quien pregunta debe leer la plantilla vigente,
+    aunque nadie haya actualizado todavia la copia del repo.
+    """
+    clave = (repo.resolve(), stack_id)
+    if clave not in _planes:
+        try:
+            _planes[clave] = plan_de_copias(repo, stack_id, frozenset())
+        except (OSError, ValueError):
+            _planes[clave] = []
+    item = next((i for i in _planes[clave] if i["rel"] == rel), None)
+    return item if item and item["estado"] in (copias.AL_DIA, copias.MODIFICADA) else None
+
+
+def _instalada(item: dict[str, Any]) -> str:
+    rel = item["rel"]
+    if item["etiqueta"] == "contrato":
+        return "Generado contrato multi-LLM en AGENTS.md"
+    if item["etiqueta"] == "validador":
+        return f"Instalado validador: {rel}"
+    return f"Instalada {item['etiqueta']}: {rel}"
+
+
+def _escribir_copia(repo: Path, item: dict[str, Any]) -> None:
+    destino = repo / item["rel"]
+    if item["tipo"] == "carpeta":
+        if destino.exists():
+            shutil.rmtree(destino)
+        destino.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copytree(item["origen"], destino,
+                        ignore=shutil.ignore_patterns("__pycache__", ".DS_Store"))
+        return
+    destino.parent.mkdir(parents=True, exist_ok=True)
+    destino.write_bytes(item["datos"])
+    if item.get("ejecutable"):
+        destino.chmod(0o755)
+
+
+def _versionada(repo: Path, rel: str) -> bool:
+    """True si git ya sigue esa copia en el repo: reescribirla deja el arbol con cambios."""
+    code, out = _run_cmd(["git", "ls-files", "--", rel], cwd=repo)
+    return code == 0 and bool(out.strip())
+
+
+def normalizar_repositorio(repo: Path, stack_id: str | None = None, dry_run: bool = False,
+                           rules: dict | None = None, reemplazar: bool = False,
+                           conservar_versionadas: bool = False) -> dict[str, Any]:
+    """Aplica la normativa de CALPIL (rules, skills, AGENTS.md, validadores) al repo.
+
+    - Instala lo que falta.
+    - Actualiza la copia que quedo vieja y nadie edito (ver copias.py).
+    - Conserva la copia que el proyecto edito, y lo avisa; `reemplazar` la cambia
+      por la plantilla (decision del usuario).
+    - Ajusta el alcance de las reglas que cubren el codigo a donde vive el codigo
+      de este repo.
+
+    No instala las skills de `rules.stack_skills_excluidas` ni reemplaza un
+    AGENTS.md que el arnes no genero: ambos son decisiones del usuario.
+
+    `conservar_versionadas` es el modo del arranque de sesion: una copia vieja que
+    el repo versiona NO se reescribe sola, porque el cambio quedaria sin commit en
+    el checkout principal y `gate.py close` no integra sobre un arbol con cambios.
+    Se devuelve en `pendientes` para que alguien corra `normalizar` y commitee.
     """
     repo = repo.resolve()
     if not stack_id:
@@ -485,94 +742,58 @@ def normalizar_repositorio(repo: Path, stack_id: str | None = None, dry_run: boo
     if stack_id == "generico":
         return {"status": "skipped", "message": "Repo generico; no aplica stack especifico."}
 
-    manifest = cargar_manifest(stack_id)
-    stack_source_dir = STACKS_DIR / stack_id
-    actions_taken: list[str] = []
-    avisos: list[str] = []
     # Antes de escribir nada: una regla que no se entiende no deja el repo a medio instalar.
     excluidas = skills_excluidas(rules_del_proyecto(repo) if rules is None else rules, stack_id)
+    plan = plan_de_copias(repo, stack_id, excluidas)
+    actions_taken: list[str] = []
+    avisos: list[str] = []
+    conservadas: list[dict[str, Any]] = []
+    pendientes: list[str] = []
+    registro = copias.leer_registro(repo)
+    registro_nuevo = dict(registro)
 
-    # 1. Instalar Rules Multi-LLM (.claude/rules/, .agents/rules/, .gemini/rules/)
-    target_claude_rules = repo / ".claude" / "rules"
-    target_agents_rules = repo / ".agents" / "rules"
-    target_gemini_rules = repo / ".gemini" / "rules"
-    source_rules_dir = stack_source_dir / "rules"
-    if source_rules_dir.exists():
-        if not dry_run:
-            target_claude_rules.mkdir(parents=True, exist_ok=True)
-            target_agents_rules.mkdir(parents=True, exist_ok=True)
-            target_gemini_rules.mkdir(parents=True, exist_ok=True)
-        for r_file in source_rules_dir.glob("*.md"):
-            # A. Instalar en .claude/rules (Claude Code)
-            dest_claude = target_claude_rules / r_file.name
-            if not dest_claude.exists():
-                if not dry_run:
-                    shutil.copy2(r_file, dest_claude)
-                actions_taken.append(f"Instalada regla: .claude/rules/{r_file.name}")
-            # B. Instalar en .agents/rules (OpenAI Codex, Grok, Kimi, Hermes)
-            dest_agents = target_agents_rules / r_file.name
-            if not dest_agents.exists():
-                if not dry_run:
-                    shutil.copy2(r_file, dest_agents)
-                actions_taken.append(f"Instalada regla compartida: .agents/rules/{r_file.name}")
-            # C. Instalar en .gemini/rules (Gemini CLI, Antigravity AGY)
-            dest_gemini = target_gemini_rules / r_file.name
-            if not dest_gemini.exists():
-                if not dry_run:
-                    shutil.copy2(r_file, dest_gemini)
-                actions_taken.append(f"Instalada regla Gemini/AGY: .gemini/rules/{r_file.name}")
-
-    # 2. Instalar Skills tanto en .claude/skills/ como en .agents/skills/ (para Hermes, Codex, Gemini)
-    target_claude_skills = repo / ".claude" / "skills"
-    target_shared_skills = repo / ".agents" / "skills"
-    source_skills_dir = stack_source_dir / "skills"
-
-    if source_skills_dir.exists():
-        if not dry_run:
-            target_claude_skills.mkdir(parents=True, exist_ok=True)
-            target_shared_skills.mkdir(parents=True, exist_ok=True)
-        for skill_dir in source_skills_dir.iterdir():
-            if skill_dir.name in excluidas:
+    for item in plan:
+        rel, estado = item["rel"], item["estado"]
+        if estado == copias.AL_DIA:
+            registro_nuevo[rel] = item["huella"]
+            continue
+        if estado == copias.FALTA:
+            accion = _instalada(item)
+        elif estado == copias.VIEJA:
+            if conservar_versionadas and _versionada(repo, rel):
+                pendientes.append(rel)
                 continue
-            if skill_dir.is_dir() and (skill_dir / "SKILL.md").exists():
-                dest_claude = target_claude_skills / skill_dir.name
-                dest_shared = target_shared_skills / skill_dir.name
-                if not dest_claude.exists():
-                    if not dry_run:
-                        shutil.copytree(skill_dir, dest_claude)
-                    actions_taken.append(f"Instalada skill: .claude/skills/{skill_dir.name}")
-                if not dest_shared.exists():
-                    if not dry_run:
-                        shutil.copytree(skill_dir, dest_shared)
-                    actions_taken.append(f"Instalada skill compartida: .agents/skills/{skill_dir.name}")
-
-    # 3. Generar / Sincronizar AGENTS.md (contrato multi-LLM)
-    agents_md = repo / "AGENTS.md"
-    if not agents_md.exists():
-        agents_content = _generar_agents_md(stack_id, manifest)
+            accion = f"Actualizada {item['etiqueta']}: {rel} ({item['motivo']})"
+        elif item["etiqueta"] == "contrato":
+            if "CALPIL" not in (repo / rel).read_text(encoding="utf-8", errors="ignore"):
+                # Antes se reemplazaba entero por la plantilla del stack: el AGENTS.md del
+                # proyecto se perdia. Un archivo que ya existe es del usuario.
+                avisos.append("AGENTS.md ya existe y no se reemplaza: el contrato del stack queda en las rules instaladas")
+            continue
+        elif reemplazar:
+            accion = f"Reemplazada {item['etiqueta']}: {rel} (--reemplazar)"
+        else:
+            conservadas.append(item)
+            continue
         if not dry_run:
-            agents_md.write_text(agents_content, encoding="utf-8")
-        actions_taken.append("Generado contrato multi-LLM en AGENTS.md")
-    elif "CALPIL" not in agents_md.read_text(encoding="utf-8", errors="ignore"):
-        # Antes se reemplazaba entero por la plantilla del stack: el AGENTS.md del
-        # proyecto se perdia. Un archivo que ya existe es del usuario.
-        avisos.append("AGENTS.md ya existe y no se reemplaza: el contrato del stack queda en las rules instaladas")
+            _escribir_copia(repo, item)
+        registro_nuevo[rel] = item["huella"]
+        actions_taken.append(accion)
 
-    # 4. Instalar scripts de verificación si existen en el stack
-    scripts_dir = repo / "scripts"
-    stack_scripts_dir = stack_source_dir / "scripts"
-    if stack_scripts_dir.exists():
-        if not dry_run:
-            scripts_dir.mkdir(parents=True, exist_ok=True)
-        for s_file in stack_scripts_dir.glob("*"):
-            if s_file.is_file():
-                dest_file = scripts_dir / s_file.name
-                if not dest_file.exists():
-                    if not dry_run:
-                        shutil.copy2(s_file, dest_file)
-                        if s_file.suffix in (".py", ".sh", ".mjs"):
-                            dest_file.chmod(0o755)
-                    actions_taken.append(f"Instalado validador: scripts/{s_file.name}")
+    alcances: list[str] = []
+    for nombre in sorted({i["regla"] for i in plan if i.get("alcance")}):
+        alcance = next(i["alcance"] for i in plan if i.get("regla") == nombre and i.get("alcance"))
+        alcances.append(f"{nombre}: {alcance['sin_cubrir']} archivos de codigo fuera de los globs de la "
+                        f"plantilla (p. ej. {alcance['ejemplo']}); la regla de este repo se amplia a "
+                        f"{', '.join(alcance['agregados'])}")
+    if conservadas:
+        muestra = ", ".join(i["rel"] for i in conservadas[:4]) + ("..." if len(conservadas) > 4 else "")
+        avisos.append(f"{len(conservadas)} copias difieren de la plantilla y se conservan "
+                      f"({conservadas[0]['motivo']}): {muestra}. Para adoptar la plantilla: "
+                      f"stack.py normalizar --repo {shlex.quote(str(repo))} --reemplazar")
+    if not dry_run and registro_nuevo != registro:
+        copias.guardar_registro(repo, registro_nuevo)
+    _planes.pop((repo, stack_id), None)
 
     return {
         "status": "normalized",
@@ -580,6 +801,9 @@ def normalizar_repositorio(repo: Path, stack_id: str | None = None, dry_run: boo
         "repo": str(repo),
         "actions": actions_taken,
         "warnings": avisos,
+        "alcance": alcances,
+        "conservadas": [i["rel"] for i in conservadas],
+        "pendientes": pendientes,
         "skills_excluidas": sorted(excluidas),
         "dry_run": dry_run,
     }
@@ -1507,6 +1731,7 @@ def auto_normalizar_y_asegurar_cumplimiento(
     rules_proj = (data.get("rules") or {}) if isinstance(data, dict) else None
 
     violadores: list[dict[str, Any]] = []
+    pendientes_por_repo: list[tuple[Path, int]] = []
     for d in st_calpil:
         target_path = Path(d["path"])
         stack_id = d["stack"]
@@ -1520,15 +1745,24 @@ def auto_normalizar_y_asegurar_cumplimiento(
         # -------------------------------------------------------------
         # Nivel 1: Entorno y Metadatos (.claude/rules, .agents/rules, .gemini/rules, skills, AGENTS.md)
         # -------------------------------------------------------------
-        if not diag["rules_ok"] or not diag["skills_ok"] or not diag["multi_llm_ready"]:
+        if (not diag["rules_ok"] or not diag["skills_ok"] or not diag["multi_llm_ready"]
+                or diag["copias_viejas"]):
             if auto_normalizar_nivel_1:
-                norm_res = normalizar_repositorio(target_path, stack_id, dry_run=False, rules=rules_proj)
+                norm_res = normalizar_repositorio(target_path, stack_id, dry_run=False, rules=rules_proj,
+                                                  conservar_versionadas=True)
                 acciones = norm_res.get("actions", norm_res.get("actions_taken", []))
                 if acciones:
-                    msg = f"Auto-normalizado Nivel 1 en {target_path.name} ({d['name']}): {len(acciones)} elementos instalados."
+                    actualizadas = sum(a.startswith("Actualizada") for a in acciones)
+                    instaladas = len(acciones) - actualizadas
+                    partes = ([f"{instaladas} elementos instalados"] if instaladas else []) + \
+                             ([f"{actualizadas} copias viejas actualizadas"] if actualizadas else [])
+                    msg = f"Auto-normalizado Nivel 1 en {target_path.name} ({d['name']}): {', '.join(partes)}."
                     resultado["nivel_1_acciones"].append(msg)
                 for aviso in norm_res.get("warnings", []):
-                    resultado["nivel_1_acciones"].append(f"[i] {target_path.name}: {aviso}")
+                    if not norm_res.get("conservadas") or "se conservan" not in aviso:
+                        resultado["nivel_1_acciones"].append(f"[i] {target_path.name}: {aviso}")
+                if norm_res.get("pendientes"):
+                    pendientes_por_repo.append((target_path, len(norm_res["pendientes"])))
                 # Re-verificar tras normalizar
                 diag = verificar_cumplimiento(target_path, stack_id, rules=rules_proj)
 
@@ -1541,6 +1775,22 @@ def auto_normalizar_y_asegurar_cumplimiento(
             ])
             violadores.append({"repo": target_path, "stack": stack_id, "nombre": d["name"],
                                "errores": list(diag["architecture_errors"])})
+
+    if pendientes_por_repo:
+        # Una copia vieja que el repo versiona no se reescribe sola: quedaria como cambio
+        # sin commit en el checkout principal, y close no integra sobre un arbol con cambios.
+        nombres = ", ".join(f"{r.name} ({n})" for r, n in pendientes_por_repo[:6])
+        resultado["nivel_1_acciones"].append(
+            f"[!] {len(pendientes_por_repo)} repo(s) con copias viejas de rules, skills o validadores "
+            f"que versionan: {nombres}{'...' if len(pendientes_por_repo) > 6 else ''}. No se "
+            "actualizan solas (quedarian sin commit). En cada uno: stack.py normalizar --repo <ruta> "
+            "y commit. Mientras tanto el brief entrega la plantilla vigente.")
+    resultado["copias_pendientes"] = [str(r) for r, _ in pendientes_por_repo]
+    for det in repos_sin_declarar(repo_root):
+        resultado["nivel_1_acciones"].append(
+            f"[!] {Path(det['path']).name} ({det['stack']}) es un repo dentro del proyecto que no esta "
+            "declarado en harness/grafos.json: no se normaliza ni se mide. Declaralo como raiz, o "
+            f"instala su norma: stack.py normalizar --repo {shlex.quote(det['path'])}")
 
     # Con el trinquete adoptado (arquitectura.py) lo heredado se mide y solo baja:
     # no se crea la #0 ni se bloquea el backlog entero.
@@ -1747,6 +1997,8 @@ def main() -> None:
     p_norm.add_argument("--repo", default=".", help="Ruta del repositorio")
     p_norm.add_argument("--stack", default=None, help="Forzar stack especifico")
     p_norm.add_argument("--dry-run", action="store_true", help="Solo simular cambios")
+    p_norm.add_argument("--reemplazar", action="store_true",
+                        help="Cambia por la plantilla tambien las copias que el proyecto edito (decision del usuario)")
 
     # auditar
     p_aud = sub.add_parser("auditar", help="Audita versiones del stack, vulnerabilidades (CVEs) y fuentes Context7/Oficiales")
@@ -1825,6 +2077,9 @@ def main() -> None:
                 print(f"    Stack: {t['stack']} ({t['name']}) [Confianza: {t['confidence']}%]")
                 if t["indicators"]:
                     print(f"    Indicadores: {', '.join(t['indicators'])}")
+            for t in repos_sin_declarar(repo_path):
+                print(f"  [!] sin declarar en harness/grafos.json: {t['path']} ({t['stack']}); "
+                      "no se normaliza ni se mide")
         sys.exit(0)
 
     if args.cmd in ("verificar", "normalizar"):
@@ -1844,14 +2099,26 @@ def main() -> None:
             print("=" * 68)
             print(f"DIAGNÓSTICO NORMATIVO CALPIL: {diag['stack']} en {repo_path.name}")
             print("=" * 68)
-            print(f"Estado global: {'✅ COMPLIANT' if diag['compliant'] else '❌ NON-COMPLIANT'}")
+            her = diag.get("heredado") or {}
+            pendiente = bool(her.get("archivos") or diag.get("architecture_warnings"))
+            print("Estado global: " + ("❌ NON-COMPLIANT" if not diag["compliant"]
+                                       else "⚠️  INSTALACION CONFORME; ARQUITECTURA CON PENDIENTES" if pendiente
+                                       else "✅ COMPLIANT"))
             print(f"Rules modulares:     {'OK (multi-LLM)' if diag['rules_ok'] else 'FALTAN (' + ', '.join(diag['missing_rules']) + ')'}")
             missing_skills_cnt = len(diag['missing_skills'])
             skills_status = 'OK' if diag['skills_ok'] else f"FALTAN {missing_skills_cnt} skills"
             print(f"Skills operativas:   {skills_status}")
             if diag.get("skills_excluidas"):
                 print(f"Skills excluidas:    {', '.join(diag['skills_excluidas'])} (rules.{REGLA_SKILLS_EXCLUIDAS})")
-            print(f"Arquitectura:        {'OK' if diag['architecture_ok'] else 'VIOLACIONES DETECTADAS'}")
+            print(f"Arquitectura:        {'VIOLACIONES DETECTADAS' if not diag['architecture_ok'] else 'sin violaciones del verificador' if pendiente else 'OK'}")
+            if her.get("archivos"):
+                print(f"  [!] {her['archivos']} archivos en {her['unidades']} carpetas viven fuera de la norma del stack "
+                      "(codigo heredado: arquitectura.py inventario --detalle)")
+            if her.get("sin_medir"):
+                print(f"  [i] {her['sin_medir']} archivos de codigo quedan fuera del alcance del layout y no se miden "
+                      "(arquitectura.py inventario --detalle)")
+            for aviso in diag.get("architecture_warnings", []):
+                print(f"  [!] verificador: {aviso}")
             print(f"Multi-LLM Ready:     {'SI' if diag['multi_llm_ready'] else 'NO'}")
             parity_label = 'TOTAL (todos los hosts)' if diag.get('full_multi_llm_parity') else f"PARCIAL (hosts sincronizados: {', '.join(diag.get('hosts_active', [])) if diag.get('hosts_active') else 'ninguno'})"
             print(f"Paridad Multi-LLM:   {parity_label}")
@@ -1923,17 +2190,24 @@ def main() -> None:
         sys.exit(salida)
 
     if args.cmd == "normalizar":
-        res = normalizar_repositorio(repo_path, args.stack, args.dry_run, rules=rules_cli)
+        res = normalizar_repositorio(repo_path, args.stack, args.dry_run, rules=rules_cli,
+                                     reemplazar=args.reemplazar)
         print(f"Normalización de stack '{res.get('stack')}' en {repo_path.name}:")
         if res.get("skills_excluidas"):
             print(f"  = Skills excluidas por el proyecto: {', '.join(res['skills_excluidas'])}")
-        for aviso in res.get("warnings", []):
+        for aviso in res.get("alcance", []) + res.get("warnings", []):
             print(f"  [i] {aviso}")
         actions = res.get("actions", [])
         if actions:
             for act in actions:
                 print(f"  + {act}")
-            print(f"\nTotal: {len(actions)} acciones aplicadas. El repositorio ahora cumple la normativa multi-LLM.")
+            if args.dry_run:
+                print(f"\nTotal: {len(actions)} acciones pendientes (--dry-run: no se escribio nada).")
+            else:
+                print(f"\nTotal: {len(actions)} acciones aplicadas. Las rules, skills y validadores "
+                      "quedan al dia con la plantilla.")
+        elif res.get("status") == "skipped":
+            print(f"  - {res.get('message')}")
         else:
             print("  - Todas las rules, skills y contratos ya se encontraban normalizados.")
         sys.exit(0)

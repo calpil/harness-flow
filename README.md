@@ -131,7 +131,10 @@ Para proyectos con mucho código anterior al arnés. En vez de bloquear todo el 
 - **El brief y el briefing del revisor** anuncian el stack de cada repo que la feature declara y traen el **texto completo de sus reglas**, el **índice de sus skills** con la ruta de cada `SKILL.md` y su **documentación vigente** (doc oficial, id de Context7 y escáner), también para los repos que viven fuera de la raíz. El rol producto recibe lo mismo, de todo el proyecto, al crear el borrador del SDD.
 - **El brief es el paquete completo de un agente delegado**: trae el protocolo de implementación (TDD vertical y las 5 paradas) y, junto a cada índice, el comando con rutas absolutas que imprime una skill del stack (`stack.py skill`) o una referencia (`normas.py --ref`). Quien delega pega el brief entero y no anexa nada.
 - **Modo Pair por defecto en cualquier repo**: `gate.py approve-spec` lo registra en el backlog al sellar el spec por primera vez y `worktree.py start` lo confirma (`--delegado` para delegar), así que vale también en una raíz multi-repo que usa `worktree.py register`. La lista de tests se sella con `gate.py aprobar-tests --yes` y `close` la exige en las features en modo pair.
-- **`stack.py normalizar`** solo agrega lo que falta: no reemplaza un `AGENTS.md` existente ni reinstala las skills de `rules.stack_skills_excluidas`.
+- **`stack.py normalizar`** instala lo que falta, actualiza la copia que quedó vieja y nadie editó, y conserva la que el proyecto editó. No reemplaza un `AGENTS.md` que el arnés no generó ni reinstala las skills de `rules.stack_skills_excluidas`.
+- **El alcance de cada regla sale del código del repo**: si el código vive fuera de los `globs` de la plantilla (`projects/*/src/app/`, `handlers/`), la regla de ese repo se amplía a `**/*.<ext>`. Se mide en cada normalización.
+- **Repos del proyecto**: la raíz entra siempre; también una carpeta con otro stack dentro de un repo y los monorepos `apps/*`. Un clon ajeno dentro de la raíz se avisa y no se toca.
+- **`stack.py verificar`** no da `COMPLIANT` sobre código sin medir: dice cuántos archivos viven fuera de la norma y qué no midió el verificador. Guía: [`references/normalizacion-de-stacks.md`](references/normalizacion-de-stacks.md).
 - **Verificadores sin falsos positivos**: workspaces Angular con varios proyectos, servicios Go sin `internal/` (aviso) y raíces de `grafos.json` como objetos.
 - **Context7** documentado para Claude Code, Codex, Gemini CLI, Antigravity, Grok y Hermes; el revisor tiene Context7 y lectura web entre sus herramientas.
 
@@ -347,6 +350,7 @@ harness-flow/
 │   ├── multirepo.md, claude.md, openai.md, grok.md, kimi.md, entorno.md
 │   ├── hub.md, obsidian.md, atlassian.md, documentacion.md
 │   ├── arquitectura-heredada.md      <- Trinquete: base, cuota de normalización y código anterior al arnés
+│   ├── normalizacion-de-stacks.md    <- Qué repos se normalizan, alcance de las reglas y copias viejas
 │   ├── context7-documentacion-oficial.md <- Context7 MCP, documentación oficial y seguridad
 │   ├── comunicacion-ste100-y-prompts.md <- Principios Karpathy, norma ASD-STE100 y micro-reportes
 │   ├── patrones-datos-ddia.md        <- Patrones DDIA: Transactional Outbox, Idempotencia y OCC
@@ -380,7 +384,7 @@ cd <skill> && "$PY" -m unittest discover -s tests
 ```
 
 - La suite completa tarda unos 17 minutos: los runners medidos y los cierres multi-repo crean repos reales.
-- `test_frontend_runner.py`, `test_retirados_frontend.py`, `test_frontend_close.py` y `test_cierre_historico.py` exigen `HARNESS_TEST_FRONTEND_MODULES`, la ruta a un `node_modules` con Angular 22 y Vitest 4. Sin ella fallan a propósito en vez de omitirse.
+- `test_frontend_runner.py`, `test_retirados_frontend.py`, `test_frontend_close.py` y `test_cierre_historico.py` exigen `HARNESS_TEST_FRONTEND_MODULES`, la ruta a un `node_modules` con Angular 22 y Vitest 4. Sin ella fallan a propósito en vez de omitirse. El toolchain se instala una vez fuera del repo (`references/multirepo.md`); con él en `~/.harness-flow/frontend-toolchain`, la suite completa se corre así: `T=~/.harness-flow/frontend-toolchain; PATH=$T/node_modules/node/bin:$PATH HARNESS_TEST_FRONTEND_MODULES=$T/node_modules "$PY" -m unittest discover -s tests`. Esos fallos no son "fallos conocidos": son una parte de la suite sin medir.
 - Los tests no abren el Memory Hub real: `HARNESS_SIN_CONTEXTO=1` y `HARNESS_SIN_HUB=1` lo impiden.
 
 ---

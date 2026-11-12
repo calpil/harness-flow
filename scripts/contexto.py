@@ -1251,13 +1251,21 @@ def lineas_modo(f: dict) -> list[str]:
 def _texto_regla(repos_del_stack: list[Path], sid: str, nombre: str) -> tuple[str, str]:
     """(cuerpo, origen) de una regla: la copia del proyecto si existe, si no la de la skill."""
     import stack
+    viejas = False
     for repo in repos_del_stack:
         for carpeta in (".claude", ".agents", ".gemini"):
             ruta = repo / carpeta / "rules" / nombre
-            if ruta.is_file():
+            if not ruta.is_file():
+                continue
+            # Una copia que quedo vieja no se entrega: el implementer leeria una norma
+            # que la plantilla ya corrigio. La que el proyecto edito si manda.
+            if stack.copia_vigente(repo, sid, f"{carpeta}/rules/{nombre}"):
                 return stack._leer_cuerpo_sin_frontmatter(ruta), f"{repo.name}/{carpeta}/rules"
+            viejas = True
     ruta = stack.STACKS_DIR / sid / "rules" / nombre
-    return (stack._leer_cuerpo_sin_frontmatter(ruta), "plantilla de la skill") if ruta.is_file() else ("", "")
+    origen = ("plantilla de la skill; la copia del repo esta desactualizada: stack.py normalizar"
+              if viejas else "plantilla de la skill")
+    return (stack._leer_cuerpo_sin_frontmatter(ruta), origen) if ruta.is_file() else ("", "")
 
 
 def _skill_md(repos_del_stack: list[Path], sid: str, nombre: str) -> tuple[Path | None, str]:
@@ -1266,7 +1274,7 @@ def _skill_md(repos_del_stack: list[Path], sid: str, nombre: str) -> tuple[Path 
     for repo in repos_del_stack:
         for carpeta in (".claude", ".agents"):
             ruta = repo / carpeta / "skills" / nombre / "SKILL.md"
-            if ruta.is_file():
+            if ruta.is_file() and stack.copia_vigente(repo, sid, f"{carpeta}/skills/{nombre}"):
                 return ruta, f"{repo.name}/{carpeta}/skills"
     ruta = stack.STACKS_DIR / sid / "skills" / nombre / "SKILL.md"
     return (ruta, "plantilla de harness-flow") if ruta.is_file() else (None, "")

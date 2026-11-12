@@ -144,61 +144,73 @@ class TestStackManager(unittest.TestCase):
     def test_verificar_cumplimiento_templates_calpil(self):
         if self.go_template.exists():
             diag_go = stack.verificar_cumplimiento(self.go_template)
-            self.assertTrue(diag_go["compliant"])
+            # La plantilla externa puede traer copias mas viejas que las de la skill:
+            # eso es un hallazgo propio y no dice nada de su arquitectura ni de sus rules.
+            self.assertEqual([], [f for f in diag_go["findings"]
+                                  if not f.startswith("Copias desactualizadas")])
             self.assertTrue(diag_go["architecture_ok"])
             self.assertTrue(diag_go["rules_ok"])
 
         if self.ng_template.exists():
             diag_ng = stack.verificar_cumplimiento(self.ng_template)
-            self.assertTrue(diag_ng["compliant"])
+            self.assertEqual([], [f for f in diag_ng["findings"]
+                                  if not f.startswith("Copias desactualizadas")])
             self.assertTrue(diag_ng["architecture_ok"])
             self.assertTrue(diag_ng["rules_ok"])
 
         if self.dotnet_template.exists():
             diag_dotnet = stack.verificar_cumplimiento(self.dotnet_template)
-            self.assertTrue(diag_dotnet["compliant"])
+            self.assertEqual([], [f for f in diag_dotnet["findings"]
+                                  if not f.startswith("Copias desactualizadas")])
             self.assertTrue(diag_dotnet["architecture_ok"])
             self.assertTrue(diag_dotnet["rules_ok"])
 
         if self.rust_template.exists():
             diag_rust = stack.verificar_cumplimiento(self.rust_template)
-            self.assertTrue(diag_rust["compliant"])
+            self.assertEqual([], [f for f in diag_rust["findings"]
+                                  if not f.startswith("Copias desactualizadas")])
             self.assertTrue(diag_rust["architecture_ok"])
             self.assertTrue(diag_rust["rules_ok"])
 
         if self.next_template.exists():
             diag_next = stack.verificar_cumplimiento(self.next_template)
-            self.assertTrue(diag_next["compliant"])
+            self.assertEqual([], [f for f in diag_next["findings"]
+                                  if not f.startswith("Copias desactualizadas")])
             self.assertTrue(diag_next["architecture_ok"])
             self.assertTrue(diag_next["rules_ok"])
 
         if self.sb_template.exists():
             diag_sb = stack.verificar_cumplimiento(self.sb_template)
-            self.assertTrue(diag_sb["compliant"])
+            self.assertEqual([], [f for f in diag_sb["findings"]
+                                  if not f.startswith("Copias desactualizadas")])
             self.assertTrue(diag_sb["architecture_ok"])
             self.assertTrue(diag_sb["rules_ok"])
 
         if self.nest_template.exists():
             diag_nest = stack.verificar_cumplimiento(self.nest_template)
-            self.assertTrue(diag_nest["compliant"])
+            self.assertEqual([], [f for f in diag_nest["findings"]
+                                  if not f.startswith("Copias desactualizadas")])
             self.assertTrue(diag_nest["architecture_ok"])
             self.assertTrue(diag_nest["rules_ok"])
 
         if self.py_template.exists():
             diag_py = stack.verificar_cumplimiento(self.py_template)
-            self.assertTrue(diag_py["compliant"])
+            self.assertEqual([], [f for f in diag_py["findings"]
+                                  if not f.startswith("Copias desactualizadas")])
             self.assertTrue(diag_py["architecture_ok"])
             self.assertTrue(diag_py["rules_ok"])
 
         if self.ios_template.exists():
             diag_ios = stack.verificar_cumplimiento(self.ios_template)
-            self.assertTrue(diag_ios["compliant"])
+            self.assertEqual([], [f for f in diag_ios["findings"]
+                                  if not f.startswith("Copias desactualizadas")])
             self.assertTrue(diag_ios["architecture_ok"])
             self.assertTrue(diag_ios["rules_ok"])
 
         if self.android_template.exists():
             diag_android = stack.verificar_cumplimiento(self.android_template)
-            self.assertTrue(diag_android["compliant"])
+            self.assertEqual([], [f for f in diag_android["findings"]
+                                  if not f.startswith("Copias desactualizadas")])
             self.assertTrue(diag_android["architecture_ok"])
             self.assertTrue(diag_android["rules_ok"])
 
@@ -453,6 +465,10 @@ class TestStackManager(unittest.TestCase):
         and_repo = self.tmpdir / "unstructured-android"
         and_repo.mkdir()
         (and_repo / "settings.gradle.kts").write_text('rootProject.name = "MyAndroidApp"\n', encoding="utf-8")
+        # Sin un AndroidManifest.xml un proyecto Gradle no es Android (detection.requires_any).
+        manifiesto = and_repo / "app" / "src" / "main" / "AndroidManifest.xml"
+        manifiesto.parent.mkdir(parents=True)
+        manifiesto.write_text("<manifest/>\n", encoding="utf-8")
 
         plan = stack.generar_plan_refactor(and_repo)
         self.assertTrue(plan["needed"])

@@ -12,7 +12,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from comun import (bitacora, bloqueos_feature, enlazar_dependencias, get_feature, git,  # noqa: E402
+from comun import (bitacora, bloqueos_feature, enlazar_dependencias, enlazar_normativa, get_feature, git,  # noqa: E402
                    load_backlog, now_iso, paths, save_backlog, slugify)
 
 ABIERTOS = ("in_progress", "blocked", "review")
@@ -182,7 +182,7 @@ def cmd_start(args) -> None:
     bitacora(p, f"start #{fid} rama={rama} worktree={destino} modo={f['modo']}")
     print(f"[ok] feature #{fid} arrancada\n     rama:     {rama}\n     worktree: {destino}")
     _decir_modo(f)
-    enlazados = enlazar_dependencias(data, repo, destino)
+    enlazados = enlazar_dependencias(data, repo, destino) + enlazar_normativa(repo, destino)
     if enlazados:
         print(f"     enlazado desde la raiz: {', '.join(enlazados)}")
     print("[i]  TRABAJA DENTRO de ese worktree.")
@@ -210,6 +210,12 @@ def cmd_register(args) -> None:
     # El modo lo fija gate.py approve-spec (primera aprobacion), start o `worktree.py modo`.
     save_backlog(p, data)
     bitacora(p, f"register #{f['id']} multi-repo")
+    for fila in manifest.get("repos", []):
+        if fila.get("repo") and fila.get("worktree"):
+            enlazadas = enlazar_normativa(Path(str(fila["repo"])), Path(str(fila["worktree"])))
+            if enlazadas:
+                print(f"[i]  {Path(str(fila['worktree'])).name}: normativa del stack enlazada desde el "
+                      f"checkout principal ({', '.join(enlazadas)})")
     if f.get("modo"):
         _decir_modo(f)
     else:

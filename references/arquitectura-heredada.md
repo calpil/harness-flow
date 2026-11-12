@@ -108,3 +108,11 @@ aviso porque un checkout viejo no es una violacion.
   agrego la feature.
 - **Repos fuera de la raiz**: las raices salen de `harness/grafos.json`; la clave
   de cada repo en la base es su ruta relativa a la raiz, o absoluta si vive fuera.
+- **Codigo que el layout no mira**: `layout.codigo` suele nombrar una ruta
+  (`**/src/app/**/*.ts`). Un archivo con extension de codigo fuera de ella (una
+  libreria en `projects/ui/src/lib`) no cuenta como heredado: NO se mide.
+  `inventario` dice cuantos son y `inventario --detalle` los lista por carpeta.
+- **Sin trinquete adoptado** nada frena lo heredado. El arranque de sesion dice
+  cuanto hay: `[!] N archivos en M carpetas viven fuera de la norma del stack`.
+  Que repos se miden y como se instala la norma:
+  [`normalizacion-de-stacks.md`](normalizacion-de-stacks.md).

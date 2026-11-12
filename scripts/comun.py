@@ -438,6 +438,65 @@ def enlazar_dependencias(data: dict, raiz: Path, destino: Path) -> list[str]:
     return hechos
 
 
+CARPETAS_NORMATIVA = (".claude/rules", ".claude/skills", ".agents/rules", ".agents/skills",
+                      ".gemini/rules")
+
+
+def enlazar_normativa(repo: Path, destino: Path) -> list[str]:
+    """Enlaza al worktree las rules y skills del stack que el repo NO versiona.
+
+    `stack.py normalizar` las instala en el checkout principal. Si el repo las
+    ignora (`.gitignore` con `.*`), un worktree nace sin ninguna: el host que
+    trabaja dentro del worktree no carga la norma del stack. Una carpeta que el
+    repo si versiona no se toca: la trae la rama. Solo enlaza lo que existe en
+    el checkout principal y falta en el worktree.
+    """
+    hechos = []
+    if repo.resolve() == destino.resolve():
+        return hechos
+    for rel in CARPETAS_NORMATIVA:
+        origen, enlace = repo / rel, destino / rel
+        if not origen.is_dir() or os.path.lexists(enlace):
+            continue
+        code, versionados = git(["ls-files", "--", rel], repo)
+        if code != 0 or versionados.strip():
+            continue
+        try:
+            enlace.parent.mkdir(parents=True, exist_ok=True)
+            enlace.symlink_to(origen.resolve(), target_is_directory=True)
+            hechos.append(rel)
+        except OSError as exc:
+            print(f"[!] no pude enlazar {rel} en {destino}: {exc}")
+            continue
+        _excluir_si_no_se_ignora(destino, rel)
+    return hechos
+
+
+def worktrees_abiertos(data: dict, abiertos=("in_progress", "review", "blocked")) -> list[tuple[Path, Path]]:
+    """[(checkout principal, worktree)] de las features en curso, sin repetir."""
+    pares: list[tuple[Path, Path]] = []
+    for f in data.get("features", []):
+        if f.get("status") not in abiertos:
+            continue
+        filas = [(r.get("repo"), r.get("worktree")) for r in (f.get("multi_repo") or {}).get("repos", [])]
+        filas.append((None, f.get("worktree")))
+        for repo, arbol in filas:
+            if not arbol or not Path(str(arbol)).is_dir():
+                continue
+            arbol = Path(str(arbol))
+            principal = Path(str(repo)) if repo else checkout_principal(arbol)
+            if principal and principal.is_dir() and (principal, arbol) not in pares:
+                pares.append((principal, arbol))
+    return pares
+
+
+def checkout_principal(arbol: Path) -> Path | None:
+    """El checkout del que cuelga un worktree; None si no se puede saber."""
+    code, out = git(["rev-parse", "--path-format=absolute", "--git-common-dir"], arbol)
+    comun_dir = Path(out.strip()) if code == 0 and out.strip() else None
+    return comun_dir.parent if comun_dir and comun_dir.name == ".git" else None
+
+
 def _excluir_si_no_se_ignora(destino: Path, nombre: str) -> None:
     """`node_modules/` en .gitignore no ignora un ENLACE (git no lo ve como
     directorio): el worktree quedaria con un `??` y `close` abortaria por arbol

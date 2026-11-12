@@ -12,6 +12,11 @@
       "build.gradle.kts",
       "AndroidManifest.xml"
     ],
+    "requires_any": [
+      "AndroidManifest.xml",
+      "app/src/main/AndroidManifest.xml",
+      "*/src/main/AndroidManifest.xml"
+    ],
     "extensions": [
       ".kt",
       ".kts"

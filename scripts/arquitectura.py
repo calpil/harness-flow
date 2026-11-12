@@ -45,6 +45,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 from comun import (  # noqa: E402
     bitacora, get_feature, git, load_backlog, now_iso, paths, save_backlog,
 )
+import copias  # noqa: E402
 import stack  # noqa: E402
 
 UMBRAL_LINEAS = 50
@@ -56,19 +57,7 @@ _IGNORADOS = frozenset((".git", "node_modules", "vendor", "dist", "build", ".ang
 
 # --- layout: que rutas son codigo, y cuales estan dentro de la norma -------
 
-def _regex(patron: str) -> re.Pattern:
-    """Glob de rutas posix: `**/` cruza directorios (o ninguno), `*` no cruza `/`."""
-    out, i = "", 0
-    while i < len(patron):
-        if patron.startswith("**/", i):
-            out, i = out + "(?:.*/)?", i + 3
-        elif patron.startswith("**", i):
-            out, i = out + ".*", i + 2
-        elif patron[i] == "*":
-            out, i = out + "[^/]*", i + 1
-        else:
-            out, i = out + re.escape(patron[i]), i + 1
-    return re.compile(out + r"\Z")
+_regex = copias.regex_glob
 
 
 class Layout:
@@ -116,6 +105,22 @@ def heredados_por_unidad(layout: Layout, rutas: list[str], exentas=()) -> dict[s
             if unidad not in exentas:
                 unidades.setdefault(unidad, []).append(ruta)
     return {u: sorted(v) for u, v in sorted(unidades.items())}
+
+
+def fuera_de_alcance(layout: Layout, rutas: list[str], stack_id: str) -> list[str]:
+    """Archivos con extension de codigo que el layout no mira: ni dentro ni fuera de la norma.
+
+    `layout.codigo` suele nombrar una ruta (`**/src/app/**/*.ts`, `src/**/*.py`).
+    El codigo que vive en otra (una libreria en `projects/ui/src/lib`, un `app/`
+    en vez de `src/`) no cuenta como heredado: NO se mide, y hay que decirlo.
+    Los tests y lo que el layout excluye a proposito no entran.
+    """
+    manifest = stack.cargar_manifest(stack_id)
+    validadores = stack.STACKS_DIR / stack_id / "scripts"
+    propios = {f"scripts/{f.name}" for f in validadores.glob("*")} if validadores.is_dir() else set()
+    codigo = copias.codigo_del_repo(rutas, copias.extensiones_de_codigo(manifest), propios)
+    return [r for r in codigo
+            if not any(x.match(r) for x in layout.codigo) and not any(x.match(r) for x in layout.excluir)]
 
 
 # --- de donde salen las rutas ----------------------------------------------
@@ -203,6 +208,15 @@ def medir(repo: Path, stack_id: str, layout: Layout, exentas=()) -> dict:
     return {"stack": stack_id, "path": str(repo),
             "heredadas": {u: len(v) for u, v in heredadas.items()},
             "violaciones": violaciones(repo, stack_id) or []}
+
+
+def sin_medir_por_carpeta(repo: Path, stack_id: str, layout: Layout) -> dict[str, int]:
+    """{carpeta de primer nivel: archivos de codigo que el layout no mira}."""
+    cuenta: dict[str, int] = {}
+    for ruta in fuera_de_alcance(layout, rutas_en_disco(repo), stack_id):
+        carpeta = "/".join(ruta.split("/")[:2]) if ruta.count("/") > 1 else (ruta.split("/")[0] if "/" in ruta else ".")
+        cuenta[carpeta] = cuenta.get(carpeta, 0) + 1
+    return dict(sorted(cuenta.items(), key=lambda x: (-x[1], x[0])))
 
 
 def restantes(base: dict) -> tuple[int, int]:
@@ -439,7 +453,7 @@ def al_cerrar(p: dict, data: dict, f: dict) -> None:
 
 def cmd_inventario(args) -> None:
     p = paths()
-    total_u = total_a = 0
+    total_u = total_a = total_s = 0
     salida = {}
     for d in destinos(p):
         if d["layout"] is None:
@@ -451,10 +465,18 @@ def cmd_inventario(args) -> None:
         total_u, total_a = total_u + u, total_a + a
         print(f"{d['clave']} [{d['stack']}]: {u} unidades heredadas, {a} archivos; "
               f"{len(hoy['violaciones'])} violaciones del verificador")
+        sin_medir = sin_medir_por_carpeta(d["path"], d["stack"], d["layout"])
+        total_s += sum(sin_medir.values())
+        if sin_medir:
+            print(f"    [i] {sum(sin_medir.values())} archivos de codigo fuera del alcance del layout, "
+                  "NO medidos" + ("" if args.detalle else " (--detalle los lista)"))
         if args.detalle:
             for unidad, n in sorted(hoy["heredadas"].items(), key=lambda x: -x[1]):
                 print(f"    {n:>4}  {unidad}")
-    print(f"TOTAL: {total_u} unidades heredadas, {total_a} archivos")
+            for carpeta, n in sin_medir.items():
+                print(f"    {n:>4}  {carpeta}  (sin medir)")
+    print(f"TOTAL: {total_u} unidades heredadas, {total_a} archivos"
+          + (f"; {total_s} archivos de codigo sin medir" if total_s else ""))
     if args.json:
         print(json.dumps(salida, ensure_ascii=False, indent=2))
 
@@ -654,7 +676,17 @@ def resumen(p: dict, data: dict) -> str | None:
     medibles = [d for d in destinos(p) if d["layout"] is not None]
     if not medibles:
         return None
-    return "trinquete sin adoptar (arquitectura.py inventario; adoptar --yes es del usuario)"
+    # Sin trinquete nada frena lo heredado: al menos se dice cuanto hay. Solo se
+    # cuentan rutas (git ls-files); el verificador de cada stack no se corre aqui.
+    unidades = archivos = 0
+    for d in medibles:
+        heredadas = heredados_por_unidad(d["layout"], rutas_en_disco(d["path"]))
+        unidades += len(heredadas)
+        archivos += sum(len(v) for v in heredadas.values())
+    if not archivos:
+        return "trinquete sin adoptar; 0 archivos fuera de la norma (arquitectura.py inventario)"
+    return (f"[!] {archivos} archivos en {unidades} carpetas viven fuera de la norma del stack y nada "
+            "los frena: trinquete sin adoptar (arquitectura.py inventario; adoptar --yes es del usuario)")
 
 
 def main() -> None:

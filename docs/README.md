@@ -11,6 +11,7 @@ Bienvenido al directorio de documentación técnica y memorias de arquitectura d
 | [`memoria-tecnica-implementaciones.md`](memoria-tecnica-implementaciones.md) | **Memoria técnica maestra** que documenta exhaustivamente todos los hitos implementados: stacks (.NET, Rust, iOS, Android), metodologías (Karpathy/STE100, DDIA, Ousterhout, GoF/Fowler, McConnell, OWASP/ZAP) y auditoría de los 10 stacks CALPIL. | Arquitectos, Líderes Técnicos e Ingenieros de Plataforma |
 | [`patrones-de-diseno-y-raiz-de-composicion.md`](patrones-de-diseno-y-raiz-de-composicion.md) | **Guía de Patrones de Diseño y Raíz de Composición**: Mapeo dialéctico de patrones GoF (creacionales, estructurales y de comportamiento) en capas hexagonales y clarificación de la inyección en `main`. | Diseñadores de Arquitectura, Implementers y Revisores |
 | [`principios-karpathy-ste100-harness-flow.md`](principios-karpathy-ste100-harness-flow.md) | Informe especializado sobre los **7 principios de Andrej Karpathy** y la norma aeroespacial **ASD-STE100** para comunicación de alta densidad y micro-reportes. | Implementers, Revisores y Diseñadores de Prompts |
+| [`diagnostico-normalizacion-de-stacks.md`](diagnostico-normalizacion-de-stacks.md) | **Diagnóstico de la normalización en dos proyectos reales** (ADR e Innova Real Estate, 2026-11-12): qué se midió, qué estaba mal en el arnés, qué se corrigió, qué queda por hacer en cada proyecto y cómo correr la suite con el toolchain de frontend. | Mantenedores del arnés y dueños de los proyectos |
 | [`explicacion-y-diagnostico.md`](explicacion-y-diagnostico.md) | **Diagnóstico de salud y auditoría estructural** del arnés: verificación de gates, postmerge medido, scripts neutralizados y telemetría de procesos CBM. | Mantenedores del arnés y Administradores de Infraestructura |
 
 ---
@@ -53,8 +54,9 @@ flowchart TD
     H30["<b>Hito 30: Norma del Stack y Pair en Cada Rol</b><br/>Índice de skills en el brief, stacks del proyecto para el rol producto y pair fijado al aprobar el spec"]
     H31["<b>Hito 31: Una Sola Lista de Normas</b><br/>Registro norma × rol para producto, leader, implementer y revisor; AC negativos; Context7 y auditar con exit real"]
     H32["<b>Hito 32: Brief como Paquete para Delegar</b><br/>Protocolo en el brief y comandos que imprimen cada skill del stack y cada referencia"]
+    H33["<b>Hito 33: La Norma Sigue al Código</b><br/>Alcance de las reglas medido en el repo, copias viejas actualizadas, raíz y monorepos normalizados, verificar sin OK sobre código sin medir"]
 
-    H1 --> H2 --> H3 --> H4 --> H5 --> H6 --> H7 --> H8 --> H9 --> H10 --> H11 --> H12 --> H13 --> H14 --> H15 --> H16 --> H17 --> H18 --> H19 --> H20 --> H21 --> H22 --> H23 --> H24 --> H25 --> H26 --> H27 --> H28 --> H29 --> H30 --> H31 --> H32
+    H1 --> H2 --> H3 --> H4 --> H5 --> H6 --> H7 --> H8 --> H9 --> H10 --> H11 --> H12 --> H13 --> H14 --> H15 --> H16 --> H17 --> H18 --> H19 --> H20 --> H21 --> H22 --> H23 --> H24 --> H25 --> H26 --> H27 --> H28 --> H29 --> H30 --> H31 --> H32 --> H33
 ```
 
 ---

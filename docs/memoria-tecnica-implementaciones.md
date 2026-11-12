@@ -853,11 +853,52 @@ Comandos: `inventario`, `base`, `adoptar`, `check [--feature]`, `siguiente` (lo 
 
 ---
 
-## 35. Estado de Verificación y Métricas de Calidad
+## 35. Hito 33: La Norma del Stack Sigue al Código y no se Queda Vieja
 
-* **Batería de Pruebas Automatizadas**: 57 archivos de test en `tests/`. La última corrida completa con el árbol limpio (2026-11-12, commit `77f1eee`) ejecutó 1.143 tests: 1.070 pasaron y 73 fallaron, los 73 por el mismo prerrequisito de entorno. Es el mismo resultado que la corrida sobre `3ff2f0c`: entre los dos commits solo cambió documentación. Una corrida anterior, sobre `50e04e9`, había mostrado además 3 tests que ese commit dejó desactualizados (`test_contexto`, `test_multirepo_close` y `test_spec_acs`); se corrigieron en `04a4fc5`. Los 73 de entorno están en `test_frontend_runner.py`, `test_retirados_frontend.py`, `test_frontend_close.py` y `test_cierre_historico.py`, que exigen `HARNESS_TEST_FRONTEND_MODULES` (un `node_modules` con Angular 22 y Vitest 4) y fallan a propósito en vez de omitirse cuando falta. Ningún otro test falla.
-* **Tests agregados en los hitos 19 a 31**: `test_indice_hermes.py`, `test_stack_adopcion.py`, `test_stack_normalizar.py`, `test_arquitectura.py`, `test_brief_stacks.py`, `test_hub.py`, `test_modelo.py`, `test_pair_y_reglas.py`, `test_feature_cero.py`, `test_normativa_por_rol.py` y `test_normas.py`, más casos nuevos en `test_plugin_claude.py`. Cada regresión se comprobó contra el código anterior: falla ahí y pasa con la corrección.
+**Problema.** Medido en dos proyectos reales (ADR e Innova Real Estate) el 2026-11-12, en solo lectura:
+
+- **Copias viejas.** `normalizar` solo agregaba lo que faltaba. En el front de Real Estate, `architecture.md` apuntaba a `src/app/features/**` y el código vivía en `projects/*/src/app/`; la plantilla ya estaba corregida y la copia no se actualizó. El verificador copiado en sus servicios Go tenía 146 líneas contra 285 de la plantilla. El brief entregaba el texto de la copia del repo, o sea el viejo.
+- **Un OK sin medir.** `stack.py verificar` decía "Arquitectura: OK / COMPLIANT" en 12 de 13 repos de Real Estate, con 1.361 archivos en 256 carpetas fuera del layout del stack. El verificador de Go avisa "límites NO medidos" cuando no hay `internal/` y sale con 0; ese aviso se perdía.
+- **Repos sin norma.** La raíz se perdía si no estaba declarada en `grafos.json` o si una subcarpeta traía un `package.json`. Un back dentro de un front, y un monorepo `apps/web` + `apps/api`, no se veían. Un proyecto Gradle cualquiera se detectaba como Android.
+- **Worktrees sin norma.** Un repo que no versiona `.claude/` daba worktrees con 0 rules y 0 skills.
+- **Errores tragados.** `estado.py` envolvía la normalización en `except Exception: pass`.
+
+**Qué se implementó.**
+
+1. **`scripts/copias.py`** (nuevo). Alcance real de una regla, huellas, registro de lo instalado (`<git-dir>/harness-flow-copias.json`, fuera del árbol) e historial git de la plantilla.
+2. **El alcance sale del código del repo.** `copias.ajustar_alcance`: si algún archivo de código queda fuera de los `globs` de la plantilla, la regla de ese repo suma `**/*.<ext>`. Aplica a `architecture.md` y `security.md` (`normative.rules_cubren_codigo` lo cambia). Se mide en cada normalización: mudar el código no deja la regla atrás.
+3. **`stack.plan_de_copias`**: la única lista de lo que se instala, con el estado de cada copia (falta, al día, vieja, modificada). `normalizar` instala lo que falta, actualiza lo viejo y conserva lo modificado; `--reemplazar` lo cambia por la plantilla. `verificar` reporta las viejas como hallazgo.
+4. **El arranque de sesión no reescribe una copia que el repo versiona.** Quedaría como cambio sin commit y `gate.py close` no integra sobre un árbol con cambios. Avisa en una línea con los repos afectados. El brief (`contexto._texto_regla`, `_skill_md`) y `stack.py skill` entregan la plantilla vigente cuando la copia del repo quedó vieja.
+5. **`stack.detectar_todos_los_destinos`** reescrito: la raíz entra siempre; entran las carpetas con otro stack dentro de un repo y el segundo nivel de un monorepo. Un clon propio dentro de un repo no entra: `stack.repos_sin_declarar` lo lista y el arranque lo avisa, sin escribir en él.
+6. **`detection.requires_any`** en el manifest: la señal propia del stack. Android exige un `AndroidManifest.xml`.
+7. **`verificar` honesto**: `heredado` (archivos y carpetas fuera de la norma, y archivos que el layout no mira), `architecture_warnings` y la etiqueta `INSTALACION CONFORME; ARQUITECTURA CON PENDIENTES`. `arquitectura.py inventario` lista el código sin medir, y `arquitectura.resumen` cuenta lo heredado cuando no hay trinquete.
+8. **`comun.enlazar_normativa`**: `worktree.py start`, `register` y el arranque de sesión enlazan al worktree las carpetas de rules y skills que el repo no versiona.
+
+**Decisiones.**
+
+- El arnés no commitea en los repos del usuario ni escribe en un repo que nadie declaró. Dice lo que falta y con qué comando.
+- Sin prueba de que nadie editó una copia (registro o historial), no se toca.
+- `stack.py verificar` conserva su exit: el código heredado lo gobierna el trinquete, que es decisión del usuario adoptar.
+- No se cambió la detección de Spring Boot ni de Python: un repo JVM o Python sin otra señal sigue cayendo en esos stacks. Queda documentado como límite.
+
+**Hallazgo al implementar.** La primera versión reescribía las copias viejas en el arranque de sesión. Al probarla contra los proyectos reales se vio que dejaba 13 checkouts con cambios sin commit, y `close` se niega a integrar así. De ahí el punto 4.
+
+**Tests.** [`tests/test_copias.py`](../tests/test_copias.py), 41 tests. Tres tests existentes cambiaron por diseño: la raíz no declarada ahora entra (`test_stack_adopcion`), el arreglo Android trae su manifiesto y la plantilla externa puede traer copias viejas (`test_stack`).
+
+**Guía.** [`references/normalizacion-de-stacks.md`](../references/normalizacion-de-stacks.md).
+
+---
+
+## 36. Estado de Verificación y Métricas de Calidad
+
+* **Batería de Pruebas Automatizadas**: 58 archivos de test en `tests/`, 1.184 tests. Última medición (2026-11-12, sobre el árbol de trabajo del Hito 33, antes de su commit), en dos corridas:
+  * Suite completa sin el toolchain de frontend: 1.184 tests, 1.111 pasaron y 73 fallaron. Los 73 están en `test_frontend_runner.py`, `test_retirados_frontend.py`, `test_frontend_close.py` y `test_cierre_historico.py`, que exigen `HARNESS_TEST_FRONTEND_MODULES` y fallan a propósito cuando falta.
+  * Esos cuatro archivos con el toolchain (`~/.harness-flow/frontend-toolchain`: Angular 22.2.1, Vitest 4.1.11, Node 22): 93 tests, 93 pasaron.
+  * Entre las dos corridas, los 1.184 tests pasan. Ningún test falla.
+* **Corrección de las mediciones anteriores**: las corridas sobre `50e04e9`, `3ff2f0c` y `77f1eee` reportaron esos 73 fallos como "prerrequisito de entorno". El toolchain estaba instalado desde el 2026-10-01; lo que faltó fue pasar su ruta. En esas corridas el runner de frontend quedó sin medir. La suite se corre siempre así: `T=~/.harness-flow/frontend-toolchain; PATH=$T/node_modules/node/bin:$PATH HARNESS_TEST_FRONTEND_MODULES=$T/node_modules "$PY" -m unittest discover -s tests`.
+* **Historial**: la corrida sobre `50e04e9` mostró además 3 tests que ese commit dejó desactualizados (`test_contexto`, `test_multirepo_close` y `test_spec_acs`); se corrigieron en `04a4fc5`.
+* **Tests agregados en los hitos 19 a 33**: `test_indice_hermes.py`, `test_stack_adopcion.py`, `test_stack_normalizar.py`, `test_arquitectura.py`, `test_brief_stacks.py`, `test_hub.py`, `test_modelo.py`, `test_pair_y_reglas.py`, `test_feature_cero.py`, `test_normativa_por_rol.py`, `test_normas.py` y `test_copias.py`, más casos nuevos en `test_plugin_claude.py`. Cada regresión se comprobó contra el código anterior: falla ahí y pasa con la corrección.
 * **Aislamiento**: los tests no abren el Memory Hub real (`HARNESS_SIN_CONTEXTO=1`, `HARNESS_SIN_HUB=1`), y la lógica de `hub.py` se prueba con una conexión falsa.
 * **Validación de Habilidades de Agentes**: 100% de las habilidades validadas en los 10 stacks con `validate-agent-skills.mjs`.
 * **Verificación de Arquitectura en las 10 Plantillas Reales de CALPIL**:
-  * 10/10 plantillas evaluadas como **COMPLIANT** (Rules OK, Skills OK, Arquitectura OK): Golang Hexagonal, Angular Product, .NET Hexagonal, Rust Hexagonal, Next.js Product, Spring Boot Hexagonal, NestJS Hexagonal, Python Data Product, iOS SwiftUI Clean Architecture y Android Jetpack Compose Clean Architecture.
+  * Medidas el 2026-11-12 con el `verificar` del Hito 33: 10/10 plantillas sin violaciones del verificador y con 0 archivos fuera de la norma (Golang Hexagonal, Angular Product, .NET Hexagonal, Rust Hexagonal, Next.js Product, Spring Boot Hexagonal, NestJS Hexagonal, Python Data Product, iOS SwiftUI Clean Architecture y Android Jetpack Compose Clean Architecture). Ya no salen todas como `COMPLIANT`: 8 de las 10 traen alguna rule más vieja que la de la skill, y `verificar` lo reporta como hallazgo (`Copias desactualizadas`). Las plantillas `nestjs-bff` y `nestjs-layered` tienen además rules y skills sin instalar.

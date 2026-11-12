@@ -60,6 +60,9 @@ El arnés se instala **una sola vez en la raíz del proyecto** (espacio de traba
 | `postmerge_frontend.py`| Validador post-merge para Angular / Node / TypeScript. |
 | `postmerge_terraform.py`| Validador post-merge para infraestructura Terraform (`fmt`, `validate`, `test`). |
 | `stack.py` | Gobernanza de los 10 stacks tecnológicos CALPIL: detección dinámica, auditoría de cumplimiento, normalización multi-LLM (Claude, Codex, Gemini, Hermes), scaffolding y verificadores AST/regex. |
+| `copias.py` | Copias de la normativa instaladas en un repo: alcance real de cada regla (medido en el código del repo), huellas, registro de lo instalado e historial de la plantilla para distinguir una copia vieja de una editada por el proyecto. |
+| `arquitectura.py` | Trinquete de arquitectura: mide el código que vive fuera del layout del stack, sella la base y exige que solo baje. `inventario` dice también el código que el layout no mira. |
+| `normas.py` | Registro único de las normas de ingeniería (12 normas × 5 roles) que imprimen el brief, el briefing y el borrador de producto. |
 | `documentacion.py` | Sincronización automática de bloques generados en `PRD-master.md` y `sdd.md`. |
 | `vault.py` | Generación del panel visual en Obsidian (`docs/vault/`). |
 | `atlassian.py` | Sincronización bidireccional opcional con Jira y Confluence. |
@@ -170,6 +173,24 @@ Tras una auditoría exhaustiva de los scripts, manifiestos de plugins y configur
 * **Estado:** **Mitigado automáticamente (no es un defecto de la skill).**
   Los hooks `PreToolUse`, `PostToolUse`, `SessionStart` y `SubagentStart` en `~/.claude/settings.json` los registra el instalador externo de `codebase-memory-mcp` con `timeout: 5`. Cuando el daemon de CBM pierde su socket o deja huérfanos, [`scripts/contexto.py`](file:///Users/alan/.hermes/skills/software-development/harness-flow/scripts/contexto.py#L435-L485) y [`scripts/cbm_procesos.py`](file:///Users/alan/.hermes/skills/software-development/harness-flow/scripts/cbm_procesos.py) lo detectan y sanean automáticamente al correr `estado.py` o `contexto.py`.
 
+### ✅ Hallazgo 6 (Corregido): La normalización dejaba código sin la norma del stack
+
+* **Ubicación:** [`scripts/stack.py`](../scripts/stack.py), [`scripts/copias.py`](../scripts/copias.py), [`scripts/arquitectura.py`](../scripts/arquitectura.py) y [`tests/test_copias.py`](../tests/test_copias.py).
+* **Estado:** **Corregido (Hito 33).** Medido en ADR e Innova Real Estate el 2026-11-12:
+  * `normalizar` solo agregaba lo que faltaba: una copia instalada no se actualizaba nunca. Una regla apuntaba a `src/app/features/**` y el código vivía en `projects/*/src/app/`.
+  * `stack.py verificar` decía "Arquitectura: OK" en 12 de 13 repos de un proyecto con 1.361 archivos fuera del layout del stack.
+  * La raíz del proyecto, un back dentro de un front y un monorepo `apps/*` podían quedar sin normalizar.
+* **Corrección:** el alcance de cada regla se calcula con el código del repo en cada normalización; las copias viejas se actualizan y las editadas por el proyecto se conservan; `verificar` cuenta el código fuera de la norma y muestra lo que el verificador no midió. Detalle: [`diagnostico-normalizacion-de-stacks.md`](diagnostico-normalizacion-de-stacks.md).
+* **Pendiente en los proyectos (decisión del usuario):** actualizar y commitear las copias viejas que cada repo versiona, y adoptar el trinquete donde no está adoptado.
+
+---
+
+### ✅ Hallazgo 7 (Corregido en el procedimiento): 73 tests de frontend reportados como "fallos de entorno"
+
+* **Ubicación:** [`tests/test_frontend_runner.py`](../tests/test_frontend_runner.py), `test_retirados_frontend.py`, `test_frontend_close.py` y `test_cierre_historico.py`.
+* **Estado:** **No era un defecto del código ni del entorno.** Esos tests exigen `HARNESS_TEST_FRONTEND_MODULES` y fallan a propósito si falta. El toolchain estaba instalado en `~/.harness-flow/frontend-toolchain`; la suite se corría sin pasar su ruta y los 73 fallos se daban por conocidos.
+* **Corrección:** la suite se corre siempre con el toolchain. El comando está en [`diagnostico-normalizacion-de-stacks.md`](diagnostico-normalizacion-de-stacks.md) y en `references/multirepo.md`.
+
 ---
 
 ## 5. Resumen de Salud del Sistema
@@ -184,6 +205,7 @@ Tras una auditoría exhaustiva de los scripts, manifiestos de plugins y configur
 | **Permisos de Plugin (`.claude/settings.json`)** | ✅ Óptimo | Incluye permisos para `~/.harness-flow/venv/bin/python` y `eval "$(python3 ...)"`. |
 | **Neutralización de `postmerge.py`** | ✅ Óptimo | Código muerto eliminado; falla rápido con `exit 2` tanto en CLI como por importación, redirigiendo a `postmerge_medido.py`. |
 | **Gestión de CBM (`cbm_procesos.py`)** | ✅ Óptimo | Telemetría y saneamiento automático en macOS/Linux (aviso controlado en Windows). |
+| **Normalización de stacks (`stack.py`, `copias.py`)** | ✅ Óptimo | El alcance de las reglas sale del código del repo, las copias viejas se actualizan o se avisan, y `verificar` no da un OK sobre código sin medir. Quedan pendientes en los proyectos las copias que cada repo versiona. |
 | **Matriz de Modelos y Reasoning Effort** | ✅ Óptimo | Calibrada por coste/latencia: roles pesados en máxima capacidad, implementer en alta velocidad y tareas de lectura/rutina en esfuerzo medio/bajo sin extended thinking innecesario. |
 
 ---

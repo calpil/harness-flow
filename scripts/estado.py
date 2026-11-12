@@ -57,13 +57,21 @@ def main() -> None:
         norm_info = stack.auto_normalizar_y_asegurar_cumplimiento(p["root"], data)
         for act in norm_info.get("nivel_1_acciones", []):
             print(f"   {act}")
+        # Los worktrees en curso de un repo que no versiona la normativa nacen sin ella.
+        from comun import enlazar_normativa, worktrees_abiertos
+        con_enlace = [arbol.name for principal, arbol in worktrees_abiertos(data)
+                      if enlazar_normativa(principal, arbol)]
+        if con_enlace:
+            print(f"   normativa del stack enlazada en {len(con_enlace)} worktree(s) que no la traian: "
+                  f"{', '.join(con_enlace[:4])}{'...' if len(con_enlace) > 4 else ''}")
         st_detectados = stack.detectar_todos_los_destinos(p["root"])
         st_calpil = [s for s in st_detectados if s["stack"] != "generico"]
         if st_calpil:
             partes_st = [f"{s['name']} en {Path(s['path']).name} (confianza {s['confidence']}%)" for s in st_calpil]
             print("   stacks: " + ", ".join(partes_st))
     except Exception as exc:
-        pass
+        # Un fallo aqui dejaba los repos sin normalizar y sin una linea que lo dijera.
+        print(f"   [!] no se pudo normalizar los stacks del proyecto: {exc}")
     try:
         import arquitectura
         linea_arq = arquitectura.resumen(p, data)

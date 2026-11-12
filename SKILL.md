@@ -291,15 +291,15 @@ Harness Flow integra un motor declarativo y extensible de detección y gobierno 
 - **Python Data Product (`python-dataproduct`)**: Python 3.14 con FastAPI, Polars/Pydantic y adaptadores de origen/destino.
 - **iOS SwiftUI Clean (`ios-swiftui-clean`)**: Swift con Clean Architecture por módulos SPM (`*Domain` puro, `*Data`, `*UI`, `*App` como Composition Root).
 - **Android Compose Clean (`android-compose-clean`)**: Kotlin y Jetpack Compose con `features/*/(domain|data|presentation)` y `core`.
-- **Stacks Futuros**: cualquier nuevo stack se agrega simplemente creando una carpeta `assets/stacks/<nuevo-stack>/manifest.json` con su bloque `"detection"` (indicadores de archivos, extensiones, dependencias y anti-indicadores); el motor lo detectará y normalizará de forma automática sin tocar código Python. Para que su código heredado se mida (trinquete), el manifest declara además el bloque `"layout"`.
+- **Stacks Futuros**: cualquier nuevo stack se agrega simplemente creando una carpeta `assets/stacks/<nuevo-stack>/manifest.json` con su bloque `"detection"` (indicadores de archivos, extensiones, dependencias y anti-indicadores); el motor lo detectará y normalizará de forma automática sin tocar código Python. `detection.requires_any` declara la señal propia del stack: sin ninguno de esos archivos el repo no es de ese stack (un proyecto Gradle sin `AndroidManifest.xml` no es Android). Para que su código heredado se mida (trinquete), el manifest declara además el bloque `"layout"`.
 
 ### Comandos de Stacks
 
 | Comando | Función |
 | --- | --- |
 | `$PY "$H/stack.py" detectar [--repo <r>]` | Detecta el stack de la raíz o microservicios con confianza e indicadores |
-| `$PY "$H/stack.py" verificar [--repo <r>]` | Audita cumplimiento normativo (Rules, Skills, Arquitectura y Testing) |
-| `$PY "$H/stack.py" normalizar [--repo <r>]` | Instala/sincroniza rules, skills operativas, `AGENTS.md` y checkers de arquitectura |
+| `$PY "$H/stack.py" verificar [--repo <r>]` | Audita la instalación (rules, skills, copias viejas) y la arquitectura. Dice cuánto código vive fuera de la norma y qué no midió el verificador: no da `COMPLIANT` sobre código sin medir |
+| `$PY "$H/stack.py" normalizar [--repo <r>] [--reemplazar]` | Instala rules, skills, `AGENTS.md` y validadores; ajusta el alcance de las reglas a donde vive el código del repo; actualiza la copia que quedó vieja y conserva la que el proyecto editó (`--reemplazar` la cambia por la plantilla). Ver `references/normalizacion-de-stacks.md` |
 | `$PY "$H/stack.py" refactorizar [--repo <r>] [--scaffold]` | Plan de refactorización: detallado y con esqueleto canónico (`--scaffold`) en Go, Angular, .NET, Rust, iOS y Android; genérico (un paso por incumplimiento medido) en NestJS, Next.js, Python y Spring Boot |
 | `$PY "$H/stack.py" auditar [--repo <r>] [--dast]` | Corre el escáner de dependencias del stack y muestra su documentación oficial e id de Context7. Exit 0 limpio, 1 con hallazgos, 2 si no pudo medir. `--dast` (OWASP ZAP) es informativo |
 | `$PY "$H/contexto.py" stacks [--resumen]` | Stacks de TODOS los repos del proyecto con sus restricciones, reglas, skills y documentación vigente. Es lo que recibe el rol producto |
@@ -460,6 +460,7 @@ Python. Si no hay revisor aislado, puedes revisar localmente con
 | [`references/contexto.md`](references/contexto.md) | varias raices de grafo, el parte de `refrescar`, algo del contexto no cuadra |
 | [`references/lecciones-del-arnes.md`](references/lecciones-del-arnes.md) | **antes de tocar o escribir un gate** |
 | [`references/arquitectura-heredada.md`](references/arquitectura-heredada.md) | proyecto con mucho código anterior al arnés: trinquete, base, cuota de normalización, `arquitectura.py` |
+| [`references/normalizacion-de-stacks.md`](references/normalizacion-de-stacks.md) | un repo no recibe las rules o skills de su stack, una regla no nombra el código del repo, una copia instalada quedó vieja, worktree sin normativa, `stack.py verificar` |
 | [`references/normas-de-ingenieria.md`](references/normas-de-ingenieria.md) | una norma no llega a un rol, quieres agregar o cambiar una, AC negativos, bloque `documentation`/`security_audit` del manifest, exit de `stack.py auditar` |
 | [`references/hosts.md`](references/hosts.md) | raíces de skills y creación de lecciones por host |
 | [`references/hub.md`](references/hub.md) | esquema del hub, `derivar-graphify`, credenciales |

@@ -345,7 +345,8 @@ class DestinosDeGrafosTests(Base):
     def test_raices_como_strings_siguen_funcionando(self):
         front, micros = self._proyecto(lambda m: [str(m / "ms-pagos")])
         rutas = {Path(d["path"]) for d in stack.detectar_todos_los_destinos(front)}
-        self.assertEqual({micros / "ms-pagos"}, rutas)
+        # La raiz del arnes entra siempre, este o no declarada: es un repo del proyecto.
+        self.assertEqual({front, micros / "ms-pagos"}, rutas)
 
     def test_los_microservicios_de_cualquier_stack_se_ven(self):
         """La lista de marcadores era fija (go.mod, angular.json, package.json): un
