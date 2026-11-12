@@ -204,10 +204,12 @@ def cmd_register(args) -> None:
         sys.exit(f"[!!] multi-repo: {exc}")
     f["multi_repo"] = manifest
     f["multi_repo_protected"] = protected
-    _fijar_modo(p, f, args)
+    # register NO fija el modo: registra worktrees que ya existen, con el trabajo
+    # hecho, para validar una integracion. Ponerla en pair aqui exigiria una
+    # lista de tests "aprobada antes de implementar" despues de haber implementado.
+    # El modo lo fija start (o `worktree.py modo`) al empezar.
     save_backlog(p, data)
-    bitacora(p, f"register #{f['id']} multi-repo modo={f['modo']}")
-    _decir_modo(f)
+    bitacora(p, f"register #{f['id']} multi-repo")
 
 
 def cmd_list(args) -> None:
@@ -253,9 +255,7 @@ def main() -> None:
     s.add_argument("--pair", action="store_true", help="modo pair (es el modo por defecto)")
     s.set_defaults(fn=cmd_start)
     s = sub.add_parser("register"); s.add_argument("--feature", required=True)
-    s.add_argument("--manifest", required=True)
-    s.add_argument("--delegado", action="store_true"); s.add_argument("--pair", action="store_true")
-    s.set_defaults(fn=cmd_register)
+    s.add_argument("--manifest", required=True); s.set_defaults(fn=cmd_register)
     s = sub.add_parser("modo"); s.add_argument("--feature", required=True)
     s.add_argument("--pair", action="store_true"); s.add_argument("--delegado", action="store_true")
     s.set_defaults(fn=cmd_modo)

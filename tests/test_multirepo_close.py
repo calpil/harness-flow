@@ -134,6 +134,18 @@ class MultiRepoCloseTests(unittest.TestCase):
                  for p in base.rglob("*") if p.is_file()}
         self.assertEqual(before, after)
 
+    def test_register_no_fija_el_modo_pair(self):
+        """register registra worktrees que ya existen, con el trabajo hecho.
+
+        Cuando fijaba `modo: pair`, close exigia una lista de tests "aprobada
+        antes de implementar" a una feature ya implementada: 99 tests de cierre
+        multi-repo fallaron por eso. El modo lo fija start, al empezar.
+        """
+        self.register()
+        self.load()
+        feature = next(f for f in self.data["features"] if f["id"] == 7)
+        self.assertNotIn("modo", feature)
+
     def test_close_revalidates_every_repo_and_current_target_tip(self):
         self.register()
         self.seal()

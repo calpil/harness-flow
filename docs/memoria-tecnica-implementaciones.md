@@ -737,7 +737,7 @@ Comandos: `inventario`, `base`, `adoptar`, `check [--feature]`, `siguiente` (lo 
 
 **Qué se implementó.**
 1. **Reglas completas en el brief.** [`scripts/contexto.py`](../scripts/contexto.py) (`lineas_reglas`) agrega el texto de las reglas de cada stack que toca la feature, una vez por stack, tomando la copia del proyecto si existe y si no la plantilla de la skill. Va aparte del índice: `--max-lineas` no lo recorta. El briefing del revisor lo trae en su bloque de normativa ([`scripts/revision.py`](../scripts/revision.py)).
-2. **Pair por defecto en cualquier repo.** [`scripts/worktree.py`](../scripts/worktree.py) registra el modo en el backlog al hacer `start` o `register`: `pair` salvo `--delegado`. `worktree.py modo --feature <id> --pair|--delegado` lo cambia. El brief lo repite en la cabecera.
+2. **Pair por defecto en cualquier repo.** [`scripts/worktree.py`](../scripts/worktree.py) registra el modo en el backlog al hacer `start`: `pair` salvo `--delegado`. `register` no lo fija, porque registra worktrees con el trabajo ya hecho. `worktree.py modo --feature <id> --pair|--delegado` lo cambia. El brief lo repite en la cabecera.
 3. **Lista de tests sellada.** `gate.py aprobar-tests --feature <id> --yes` sella `docs/tests-<id>.md` ([`templates/tests.md`](../templates/tests.md)) si declara al menos un test por AC. En features en modo pair, `gate.py close` se niega si falta el sello, si la lista cambió después de aprobarla o si el spec ganó un AC que la lista no cubre. `gate.py check` lo avisa antes.
 4. Las features arrancadas antes de este registro no tienen `modo` y no quedan sujetas al gate.
 
