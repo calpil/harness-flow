@@ -137,13 +137,22 @@ class MultiRepoCloseTests(unittest.TestCase):
                  for p in base.rglob("*") if p.is_file()}
         self.assertEqual(before, after)
 
-    def test_register_no_fija_el_modo_pair(self):
+    def test_register_no_fija_ni_cambia_el_modo(self):
         """register registra worktrees que ya existen, con el trabajo hecho.
 
         Cuando fijaba `modo: pair`, close exigia una lista de tests "aprobada
         antes de implementar" a una feature ya implementada: 99 tests de cierre
-        multi-repo fallaron por eso. El modo lo fija start, al empezar.
+        multi-repo fallaron por eso. El modo lo fija approve-spec en la primera
+        aprobacion, start al empezar, o el usuario con `worktree.py modo`.
         """
+        self.register()
+        self.load()
+        feature = next(f for f in self.data["features"] if f["id"] == 7)
+        self.assertEqual("delegado", feature["modo"], "el modo que declaro el fixture sigue igual")
+
+        # Un spec sellado antes de que el modo se registrara: register no inventa uno.
+        del feature["modo"]
+        self.save()
         self.register()
         self.load()
         feature = next(f for f in self.data["features"] if f["id"] == 7)

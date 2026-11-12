@@ -262,7 +262,11 @@ class CosturasYVerticalSliceTests(unittest.TestCase):
             "- 1. Red/Green AC-1\n"
             "- 2. Red/Green AC-2\n"
         )
-        self.assertEqual(avisos_vertical_spec(spec_limpio), [])
+        # Un spec que expone un endpoint sin ningun AC negativo ya no esta limpio:
+        # ese aviso, y solo ese (tests/test_normas.py lo cubre).
+        self.assertEqual(["seguridad"], [a.split(":")[0] for a in avisos_vertical_spec(spec_limpio)])
+        con_negativo = spec_limpio.replace("- AC-2: Given A", "- AC-2 [negativo]: Given A")
+        self.assertEqual(avisos_vertical_spec(con_negativo), [])
 
         spec_pesado = (
             "## Criterios de aceptacion\n\n"

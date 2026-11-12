@@ -270,8 +270,11 @@ class ContextoTests(unittest.TestCase):
         with mock.patch.object(contexto, "_lecciones", return_value=[]), \
                 mock.patch.object(contexto, "_impacto_hub", return_value=["x"] * 40), \
                 contextlib.redirect_stdout(buf):
+            # --max-lineas acota el INDICE. Las reglas del stack y las normas de
+            # ingenieria van aparte y no se recortan (tests/test_normas.py): aqui se
+            # piden sin ellas, que es como revision.py incrusta el brief.
             contexto.cmd_brief(Namespace(feature="1", max_lineas=12,
-                                         max_archivos=5, max_lecciones=5))
+                                         max_archivos=5, max_lecciones=5, con_reglas=False))
         lineas = buf.getvalue().rstrip("\n").splitlines()
         self.assertLessEqual(len(lineas), 12)
         self.assertTrue(any("recortadas" in l for l in lineas), lineas)

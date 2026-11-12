@@ -116,7 +116,10 @@ y no-objetivos) o en el SDD (persistencia y consistencia, fronteras de
 confianza, estrategia de errores, versiones del stack contrastadas con Context7
 o la documentacion oficial, patrones solo con eje real). El spec, el codigo y
 el review heredan esas mismas normas. Para verlas sueltas:
-`"$PY" "$H/normas.py" --rol producto --doc $ARGUMENTS[0]`.
+
+```bash
+eval "$(python3 "${CLAUDE_PLUGIN_ROOT}/scripts/entorno.py" --shell)" && "$PY" "$H/normas.py" --rol producto --doc $ARGUMENTS[0]
+```
 
 ## 2. Borrador
 
