@@ -94,12 +94,24 @@ $PY "$H/stack.py" verificar --repo <ruta>
 # 3. Normalizar repositorio (instala .claude/, .agents/, .gemini/ y genera AGENTS.md)
 $PY "$H/stack.py" normalizar --repo <ruta>
 
-# 4. Auditoría de versiones, seguridad oficial Context7 y análisis dinámico DAST
+# 4. Escáner de dependencias del stack (exit 0 limpio, 1 hallazgos, 2 sin medir) y DAST informativo
 $PY "$H/stack.py" auditar --repo <ruta> [--dast] [--openapi ruta/a/openapi.json]
 
 # 5. Generar plan de refactorización vertical o scaffolding canónico
 $PY "$H/stack.py" refactorizar --repo <ruta> [--scaffold]
+
+# 6. Stacks de todo el proyecto con reglas, skills y documentación vigente (rol producto)
+$PY "$H/contexto.py" stacks [--resumen]
+
+# 7. Normas de ingeniería: tabla norma × rol, o la parte de un rol
+$PY "$H/normas.py" --cuadro
+$PY "$H/normas.py" --rol producto|leader|implementer|revisor [--doc prd|sdd]
+
+# 8. Fijar o cambiar el modo de implementación de una feature
+$PY "$H/worktree.py" modo --feature <id> --pair|--delegado
 ```
+
+Guía de las normas, los AC negativos y el bloque `documentation`/`security_audit` del manifest: [`references/normas-de-ingenieria.md`](references/normas-de-ingenieria.md).
 
 ---
 
@@ -112,8 +124,8 @@ Para proyectos con mucho código anterior al arnés. En vez de bloquear todo el 
 - Guía: [`references/arquitectura-heredada.md`](references/arquitectura-heredada.md).
 
 ### 9. Contexto por Repo, Normalización Respetuosa y Context7 en Cada Host
-- **El brief y el briefing del revisor** anuncian el stack de cada repo que la feature declara y traen el **texto completo de sus reglas**, también para los repos que viven fuera de la raíz.
-- **Modo Pair por defecto en cualquier repo**: `worktree.py start` lo registra en el backlog (`--delegado` para delegar). La lista de tests se sella con `gate.py aprobar-tests --yes` y `close` la exige en las features en modo pair.
+- **El brief y el briefing del revisor** anuncian el stack de cada repo que la feature declara y traen el **texto completo de sus reglas**, el **índice de sus skills** con la ruta de cada `SKILL.md` y su **documentación vigente** (doc oficial, id de Context7 y escáner), también para los repos que viven fuera de la raíz. El rol producto recibe lo mismo, de todo el proyecto, al crear el borrador del SDD.
+- **Modo Pair por defecto en cualquier repo**: `gate.py approve-spec` lo registra en el backlog al sellar el spec por primera vez y `worktree.py start` lo confirma (`--delegado` para delegar), así que vale también en una raíz multi-repo que usa `worktree.py register`. La lista de tests se sella con `gate.py aprobar-tests --yes` y `close` la exige en las features en modo pair.
 - **`stack.py normalizar`** solo agrega lo que falta: no reemplaza un `AGENTS.md` existente ni reinstala las skills de `rules.stack_skills_excluidas`.
 - **Verificadores sin falsos positivos**: workspaces Angular con varios proyectos, servicios Go sin `internal/` (aviso) y raíces de `grafos.json` como objetos.
 - **Context7** documentado para Claude Code, Codex, Gemini CLI, Antigravity, Grok y Hermes; el revisor tiene Context7 y lectura web entre sus herramientas.

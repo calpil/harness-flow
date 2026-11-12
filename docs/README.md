@@ -75,6 +75,7 @@ Los documentos de `docs/` complementan y fundamentan las guías operativas que l
 * [`references/comunicacion-ste100-y-prompts.md`](../references/comunicacion-ste100-y-prompts.md): Norma de redacción técnica ASD-STE100 y optimización de prompts de Karpathy.
 * [`references/context7-documentacion-oficial.md`](../references/context7-documentacion-oficial.md): Integración con Context7 MCP, enlaces oficiales por stack y escáneres de seguridad CVE.
 * [`references/vertical-slice.md`](../references/vertical-slice.md): Metodología de desarrollo vertical, costuras públicas y modo Pair interactivo.
+* [`references/normas-de-ingenieria.md`](../references/normas-de-ingenieria.md): Registro de las 12 normas de ingeniería (`scripts/normas.py`), cuadro norma × rol, cómo llega cada una a producto, leader, implementer y revisor en cualquier host, AC negativos, bloque `documentation`/`security_audit` del manifest y exit de `stack.py auditar`.
 * [`references/arquitectura-heredada.md`](../references/arquitectura-heredada.md): Trinquete de arquitectura para proyectos con código anterior al arnés: inventario, base, cuota de normalización y casos límite.
 * [`references/modelos.md`](../references/modelos.md): Modelo y esfuerzo por rol y proveedor; elección de Fable 5.2 u Opus 5.5 en Producto y Leader.
 * [`references/hub.md`](../references/hub.md): Memory Hub Postgres: qué es un servicio, purga de dependencias y cómo apagarlo en tests.

@@ -299,8 +299,11 @@ Harness Flow integra un motor declarativo y extensible de detección y gobierno 
 | `$PY "$H/stack.py" detectar [--repo <r>]` | Detecta el stack de la raíz o microservicios con confianza e indicadores |
 | `$PY "$H/stack.py" verificar [--repo <r>]` | Audita cumplimiento normativo (Rules, Skills, Arquitectura y Testing) |
 | `$PY "$H/stack.py" normalizar [--repo <r>]` | Instala/sincroniza rules, skills operativas, `AGENTS.md` y checkers de arquitectura |
-| `$PY "$H/stack.py" refactorizar [--repo <r>] [--scaffold]` | Planifica refactorización (*Expand-Contract*) y genera esqueleto canónico faltante |
-| `$PY "$H/stack.py" auditar [--repo <r>]` | Audita versiones vigentes, fuentes Context7/Oficiales y escáner de seguridad (CVEs) |
+| `$PY "$H/stack.py" refactorizar [--repo <r>] [--scaffold]` | Plan de refactorización: detallado y con esqueleto canónico (`--scaffold`) en Go, Angular, .NET, Rust, iOS y Android; genérico (un paso por incumplimiento medido) en NestJS, Next.js, Python y Spring Boot |
+| `$PY "$H/stack.py" auditar [--repo <r>] [--dast]` | Corre el escáner de dependencias del stack y muestra su documentación oficial e id de Context7. Exit 0 limpio, 1 con hallazgos, 2 si no pudo medir. `--dast` (OWASP ZAP) es informativo |
+| `$PY "$H/contexto.py" stacks [--resumen]` | Stacks de TODOS los repos del proyecto con sus restricciones, reglas, skills y documentación vigente. Es lo que recibe el rol producto |
+| `$PY "$H/normas.py" --cuadro` | Tabla norma × rol; exit 1 si una celda está vacía. `--rol producto\|leader\|implementer\|revisor` imprime la parte de un rol |
+| `$PY "$H/worktree.py" modo --feature <id> --pair\|--delegado` | Fija o cambia el modo de implementación. Delegar es decisión del usuario |
 | `$PY "$H/stack.py" arquitectura [--repo <r>] [--stack <id>]` | Corre solo el verificador de arquitectura y sale con su exit code (2 si no pudo medir). Es el comando de los AC de una normalización |
 | `$PY "$H/stack.py" stacks` | Lista los stacks tecnológicos soportados |
 
@@ -454,6 +457,7 @@ Python. Si no hay revisor aislado, puedes revisar localmente con
 | [`references/contexto.md`](references/contexto.md) | varias raices de grafo, el parte de `refrescar`, algo del contexto no cuadra |
 | [`references/lecciones-del-arnes.md`](references/lecciones-del-arnes.md) | **antes de tocar o escribir un gate** |
 | [`references/arquitectura-heredada.md`](references/arquitectura-heredada.md) | proyecto con mucho código anterior al arnés: trinquete, base, cuota de normalización, `arquitectura.py` |
+| [`references/normas-de-ingenieria.md`](references/normas-de-ingenieria.md) | una norma no llega a un rol, quieres agregar o cambiar una, AC negativos, bloque `documentation`/`security_audit` del manifest, exit de `stack.py auditar` |
 | [`references/hosts.md`](references/hosts.md) | raíces de skills y creación de lecciones por host |
 | [`references/hub.md`](references/hub.md) | esquema del hub, `derivar-graphify`, credenciales |
 | [`references/obsidian.md`](references/obsidian.md) | que genera el vault, config sembrada, `--con-grafo` |

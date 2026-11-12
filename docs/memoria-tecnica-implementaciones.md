@@ -825,6 +825,10 @@ Comandos: `inventario`, `base`, `adoptar`, `check [--feature]`, `siguiente` (lo 
 
 **Lo que sigue siendo instrucción y no gate.** Ningún script comprueba que el código cumple una norma: eso lo decide el revisor. Lo garantizado es la entrega: que cada rol recibe su parte, en cualquier host. Ningún gate corre `stack.py auditar` solo; el escaneo DAST sigue siendo informativo.
 
+**Guía operativa.** [`references/normas-de-ingenieria.md`](../references/normas-de-ingenieria.md): el cuadro, cómo llega cada norma a cada rol, los AC negativos, las claves `documentation` y `security_audit` del manifest, los exit de `auditar` y cómo agregar una norma sin tocar prompts.
+
+**Corrección posterior (commit `04a4fc5`).** La corrida completa mostró tres tests que el cambio dejó desactualizados: el recorte del brief (`test_contexto`), el modo tras `register` (`test_multirepo_close`) y el spec "limpio" con un endpoint sin AC negativo (`test_spec_acs`). Se corrigieron junto con una llamada sin `eval` en `commands/producto.md`.
+
 **Tests.** [`tests/test_normas.py`](../tests/test_normas.py): 57 tests. El invariante central: una norma con hallazgo bloqueante o mayor tiene siempre su instrucción para quien escribe, y el cuadro no tiene celdas vacías.
 
 ---
