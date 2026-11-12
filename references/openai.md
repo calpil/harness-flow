@@ -84,7 +84,9 @@ la lista de tests aprobada (`gate.py aprobar-tests`). `--pair` ya no hace falta 
 modo delegado es decisión del usuario (`worktree.py modo --feature <id> --delegado`) o de una sesión
 sin usuario. En los dos modos el brief (`contexto.py brief`) trae el texto de las reglas de cada
 stack, el índice de sus skills y el bloque `NORMAS DE INGENIERIA`, que es la misma lista que audita
-el revisor: cúmplelas aunque tu host no cargue `agents/implementer.md`.
+el revisor: cúmplelas aunque tu host no cargue `agents/implementer.md`. Si delegas en un
+subagente, pégale el brief entero y nada más: trae el comando que imprime cada skill del stack
+(`stack.py skill`) y cada referencia (`normas.py --ref`), con rutas absolutas.
 
 En OpenAI (Codex CLI y ChatGPT):
 

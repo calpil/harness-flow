@@ -331,6 +331,33 @@ NORMAS: list[dict] = [
 ]
 
 
+def comando(script: str, *args: str) -> str:
+    """Un comando listo para pegar: interprete y script con ruta absoluta.
+
+    El brief lo imprime para que un agente delegado lea una skill o una
+    referencia sin tener `$PY`/`$H` en su entorno y sin depender de que su host
+    le deje abrir archivos fuera del proyecto.
+    """
+    import re
+    import shlex
+    import sys
+
+    def cita(x: str) -> str:   # un hueco como <nombre> se deja a la vista, sin comillas
+        return x if re.fullmatch(r"<[\w -]+>", x) else shlex.quote(x)
+    return " ".join(cita(x) for x in (sys.executable, str(Path(__file__).resolve().parent / script), *args))
+
+
+def ruta_referencia(nombre: str) -> Path | None:
+    """El archivo de references/ que nombra `nombre`: el id de una norma o el nombre del archivo."""
+    por_id = {n["id"]: n["ref"] for n in NORMAS}
+    archivo = por_id.get(nombre, nombre)
+    if not archivo.endswith(".md"):
+        archivo += ".md"
+    ruta = REFERENCIAS / archivo
+    # Solo archivos de references/: el nombre no puede salir de la carpeta.
+    return ruta if ruta.is_file() and ruta.resolve().parent == REFERENCIAS.resolve() else None
+
+
 def referencia(norma: dict) -> str:
     """Ruta absoluta de la referencia de una norma: abrible desde cualquier host."""
     return str(REFERENCIAS / norma["ref"])
@@ -345,6 +372,7 @@ def lineas_para_construir(con_spec: bool) -> list[str]:
     L = ["", "=" * 72,
          "NORMAS DE INGENIERIA - las mismas que audita el revisor (su violacion es hallazgo)",
          "cada una aplica solo si el cambio toca su materia; detalle en " + str(REFERENCIAS) + "/<ref>",
+         "para leer una referencia sin abrir el archivo: " + comando("normas.py", "--ref", "<id>"),
          "=" * 72]
     for n in NORMAS:
         L.append(f"[{n['id']}] {n['titulo']} · alcance: {n['cuando']} · ref: {n['ref']}")
@@ -359,6 +387,7 @@ def lineas_para_producto(doc: str) -> list[str]:
     L = ["", "=" * 72,
          f"NORMAS DE INGENIERIA - lo que el {doc.upper()} deja escrito (el spec, el codigo y el review las heredan)",
          "cada una aplica solo si el producto toca su materia; detalle en " + str(REFERENCIAS) + "/<ref>",
+         "para leer una referencia sin abrir el archivo: " + comando("normas.py", "--ref", "<id>"),
          "=" * 72]
     for n in NORMAS:
         for x in n["producto"].get(doc, []):
@@ -412,7 +441,21 @@ if __name__ == "__main__":
     ap.add_argument("--rol", choices=["producto", "leader", "implementer", "revisor"], default="implementer")
     ap.add_argument("--doc", choices=["prd", "sdd"], default="sdd", help="con --rol producto")
     ap.add_argument("--cuadro", action="store_true", help="tabla norma x rol; exit 1 si una celda esta vacia")
+    ap.add_argument("--ref", help="imprime una referencia: el id de una norma (seguridad, datos...) o el "
+                                  "nombre de un archivo de references/ (vertical-slice)")
     a = ap.parse_args()
+    if a.ref:
+        ruta = ruta_referencia(a.ref)
+        if ruta is None:
+            import sys
+            ids = ", ".join(n["id"] for n in NORMAS)
+            archivos = ", ".join(sorted(x.stem for x in REFERENCIAS.glob("*.md")))
+            print(f"[!!] normas: no hay referencia '{a.ref}'. Ids de norma: {ids}. Archivos: {archivos}",
+                  file=sys.stderr)
+            raise SystemExit(2)
+        print(f"# referencia {ruta.name} ({ruta})\n")
+        print(ruta.read_text(encoding="utf-8"))
+        raise SystemExit(0)
     if a.cuadro:
         print("\n".join(lineas_cuadro()))
         raise SystemExit(0 if all(all(c.values()) for _, c in cuadro()) else 1)

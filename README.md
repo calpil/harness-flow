@@ -109,6 +109,10 @@ $PY "$H/normas.py" --rol producto|leader|implementer|revisor [--doc prd|sdd]
 
 # 8. Fijar o cambiar el modo de implementación de una feature
 $PY "$H/worktree.py" modo --feature <id> --pair|--delegado
+
+# 9. Leer una skill de stack o una referencia entera (lo que usa un agente delegado)
+$PY "$H/stack.py" skill <nombre> --stack <stack-id> [--repo <ruta>]
+$PY "$H/normas.py" --ref <id-de-norma|archivo>
 ```
 
 Guía de las normas, los AC negativos y el bloque `documentation`/`security_audit` del manifest: [`references/normas-de-ingenieria.md`](references/normas-de-ingenieria.md).
@@ -125,6 +129,7 @@ Para proyectos con mucho código anterior al arnés. En vez de bloquear todo el 
 
 ### 9. Contexto por Repo, Normalización Respetuosa y Context7 en Cada Host
 - **El brief y el briefing del revisor** anuncian el stack de cada repo que la feature declara y traen el **texto completo de sus reglas**, el **índice de sus skills** con la ruta de cada `SKILL.md` y su **documentación vigente** (doc oficial, id de Context7 y escáner), también para los repos que viven fuera de la raíz. El rol producto recibe lo mismo, de todo el proyecto, al crear el borrador del SDD.
+- **El brief es el paquete completo de un agente delegado**: trae el protocolo de implementación (TDD vertical y las 5 paradas) y, junto a cada índice, el comando con rutas absolutas que imprime una skill del stack (`stack.py skill`) o una referencia (`normas.py --ref`). Quien delega pega el brief entero y no anexa nada.
 - **Modo Pair por defecto en cualquier repo**: `gate.py approve-spec` lo registra en el backlog al sellar el spec por primera vez y `worktree.py start` lo confirma (`--delegado` para delegar), así que vale también en una raíz multi-repo que usa `worktree.py register`. La lista de tests se sella con `gate.py aprobar-tests --yes` y `close` la exige en las features en modo pair.
 - **`stack.py normalizar`** solo agrega lo que falta: no reemplaza un `AGENTS.md` existente ni reinstala las skills de `rules.stack_skills_excluidas`.
 - **Verificadores sin falsos positivos**: workspaces Angular con varios proyectos, servicios Go sin `internal/` (aviso) y raíces de `grafos.json` como objetos.

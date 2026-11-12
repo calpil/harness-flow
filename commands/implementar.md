@@ -116,6 +116,10 @@ worktree y la salida ENTERA del paso 3:
 > Implementa la feature #$ARGUMENTS[0]. Spec: `docs/spec-feature-$ARGUMENTS[0]-<slug>.md`.
 > Worktree: `<ruta>`. Brief: <salida de contexto.py brief>
 
+- **El brief es el paquete completo.** Trae el protocolo, las reglas de cada stack, el
+  indice de sus skills y las normas, cada uno con el comando que imprime su contenido
+  (`stack.py skill ...`, `normas.py --ref ...`), con rutas absolutas. No anexes skills
+  ni referencias a mano: el subagente las lee con esos comandos.
 - **Pasa `effort`, nunca `model`.** El `effort` de la invocacion le gana al del
   frontmatter, que queda en `xhigh` como red si lo olvidas. Un `model` pisaria
   el Sonnet 5.5 del frontmatter.

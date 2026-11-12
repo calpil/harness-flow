@@ -435,6 +435,34 @@ def verificar_cumplimiento(repo: Path, stack_id: str | None = None,
 # 3. Normalización Multi-LLM
 # ---------------------------------------------------------------------------
 
+def ruta_skill(nombre: str, stack_id: str | None = None, repo: Path | None = None) -> tuple[Path | None, str]:
+    """(SKILL.md, origen) de una skill de stack: la copia del repo si existe, si no la plantilla.
+
+    Sin resultado devuelve (None, motivo). Es lo que hay detras de `stack.py skill`:
+    un agente delegado lee la skill con un comando, sin depender de que el host le
+    deje abrir un archivo fuera del proyecto ni de que este instalada en el repo.
+    """
+    if not re.fullmatch(r"[\w.-]+", nombre or ""):
+        return None, f"nombre de skill invalido: {nombre!r}"
+    if repo is not None:
+        repo = repo.resolve()
+        for carpeta in (".claude", ".agents"):
+            ruta = repo / carpeta / "skills" / nombre / "SKILL.md"
+            if ruta.is_file():
+                return ruta, f"copia del repo, {carpeta}/skills"
+        if not stack_id and repo.is_dir():
+            stack_id = detectar_stack_directorio(repo)["stack"]
+    if not stack_id or stack_id == "generico":
+        return None, "indica --stack <id> (stack.py stacks los lista) o un --repo con stack detectable"
+    if not (STACKS_DIR / stack_id).is_dir():
+        return None, f"el stack {stack_id} no existe (stack.py stacks los lista)"
+    ruta = STACKS_DIR / stack_id / "skills" / nombre / "SKILL.md"
+    if ruta.is_file():
+        return ruta, "plantilla de harness-flow"
+    disponibles = ", ".join(sorted(_skills_del_stack(stack_id))) or "ninguna"
+    return None, f"el stack {stack_id} no tiene la skill {nombre}. Tiene: {disponibles}"
+
+
 def _skills_del_stack(stack_id: str) -> set[str]:
     origen = STACKS_DIR / stack_id / "skills"
     if not origen.is_dir():
@@ -1743,7 +1771,22 @@ def main() -> None:
     p_arq.add_argument("--repo", default=".")
     p_arq.add_argument("--stack", help="stack del repo (por defecto, el detectado)")
 
+    p_sk = sub.add_parser("skill", help="Imprime el SKILL.md de una skill de un stack (para leerla sin "
+                                        "depender de permisos de archivo ni de que este instalada)")
+    p_sk.add_argument("nombre", help="nombre de la skill (add-feature, write-tests...)")
+    p_sk.add_argument("--stack", help="stack al que pertenece (por defecto, el detectado en --repo)")
+    p_sk.add_argument("--repo", default=None, help="repo cuya copia instalada se prefiere a la plantilla")
+
     args = ap.parse_args()
+
+    if args.cmd == "skill":
+        ruta, origen = ruta_skill(args.nombre, args.stack, Path(args.repo) if args.repo else None)
+        if ruta is None:
+            print(f"[!!] skill: {origen}", file=sys.stderr)
+            sys.exit(2)
+        print(f"# skill {args.nombre} ({origen}: {ruta})\n")
+        print(ruta.read_text(encoding="utf-8"))
+        sys.exit(0)
 
     if args.cmd == "arquitectura":
         # Para los AC de una feature de normalizacion: mide solo la arquitectura (no si

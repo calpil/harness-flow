@@ -1218,15 +1218,34 @@ def lineas_modo(f: dict) -> list[str]:
     registraba. Ahora pair es el modo por defecto en cualquier repo, queda en el
     backlog, y close exige su rastro: la lista de tests aprobada por el usuario.
     """
+    import normas
     modo = f.get("modo")
+    # El protocolo va en el brief, no solo en el prompt del host: un agente al que
+    # se le delega con el brief pegado no tiene commands/ ni agents/.
+    protocolo = [
+        "  protocolo (TDD vertical): un test a la vez en la costura publica -> Red -> codigo minimo -> "
+        "Green -> refactor en verde. Nunca todos los tests primero.",
+        "  5 paradas: (1) decision de diseno fuera del plan/spec, (2) alcance que ningun AC pide, "
+        "(3) pasar exige cambiar, saltar o borrar un test, (4) dos intentos sin verde, "
+        "(5) el paso supera ~50 lineas o 3 archivos.",
+        "  detalle: " + normas.comando("normas.py", "--ref", "vertical-slice"),
+    ]
     if modo == "pair":
         return [f"modo pair interactivo: ACTIVADO (por defecto en cualquier repo; registrado en el backlog)",
                 f"  antes de escribir codigo: lista de tests en docs/tests-{f['id']}.md, aprobada por el "
-                f"usuario con gate.py aprobar-tests --feature {f['id']} --yes (close la exige)"]
+                f"usuario con gate.py aprobar-tests --feature {f['id']} --yes (close la exige)",
+                *protocolo,
+                "  en una parada: detente y pregunta al usuario."]
     if modo == "delegado":
-        return ["modo delegado: el usuario lo pidio o la sesion no tiene usuario (subagente implementer)"]
+        return ["modo delegado: el usuario lo pidio o la sesion no tiene usuario (subagente implementer)",
+                *protocolo,
+                "  en una parada: detente y devuelve la pregunta a quien te delego; no decidas tu.",
+                "  este brief es tu paquete completo: reglas del stack, indice de skills con el comando "
+                "para leer cada una, y normas con el comando para leer cada referencia."]
     return ["modo de implementacion: sin registrar (spec aprobado antes de que el modo se registrara): "
-            f"fijalo con worktree.py modo --feature {f['id']} --pair|--delegado"]
+            f"fijalo con worktree.py modo --feature {f['id']} --pair|--delegado",
+            *protocolo,
+            "  en una parada: detente y pregunta (al usuario, o a quien te delego)."]
 
 
 def _texto_regla(repos_del_stack: list[Path], sid: str, nombre: str) -> tuple[str, str]:
@@ -1298,10 +1317,15 @@ def _lineas_skills(repos_del_stack: list[Path], sid: str, skills: list[str]) -> 
         desc = _descripcion_skill(ruta)
         grupos.setdefault((str(ruta.parent.parent), origen), []).append(
             f"  - {nombre}: {desc}" if desc else f"  - {nombre}")
+    import normas
     L = [f"--- SKILLS DEL STACK {sid} ({len(skills)}): antes de una tarea que una de ellas cubre, "
          "ABRE su SKILL.md y siguela"]
     for (base, origen), filas in grupos.items():
         L.append(f"    en {base}/<nombre>/SKILL.md ({origen}):")
+        # El comando la imprime entera: vale para un agente delegado, que puede no
+        # tener permiso para abrir un archivo fuera del proyecto.
+        repo = ["--repo", str(Path(base).parent.parent)] if origen != "plantilla de harness-flow" else []
+        L.append("    para leer una: " + normas.comando("stack.py", "skill", "<nombre>", "--stack", sid, *repo))
         L += filas
     if sin_archivo:
         L.append(f"  [!] sin SKILL.md localizable: {', '.join(sin_archivo)}")

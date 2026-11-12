@@ -223,6 +223,113 @@ class BriefTests(Proyecto):
         self.assertTrue((Path(base) / "patrones-datos-ddia.md").is_file())
 
 
+class PaqueteParaDelegarTests(Proyecto):
+    """El brief es el paquete completo de un agente delegado: no hace falta anexarle nada.
+
+    Un agente de otro proyecto delego en ocho subagentes pegandoles el brief y
+    tuvo que mandarles un anexo con las skills del stack y las referencias: el
+    brief daba rutas de archivo, y un subagente puede no tener permiso para
+    abrir un archivo fuera del proyecto. Ahora da un comando que las imprime.
+    """
+
+    def correr(self, comando: str) -> subprocess.CompletedProcess:
+        return subprocess.run(comando, shell=True, cwd=str(self.root), capture_output=True, text=True)
+
+    def comando(self, brief: str, marca: str) -> str:
+        linea = next(ln for ln in brief.splitlines() if marca in ln)
+        return linea.split(marca, 1)[1].strip()
+
+    def test_el_comando_del_brief_imprime_la_skill_entera(self):
+        cmd = self.comando(self.brief(), "para leer una: ")
+        self.assertIn("<nombre>", cmd, "el hueco queda a la vista, sin comillas")
+        r = self.correr(cmd.replace("<nombre>", "add-persistence"))
+        self.assertEqual(0, r.returncode, r.stdout + r.stderr)
+        self.assertIn("name: add-persistence", r.stdout)
+        self.assertGreater(len(r.stdout.splitlines()), 20, "el cuerpo, no solo el encabezado")
+
+    def test_el_comando_del_brief_imprime_la_referencia_de_una_norma(self):
+        cmd = self.comando(self.brief(), "para leer una referencia sin abrir el archivo: ")
+        r = self.correr(cmd.replace("<id>", "comunicacion"))
+        self.assertEqual(0, r.returncode, r.stdout + r.stderr)
+        self.assertIn("ASD-STE100", r.stdout)
+
+    def test_el_protocolo_de_implementacion_va_en_el_brief_en_cualquier_modo(self):
+        for modo in ("pair", "delegado", None):
+            f = {"id": 1, "name": "cobro", "status": "in_progress", "last_spec_sig": "x"}
+            if modo:
+                f["modo"] = modo
+            self.backlog(f)
+            out = self.brief()
+            with self.subTest(modo=modo):
+                self.assertIn("protocolo (TDD vertical): un test a la vez", out)
+                self.assertIn("5 paradas:", out)
+                r = self.correr(self.comando(out, "  detalle: "))
+                self.assertEqual(0, r.returncode, r.stdout + r.stderr)
+                self.assertIn("Vertical Slice", r.stdout)
+
+    def test_al_delegado_se_le_dice_a_quien_devolver_la_pregunta_y_que_no_falta_nada(self):
+        self.backlog({"id": 1, "name": "cobro", "status": "in_progress", "modo": "delegado",
+                      "last_spec_sig": "x"})
+        out = self.brief()
+        self.assertIn("devuelve la pregunta a quien te delego", out)
+        self.assertIn("este brief es tu paquete completo", out)
+
+    def test_la_copia_del_repo_gana_y_el_comando_la_pide(self):
+        stack.normalizar_repositorio(self.root, "golang-hexagonal", rules={})
+        cmd = self.comando(self.brief(), "para leer una: ")
+        self.assertIn(f"--repo {self.root}", cmd)
+        r = self.correr(cmd.replace("<nombre>", "add-persistence"))
+        self.assertEqual(0, r.returncode, r.stdout + r.stderr)
+        self.assertIn("copia del repo", r.stdout.splitlines()[0])
+
+    def test_invocado_por_un_enlace_los_comandos_que_imprime_funcionan(self):
+        """La skill suele llegar a un host por un enlace (~/.claude/skills -> ~/.hermes/...)."""
+        enlace = self.tmp / "enlace-skill"
+        enlace.symlink_to(RAIZ, target_is_directory=True)
+        env = dict(os.environ, HARNESS_SIN_CONTEXTO="1", HARNESS_SIN_HUB="1", HARNESS_SIN_CBM="1")
+        r = subprocess.run([sys.executable, str(enlace / "scripts" / "contexto.py"), "brief", "--feature", "1"],
+                           cwd=str(self.root), capture_output=True, text=True, env=env)
+        self.assertEqual(0, r.returncode, r.stdout + r.stderr)
+        skill = self.correr(self.comando(r.stdout, "para leer una: ").replace("<nombre>", "write-tests"))
+        self.assertEqual(0, skill.returncode, skill.stdout + skill.stderr)
+        ref = self.correr(self.comando(r.stdout, "para leer una referencia sin abrir el archivo: ")
+                          .replace("<id>", "seguridad"))
+        self.assertEqual(0, ref.returncode, ref.stdout + ref.stderr)
+        base = re.search(r"detalle en (.+)/<ref>", r.stdout).group(1)
+        self.assertTrue((Path(base) / "seguridad-owasp-y-zap.md").is_file(), "la ruta impresa existe")
+
+
+class LeerSkillYReferenciaTests(unittest.TestCase):
+    def test_una_skill_que_no_existe_no_devuelve_verde_y_dice_cuales_hay(self):
+        r = harness("stack.py", "skill", "no-existe", "--stack", "golang-hexagonal", cwd=RAIZ)
+        self.assertEqual(2, r.returncode)
+        self.assertIn("add-persistence", r.stderr)
+
+    def test_sin_stack_ni_repo_lo_pide(self):
+        r = harness("stack.py", "skill", "add-feature", cwd=tempfile.gettempdir())
+        self.assertEqual(2, r.returncode)
+        self.assertIn("--stack", r.stderr)
+
+    def test_un_nombre_con_ruta_no_sale_de_las_skills(self):
+        r = harness("stack.py", "skill", "../../rules/architecture", "--stack", "golang-hexagonal", cwd=RAIZ)
+        self.assertEqual(2, r.returncode)
+
+    def test_la_referencia_se_pide_por_id_de_norma_o_por_archivo(self):
+        for nombre, frase in (("datos", "Outbox"), ("vertical-slice", "Vertical Slice"),
+                              ("normas-de-ingenieria.md", "norma × rol")):
+            r = harness("normas.py", "--ref", nombre, cwd=RAIZ)
+            with self.subTest(ref=nombre):
+                self.assertEqual(0, r.returncode, r.stdout + r.stderr)
+                self.assertIn(frase, r.stdout)
+
+    def test_una_referencia_que_no_existe_no_devuelve_verde(self):
+        for nombre in ("no-existe", "../SKILL", "../scripts/gate.py"):
+            r = harness("normas.py", "--ref", nombre, cwd=RAIZ)
+            with self.subTest(ref=nombre):
+                self.assertEqual(2, r.returncode)
+                self.assertIn("no hay referencia", r.stderr)
+
+
 class BriefingDelRevisorTests(Proyecto):
     def test_audita_cada_norma_del_registro(self):
         out = self.briefing()

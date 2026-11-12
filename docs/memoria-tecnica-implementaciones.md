@@ -833,7 +833,25 @@ Comandos: `inventario`, `base`, `adoptar`, `check [--feature]`, `siguiente` (lo 
 
 ---
 
-## 34. Estado de Verificación y Métricas de Calidad
+## 34. Hito 32: El Brief como Paquete Completo de un Agente Delegado
+
+**Problema.** Reportado desde un proyecto real con ocho subagentes en ejecución. El agente que delegaba les pegó el brief y además tuvo que mandarles un anexo con las skills del stack y las referencias de STE100 y vertical slice, y guardó en su memoria que "todo agente que delegue recibe también las skills y las referencias". Dos causas:
+- El brief daba **rutas de archivo**. Un subagente puede no tener permiso para abrir un archivo fuera del proyecto, y la ruta mostrada (`~/.hermes/...`) no coincidía con la que el host conoce (`~/.claude/skills/harness-flow`), que es un enlace a los mismos archivos.
+- El **protocolo de implementación** (TDD vertical, 5 paradas) vivía solo en `commands/implementar.md`, `agents/implementer.md` y `SKILL.md`. Un subagente genérico con el brief pegado no lo recibía, y `vertical-slice.md` no aparecía en el brief.
+
+**Qué se implementó.**
+1. `stack.py skill <nombre> [--stack <id>] [--repo <ruta>]`: imprime el `SKILL.md` de una skill de stack, la copia del repo si existe y si no la plantilla. Exit 2 si no existe; un nombre con ruta se rechaza.
+2. `normas.py --ref <id|archivo>`: imprime una referencia entera, por id de norma o por nombre de archivo de `references/`. Exit 2 si no existe o si sale de la carpeta.
+3. El brief imprime esos comandos junto a cada índice, con el intérprete y el script en **ruta absoluta**: sirven en un subagente sin `$PY`/`$H`.
+4. `contexto.lineas_modo`: el protocolo va en el brief en cualquier modo (pair, delegado o sin registrar), con el comando que imprime `vertical-slice.md`. En modo delegado dice a quién devolver la pregunta y que el brief es el paquete completo.
+
+**Decisión.** No se cambia la ruta impresa: es la ruta real de la instalación, la misma que exporta `entorno.py` en `H`. Y la garantía no se deja en la memoria de un agente, que vale para un solo host: va en la salida del script.
+
+**Tests.** `PaqueteParaDelegarTests` y `LeerSkillYReferenciaTests` en [`tests/test_normas.py`](../tests/test_normas.py): los comandos que el brief imprime se ejecutan de verdad, también invocando la skill por un enlace.
+
+---
+
+## 35. Estado de Verificación y Métricas de Calidad
 
 * **Batería de Pruebas Automatizadas**: 57 archivos de test en `tests/`. La última corrida completa con el árbol limpio (2026-11-12, commit `50e04e9`) ejecutó 1.132 tests: 1.056 pasaron y 76 fallaron. De esos, 73 fallan por el mismo prerrequisito de entorno y 3 eran tests que el propio commit dejó desactualizados (`test_contexto`, `test_multirepo_close` y `test_spec_acs`); se corrigieron en el commit siguiente y sus módulos se volvieron a correr completos, en verde. No se repitió la corrida completa sobre ese commit de corrección, que solo toca tres tests y un comando. Los 73 de entorno están en `test_frontend_runner.py`, `test_retirados_frontend.py`, `test_frontend_close.py` y `test_cierre_historico.py`, que exigen `HARNESS_TEST_FRONTEND_MODULES` (un `node_modules` con Angular 22 y Vitest 4) y fallan a propósito en vez de omitirse cuando falta. Ningún otro test falla.
 * **Tests agregados en los hitos 19 a 31**: `test_indice_hermes.py`, `test_stack_adopcion.py`, `test_stack_normalizar.py`, `test_arquitectura.py`, `test_brief_stacks.py`, `test_hub.py`, `test_modelo.py`, `test_pair_y_reglas.py`, `test_feature_cero.py`, `test_normativa_por_rol.py` y `test_normas.py`, más casos nuevos en `test_plugin_claude.py`. Cada regresión se comprobó contra el código anterior: falla ahí y pasa con la corrección.

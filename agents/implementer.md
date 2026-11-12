@@ -104,7 +104,9 @@ detente; no los busques ni los inventes.
   - Antes de una tarea que una skill del stack cubre (`add-feature`, `write-tests`,
     `add-persistence`, `architecture-review`...), ABRE su `SKILL.md` en la ruta que da el bloque
     `SKILLS DEL STACK` y síguela. La ruta existe siempre: la copia del repo si está instalada, y
-    si no la plantilla de harness-flow.
+    si no la plantilla de harness-flow. Si tu host no te deja abrir ese archivo, corre el comando
+    `para leer una:` del mismo bloque: imprime la skill entera. Lo mismo vale para las referencias
+    de las normas (`para leer una referencia ...`).
   - Si el brief avisa que un microservicio declarado no tiene repo localizable, dilo y detente:
     no adivines la norma.
   - Un repo con otro stack se rige por sus propias reglas: no apliques las de un stack a otro.

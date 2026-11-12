@@ -52,8 +52,9 @@ flowchart TD
     H29["<b>Hito 29: Feature #0 Completa y Medible</b><br/>Cubre todos los repos con violaciones y sus AC corren desde el proyecto"]
     H30["<b>Hito 30: Norma del Stack y Pair en Cada Rol</b><br/>Índice de skills en el brief, stacks del proyecto para el rol producto y pair fijado al aprobar el spec"]
     H31["<b>Hito 31: Una Sola Lista de Normas</b><br/>Registro norma × rol para producto, leader, implementer y revisor; AC negativos; Context7 y auditar con exit real"]
+    H32["<b>Hito 32: Brief como Paquete para Delegar</b><br/>Protocolo en el brief y comandos que imprimen cada skill del stack y cada referencia"]
 
-    H1 --> H2 --> H3 --> H4 --> H5 --> H6 --> H7 --> H8 --> H9 --> H10 --> H11 --> H12 --> H13 --> H14 --> H15 --> H16 --> H17 --> H18 --> H19 --> H20 --> H21 --> H22 --> H23 --> H24 --> H25 --> H26 --> H27 --> H28 --> H29 --> H30 --> H31
+    H1 --> H2 --> H3 --> H4 --> H5 --> H6 --> H7 --> H8 --> H9 --> H10 --> H11 --> H12 --> H13 --> H14 --> H15 --> H16 --> H17 --> H18 --> H19 --> H20 --> H21 --> H22 --> H23 --> H24 --> H25 --> H26 --> H27 --> H28 --> H29 --> H30 --> H31 --> H32
 ```
 
 ---

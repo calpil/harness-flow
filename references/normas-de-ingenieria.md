@@ -61,10 +61,42 @@ modelo de lenguaje no tiene nada que cumplir de la norma `ia`.
 - El briefing no repite el bloque del implementer: el revisor recibe qué
   auditar, no la lista de quien escribe.
 - Para verlas sueltas: `"$PY" "$H/normas.py" --rol producto|leader|implementer|revisor [--doc prd|sdd]`.
+- Para leer una referencia entera: `"$PY" "$H/normas.py" --ref <id>`.
 
 Es igual en Claude Code, Hermes, Codex, Grok, AGY y Kimi: todos corren los
 mismos scripts. `commands/*.md` y `agents/*.md` solo los lee Claude Code (y Kimi
 con el plugin), y por eso no llevan la lista: llevan la instrucción de leerla.
+
+## Delegar: el brief es el paquete completo
+
+Un agente que delega no anexa nada: pega el brief entero. El brief trae, además
+de las reglas y las normas:
+
+- **El protocolo de implementación**, en cualquier modo: TDD vertical (un test
+  a la vez en la costura pública) y las 5 paradas. En modo delegado dice a quién
+  devolver la pregunta.
+- **El comando que imprime cada skill del stack**:
+  `stack.py skill <nombre> --stack <id> [--repo <ruta>]`. Con `--repo` prefiere
+  la copia instalada en el repo; sin ella usa la plantilla.
+- **El comando que imprime cada referencia**: `normas.py --ref <id>`, con el id
+  de una norma (`seguridad`, `comunicacion`...) o el nombre de un archivo de
+  `references/` (`vertical-slice`).
+
+Los dos comandos van impresos con el intérprete y el script en ruta absoluta.
+Sirven en un subagente que no tiene `$PY` ni `$H`, y que no tiene permiso para
+abrir un archivo fuera del proyecto. Salen con exit 2 si la skill o la
+referencia no existe.
+
+**La ruta que se imprime.** Es la ruta real de la instalación. Si un host llega
+a la skill por un enlace (`~/.claude/skills/harness-flow` →
+`~/.hermes/skills/software-development/harness-flow`), las dos rutas son los
+mismos archivos: `entorno.py` exporta `H` con la ruta real, y por eso el brief
+la muestra así. No hay una copia distinta en cada host.
+
+**No se guarda en la memoria de un agente.** Que un agente recuerde "anexar las
+skills y las referencias al delegar" solo vale para ese agente en ese host. La
+garantía es del script: cualquier agente, en cualquier host, la recibe en el
+brief.
 
 ## El invariante
 
