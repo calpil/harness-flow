@@ -112,15 +112,16 @@ class BriefTests(Proyecto):
         self.assertIn("(angular-product", out)
         self.assertNotIn("otros repos de la feature", out)
 
-    def test_si_la_raiz_no_tiene_stack_el_modo_pair_sale_del_primer_repo_que_si(self):
-        """Raiz multi-repo sin stack propio: el comportamiento que ya existia."""
+    def test_si_la_raiz_no_tiene_stack_se_anuncia_el_del_primer_repo_que_si(self):
+        """Raiz multi-repo sin stack propio. El modo pair ya no sale de aqui: lo registra
+        worktree.py start para cualquier repo (tests/test_pair_y_reglas.py)."""
         (self.root / "angular.json").unlink()
         (self.root / "package.json").unlink()
         out = self.lineas(["ms-datos"])
         self.assertIn("stack detectado: ", out)
         self.assertIn("(python-dataproduct", out)
         self.assertIn("· en ms-datos", out)
-        self.assertIn("modo pair interactivo: ACTIVADO", out)
+        self.assertNotIn("modo pair", out)
 
 
 class BriefingRevisorTests(Proyecto):

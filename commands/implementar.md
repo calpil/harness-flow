@@ -1,17 +1,19 @@
 ---
-description: Rol implementer de harness-flow — verifica el gate del spec, delega la implementacion al subagente implementer (o ejecuta en modo Pair interactivo con --pair) en el worktree de la feature y contrasta su evidencia antes del review.
-argument-hint: <id-feature> [--pair]
+description: Rol implementer de harness-flow — verifica el gate del spec e implementa en modo Pair (por defecto, con la lista de tests aprobada por el usuario) o delega al subagente implementer con --delegado, en el worktree de la feature y contrasta su evidencia antes del review.
+argument-hint: <id-feature> [--delegado]
 model: claude-opus-5-5
 effort: xhigh
 ---
 
 # harness-flow: implementar (rol implementer)
 
-Implementa la feature `$ARGUMENTS[0]`. Argumentos recibidos: `$ARGUMENTS` (si
-incluyen `--pair`, aplica el modo Pair de la seccion 5b).
+Implementa la feature `$ARGUMENTS[0]`. Argumentos recibidos: `$ARGUMENTS`.
 
-**Activación Automática de Modo Pair en cualquier stack normativo:**
-Si el brief (`contexto.py brief`) detecta un stack tecnológico normativo (ej. Golang Hexagonal, Angular Product, .NET Hexagonal), o si el usuario pasa `--pair` o pide modo pair, **el modo Pair interactivo se activa de forma automática**. En este modo no se delega a ciegas a un subagente sin visibilidad: tú ejecutas como **Driver** en el worktree y el usuario actúa como **Navigator**.
+**El modo es Pair, siempre, salvo que el usuario pida delegar.** No depende de
+que el repo tenga un stack detectado. Solo se delega al subagente si los
+argumentos traen `--delegado`, si el usuario lo pide, o si la sesion no tiene
+usuario (`claude -p`). El modo lo registra `worktree.py start` en el backlog y
+el brief lo repite; en modo pair, `close` exige la lista de tests aprobada.
 
 **Protocolo de Intervención con Preguntas de Formulario:**
 El agente ejecuta los ciclos TDD verticalmente (`1 test -> Red -> código mínimo -> Green -> Refactor en verde`) emitiendo su micro-reporte continuo. **Solo interviene consultando al usuario con preguntas interactivas de formulario (`ask_question` en Gemini/AGY, o formulario estructurado de opciones en otros LLMs) cuando sea REALMENTE NECESARIO:**
@@ -26,7 +28,7 @@ El agente ejecuta los ciclos TDD verticalmente (`1 test -> Red -> código mínim
 4. **Aprobación de la Lista de Tests y Costuras:** antes de empezar el primer ciclo.
 5. **Aprobación de commits y cierre:** confirmando mensaje de commit o gates.
 
-Para repositorios genéricos sin stack normativo detectado y sin `--pair`, se utiliza el subagente delegado tradicional `harness-flow:implementer` (ver sección 5a).
+Con `--delegado` implementa el subagente `harness-flow:implementer` (sección 5a).
 
 > **Shell.** Cada llamada Bash abre un shell nuevo: `$PY` y `$H` no sobreviven,
 > asi que el bootstrap va pegado a cada comando, siempre. Los bloques de abajo
@@ -47,10 +49,18 @@ despues del sello. Vuelve a `/harness-flow:spec $ARGUMENTS[0]`.
 
 ## 2. Worktree
 
-Si la feature aun no tiene `worktree` en `harness/feature_list.json`, crealo:
+Si la feature aun no tiene `worktree` en `harness/feature_list.json`, crealo.
+Agrega `--delegado` SOLO si el usuario pidio delegar:
 
 ```bash
 eval "$(python3 "${CLAUDE_PLUGIN_ROOT}/scripts/entorno.py" --shell)" && "$PY" "$H/worktree.py" start --feature $ARGUMENTS[0]
+```
+
+`start` registra el modo (`pair` por defecto) y lo imprime. Si la feature ya
+estaba arrancada y el usuario cambia de idea:
+
+```bash
+eval "$(python3 "${CLAUDE_PLUGIN_ROOT}/scripts/entorno.py" --shell)" && "$PY" "$H/worktree.py" modo --feature $ARGUMENTS[0] --delegado
 ```
 
 Anota la ruta que imprime. En una raiz multi-repo sin `.git`, el arbol se
@@ -63,7 +73,9 @@ eval "$(python3 "${CLAUDE_PLUGIN_ROOT}/scripts/entorno.py" --shell)" && "$PY" "$
 ```
 
 Si dice que el contexto esta vencido, refresca con `contexto.py refrescar`
-antes de delegar: el implementer disena con lo que le pases.
+antes de seguir. El brief trae el modo registrado y el **texto completo de las
+reglas de cada stack** que toca la feature: son obligatorias, las tengas
+cargadas por otra via o no.
 
 ## 4. Elige el effort
 
@@ -80,9 +92,9 @@ Anuncialo en una frase antes de lanzar: `Implementer: claude-sonnet-5-5 / high �
 un repo, AC con comando`. Criterios completos en
 `${CLAUDE_PLUGIN_ROOT}/references/modelos.md` ("Seleccion automatica").
 
-## 5. Delega (por defecto) o ejecuta en Modo Pair (`--pair`)
+## 5. Modo Pair (por defecto) o delegado (`--delegado`)
 
-### 5a. Modo delegado (por defecto, sin `--pair`)
+### 5a. Modo delegado (solo con `--delegado` o sin usuario)
 
 Tool `Agent` con `subagent_type: "harness-flow:implementer"` y `effort` con el
 nivel del paso 4. En el prompt, una linea de goal, la ruta del spec, la del
@@ -101,18 +113,26 @@ worktree y la salida ENTERA del paso 3:
   enmienda (`/harness-flow:spec $ARGUMENTS[0]`, seccion 4), no una instruccion nueva al
   implementer.
 
-### 5b. Modo Pair interactivo (`--pair`: Driver = IA, Navigator = humano)
+### 5b. Modo Pair interactivo (por defecto: Driver = IA, Navigator = humano)
 
-Si los argumentos incluyen `--pair` (o el usuario pidio modo pair, estilo `/pair` de `hola-ai`):
+Es el modo de toda feature cuyo modo registrado es `pair` (estilo `/pair` de `hola-ai`):
 
 1. **Revisa el plan y propone la Lista de Tests (sin escribirlos aun):**
    - No lances el subagente `implementer`: tu eres el **Driver** en el worktree y
      el usuario es el **Navigator**.
    - Contrasta el `## Plan vertical` contra el codigo del worktree (si algo ya no
      encaja, avisalo; si no hay plan, propon uno de ≤5 bullets).
-   - A partir de los AC, propon **la lista de tests (solo nombres)** diciendo
-     **donde** se prueba cada uno (endpoint, servicio, componente/UI, integracion;
-     o **verificacion manual** si es visual) y **espera la aprobacion del usuario**.
+   - A partir de los AC, escribe **la lista de tests (solo nombres)** en
+     `docs/tests-$ARGUMENTS[0].md` desde `${CLAUDE_PLUGIN_ROOT}/templates/tests.md`: una linea
+     `- AC-n: <nombre> [costura: ...]` por test (o `- AC-n: verificacion manual: ...`
+     si es visual). MUESTRALA, PREGUNTA, y solo con el SI del usuario:
+
+     ```bash
+     eval "$(python3 "${CLAUDE_PLUGIN_ROOT}/scripts/entorno.py" --shell)" && "$PY" "$H/gate.py" aprobar-tests --feature $ARGUMENTS[0] --yes
+     ```
+
+     Sin ese sello `close` se niega. Si la lista cambia mientras implementas
+     (un test nuevo, uno que sobra), vuelve a mostrarla y a sellarla.
 2. **Ciclo (`1 paso = 1 test de la lista`):**
    - Escribe 1 test -> correlo y muestra que falla (**Red**) -> escribe el
      **codigo minimo** (con el valor esperado del AC, nunca calculado con la misma

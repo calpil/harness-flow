@@ -156,9 +156,10 @@ Cuando toda la lista de tests está en verde:
 ## 6. Activación Automática de Modo Pair en Stacks CALPIL y Protocolo de Preguntas de Formulario
 
 ### Activación Automática
-Cuando el proyecto o microservicio pertenece a un stack tecnológico normativo de CALPIL (`golang-hexagonal`, `angular-product`, `dotnet-hexagonal` o cualquiera de los stacks soportados), detectado mediante `stack.py detectar`:
-- **El Modo Pair interactivo se activa de forma automática**, sin requerir la bandera `--pair` manual ni configuración adicional.
-- La IA asume el rol de **Driver** (escribe los tests acoplados a costuras públicas y el código mínimo) y el usuario humano asume el rol de **Navigator** (supervisa la dirección, acuerdos de diseño y aprobación).
+- **El Modo Pair es el modo por defecto en cualquier repo**, tenga o no un stack detectado. Antes dependía de que el brief detectara un stack y de que el agente lo siguiera; ahora lo registra `worktree.py start` en el backlog (`modo: pair`) y el brief lo repite.
+- **Se delega solo por decisión del usuario** (`worktree.py start --delegado`, o `worktree.py modo --feature <id> --delegado`) o cuando la sesión no tiene usuario (`claude -p`).
+- **El rastro del modo pair es la lista de tests aprobada.** Se escribe en `docs/tests-<id>.md` (plantilla `templates/tests.md`), con al menos una línea `- AC-n: <test> [costura: ...]` por AC, y el usuario la sella con `gate.py aprobar-tests --feature <id> --yes`. `gate.py close` se niega sin ese sello, si la lista cambió después de aprobarla, o si el spec ganó un AC que la lista no cubre.
+- Las features arrancadas antes de este registro no tienen `modo` y no quedan sujetas al gate.
 
 ### Protocolo de Intervención Humana con Preguntas de Formulario
 Para no degradar la velocidad del desarrollo ni saturar al usuario con micro-preguntas irrelevantes, el agente avanza de forma autónoma en el ciclo TDD (`1 test -> Red -> código mínimo -> Green -> Refactor en verde`), emitiendo su micro-reporte en el chat.

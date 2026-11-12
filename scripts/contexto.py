@@ -1183,7 +1183,6 @@ def _lineas_stack(p: dict, data: dict, f: dict, micros: list[str]) -> list[str]:
             # no tiene stack propio, el primer microservicio que si lo tiene.
             donde = "" if ruta == repos[0][1] else f" · en {nombre}"
             L.append(f"stack detectado: {det['name']} ({sid}, confianza {det['confidence']}%){donde}")
-            L.append("modo pair interactivo: ACTIVADO AUTOMÁTICAMENTE por normativa de stack")
             if reglas:
                 L.append("reglas del stack: " + ", ".join(reglas))
             if skills:
@@ -1211,6 +1210,69 @@ def _lineas_stack(p: dict, data: dict, f: dict, micros: list[str]) -> list[str]:
     return L
 
 
+def lineas_modo(f: dict) -> list[str]:
+    """El modo de implementacion, como lo registro worktree.py start.
+
+    Antes el brief "activaba" el modo pair solo si detectaba un stack, y nada lo
+    registraba. Ahora pair es el modo por defecto en cualquier repo, queda en el
+    backlog, y close exige su rastro: la lista de tests aprobada por el usuario.
+    """
+    modo = f.get("modo")
+    if modo == "pair":
+        return [f"modo pair interactivo: ACTIVADO (por defecto en cualquier repo; registrado en el backlog)",
+                f"  antes de escribir codigo: lista de tests en docs/tests-{f['id']}.md, aprobada por el "
+                f"usuario con gate.py aprobar-tests --feature {f['id']} --yes (close la exige)"]
+    if modo == "delegado":
+        return ["modo delegado: el usuario lo pidio o la sesion no tiene usuario (subagente implementer)"]
+    return ["modo de implementacion: sin registrar (feature anterior al registro de modo): "
+            "sigue lo acordado con el usuario"]
+
+
+def _texto_regla(repos_del_stack: list[Path], sid: str, nombre: str) -> tuple[str, str]:
+    """(cuerpo, origen) de una regla: la copia del proyecto si existe, si no la de la skill."""
+    import stack
+    for repo in repos_del_stack:
+        for carpeta in (".claude", ".agents", ".gemini"):
+            ruta = repo / carpeta / "rules" / nombre
+            if ruta.is_file():
+                return stack._leer_cuerpo_sin_frontmatter(ruta), f"{repo.name}/{carpeta}/rules"
+    ruta = stack.STACKS_DIR / sid / "rules" / nombre
+    return (stack._leer_cuerpo_sin_frontmatter(ruta), "plantilla de la skill") if ruta.is_file() else ("", "")
+
+
+def lineas_reglas(p: dict, data: dict, f: dict, micros: list[str]) -> list[str]:
+    """El TEXTO de las reglas de cada stack que la feature toca, una vez por stack.
+
+    El brief solo las nombraba. En un repo fuera del proyecto de la sesion, o en
+    un worktree, el host no las carga solo: el implementer podia escribir sin
+    haberlas visto. Aqui llegan por la salida del script, en cualquier host.
+    """
+    import stack
+    repos, _ = _repos_de_la_feature(p, f, micros)
+    por_stack: dict[str, list[tuple[str, Path]]] = {}
+    for nombre, ruta in repos:
+        det = stack.detectar_stack_directorio(ruta)
+        if det["stack"] != "generico":
+            por_stack.setdefault(det["stack"], []).append((nombre, ruta))
+    L: list[str] = []
+    for sid, lista in por_stack.items():
+        manifest = stack.cargar_manifest(sid)
+        reglas = manifest.get("normative", {}).get("rules", [])
+        if not reglas:
+            continue
+        L += ["", "=" * 72,
+              f"REGLAS DEL STACK {sid} ({manifest.get('name', sid)}) - texto completo",
+              f"obligatorias en: {', '.join(n for n, _ in lista)}",
+              "=" * 72]
+        for nombre in reglas:
+            cuerpo, origen = _texto_regla([r for _, r in lista], sid, nombre)
+            if not cuerpo:
+                L.append(f"--- {nombre}: [!] no se encontro el archivo de la regla")
+                continue
+            L += [f"--- {nombre} ({origen})", cuerpo]
+    return L
+
+
 def cmd_brief(args) -> None:
     p = paths()
     data = load_backlog(p)
@@ -1228,6 +1290,7 @@ def cmd_brief(args) -> None:
     L.append(f"== BRIEF #{f['id']} {f.get('name')} ({proyecto}) ==")
     L.append(f"estado: {f.get('status')} · rama: {f.get('branch') or '-'} · "
              f"worktree: {f.get('worktree') or '(sin worktree)'}")
+    L += lineas_modo(f)
     reqs = requiere_declarados(f)
     if reqs:
         bloq = bloqueos_feature(data, f)
@@ -1316,13 +1379,22 @@ def cmd_brief(args) -> None:
            "",
            "Este brief es un INDICE, no evidencia: abre los archivos que cites."]
 
+    # Las reglas del stack van aparte del indice: --max-lineas recorta el indice,
+    # no las reglas. Un brief recortado que las perdiera volveria al problema.
+    reglas = []
+    if getattr(args, "con_reglas", True):
+        try:
+            reglas = lineas_reglas(p, data, f, micros)
+        except Exception as exc:
+            reglas = ["", f"[!] no se pudieron cargar las reglas del stack: {exc}"]
+
     if args.max_lineas and len(L) + len(pie) > args.max_lineas:
         # El recorte va por el MEDIO: truncar por el final se comia las rutas
         # de spec y evidencia, que son justo lo que el agente tiene que abrir.
         cupo = max(1, args.max_lineas - len(pie) - 1)
         recorte = len(L) - cupo
         L = L[:cupo] + [f"... {recorte} linea(s) recortadas (sube --max-lineas)"]
-    print("\n".join(L + pie))
+    print("\n".join(L + reglas + pie))
 
 
 def main() -> None:

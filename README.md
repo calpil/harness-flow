@@ -110,7 +110,8 @@ Para proyectos con mucho código anterior al arnés. En vez de bloquear todo el 
 - Guía: [`references/arquitectura-heredada.md`](references/arquitectura-heredada.md).
 
 ### 9. Contexto por Repo, Normalización Respetuosa y Context7 en Cada Host
-- **El brief y el briefing del revisor** anuncian el stack de cada repo que la feature declara, con sus reglas y skills, también los que viven fuera de la raíz.
+- **El brief y el briefing del revisor** anuncian el stack de cada repo que la feature declara y traen el **texto completo de sus reglas**, también para los repos que viven fuera de la raíz.
+- **Modo Pair por defecto en cualquier repo**: `worktree.py start` lo registra en el backlog (`--delegado` para delegar). La lista de tests se sella con `gate.py aprobar-tests --yes` y `close` la exige en las features en modo pair.
 - **`stack.py normalizar`** solo agrega lo que falta: no reemplaza un `AGENTS.md` existente ni reinstala las skills de `rules.stack_skills_excluidas`.
 - **Verificadores sin falsos positivos**: workspaces Angular con varios proyectos, servicios Go sin `internal/` (aviso) y raíces de `grafos.json` como objetos.
 - **Context7** documentado para Claude Code, Codex, Gemini CLI, Antigravity, Grok y Hermes; el revisor tiene Context7 y lectura web entre sus herramientas.
@@ -316,7 +317,7 @@ harness-flow/
 │   ├── python-dataproduct/           <- Python data product / FastAPI / Polars, 4 rules, 11 skills, check-architecture.py
 │   ├── ios-swiftui-clean/            <- iOS SwiftUI Clean Architecture, 4 rules, 9 skills, check-architecture.py
 │   └── android-compose-clean/        <- Android Jetpack Compose Clean Architecture, 4 rules, 9 skills, check-architecture.py
-├── templates/                        <- Plantillas oficiales de spec, prd, sdd y enmiendas
+├── templates/                        <- Plantillas oficiales de spec, prd, sdd, enmiendas y lista de tests (modo pair)
 ├── docs/
 │   ├── README.md                     <- Índice y guía maestra de documentación técnica
 │   ├── explicacion-y-diagnostico.md  <- Informe de auditoría exhaustiva y estado de salud

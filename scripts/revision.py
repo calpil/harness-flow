@@ -162,7 +162,8 @@ def cmd_briefing(a) -> None:
                   "contexto.py refrescar antes de delegar.\n")
         contexto.cmd_brief(argparse.Namespace(
             feature=str(f["id"]), max_lineas=a.max_lineas_brief,
-            max_archivos=10, max_lecciones=10, max_relacionados=0, con_producto=False))
+            max_archivos=10, max_lecciones=10, max_relacionados=0, con_producto=False,
+            con_reglas=False))   # las reglas van una vez, en el bloque de normativa de abajo
         print()
     except Exception as exc:
         print(f"[!] sin brief de contexto ({exc}); el revisor arranca solo con spec + diff.\n")
@@ -269,8 +270,12 @@ Reglas:
             print("- AUDITORIA DE VERSIONES Y SEGURIDAD: Verifica que no se introduzcan librerias\n"
                   f"  con CVEs conocidos o APIs deprecadas. Valida con Context7 (lib: '{lib_id}') o\n"
                   f"  documentacion oficial ({doc_cfg.get('official_docs', '')}).\n")
-    except Exception:
-        pass
+        # El texto completo de las reglas: el revisor no depende de que su host las cargue.
+        reglas = contexto.lineas_reglas(p, load_backlog(p), f, micros_declarados(f))
+        if reglas:
+            print("\n".join(reglas) + "\n")
+    except Exception as exc:
+        print(f"[!] no se pudo cargar la normativa del stack ({exc}): revisa las reglas en el repo.\n")
     # Solo un sello del gate cuenta como ronda cerrada: un 'Veredicto propuesto'
     # tipeado por un revisor anterior no lo es.
     anterior = sello_revision(rp.read_text(encoding="utf-8")) if rp.exists() else None

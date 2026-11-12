@@ -63,6 +63,46 @@ def _contexto(p, fid, args) -> None:
         print(f"[!] no se pudo preparar el contexto: {exc}")
 
 
+def _fijar_modo(p: dict, f: dict, args) -> str:
+    """Modo de implementacion de la feature: pair salvo que el usuario pida delegar.
+
+    Se registra aqui, no en el texto de un comando: antes el modo pair dependia
+    de que el brief detectara un stack y de que el agente lo siguiera, y nada
+    quedaba escrito. Con el modo en el backlog, close puede exigir su rastro
+    (la lista de tests aprobada, gate.py aprobar-tests).
+    """
+    previo = f.get("modo")
+    if getattr(args, "delegado", False):
+        f["modo"] = "delegado"
+    elif getattr(args, "pair", False) or not previo:
+        f["modo"] = "pair"
+    if previo and previo != f["modo"]:
+        bitacora(p, f"modo de #{f['id']}: {f['modo']} (antes {previo})")
+    return f["modo"]
+
+
+def _decir_modo(f: dict) -> None:
+    if f["modo"] == "pair":
+        print(f"[i]  modo pair (por defecto): la lista de tests va en docs/tests-{f['id']}.md y la aprueba\n"
+              f"     el usuario con gate.py aprobar-tests --feature {f['id']} --yes; close la exige.\n"
+              "     Para delegar al subagente: worktree.py modo --feature <id> --delegado (decision del usuario).")
+    else:
+        print("[i]  modo delegado: lo pidio el usuario o la sesion no tiene usuario.")
+
+
+def cmd_modo(args) -> None:
+    """Cambia el modo de una feature ya arrancada. Delegar es decision del usuario."""
+    if args.pair == args.delegado:
+        sys.exit("[!!] indica --pair o --delegado (uno de los dos)")
+    p = paths()
+    data = load_backlog(p)
+    f = get_feature(data, args.feature)
+    _fijar_modo(p, f, args)
+    save_backlog(p, data)
+    print(f"[ok] feature #{f['id']}: modo {f['modo']}")
+    _decir_modo(f)
+
+
 def cmd_start(args) -> None:
     p = paths()
     data = load_backlog(p)
@@ -95,9 +135,11 @@ def cmd_start(args) -> None:
                      "     Una sola feature no aislada a la vez.")
         f.update(status="in_progress", started_at=now_iso(), aislada=False,
                  branch=rama, base_branch=rama_base(data, args))
+        _fijar_modo(p, f, args)
         save_backlog(p, data)
-        bitacora(p, f"start #{fid} SIN worktree (no aislada)")
+        bitacora(p, f"start #{fid} SIN worktree (no aislada) modo={f['modo']}")
         print(f"[!] feature #{fid} arrancada SIN aislamiento. Trabaja en {p['root']}")
+        _decir_modo(f)
         _contexto(p, fid, args)
         return
 
@@ -135,9 +177,11 @@ def cmd_start(args) -> None:
     f.update(status="in_progress", started_at=now_iso(), aislada=True,
              branch=rama, base_branch=base, base_sha=base_sha,
              worktree=str(destino))
+    _fijar_modo(p, f, args)
     save_backlog(p, data)
-    bitacora(p, f"start #{fid} rama={rama} worktree={destino}")
+    bitacora(p, f"start #{fid} rama={rama} worktree={destino} modo={f['modo']}")
     print(f"[ok] feature #{fid} arrancada\n     rama:     {rama}\n     worktree: {destino}")
+    _decir_modo(f)
     enlazados = enlazar_dependencias(data, repo, destino)
     if enlazados:
         print(f"     enlazado desde la raiz: {', '.join(enlazados)}")
@@ -160,8 +204,10 @@ def cmd_register(args) -> None:
         sys.exit(f"[!!] multi-repo: {exc}")
     f["multi_repo"] = manifest
     f["multi_repo_protected"] = protected
+    _fijar_modo(p, f, args)
     save_backlog(p, data)
-    bitacora(p, f"register #{f['id']} multi-repo")
+    bitacora(p, f"register #{f['id']} multi-repo modo={f['modo']}")
+    _decir_modo(f)
 
 
 def cmd_list(args) -> None:
@@ -202,9 +248,17 @@ def main() -> None:
                                   "(por defecto rules.rama_base, o develop)")
     s.add_argument("--sin-contexto", action="store_true", dest="sin_contexto",
                    help="no refrescar grafo/hub/vault ni imprimir el brief")
+    s.add_argument("--delegado", action="store_true",
+                   help="implementa el subagente, no en pair: solo si el usuario lo pide o no hay usuario")
+    s.add_argument("--pair", action="store_true", help="modo pair (es el modo por defecto)")
     s.set_defaults(fn=cmd_start)
     s = sub.add_parser("register"); s.add_argument("--feature", required=True)
-    s.add_argument("--manifest", required=True); s.set_defaults(fn=cmd_register)
+    s.add_argument("--manifest", required=True)
+    s.add_argument("--delegado", action="store_true"); s.add_argument("--pair", action="store_true")
+    s.set_defaults(fn=cmd_register)
+    s = sub.add_parser("modo"); s.add_argument("--feature", required=True)
+    s.add_argument("--pair", action="store_true"); s.add_argument("--delegado", action="store_true")
+    s.set_defaults(fn=cmd_modo)
     sub.add_parser("list").set_defaults(fn=cmd_list)
     s = sub.add_parser("drop"); s.add_argument("--feature", required=True)
     s.set_defaults(fn=cmd_drop)

@@ -729,7 +729,25 @@ Comandos: `inventario`, `base`, `adoptar`, `check [--feature]`, `siguiente` (lo 
 
 ---
 
-## 30. Estado de Verificación y Métricas de Calidad
+## 30. Hito 28: Modo Pair y Reglas del Stack Garantizados por Scripts
+
+**Problema.** Dos cosas dependían de que el agente leyera bien el brief y decidiera cumplir, y ningún gate las comprobaba:
+- **Las reglas del stack.** El brief solo las nombraba. En un repo fuera del proyecto de la sesión, o en un worktree, el host no las carga solo.
+- **El modo pair.** Solo se "activaba" si se detectaba un stack, y no dejaba rastro: la lista de tests que aprueba el usuario vivía en el chat.
+
+**Qué se implementó.**
+1. **Reglas completas en el brief.** [`scripts/contexto.py`](../scripts/contexto.py) (`lineas_reglas`) agrega el texto de las reglas de cada stack que toca la feature, una vez por stack, tomando la copia del proyecto si existe y si no la plantilla de la skill. Va aparte del índice: `--max-lineas` no lo recorta. El briefing del revisor lo trae en su bloque de normativa ([`scripts/revision.py`](../scripts/revision.py)).
+2. **Pair por defecto en cualquier repo.** [`scripts/worktree.py`](../scripts/worktree.py) registra el modo en el backlog al hacer `start` o `register`: `pair` salvo `--delegado`. `worktree.py modo --feature <id> --pair|--delegado` lo cambia. El brief lo repite en la cabecera.
+3. **Lista de tests sellada.** `gate.py aprobar-tests --feature <id> --yes` sella `docs/tests-<id>.md` ([`templates/tests.md`](../templates/tests.md)) si declara al menos un test por AC. En features en modo pair, `gate.py close` se niega si falta el sello, si la lista cambió después de aprobarla o si el spec ganó un AC que la lista no cubre. `gate.py check` lo avisa antes.
+4. Las features arrancadas antes de este registro no tienen `modo` y no quedan sujetas al gate.
+
+**Dato de Claude Code que condiciona el diseño.** En `.claude/rules/` el host solo lee la clave `paths`; las 44 reglas de los stacks usan `globs`, que se ignora, así que se cargan siempre en el proyecto donde se abrió la sesión. No se cargan para un worktree o un repo fuera de ese proyecto: por eso el texto va en el brief.
+
+**Tests.** [`tests/test_pair_y_reglas.py`](../tests/test_pair_y_reglas.py).
+
+---
+
+## 31. Estado de Verificación y Métricas de Calidad
 
 * **Batería de Pruebas Automatizadas**: 50 archivos de test en `tests/`. La última corrida completa (2026-11-10, commit `4fc90e0`) ejecutó 974 tests: 901 pasaron y 73 fallaron, los 73 por el mismo prerrequisito de entorno. Esos 73 están en `test_frontend_runner.py`, `test_retirados_frontend.py`, `test_frontend_close.py` y `test_cierre_historico.py`, que exigen `HARNESS_TEST_FRONTEND_MODULES` (un `node_modules` con Angular 22 y Vitest 4) y fallan a propósito en vez de omitirse cuando falta. Ningún otro test falla.
 * **Tests agregados en los hitos 19 a 27**: `test_indice_hermes.py`, `test_stack_adopcion.py`, `test_stack_normalizar.py`, `test_arquitectura.py`, `test_brief_stacks.py`, `test_hub.py` y `test_modelo.py`, más casos nuevos en `test_plugin_claude.py`. Cada regresión se comprobó contra el código anterior: falla ahí y pasa con la corrección.

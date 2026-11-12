@@ -48,8 +48,9 @@ flowchart TD
     H25["<b>Hito 25: Context7 por Host</b><br/>Herramientas del revisor y conexión en cada agente"]
     H26["<b>Hito 26: Memory Hub Genérico</b><br/>Servicios por repos reales, purga de dependencias muertas y lectura sin DDL"]
     H27["<b>Hito 27: Fable 5.2 u Opus 5.5</b><br/>Producto y Leader eligen por formulario; el modelo se aplica por turno"]
+    H28["<b>Hito 28: Pair y Reglas Garantizados</b><br/>Pair por defecto registrado en el backlog, lista de tests sellada y reglas completas en el brief"]
 
-    H1 --> H2 --> H3 --> H4 --> H5 --> H6 --> H7 --> H8 --> H9 --> H10 --> H11 --> H12 --> H13 --> H14 --> H15 --> H16 --> H17 --> H18 --> H19 --> H20 --> H21 --> H22 --> H23 --> H24 --> H25 --> H26 --> H27
+    H1 --> H2 --> H3 --> H4 --> H5 --> H6 --> H7 --> H8 --> H9 --> H10 --> H11 --> H12 --> H13 --> H14 --> H15 --> H16 --> H17 --> H18 --> H19 --> H20 --> H21 --> H22 --> H23 --> H24 --> H25 --> H26 --> H27 --> H28
 ```
 
 ---

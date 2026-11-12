@@ -8,6 +8,7 @@ sea un exit 0.
   gate.py check
   gate.py check-spec   --feature <id>
   gate.py approve-spec --feature <id> --yes
+  gate.py aprobar-tests --feature <id> --yes        (modo pair: la lista de tests)
   gate.py enmienda     --feature <id> --propuesta docs/<propuesta>.md --yes
   gate.py revision     --feature <id> --veredicto approved|changes_requested|blocked
   gate.py verify       --feature <id>
@@ -31,7 +32,7 @@ from comun import (  # noqa: E402
     avisos_vertical_spec, bitacora, bloqueos_feature, comparar_huellas, cubre_acs,
     detectar_ciclos_dependencias, enlazar_dependencias, enmiendas_posteriores, get_feature, git, impl_path,
     load_backlog, n_enmiendas, now_iso, paths, review_path, save_backlog, sello_revision,
-    sig_fresh, sign, spec_acs, spec_estado, spec_huella, spec_path,
+    sig_fresh, sign, spec_acs, spec_estado, spec_huella, spec_path, tests_path,
 )
 
 ABIERTOS = ("in_progress", "blocked", "review")
@@ -137,6 +138,8 @@ def _check_feature(p, f, rules, r) -> None:
     if bloq:
         r.aviso(f"#{fid} tiene dependencia(s) sin cerrar: {', '.join(bloq)}",
                 "cierra primero los slices de los que depende")
+    for motivo in fallos_lista_tests(p, f, acs):
+        r.aviso(f"#{fid} {motivo}", "close se negara mientras falte")
 
     ip = impl_path(p, f)
     if ip.exists():
@@ -587,6 +590,85 @@ def _registrar_sello(p: dict, f: dict, sp: Path, text: str, quien: str, cuando: 
     # Contra que PRD/SDD se aprobo: si despues cambian, el spec habla de otro
     # documento y estado/check/brief lo avisan.
     f["docs_base"] = producto.huellas(p)
+
+
+# --- lista de tests (modo pair) --------------------------------------------
+#
+# El modo pair no dejaba rastro: la lista de tests que aprueba el usuario vivia
+# en el chat, y ningun gate podia comprobar que hubo pair. Ahora la lista es un
+# archivo que se sella con --yes, como el spec, y close la exige en las
+# features cuyo modo registrado es pair.
+
+ITEM_TEST_RE = re.compile(r"^\s*[-*]\s*(AC-\d+)\s*:\s*\S", re.M)
+
+
+def _acs_sin_test(lista: str, acs: list[str]) -> list[str]:
+    """AC del spec que la lista no DECLARA (`- AC-n: <test>`). Una mencion no cuenta."""
+    declarados = set(ITEM_TEST_RE.findall(lista))
+    return [ac for ac in acs if ac not in declarados]
+
+
+def fallos_lista_tests(p: dict, f: dict, acs: list[str]) -> list[str]:
+    """Por que close no acepta la lista de tests de una feature en modo pair."""
+    if f.get("modo") != "pair":
+        return []   # delegado, o feature anterior al registro de modo: no se le cambia la regla
+    tp = tests_path(p, f)
+    orden = f"gate.py aprobar-tests --feature {f['id']} --yes"
+    if not f.get("tests_sig") or not tp.is_file():
+        return [f"modo pair: falta la lista de tests aprobada por el usuario ({tp.name}; {orden}). "
+                "Si el usuario decidio delegar: worktree.py modo --feature <id> --delegado"]
+    if not sig_fresh(tp, f["tests_sig"]):
+        return [f"modo pair: la lista de tests ({tp.name}) cambio despues de aprobarla: "
+                f"muestrasela al usuario y vuelve a sellarla ({orden})"]
+    faltan = _acs_sin_test(tp.read_text(encoding="utf-8"), acs)
+    if faltan:
+        return [f"modo pair: la lista de tests aprobada no cubre {', '.join(faltan)} "
+                f"(el spec cambio): completala y vuelve a sellarla ({orden})"]
+    return []
+
+
+def cmd_aprobar_tests(args) -> None:
+    if not args.yes:
+        sys.exit("[!!] aprobar-tests requiere --yes.\n"
+                 "     La lista de tests del modo pair la aprueba el USUARIO: MUESTRASELA\n"
+                 "     (solo nombres y costura, antes de escribir codigo), PREGUNTALE, y solo\n"
+                 "     con su SI corre este comando con --yes.")
+    p = paths()
+    data = load_backlog(p)
+    f = get_feature(data, args.feature)
+    tp = tests_path(p, f)
+    if not tp.is_file():
+        sys.exit(f"[!!] no existe {tp}\n"
+                 "     Escribela desde templates/tests.md: un `- AC-n: <nombre del test> [costura: ...]`\n"
+                 "     por test, o `- AC-n: verificacion manual: <que se mira>`.")
+    sp = spec_path(p, f)
+    if not sp.exists():
+        sys.exit(f"[!!] no existe {sp}: la lista de tests sale de los AC del spec")
+    texto = tp.read_text(encoding="utf-8")
+    faltan = _acs_sin_test(texto, spec_acs(sp.read_text(encoding="utf-8")))
+    if faltan:
+        sys.exit(f"[!!] la lista de tests no declara ningun test para: {', '.join(faltan)}\n"
+                 "     Cada AC del spec necesita al menos una linea `- AC-n: <test>`\n"
+                 "     (o `- AC-n: verificacion manual: ...`). Una mencion en prosa no cuenta.")
+    quien, cuando = _firmante(args.por), now_iso()
+    sello = f"Aprobada: {quien} · {cuando} · sellado por gate.py aprobar-tests --yes"
+    if re.search(r"^Estado:.*$", texto, flags=re.M):
+        texto = re.sub(r"^Estado:.*$", "Estado: approved", texto, count=1, flags=re.M)
+    else:
+        texto = texto.replace("\n", "\n\nEstado: approved\n", 1)
+    if re.search(r"^Aprobada:.*$", texto, flags=re.M):
+        texto = re.sub(r"^Aprobada:.*$", lambda _: sello, texto, count=1, flags=re.M)
+    else:
+        texto = re.sub(r"^(Estado: approved)$", lambda m: m.group(1) + "\n" + sello,
+                       texto, count=1, flags=re.M)
+    tp.write_text(texto, encoding="utf-8")
+    f["tests_sig"] = sign(tp)   # se firma DESPUES de escribir el sello
+    f["tests_aprobados"] = {"por": quien, "at": cuando}
+    f.setdefault("tests_primera_aprobacion", cuando)
+    save_backlog(p, data)
+    n = len(ITEM_TEST_RE.findall(texto))
+    bitacora(p, f"lista de tests #{f['id']} aprobada por {quien} ({n} tests)")
+    print(f"[ok] lista de tests de #{f['id']} aprobada y sellada ({n} tests) -> {tp.name}")
 
 
 # --- enmienda --------------------------------------------------------------
@@ -1213,6 +1295,10 @@ def cmd_close(args) -> None:
                     "(creala antes de cerrar: skill_manage en Hermes; SKILL.md en Claude Code, GPT o Grok)")
 
     if args.status == "done":
+        # Modo pair: su rastro es la lista de tests que aprobo el usuario.
+        fallos.extend(fallos_lista_tests(p, f, acs))
+
+    if args.status == "done":
         # Trinquete de arquitectura: lo heredado no crece y lo muy tocado se normaliza.
         import arquitectura
         fallos_arq, avisos_arq = arquitectura.fallos_de_cierre(p, data, f)
@@ -1382,6 +1468,10 @@ def main() -> None:
     s.add_argument("--veredicto", required=True,
                    choices=["approved", "changes_requested", "blocked"])
     s.add_argument("--por"); s.set_defaults(fn=cmd_revision)
+
+    s = sub.add_parser("aprobar-tests"); s.add_argument("--feature", required=True)
+    s.add_argument("--yes", action="store_true"); s.add_argument("--por")
+    s.set_defaults(fn=cmd_aprobar_tests)
 
     s = sub.add_parser("verify"); s.add_argument("--feature", required=True)
     s.set_defaults(fn=cmd_verify)

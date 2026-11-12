@@ -380,6 +380,10 @@ def spec_path(p: dict, f: dict) -> Path:
 def impl_path(p: dict, f: dict) -> Path:
     return p["docs"] / f"impl-{f['id']}.md"
 
+def tests_path(p: dict, f: dict) -> Path:
+    """La lista de tests del modo pair, que el usuario aprueba antes de implementar."""
+    return p["docs"] / f"tests-{f['id']}.md"
+
 def review_path(p: dict, f: dict) -> Path:
     return p["docs"] / f"review-{f['id']}.md"
 
