@@ -13,6 +13,7 @@ import argparse
 import json
 import os
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -1427,6 +1428,7 @@ def auto_normalizar_y_asegurar_cumplimiento(
     # Las reglas del proyecto valen para todos sus repos, tambien los que viven fuera de la raiz.
     rules_proj = (data.get("rules") or {}) if isinstance(data, dict) else None
 
+    violadores: list[dict[str, Any]] = []
     for d in st_calpil:
         target_path = Path(d["path"])
         stack_id = d["stack"]
@@ -1459,100 +1461,166 @@ def auto_normalizar_y_asegurar_cumplimiento(
             resultado["nivel_2_violaciones"].extend([
                 f"{target_path.name} [{stack_id}]: {err}" for err in diag["architecture_errors"]
             ])
+            violadores.append({"repo": target_path, "stack": stack_id, "nombre": d["name"],
+                               "errores": list(diag["architecture_errors"])})
 
-            # Con el trinquete adoptado (arquitectura.py) lo heredado se mide y solo baja:
-            # no se crea la #0 ni se bloquea el backlog entero.
-            if (data is not None and p_paths is not None
-                    and not (p_paths["harness"] / "arquitectura-base.json").is_file()):
-                feats = data.get("features", [])
-                f0 = next((x for x in feats if str(x.get("id")) == "0"), None)
+    # Con el trinquete adoptado (arquitectura.py) lo heredado se mide y solo baja:
+    # no se crea la #0 ni se bloquea el backlog entero.
+    if (violadores and data is not None and p_paths is not None
+            and not (p_paths["harness"] / "arquitectura-base.json").is_file()):
+        _asegurar_feature_cero(p_paths, data, violadores, resultado)
 
-                if f0 is None:
-                    manifest = cargar_manifest(stack_id)
-                    test_runner = manifest.get("runners", {}).get("test", "npm test" if any(k in stack_id for k in ("angular", "nextjs", "nest")) else "go test ./...")
-                    rel_checker = f"assets/stacks/{stack_id}/scripts/check-architecture.py"
-                    try:
-                        rel_target = str(target_path.relative_to(p_paths["root"])) if target_path != p_paths["root"] else "."
-                    except Exception:
-                        rel_target = "."
+    return resultado
 
-                    f0 = {
-                        "id": 0,
-                        "name": f"normalizacion-arquitectura-{stack_id}",
-                        "description": f"Normalización y alineación arquitectónica de {d['name']} ({len(diag['architecture_errors'])} violaciones detectadas por check-architecture.py)",
-                        "status": "todo",
-                        "kind": "refactor",
-                        "created_at": now_iso(),
-                        "stack": stack_id,
-                        "is_architecture_norm": True
-                    }
-                    feats.insert(0, f0)
-                    resultado["f0_creada"] = True
-                    resultado["f0_id"] = 0
 
-                    # Bloquear todas las demás features abiertas para que requieran #0
-                    for other in feats:
-                        if str(other.get("id")) != "0" and other.get("status") not in ("done", "superseded"):
-                            reqs = other.get("requiere") or []
-                            if isinstance(reqs, (str, int)):
-                                reqs = [reqs]
-                            if 0 not in reqs and "#0" not in reqs:
-                                reqs.append(0)
-                                other["requiere"] = reqs
-                    resultado["bloqueos_activados"] = True
+def _bloquear_por_feature_cero(feats: list[dict]) -> None:
+    for other in feats:
+        if str(other.get("id")) != "0" and other.get("status") not in ("done", "superseded"):
+            reqs = other.get("requiere") or []
+            if isinstance(reqs, (str, int)):
+                reqs = [reqs]
+            if 0 not in reqs and "#0" not in reqs:
+                reqs.append(0)
+                other["requiere"] = reqs
 
-                    save_backlog(p_paths, data)
-                    bitacora(p_paths, f"creada Feature #0 de normalización arquitectónica obligatoria para {d['name']}")
 
-                    # Crear spec para Feature #0
-                    spec_file = p_paths["docs"] / f"spec-feature-0-normalizacion-arquitectura-{stack_id}.md"
-                    if not spec_file.exists():
-                        lista_errs = "\n".join(f"- {err}" for err in diag["architecture_errors"][:15])
-                        spec_content = f"""# Spec - Feature #0: normalizacion-arquitectura-{stack_id}
+def _ruta_para_comando(root: Path, repo: Path) -> str:
+    """Como nombrar el repo en un comando de AC: `.` si es la raiz, relativa si
+    cuelga de ella, absoluta si vive fuera."""
+    root, repo = root.resolve(), repo.resolve()
+    if repo == root:
+        return "."
+    try:
+        return shlex.quote(repo.relative_to(root).as_posix())
+    except ValueError:
+        return shlex.quote(str(repo))
+
+
+def _spec_feature_cero(nombre: str, root: Path, violadores: list[dict]) -> str:
+    """Spec de la #0: un AC de arquitectura y uno de tests POR REPO con violaciones.
+
+    Los comandos tienen que correr tal cual desde el proyecto. Antes el del
+    verificador iba por una ruta relativa a la skill (`assets/stacks/...`), que
+    desde el proyecto no existe, y el de tests era `go test ./...` para cualquier
+    stack. `$PY` y `$H` los exporta el arnes en cada llamada (entorno.py).
+    """
+    contexto, acs, n = [], [], 0
+    for v in violadores:
+        repo, sid = v["repo"], v["stack"]
+        manifest = cargar_manifest(sid)
+        ruta = _ruta_para_comando(root, repo)
+        contexto.append(f"### `{repo.name}` ({manifest.get('name', sid)}): {len(v['errores'])} violaciones")
+        contexto += [f"- {err}" for err in v["errores"][:15]]
+        if len(v["errores"]) > 15:
+            contexto.append(f"- ... y {len(v['errores']) - 15} mas (`stack.py arquitectura --repo {ruta}`)")
+        contexto.append("")
+        n += 1
+        acs.append(f"- AC-{n} [costura: integracion]: en `{repo.name}`, el verificador de arquitectura de "
+                   f"{sid} termina con exit 0 y cero violaciones.")
+        acs.append(f'  Comando: `"$PY" "$H/stack.py" arquitectura --repo {ruta} --stack {sid}`')
+        tests = manifest.get("runners", {}).get("test_command")
+        n += 1
+        acs.append(f"- AC-{n} [costura: integracion]: en `{repo.name}`, la suite de pruebas pasa sin "
+                   "regresiones respecto a la base.")
+        if tests:
+            acs.append(f"  Comando: `{tests}`" if ruta == "." else f"  Comando: `(cd {ruta} && {tests})`")
+        # Sin comando de tests declarado en el stack, el AC queda sin comando: lo
+        # verifica el reviewer. Un comando de otro stack daria rojo o verde falsos.
+    fuera = [v["repo"].name for v in violadores if _ruta_para_comando(root, v["repo"]) != "."]
+    aviso = ("\n> **Antes de aprobar este spec.** Estos comandos miden el checkout de cada repo. Si\n"
+             "> el trabajo se hace en worktrees, cambia cada ruta por la del worktree de ese repo\n"
+             f"> ({', '.join(fuera)}) y registralos con `worktree.py register`: un AC medido sobre\n"
+             "> otro arbol no dice nada del codigo de la feature.\n") if fuera else ""
+    return f"""# Spec - Feature #0: {nombre}
 
 Estado: draft
 
 ## Contexto
 
-Normalización arquitectónica obligatoria para el stack {manifest.get('name', stack_id)} en `{target_path.name}`.
-El verificador de arquitectura detectó {len(diag['architecture_errors'])} violaciones estructurales en el código existente.
-Esta feature es un prerrequisito obligatorio antes de implementar cualquier feature de negocio.
-
-Violaciones detectadas por el arnés:
-{lista_errs}
+Normalización arquitectónica obligatoria. El verificador de arquitectura detectó
+violaciones en {len(violadores)} repo(s) del proyecto. Esta feature es un prerrequisito
+antes de implementar cualquier feature de negocio.
+{aviso}
+{chr(10).join(contexto).rstrip()}
 
 ## Criterios de aceptacion
 
-- AC-1 [costura: integracion]: El verificador check-architecture.py finaliza con exit code 0 y cero violaciones.
-  Comando: `python3 {rel_checker} --repo {rel_target}`
-- AC-2 [costura: test]: La suite de pruebas del proyecto ejecuta sin regresiones respecto a la base.
-  Comando: `{test_runner}`
+{chr(10).join(acs)}
 
 ## Plan vertical
 
-- Paso 1: Identificar módulos y archivos con violaciones de arquitectura reportadas por check-architecture.py.
-- Paso 2: Extraer capas canónicas (domain, application, infrastructure/ports) desacoplando dependencias indebidas.
-- Paso 3: Re-ejecutar check-architecture.py y la suite de tests hasta lograr verde integral con cero regresiones.
+- Paso 1: Por repo, identificar los módulos y archivos con las violaciones listadas arriba.
+- Paso 2: Escribir tests de caracterización en la costura pública antes de mover código.
+- Paso 3: Extraer las capas que exige el stack de cada repo, desacoplando dependencias indebidas.
+- Paso 4: Re-ejecutar el verificador y la suite de cada repo hasta el verde, sin regresiones.
 
 ## Fuera de alcance
 
 Nuevas funcionalidades de negocio. Esta feature es estrictamente refactorización y alineación arquitectónica.
 """
-                        spec_file.write_text(spec_content, encoding="utf-8")
-                else:
-                    if f0.get("status") != "done":
-                        for other in feats:
-                            if str(other.get("id")) != "0" and other.get("status") not in ("done", "superseded"):
-                                reqs = other.get("requiere") or []
-                                if isinstance(reqs, (str, int)):
-                                    reqs = [reqs]
-                                if 0 not in reqs and "#0" not in reqs:
-                                    reqs.append(0)
-                                    other["requiere"] = reqs
-                        resultado["bloqueos_activados"] = True
-                        resultado["f0_id"] = 0
 
-    return resultado
+
+def _asegurar_feature_cero(p_paths: dict, data: dict, violadores: list[dict],
+                           resultado: dict[str, Any]) -> None:
+    """Crea la #0 para TODOS los repos con violaciones, o suma los nuevos a la que ya esta abierta.
+
+    Antes la #0 salia del primer repo con violaciones: cubria un solo stack, y no
+    declaraba a que repos aplica, asi que su brief no traia las reglas del stack
+    que habia que normalizar.
+    """
+    from comun import bitacora, now_iso, save_backlog, spec_path
+    feats = data.get("features", [])
+    f0 = next((x for x in feats if str(x.get("id")) == "0"), None)
+    nombres = [v["repo"].name for v in violadores]
+
+    if f0 is not None:
+        if f0.get("status") == "done":
+            return
+        declarados = list(f0.get("microservicios") or [])
+        nuevos = [n for n in nombres if n not in declarados]
+        if nuevos and f0.get("is_architecture_norm"):
+            # El spec ya escrito no se reescribe: el leader decide si es una enmienda.
+            f0["microservicios"] = declarados + nuevos
+            f0["stacks"] = sorted(set(f0.get("stacks") or ([f0["stack"]] if f0.get("stack") else []))
+                                  | {v["stack"] for v in violadores})
+            bitacora(p_paths, f"Feature #0: se suman repos con violaciones: {', '.join(nuevos)}")
+        _bloquear_por_feature_cero(feats)
+        resultado["bloqueos_activados"] = True
+        resultado["f0_id"] = 0
+        save_backlog(p_paths, data)
+        return
+
+    stacks = sorted({v["stack"] for v in violadores})
+    nombre = (f"normalizacion-arquitectura-{stacks[0]}" if len(stacks) == 1
+              else "normalizacion-arquitectura")
+    total = sum(len(v["errores"]) for v in violadores)
+    f0 = {
+        "id": 0,
+        "name": nombre,
+        "description": (f"Normalización y alineación arquitectónica de {', '.join(nombres)} "
+                        f"({total} violaciones detectadas por check-architecture.py)"),
+        "status": "todo",
+        "kind": "refactor",
+        "created_at": now_iso(),
+        "stack": stacks[0],
+        "stacks": stacks,
+        # Los repos a normalizar: de aqui saca el brief el stack y las reglas de cada uno.
+        "microservicios": nombres,
+        "is_architecture_norm": True,
+    }
+    feats.insert(0, f0)
+    resultado["f0_creada"] = True
+    resultado["f0_id"] = 0
+    _bloquear_por_feature_cero(feats)
+    resultado["bloqueos_activados"] = True
+    save_backlog(p_paths, data)
+    bitacora(p_paths, "creada Feature #0 de normalización arquitectónica obligatoria para "
+             + ", ".join(nombres))
+
+    spec_file = spec_path(p_paths, f0)
+    if not spec_file.exists():
+        spec_file.parent.mkdir(parents=True, exist_ok=True)
+        spec_file.write_text(_spec_feature_cero(nombre, p_paths["root"], violadores), encoding="utf-8")
 
 
 # ---------------------------------------------------------------------------
@@ -1620,8 +1688,29 @@ def main() -> None:
 
     # stacks
     sub.add_parser("stacks", help="Lista los stacks soportados en harness-flow")
+    p_arq = sub.add_parser("arquitectura",
+                           help="Corre solo el verificador de arquitectura del stack; sale con su exit code")
+    p_arq.add_argument("--repo", default=".")
+    p_arq.add_argument("--stack", help="stack del repo (por defecto, el detectado)")
 
     args = ap.parse_args()
+
+    if args.cmd == "arquitectura":
+        # Para los AC de una feature de normalizacion: mide solo la arquitectura (no si
+        # las rules y skills estan instaladas, que en un worktree pueden no estar).
+        # Sin repo, sin stack o sin verificador no hay medicion: exit 2, nunca verde.
+        destino = Path(args.repo).resolve()
+        sid = args.stack or (detectar_stack_directorio(destino)["stack"] if destino.is_dir() else "generico")
+        script = STACKS_DIR / sid / "scripts" / "check-architecture.py"
+        if not destino.is_dir() or sid == "generico" or not script.is_file():
+            motivo = ("el repo no existe" if not destino.is_dir()
+                      else "no se detecto un stack normativo" if sid == "generico"
+                      else f"el stack {sid} no trae verificador")
+            print(f"[!!] arquitectura: no se pudo medir {destino}: {motivo}", file=sys.stderr)
+            sys.exit(2)
+        code, out = _run_cmd([sys.executable, str(script), "--repo", str(destino)])
+        print(out)
+        sys.exit(1 if code not in (0, 1) else code)
 
     if args.cmd == "stacks":
         stacks = listar_stacks_disponibles()

@@ -747,10 +747,30 @@ Comandos: `inventario`, `base`, `adoptar`, `check [--feature]`, `siguiente` (lo 
 
 ---
 
-## 31. Estado de Verificación y Métricas de Calidad
+## 31. Hito 29: Feature #0 Completa y Medible
 
-* **Batería de Pruebas Automatizadas**: 50 archivos de test en `tests/`. La última corrida completa (2026-11-10, commit `4fc90e0`) ejecutó 974 tests: 901 pasaron y 73 fallaron, los 73 por el mismo prerrequisito de entorno. Esos 73 están en `test_frontend_runner.py`, `test_retirados_frontend.py`, `test_frontend_close.py` y `test_cierre_historico.py`, que exigen `HARNESS_TEST_FRONTEND_MODULES` (un `node_modules` con Angular 22 y Vitest 4) y fallan a propósito en vez de omitirse cuando falta. Ningún otro test falla.
-* **Tests agregados en los hitos 19 a 27**: `test_indice_hermes.py`, `test_stack_adopcion.py`, `test_stack_normalizar.py`, `test_arquitectura.py`, `test_brief_stacks.py`, `test_hub.py` y `test_modelo.py`, más casos nuevos en `test_plugin_claude.py`. Cada regresión se comprobó contra el código anterior: falla ahí y pasa con la corrección.
+**Problema.** La Feature #0 de normalización tenía tres defectos de origen, reproducidos en un proyecto con un servicio Go y uno Rust fuera de la raíz:
+- No declaraba a qué repos aplica. Su brief miraba solo el árbol de la raíz y salía sin las reglas del stack que había que normalizar.
+- Cubría un solo stack: el primer repo con violaciones le daba nombre y spec; los demás solo quedaban como bloqueo.
+- Los comandos de sus AC no corrían. El del verificador iba por una ruta relativa a la skill (`assets/stacks/...`), que desde el proyecto no existe, y el de tests era `go test ./...` también para un repo Rust.
+
+**Qué se implementó** en [`scripts/stack.py`](../scripts/stack.py):
+1. La #0 se crea después de revisar todos los repos y los cubre todos: los declara en `microservicios` y lista sus stacks en `stacks`. Con un solo stack conserva el nombre `normalizacion-arquitectura-<stack>`.
+2. Su spec trae, por repo, un AC de arquitectura y uno de tests. El de arquitectura usa `"$PY" "$H/stack.py" arquitectura --repo <ruta>`; el de tests, el `runners.test_command` del stack de ese repo, ejecutado dentro del repo.
+3. Subcomando nuevo `stack.py arquitectura`: corre solo el verificador y sale con su exit code. Sin repo, sin stack o sin verificador sale con 2: no devuelve verde.
+4. Si aparece una violación en otro repo con la #0 ya abierta, el repo se suma a `microservicios`; el spec ya escrito no se reescribe.
+5. El spec avisa que, si el trabajo va en worktrees, hay que cambiar cada ruta por la del worktree de ese repo.
+
+**Sin cambio:** el worktree de la #0 sigue creándose sobre la raíz; los repos externos se registran con `worktree.py register`. Con el trinquete adoptado la #0 no se crea.
+
+**Tests.** [`tests/test_feature_cero.py`](../tests/test_feature_cero.py). Los comandos de los AC se ejecutan de verdad: dan rojo con la violación y verde al normalizar el repo.
+
+---
+
+## 32. Estado de Verificación y Métricas de Calidad
+
+* **Batería de Pruebas Automatizadas**: 50 archivos de test en `tests/`. La última corrida completa con el árbol limpio (2026-11-11, commit `5c0e650`) ejecutó 1.030 tests: 957 pasaron y 73 fallaron, los 73 por el mismo prerrequisito de entorno. Esos 73 están en `test_frontend_runner.py`, `test_retirados_frontend.py`, `test_frontend_close.py` y `test_cierre_historico.py`, que exigen `HARNESS_TEST_FRONTEND_MODULES` (un `node_modules` con Angular 22 y Vitest 4) y fallan a propósito en vez de omitirse cuando falta. Ningún otro test falla.
+* **Tests agregados en los hitos 19 a 29**: `test_indice_hermes.py`, `test_stack_adopcion.py`, `test_stack_normalizar.py`, `test_arquitectura.py`, `test_brief_stacks.py`, `test_hub.py`, `test_modelo.py`, `test_pair_y_reglas.py` y `test_feature_cero.py`, más casos nuevos en `test_plugin_claude.py`. Cada regresión se comprobó contra el código anterior: falla ahí y pasa con la corrección.
 * **Aislamiento**: los tests no abren el Memory Hub real (`HARNESS_SIN_CONTEXTO=1`, `HARNESS_SIN_HUB=1`), y la lógica de `hub.py` se prueba con una conexión falsa.
 * **Validación de Habilidades de Agentes**: 100% de las habilidades validadas en los 10 stacks con `validate-agent-skills.mjs`.
 * **Verificación de Arquitectura en las 10 Plantillas Reales de CALPIL**:
