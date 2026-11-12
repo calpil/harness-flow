@@ -85,6 +85,21 @@ quede fuera del proyecto de la sesion. Lo reciben el leader y el implementer
 que no tiene feature: `producto.py borrador --doc sdd` imprime la de todos los
 repos del proyecto, y `contexto.py stacks [--resumen]` la repite bajo demanda.
 
+**El brief es el paquete completo de quien implementa.** Ademas del indice y de
+la norma del stack trae:
+
+- el **protocolo de implementacion** del modo registrado (TDD vertical y las 5
+  paradas), tambien si la feature no tiene modo;
+- el bloque **`NORMAS DE INGENIERIA`**, la misma lista que audita el revisor;
+- junto a cada indice, el **comando que imprime el contenido**:
+  `stack.py skill <nombre> --stack <id>` para una skill del stack y
+  `normas.py --ref <id>` para una referencia. Van con el interprete y el script
+  en ruta absoluta, asi que sirven en un subagente que no tiene `$PY`/`$H` ni
+  permiso para abrir archivos fuera del proyecto.
+
+Quien delega pega el brief entero y no anexa nada. Detalle en
+[`normas-de-ingenieria.md`](normas-de-ingenieria.md).
+
 **Documentos relacionados.** Al final, hasta 8 rutas de `docs/` (el vault de
 Obsidian), sin contenido, para que el leader sepa que abrir antes de disenar:
 

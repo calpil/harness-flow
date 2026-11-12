@@ -95,7 +95,8 @@ flowchart TD
 ### Rol 2: Implementer (`implementer.md`, `worktree.py`)
 - Crea un `git worktree` dedicado para no ensuciar la rama base (`develop` o `main`).
 - Ejecuta TDD vertical estricto (`1 test en costura pública -> Red -> código mínimo -> Green -> Refactor`).
-- **Modo Pair interactivo (`--pair`)**: la IA actúa como Driver y el humano como Navigator, pausando en cada micro-ciclo.
+- **Modo Pair interactivo (por defecto en toda feature)**: la IA actúa como Driver y el humano como Navigator, pausando en cada micro-ciclo. `gate.py approve-spec` lo registra al sellar el spec por primera vez y `gate.py close` exige la lista de tests aprobada. Se delega solo con `--delegado`.
+- **El brief es el paquete completo** de quien implementa: protocolo, reglas de cada stack, índice de skills y normas de ingeniería, con los comandos que imprimen cada skill (`stack.py skill`) y cada referencia (`normas.py --ref`).
 - **5 paradas inmediatas de Extreme Programming**:
   1. Decisión de diseño imprevista.
   2. Alcance no pedido (YAGNI).

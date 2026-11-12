@@ -829,7 +829,7 @@ Comandos: `inventario`, `base`, `adoptar`, `check [--feature]`, `siguiente` (lo 
 
 **Corrección posterior (commit `04a4fc5`).** La corrida completa mostró tres tests que el cambio dejó desactualizados: el recorte del brief (`test_contexto`), el modo tras `register` (`test_multirepo_close`) y el spec "limpio" con un endpoint sin AC negativo (`test_spec_acs`). Se corrigieron junto con una llamada sin `eval` en `commands/producto.md`.
 
-**Tests.** [`tests/test_normas.py`](../tests/test_normas.py): 57 tests. El invariante central: una norma con hallazgo bloqueante o mayor tiene siempre su instrucción para quien escribe, y el cuadro no tiene celdas vacías.
+**Tests.** [`tests/test_normas.py`](../tests/test_normas.py): 57 tests al cerrar este hito (68 con los del Hito 32). El invariante central: una norma con hallazgo bloqueante o mayor tiene siempre su instrucción para quien escribe, y el cuadro no tiene celdas vacías.
 
 ---
 
@@ -846,6 +846,8 @@ Comandos: `inventario`, `base`, `adoptar`, `check [--feature]`, `siguiente` (lo 
 4. `contexto.lineas_modo`: el protocolo va en el brief en cualquier modo (pair, delegado o sin registrar), con el comando que imprime `vertical-slice.md`. En modo delegado dice a quién devolver la pregunta y que el brief es el paquete completo.
 
 **Decisión.** No se cambia la ruta impresa: es la ruta real de la instalación, la misma que exporta `entorno.py` en `H`. Y la garantía no se deja en la memoria de un agente, que vale para un solo host: va en la salida del script.
+
+**Documentación alineada.** `references/contexto.md` y `references/claude.md` describen el paquete; `references/vertical-slice.md` decía todavía que el modo delegado era el modo por defecto y que pair se activaba con `--pair`: corregido.
 
 **Tests.** `PaqueteParaDelegarTests` y `LeerSkillYReferenciaTests` en [`tests/test_normas.py`](../tests/test_normas.py): los comandos que el brief imprime se ejecutan de verdad, también invocando la skill por un enlace.
 

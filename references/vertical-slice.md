@@ -6,14 +6,14 @@ Esta referencia detalla cómo `harness-flow` integra las 3 skills de [`nschurman
 
 ```text
 hola-ai:       /backlog          →  /story                →  /pair                      →  (/code-review)
-harness-flow:  Rol 0 (Producto)  →  Rol 1 (Leader: spec)  →  Rol 2 (--pair o delegado)  →  Rol 3 (Revisor) + Rol 4 (Cierre)
+harness-flow:  Rol 0 (Producto)  →  Rol 1 (Leader: spec)  →  Rol 2 (pair o --delegado)  →  Rol 3 (Revisor) + Rol 4 (Cierre)
 ```
 
 | Fase en `hola-ai` | Equivalente en `harness-flow` | Qué hace | Qué NUNCA hace |
 | --- | --- | --- | --- |
 | **`/backlog`** | **Rol 0: Producto** (`producto.py` / `/harness-flow:producto prd\|sdd` + `add.py`) | Convierte la idea en el PRD/SDD y en una lista corta (10–15 máx.) de candidatas verticales `F-n` de una línea con su frontera `requiere: F-m`. | Inventar requisitos sin preguntar, crear historias técnicas/por capa, estimar o escribir código final. |
 | **`/story`** | **Rol 1: Leader** (`gate.py approve-spec` / `/harness-flow:spec <id>`) | Toma **una** candidata `F-n`, define 2–3 AC (tope 5) en Given/When/Then con su costura pública, un `## Plan vertical` (≤5 bullets sin código ni rutas) y `## Sugerencias (decision del usuario)` para aprobación. | Escribir código o inflar un spec con más de 5 AC (propone partir la historia en nuevas `F-n`). |
-| **`/pair`** | **Rol 2: Implementer en Modo Pair** (`/harness-flow:implementar <id> --pair`) | Pair programming (Driver = IA, Navigator = humano): acuerda la **lista de tests** (solo nombres y costura) y ejecuta `1 test → Red → código mínimo → Green`, parando en cada paso con un micro-mensaje. | Editar/borrar tests para que pasen, agregar alcance no pedido, o commitear sin acuerdo del usuario en modo `--pair`. |
+| **`/pair`** | **Rol 2: Implementer en Modo Pair** (`/harness-flow:implementar <id>`, pair por defecto) | Pair programming (Driver = IA, Navigator = humano): acuerda la **lista de tests** (solo nombres y costura) y ejecuta `1 test → Red → código mínimo → Green`, parando en cada paso con un micro-mensaje. | Editar/borrar tests para que pasen, agregar alcance no pedido, o commitear sin acuerdo del usuario en modo `--pair`. |
 | *(Review limpio)* | **Rol 3: Reviewer aislado** + **Rol 4: Cierre** (`revision.py` + `gate.py revision` + `close`) | Audita con contexto limpio cada AC (`archivo:linea`), la integridad de los tests (sin tests borrados ni valores calculados con la misma lógica del código) y sella el cierre. | Aprobarse a sí mismo desde la sesión que escribió el código. |
 
 ---
@@ -84,8 +84,10 @@ Al refinar **una sola** feature en `docs/spec-feature-<id>-<slug>.md` desde `tem
 ## 4. Rol 2 (Implementer = `/pair` o Subagente): Lista de Tests, Ciclo TDD y las 5 Paradas
 
 El Rol 2 soporta dos modos:
-- **Modo delegado (por defecto):** subagente autónomo (`harness-flow:implementer` o equivalente del host) que ejecuta los ciclos TDD verticalmente en el worktree y entrega `docs/impl-<id>.md`.
-- **Modo Pair interactivo (`--pair`):** la IA actúa como **Driver** (escribe los tests y el código en el worktree) y el humano como **Navigator** (revisa, decide y da el sí o no en cada paso). Se activa con `/harness-flow:implementar <id> --pair` o pidiendo modo pair en cualquier host.
+- **Modo Pair interactivo (por defecto, en toda feature):** la IA actúa como **Driver** (escribe los tests y el código en el worktree) y el humano como **Navigator** (revisa, decide y da el sí o no en cada paso). No hay que activarlo: `gate.py approve-spec` lo registra al sellar el spec por primera vez y `/harness-flow:implementar <id>` lo sigue.
+- **Modo delegado (solo si el usuario lo pide o la sesión no tiene usuario):** subagente autónomo (`harness-flow:implementer` o equivalente del host) que ejecuta los ciclos TDD verticalmente en el worktree y entrega `docs/impl-<id>.md`. Se registra con `worktree.py start --feature <id> --delegado` o `worktree.py modo --feature <id> --delegado`.
+
+**El protocolo viaja en el brief.** `contexto.py brief --feature <id>` imprime, en cualquier modo, el resumen del protocolo de esta sección (un test a la vez y las 5 paradas) y el comando que imprime este archivo entero (`normas.py --ref vertical-slice`). Trae además las reglas de cada stack, el índice de sus skills con el comando que imprime cada una (`stack.py skill`) y las normas de ingeniería. Un agente al que se le delega con el brief pegado tiene el paquete completo: no hay que anexarle nada.
 
 ### Protocolo completo de `/pair` dentro de Harness Flow
 
@@ -142,14 +144,14 @@ Cuando toda la lista de tests está en verde:
 
 ## 5. Configuración Multi-LLM para el flujo completo
 
-| Host / Proveedor | Rol 0 (`/backlog` → PRD/SDD) y Rol 1 (`/story` → Spec) | Rol 2 en Modo Pair (`--pair`) | Rol 2 Delegado (Subagente) | Rol 3 (Revisor aislado) |
+| Host / Proveedor | Rol 0 (`/backlog` → PRD/SDD) y Rol 1 (`/story` → Spec) | Rol 2 en Modo Pair (por defecto) | Rol 2 Delegado (`--delegado`) | Rol 3 (Revisor aislado) |
 | --- | --- | --- | --- | --- |
-| **Claude Code** | `/harness-flow:producto`, `/harness-flow:spec` (`claude-opus-5-5`, `xhigh`) | `/harness-flow:implementar <id> --pair` en la sesión principal | `Agent(harness-flow:implementer)` (`claude-sonnet-5-5`, `high`/`xhigh`) | `/harness-flow:review <id>` → `Agent(harness-flow:revisor)` (`claude-opus-5-5`, `xhigh`/`high`) |
+| **Claude Code** | `/harness-flow:producto`, `/harness-flow:spec` (`claude-opus-5-5`, `xhigh`) | `/harness-flow:implementar <id>` en la sesión principal (pair por defecto) | `Agent(harness-flow:implementer)` (`claude-sonnet-5-5`, `high`/`xhigh`) | `/harness-flow:review <id>` → `Agent(harness-flow:revisor)` (`claude-opus-5-5`, `xhigh`/`high`) |
 | **Hermes** | Sesión en `gpt-6-astra` (`medium`/`high`), `claude-opus-5-5` (`xhigh`) o `gemini-4-argon` (`high`) | Sesión interactiva de Hermes ejecutando 1 ciclo por turno | `claude -p --agent harness-flow:implementer` o perfil del rol | `claude -p --agent harness-flow:revisor` o `delegate_task` con briefing |
 | **GPT / Codex** | `gpt-6-astra` (`medium`/`high`) | Sesión interactiva de Codex en el worktree | Sesión o `codex exec` (`gpt-6.1-sol`, `xhigh`) | `codex exec` / subagente aislado con briefing |
 | **AGY / Gemini** | Sesión en `Gemini 4 Argon (High)` | Sesión principal de AGY pausando tras cada micro-mensaje | `invoke_subagent` (`TypeName: "self"`, `Model: "inherit"`) | `invoke_subagent` (`TypeName: "self"`, `Model: "inherit"`, `Workspace: "inherit"`) |
 | **Grok** | Sesión principal de Grok | Sesión principal de Grok en el worktree | Sesión principal en el worktree | `spawn_subagent` y espera el id ([grok.md](grok.md)) |
-| **Kimi Code** | `/harness-flow:producto`, `/harness-flow:spec` | `/harness-flow:implementar <id> --pair` en la sesión | `Agent(implementer)` | `/harness-flow:review <id>` → `Agent(revisor)` o `kimi -p` |
+| **Kimi Code** | `/harness-flow:producto`, `/harness-flow:spec` | `/harness-flow:implementar <id>` en la sesión (pair por defecto) | `Agent(implementer)` | `/harness-flow:review <id>` → `Agent(revisor)` o `kimi -p` |
 
 ---
 

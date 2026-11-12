@@ -86,6 +86,15 @@ directamente como Driver y el humano como Navigator en el worktree, acordando la
 lista de tests, avanzando un test a la vez (`Red -> Green -> Refactor`) y
 pausando tras cada micro-paso según [`vertical-slice.md`](vertical-slice.md).
 
+**Al delegar** (`--delegado`), el prompt del subagente lleva la salida entera de
+`contexto.py brief` y nada más. El brief trae el protocolo, las reglas de cada
+stack, el índice de sus skills y las normas, cada uno con el comando que imprime
+su contenido (`stack.py skill`, `normas.py --ref`) en ruta absoluta. Un
+subagente en segundo plano no puede pedir permiso para abrir un archivo fuera
+del proyecto: por eso el brief da comandos y no solo rutas. La ruta que muestra
+(`~/.hermes/...`) es la real de la instalación; `~/.claude/skills/harness-flow`
+es un enlace a esos mismos archivos.
+
 ## `$PY` y `$H` no sobreviven entre llamadas Bash
 
 Esta es la diferencia operativa real con Hermes. En Claude Code **cada llamada a
