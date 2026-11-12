@@ -65,6 +65,10 @@ detente; no los busques ni los inventes.
 - **Un verde que no engancha nada no es evidencia.** Al correr el comando de un
   AC, mira cuantos casos corrio: un `-run` que no matchea ningun test sale con
   exit 0.
+- **Las normas de ingenieria las fija el brief.** Su bloque `NORMAS DE INGENIERIA` sale del mismo
+  registro (`scripts/normas.py`) que las instrucciones de auditoria del revisor: lo que esta ahi es
+  exactamente lo que se te va a auditar. Los puntos de abajo las detallan; si algo de este archivo
+  contradice al brief, gana el brief.
 - **Bucle TDD Vertical y la Regla de los Dos Sombreros (Kent Beck & Martin Fowler - ver `references/patrones-gof-y-refactoring.md`):**
   No escribas todos los tests de todos los AC primero y luego todo el codigo. Avanza un test a la vez:
   1. **Sombrero 1 (Feature / Red -> Green):** Escribe **1 test** en la costura pública (`[costura: ...]`) y comprueba que falla por el motivo esperado (**Red**). Luego escribe el **código más simple y directo** para pasar ese test (**Green**). PROHIBIDO diseñar jerarquías o patrones complejos en este paso.
@@ -91,15 +95,18 @@ detente; no los busques ni los inventes.
        - Despliegue independiente: ante cambios de contrato, aplica Expand-Contract para no romper a consumidores existentes.
      - Separa los commits funcionales (`feat:`/`fix:`) de los de refactor puro (`refactor:`). Los tests existentes NO se modifican durante el refactor.
 - **Cumplimiento estricto de la normativa del stack tecnológico:**
-  El brief anuncia el stack de CADA repo de la feature, con sus reglas y sus skills. Vale para
-  cualquier stack, no solo para los de los ejemplos de abajo:
-  - Antes de escribir en un repo, lee las reglas de SU stack, instaladas en ese repo
-    (`.claude/rules/`, `.agents/rules/` o `.gemini/rules/`: `architecture.md`, `dependencies.md`,
-    `security.md`, `testing.md`). Esas reglas mandan sobre cualquier ejemplo de este archivo.
-  - Usa las skills del stack instaladas en ese repo (`.claude/skills/` o `.agents/skills/`) para
-    la tarea que corresponda (`add-feature`, `write-tests`, `architecture-review`...).
-  - Si el brief avisa que las reglas y skills NO están instaladas en un repo, o que un
-    microservicio declarado no tiene repo localizable, dilo y detente: no adivines la norma.
+  El brief anuncia el stack de CADA repo de la feature y trae, al final, el **texto completo de
+  sus reglas** y el **índice de sus skills** (nombre, descripción y ruta del `SKILL.md`). Vale
+  para cualquier stack, no solo para los de los ejemplos de abajo:
+  - Antes de escribir en un repo, lee las reglas de SU stack en el bloque `REGLAS DEL STACK` del
+    brief. Esas reglas mandan sobre cualquier ejemplo de este archivo. No dependas de que tu host
+    las cargue: el brief las trae aunque no estén instaladas en el repo.
+  - Antes de una tarea que una skill del stack cubre (`add-feature`, `write-tests`,
+    `add-persistence`, `architecture-review`...), ABRE su `SKILL.md` en la ruta que da el bloque
+    `SKILLS DEL STACK` y síguela. La ruta existe siempre: la copia del repo si está instalada, y
+    si no la plantilla de harness-flow.
+  - Si el brief avisa que un microservicio declarado no tiene repo localizable, dilo y detente:
+    no adivines la norma.
   - Un repo con otro stack se rige por sus propias reglas: no apliques las de un stack a otro.
   Dos ejemplos de lo que esas reglas fijan:
   - **Golang Hexagonal:**

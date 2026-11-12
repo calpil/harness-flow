@@ -192,6 +192,11 @@ Criterios de aceptacion a verificar ({len(acs)}):""")
     for ac in acs:
         print(f"  {lineas_ac.get(ac, ac)}")
 
+    # Las normas que se auditan salen del mismo registro que recibio quien escribio
+    # el codigo (contexto.py brief): no se bloquea por algo que no se le dijo, y la
+    # lista es la misma en cualquier host, tenga o no agents/revisor.md.
+    import normas
+    normas_revisor = "\n".join(normas.lineas_para_revisar())
     print(f"""
 Archivos que debes leer tu mismo (no confies en este resumen):
   spec:      {sp}
@@ -222,13 +227,7 @@ Reglas:
 - Un AC sin cita `archivo:linea` NO es 'ok'.
 - Si la evidencia cita una linea que no existe o no hace lo que dice, es 'falla'.
 - Audita la integridad de los tests en el diff: si se borro, salto (skip) o debilito un test existente para forzar el verde, o si el test es tautologico (recalcula el valor esperado con la misma logica del codigo en vez de contrastar contra el AC en la costura publica), reportalo como hallazgo mayor/bloqueante.
-- Audita patrones de datos y fiabilidad distribuida (DDIA): detecta y clasifica como BLOQUEANTE o MAYOR el anti-patron de doble escritura (Dual-Write: guardar en BD y luego llamar a broker o API externa fuera de un Transactional Outbox atómico en la misma TX), updates concurrentes sin control optimista (OCC con version) o mutaciones de red no idempotentes.
-- Audita la filosofía de diseño (Ousterhout): detecta y clasifica como MAYOR métodos pass-through que solo reenvían llamadas sin abstraer, fuga de información entre capas (Information Leakage) o sobre-fragmentación artificial (classitis).
-- Audita Code Smells y patrones GoF (Martin Fowler & GoF): detecta y clasifica como MAYOR la obsesión con primitivos en entidades core (Primitive Obsession: IDs o importes como strings/ints sin Value Objects), acoplamiento disperso (Shotgun Surgery), envidia de atributos ajenos (Feature Envy), abstracciones prematuras no pedidas por los AC (Speculative Generality) o intermediarios vacíos (Middle Man).
-- Audita algoritmos y estructuras de datos (CLRS): detecta y clasifica como BLOQUEANTE consultas N+1 (queries de base de datos o HTTP en bucles sin batching), como MAYOR búsquedas lineales anidadas O(N^2) sobre colecciones no indexadas y concatenación iterativa de strings en bucles sin buffers contiguos (StringBuilder).
-- Audita ingeniería de IA y modelos fundacionales (Chip Huyen): detecta y clasifica como BLOQUEANTE llamadas a APIs de LLMs sin timeouts ni reintentos resilientes (backoff + jitter), o loops agénticos/de auto-corrección sin límite estricto de <= 2 iteraciones; clasifica como MAYOR el parsing de texto libre en lugar de Structured Outputs (JSON Schema / Tool Calling) y la concatenación directa de inputs de usuario en prompts sin delimitadores semánticos.
-- Audita arquitectura de microservicios (Sam Newman): detecta y clasifica como BLOQUEANTE acceso a bases de datos de otros servicios (violación de Database per Service), llamadas remotas sin timeouts ni circuit breakers, y breaking changes sin versión ni Expand-Contract; clasifica como MAYOR la omisión de correlation IDs (X-Correlation-ID o traceparent) en llamadas remotas o eventos.
-- Aplica Code Review pragmático (Gergely Orosz): cero nitpicking de formato o estilo cosmético; enfoca la auditoría en corrección de negocio (ACs cumplidos), casos borde, seguridad y arquitectura; sugerencias van a '## Observaciones' y NO abren otra ronda.
+{normas_revisor}
 - No modifiques codigo. Solo lees y escribes {rp.name}.
 """)
     # Normativa de CADA stack que la feature toca: un repo por linea, y las reglas
@@ -254,23 +253,19 @@ Reglas:
                   f"- Stack detectado: {sid} (confianza: {confianza[sid]}%) en: {', '.join(nombres)}\n"
                   "- Reglas arquitectonicas obligatorias que DEBES auditar en el diff:")
             for ck, cv in normativa.get("architecture_constraints", {}).items():
-                if isinstance(cv, dict):
-                    print(f"  * {ck}: {cv.get('rationale', '')}")
-                else:
-                    print(f"  * {ck}: {cv}")
+                print(f"  * {ck}: {contexto.texto_restriccion(cv)}")
             reglas = normativa.get("rules", [])
             if reglas:
-                print(f"- Reglas completas del stack, instaladas en cada repo (.claude/rules, .agents/rules\n"
-                      f"  o .gemini/rules): {', '.join(reglas)}. Leelas: mandan sobre cualquier ejemplo.")
+                print(f"- Reglas completas del stack ({', '.join(reglas)}): su TEXTO va abajo, junto al indice\n"
+                      "  de skills del stack. Mandan sobre cualquier ejemplo.")
             print("- AUDITORIA OBLIGATORIA: Cualquier violacion a los limites de capas de ESTE stack\n"
                   "  (dominio que importa frameworks, transporte o persistencia; aplicacion que importa\n"
                   "  adaptadores; bypass de puertos) DEBE clasificarse como hallazgo BLOQUEANTE o MAYOR.")
-            doc_cfg = manifest.get("documentation", {})
-            lib_id = doc_cfg.get("context7", {}).get("library_id", "")
             print("- AUDITORIA DE VERSIONES Y SEGURIDAD: Verifica que no se introduzcan librerias\n"
-                  f"  con CVEs conocidos o APIs deprecadas. Valida con Context7 (lib: '{lib_id}') o\n"
-                  f"  documentacion oficial ({doc_cfg.get('official_docs', '')}).\n")
-        # El texto completo de las reglas: el revisor no depende de que su host las cargue.
+                  "  con CVEs conocidos o APIs deprecadas. La documentacion oficial, el id de\n"
+                  "  Context7 y el escaner de este stack van abajo, en su bloque DOCUMENTACION VIGENTE.\n")
+        # El texto completo de las reglas y el indice de skills: el revisor no depende
+        # de que su host los cargue ni de que esten instalados en el repo.
         reglas = contexto.lineas_reglas(p, load_backlog(p), f, micros_declarados(f))
         if reglas:
             print("\n".join(reglas) + "\n")

@@ -90,7 +90,7 @@
     "official_docs": "https://developer.apple.com/documentation/swift",
     "security_advisories": "https://support.apple.com/en-us/HT201222",
     "context7": {
-      "library_id": "/apple/swift",
+      "library_id": "/swiftlang/swift",
       "ecosystem": "swift",
       "suggested_queries": [
         "Swift Concurrency async await and actors",
@@ -100,7 +100,7 @@
     }
   },
   "security_audit": {
-    "command": "swift package audit",
+    "command": "osv-scanner --lockfile=Package.resolved",
     "advisory_feed": "https://github.com/swiftlang/swift-package-manager",
     "minimum_version": "6.0"
   },

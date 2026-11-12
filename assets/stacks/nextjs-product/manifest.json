@@ -17,7 +17,9 @@
       "react"
     ],
     "content_matches": {
-      "package.json": ["\"next\":"]
+      "package.json": [
+        "\"next\":"
+      ]
     },
     "strong_indicators": [
       "src/app",
@@ -81,6 +83,22 @@
       "server_only_isolation": "Módulos de acceso a datos o secretos deben aislarse con import 'server-only'.",
       "composition_root": "src/app (App Router)"
     }
+  },
+  "documentation": {
+    "official_docs": "https://nextjs.org/docs",
+    "security_advisories": "https://github.com/vercel/next.js/security/advisories",
+    "context7": {
+      "library_id": "/vercel/next.js",
+      "ecosystem": "npm",
+      "suggested_queries": [
+        "Next.js App Router server components and server actions",
+        "Next.js caching and revalidation",
+        "Next.js server-only modules and environment variables"
+      ]
+    }
+  },
+  "security_audit": {
+    "command": "npm audit --audit-level=high"
   },
   "runners": {
     "test_command": "npm test",

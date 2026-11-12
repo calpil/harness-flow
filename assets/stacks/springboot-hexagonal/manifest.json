@@ -16,8 +16,13 @@
       ".java"
     ],
     "content_matches": {
-      "pom.xml": ["spring-boot", "org.springframework.boot"],
-      "build.gradle": ["org.springframework.boot"]
+      "pom.xml": [
+        "spring-boot",
+        "org.springframework.boot"
+      ],
+      "build.gradle": [
+        "org.springframework.boot"
+      ]
     },
     "strong_indicators": [
       "src/main/java",
@@ -60,6 +65,25 @@
       "adapter_isolation": "adapter/in (REST controllers) y adapter/out (repositorios JPA, clientes HTTP) desacoplados.",
       "archunit_verification": "Reglas de arquitectura verificadas mediante tests de ArchUnit."
     }
+  },
+  "documentation": {
+    "official_docs": "https://docs.spring.io/spring-boot/",
+    "security_advisories": "https://spring.io/security",
+    "context7": {
+      "library_id": "/websites/spring_io_spring-boot",
+      "ecosystem": "maven",
+      "suggested_queries": [
+        "Spring Boot configuration properties and profiles",
+        "Spring Data JPA transactions and repositories",
+        "Spring Security filter chain and method security"
+      ]
+    }
+  },
+  "security_audit": {
+    "command": "./mvnw -q org.owasp:dependency-check-maven:check",
+    "alternative_commands": [
+      "./gradlew dependencyCheckAnalyze"
+    ]
   },
   "runners": {
     "test_command": "./mvnw test",

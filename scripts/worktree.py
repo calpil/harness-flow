@@ -91,7 +91,7 @@ def _decir_modo(f: dict) -> None:
 
 
 def cmd_modo(args) -> None:
-    """Cambia el modo de una feature ya arrancada. Delegar es decision del usuario."""
+    """Fija o cambia el modo de una feature. Delegar es decision del usuario."""
     if args.pair == args.delegado:
         sys.exit("[!!] indica --pair o --delegado (uno de los dos)")
     p = paths()
@@ -207,9 +207,16 @@ def cmd_register(args) -> None:
     # register NO fija el modo: registra worktrees que ya existen, con el trabajo
     # hecho, para validar una integracion. Ponerla en pair aqui exigiria una
     # lista de tests "aprobada antes de implementar" despues de haber implementado.
-    # El modo lo fija start (o `worktree.py modo`) al empezar.
+    # El modo lo fija gate.py approve-spec (primera aprobacion), start o `worktree.py modo`.
     save_backlog(p, data)
     bitacora(p, f"register #{f['id']} multi-repo")
+    if f.get("modo"):
+        _decir_modo(f)
+    else:
+        # Solo le pasa a un spec sellado antes de que el modo se registrara al aprobar.
+        print(f"[!]  #{f['id']} no tiene modo registrado: close NO exigira la lista de tests.\n"
+              f"     Si aun no hay codigo, fijalo: worktree.py modo --feature {f['id']} --pair\n"
+              f"     (o --delegado, si el usuario decide delegar).")
 
 
 def cmd_list(args) -> None:

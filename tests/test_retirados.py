@@ -63,6 +63,9 @@ class RetiradosTests(unittest.TestCase):
         self.mapa.write_text(json.dumps({"version": 1, "feature": "7", "bases": {"alpha": str(self.base)}}))
         self.retirados = self.home / "retirados.json"
         self.ok("gate.py", "approve-spec", "--feature", "7", "--yes", "--por", "Fixture")
+        # El fixture llega al cierre con el trabajo ya hecho por un script: es modo delegado.
+        # Sin declararlo, la primera aprobacion la deja en pair y close exige la lista de tests.
+        self.ok("worktree.py", "modo", "--feature", "7", "--delegado")
 
     def git(self, path, *args):
         r = subprocess.run(["git", "-C", str(path), *args], env=self.env, capture_output=True, text=True)

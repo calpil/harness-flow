@@ -716,7 +716,30 @@ def avisos_vertical_spec(text: str, rules: dict | None = None) -> list[str]:
             f"vertical-slice: costura acoplada a detalles internos ({detalle}); "
             "prueba comportamiento en la interfaz publica mas alta practica"
         )
+    expuestos = [ac for ac, val in costuras.items() if _COSTURA_EXPUESTA_RE.search(val)]
+    if expuestos and not ac_negativos(limpio):
+        avisos.append(
+            f"seguridad: {', '.join(expuestos)} exponen un endpoint y ningun AC es negativo; el revisor "
+            "marca como MAYOR un endpoint sin test de rechazo. Agrega un AC '[negativo]' (sin permiso, "
+            "entrada invalida, fuera de limite) o di en '## Fuera de alcance' por que no aplica"
+        )
     return avisos
+
+
+# Un AC negativo dice que pasa cuando NO debe funcionar: sin permiso, con entrada
+# invalida, fuera del limite. Se marca en su linea, igual que la costura.
+_AC_NEGATIVO_RE = re.compile(r"\[\s*negativo\s*\]", re.IGNORECASE)
+_COSTURA_EXPUESTA_RE = re.compile(r"\b(endpoint|api|http|rest|grpc|webhook)\b", re.IGNORECASE)
+
+
+def ac_negativos(text: str) -> list[str]:
+    """Los AC marcados `[negativo]` en su linea."""
+    out = []
+    for ln in re.sub(r"<!--.*?-->", "", text, flags=re.S).splitlines():
+        m = AC_RE.match(ln)
+        if m and _AC_NEGATIVO_RE.search(ln):
+            out.append(m.group(1))
+    return out
 
 # --- huella del spec por partes ---------------------------------------------
 #

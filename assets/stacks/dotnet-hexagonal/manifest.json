@@ -138,6 +138,7 @@
   },
   "security_audit": {
     "command": "dotnet list package --vulnerable",
+    "findings_pattern": "has the following vulnerable packages",
     "minimum_version": "8.0.0"
   }
 }

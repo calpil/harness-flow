@@ -86,6 +86,9 @@ class MultiRepoCloseTests(unittest.TestCase):
         self.manifest_path = self.home / "manifest.json"
         self.write_manifest()
         self.ok("gate.py", "approve-spec", "--feature", "7", "--yes", "--por", "Fixture")
+        # El fixture llega al cierre con el trabajo ya hecho por un script: es modo delegado.
+        # Sin declararlo, la primera aprobacion la deja en pair y close exige la lista de tests.
+        self.ok("worktree.py", "modo", "--feature", "7", "--delegado")
 
     def save(self):
         self.backlog.write_text(json.dumps(self.data, indent=2) + "\n")

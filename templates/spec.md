@@ -32,10 +32,13 @@ Patrón de ACs para Features de IA / Predictivas (Chip Huyen - ver `references/a
   - Inferencia estructurada: salida feliz tipada y validada contra JSON Schema.
   - Fallback determinista: regla heurística base infalible si la IA falla o supera el timeout.
   - Human-in-the-Loop: persistencia de telemetría y veredicto humano para calibrar el Golden Dataset.
+AC negativos (OWASP - ver `references/seguridad-owasp-y-zap.md`): todo AC que expone un endpoint o
+una acción con permisos lleva al menos un AC marcado `[negativo]` (sin permiso, entrada inválida,
+fuera de límite). `approve-spec` avisa si falta; el revisor lo marca como hallazgo mayor.
 Apunta a 2-5 AC por vertical slice; si necesita mas de 5, considera dividir la
 feature en slices verticales mas chicos antes de aprobar.
 
-- AC-1 [costura: endpoint]: El endpoint rechaza credenciales inválidas. Devuelve HTTP 401 con RFC 7807. `verificar: pytest tests/test_auth.py -q`
+- AC-1 [costura: endpoint] [negativo]: El endpoint rechaza credenciales inválidas. Devuelve HTTP 401 con RFC 7807. `verificar: pytest tests/test_auth.py -q`
 - AC-2 [costura: servicio]: El servicio descuenta stock al confirmar pago. Devuelve orden confirmada.
   Comando: `npm test -- checkout`
 - AC-3 [costura: manual]: <sin comando: lo verifica el reviewer a mano>

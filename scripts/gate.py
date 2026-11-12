@@ -485,13 +485,39 @@ def cmd_approve_spec(args) -> None:
     text = _sellar_spec(text, f"Aprobado: {quien} · {cuando} · sellado por gate.py approve-spec --yes")
     sp.write_text(text, encoding="utf-8")
 
+    primera_aprobacion = not f.get("last_spec_sig")
     _registrar_sello(p, f, sp, text, quien, cuando)
+    modo_fijado = _fijar_modo_al_aprobar(f, primera_aprobacion)
     arquitectura.registrar_aprobacion(p, data, f)
     save_backlog(p, data)
-    bitacora(p, f"spec #{f['id']} approved por {quien} ({len(acs)} AC)")
+    bitacora(p, f"spec #{f['id']} approved por {quien} ({len(acs)} AC)"
+                + (" modo=pair" if modo_fijado else ""))
     print(f"[ok] spec #{f['id']} aprobado y sellado. AC: {', '.join(acs)}")
+    if modo_fijado:
+        print(f"[i]  modo pair (por defecto): close exigira la lista de tests aprobada por el usuario\n"
+              f"     (docs/tests-{f['id']}.md, gate.py aprobar-tests --feature {f['id']} --yes).\n"
+              f"     Si el usuario decide delegar: worktree.py modo --feature {f['id']} --delegado")
     for x in avisos:
         print(f"[!]  {x}")
+
+
+def _fijar_modo_al_aprobar(f: dict, primera_aprobacion: bool) -> bool:
+    """Deja la feature en modo pair al sellar su spec por PRIMERA vez. True si lo fijo.
+
+    El modo lo registraba solo `worktree.py start`. Una feature que llega al
+    codigo por otro camino (`worktree.py register` en una raiz multi-repo, o un
+    arbol armado a mano) cerraba sin modo, y sin modo `close` no exige la lista
+    de tests. El sello del spec es el unico paso por el que pasa toda feature
+    antes de implementarse: ahi queda el modo.
+
+    Solo en la primera aprobacion: una feature cuyo spec ya estaba sellado puede
+    tener el trabajo hecho, y exigirle una lista "aprobada antes de implementar"
+    seria cambiarle la regla a mitad de camino.
+    """
+    if not primera_aprobacion or f.get("modo"):
+        return False
+    f["modo"] = "pair"
+    return True
 
 
 def motivo_doc(p: dict, data: dict, doc: str) -> str | None:

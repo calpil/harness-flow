@@ -233,6 +233,15 @@ def avisos_vertical_prd(text: str, max_candidatas: int = 15) -> list[str]:
     return avisos
 
 
+def avisos_sdd(text: str) -> list[str]:
+    """Avisos (no bloqueantes) sobre un SDD: lo que la plantilla pide y `validar` no exige."""
+    limpio = re.sub(r"<!--.*?-->", "", text, flags=re.S)
+    if not re.search(r"^[^\S\n]*```+[^\S\n]*mermaid\b", limpio, re.MULTILINE | re.IGNORECASE):
+        return ["el SDD no trae ningun diagrama Mermaid: la plantilla pide modelar componentes e "
+                "interacciones con diagramas, no con parrafos"]
+    return []
+
+
 def _etiqueta_con_contenido(seccion: str, etiqueta: str) -> bool:
     """`Hoy: texto` en la linea, o `Hoy:` y el parrafo debajo (hasta el blanco o la otra etiqueta)."""
     pat = re.compile(rf"^[^\S\n]*[*_]{{0,2}}{etiqueta}[*_]{{0,2}}[^\S\n]*:[^\S\n]*(.*)$", re.M | re.I)
@@ -624,6 +633,18 @@ def cmd_borrador(args) -> None:
     print("[i]  rellena cada seccion (las guias <!-- --> se reemplazan o se borran),")
     print("     MUESTRASELO al usuario y solo con su SI corre:")
     print(f"     producto.py aprobar --doc {doc} --yes")
+    # El rol producto no pasa por el brief de una feature. La norma de los stacks
+    # del proyecto le llega aqui, por la salida del comando que si corre siempre:
+    # completa para el SDD (es arquitectura), en resumen para el PRD.
+    try:
+        import contexto
+        print()
+        print("\n".join(contexto.lineas_stacks_proyecto(p, data, resumen=(doc != "sdd"))))
+        import normas
+        print("\n".join(normas.lineas_para_producto(doc)))
+    except (Exception, SystemExit) as exc:
+        print(f"[!]  no se pudo cargar la norma de los stacks del proyecto ({exc}): "
+              "corre contexto.py stacks antes de escribir el SDD")
 
 
 def cmd_aprobar(args) -> None:
@@ -684,6 +705,8 @@ def cmd_aprobar(args) -> None:
         borrador.write_text(sellado, encoding="utf-8")
 
     print(f"[ok] {cfg['titulo']} aprobado y sellado por {quien}: {_rel(p['root'], destino)}")
+    for aviso in avisos_sdd(sellado) if doc == "sdd" else []:
+        print(f"[!]  {aviso}")
     if doc == "prd":
         print("[i]  gate.py check acepta ese cuerpo por el sello; commitea docs/prd/PRD-master.md")
         print("     cuando corresponda (es del usuario, el agente no lo commitea).")

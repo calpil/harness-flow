@@ -420,14 +420,14 @@ class TestStackManager(unittest.TestCase):
         if self.ios_template.exists():
             res_ios = stack.auditar_seguridad_y_versiones(self.ios_template)
             self.assertEqual(res_ios["stack"], "ios-swiftui-clean")
-            self.assertEqual(res_ios["context7_library"], "/apple/swift")
+            self.assertEqual(res_ios["context7_library"], "/swiftlang/swift")
             self.assertEqual(res_ios["minimum_version"], "6.0")
-            self.assertIn("swift package audit", res_ios["audit_command"])
+            self.assertIn("osv-scanner", res_ios["audit_command"])
 
         if self.android_template.exists():
             res_and = stack.auditar_seguridad_y_versiones(self.android_template)
             self.assertEqual(res_and["stack"], "android-compose-clean")
-            self.assertEqual(res_and["context7_library"], "/google/android")
+            self.assertEqual(res_and["context7_library"], "/websites/developer_android_develop_ui_compose")
             self.assertEqual(res_and["minimum_version"], "2.0.0")
             self.assertIn("./gradlew dependencyCheckAnalyze", res_and["audit_command"])
 

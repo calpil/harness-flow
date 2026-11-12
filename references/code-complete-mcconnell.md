@@ -210,7 +210,7 @@ Programar *en* el lenguaje es pensar solo lo que el framework sugiere (lógica d
 | ¿Errores, seguridad, interfaces, reuso, rendimiento? | SDD y skills del stack. El rendimiento se afina solo si un AC lo pide (capítulos 25 y 26). |
 | ¿Dónde estás en la ola? | Stack maduro por defecto. Ola temprana se nombra en el SDD cuando la dependencia es nueva. |
 | ¿Procedimiento de integración antes del master? | Worktree, `verify` en ese worktree, review, `close`, postmerge medido. |
-| ¿Pareja o solo? | Pair automático en stack CALPIL. Implementer delegado en repos genéricos. `--pair` si se pide. |
+| ¿Pareja o solo? | Pair por defecto en toda feature, con stack detectado o sin él. Implementer delegado solo si el usuario lo pide (`--delegado`) o la sesión no tiene usuario. |
 | ¿Tests antes del código? | Sí. TDD vertical, un test en la costura pública. |
 | ¿Tests unitarios aunque no sean primero? | Sí, en la costura. El valor esperado sale del AC. |
 | ¿Pasar el depurador antes de integrar? | No es gate. La evidencia es el test. Exclusión consciente. |
@@ -325,7 +325,7 @@ El prototipo experimental del capítulo es el mínimo código desechable que res
 
 Eso choca con `F-1`. El esqueleto del arnés es producto, se mide en la costura y no se tira. Un spike que responde una pregunta de diseño no es la candidata, no se mergea y no se bautiza como código de producción. Si la pregunta ya está respondida por el stack o por una decisión `D-n`, no hay spike.
 
-El diseño de a dos ya existe: el sí del usuario al spec, el pair en stack CALPIL, la parada cuando aparece una decisión que el plan no tenía. La inspección formal es el capítulo 21. No se agrega un gate. Capturar el diseño es el `## Plan vertical`, los `D-n` y el propio código. Wiki, tarjetas CRC o un UML aparte no son artefactos del arnés.
+El diseño de a dos ya existe: el sí del usuario al spec, el pair por defecto en toda feature, la parada cuando aparece una decisión que el plan no tenía. La inspección formal es el capítulo 21. No se agrega un gate. Capturar el diseño es el `## Plan vertical`, los `D-n` y el propio código. Wiki, tarjetas CRC o un UML aparte no son artefactos del arnés.
 
 Cuánto detalle antes de codificar, según la tabla del capítulo, pesada con la clase de software:
 

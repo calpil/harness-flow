@@ -50,8 +50,10 @@ flowchart TD
     H27["<b>Hito 27: Fable 5.2 u Opus 5.5</b><br/>Producto y Leader eligen por formulario; el modelo se aplica por turno"]
     H28["<b>Hito 28: Pair y Reglas Garantizados</b><br/>Pair por defecto registrado en el backlog, lista de tests sellada y reglas completas en el brief"]
     H29["<b>Hito 29: Feature #0 Completa y Medible</b><br/>Cubre todos los repos con violaciones y sus AC corren desde el proyecto"]
+    H30["<b>Hito 30: Norma del Stack y Pair en Cada Rol</b><br/>Índice de skills en el brief, stacks del proyecto para el rol producto y pair fijado al aprobar el spec"]
+    H31["<b>Hito 31: Una Sola Lista de Normas</b><br/>Registro norma × rol para producto, leader, implementer y revisor; AC negativos; Context7 y auditar con exit real"]
 
-    H1 --> H2 --> H3 --> H4 --> H5 --> H6 --> H7 --> H8 --> H9 --> H10 --> H11 --> H12 --> H13 --> H14 --> H15 --> H16 --> H17 --> H18 --> H19 --> H20 --> H21 --> H22 --> H23 --> H24 --> H25 --> H26 --> H27 --> H28 --> H29
+    H1 --> H2 --> H3 --> H4 --> H5 --> H6 --> H7 --> H8 --> H9 --> H10 --> H11 --> H12 --> H13 --> H14 --> H15 --> H16 --> H17 --> H18 --> H19 --> H20 --> H21 --> H22 --> H23 --> H24 --> H25 --> H26 --> H27 --> H28 --> H29 --> H30 --> H31
 ```
 
 ---

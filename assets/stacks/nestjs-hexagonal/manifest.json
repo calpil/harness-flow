@@ -15,7 +15,9 @@
       "@nestjs/common"
     ],
     "content_matches": {
-      "package.json": ["@nestjs/core"]
+      "package.json": [
+        "@nestjs/core"
+      ]
     },
     "strong_indicators": [
       "src/domain",
@@ -58,6 +60,22 @@
       "domain_purity": "domain/** sin dependencias de @nestjs ni persistencia directa.",
       "composition_root": "Nest Modules en la capa externa cablean puertos con adapters."
     }
+  },
+  "documentation": {
+    "official_docs": "https://docs.nestjs.com/",
+    "security_advisories": "https://github.com/nestjs/nest/security/advisories",
+    "context7": {
+      "library_id": "/nestjs/docs.nestjs.com",
+      "ecosystem": "npm",
+      "suggested_queries": [
+        "NestJS modules providers and dependency injection",
+        "NestJS guards pipes and validation",
+        "Prisma client transactions with NestJS"
+      ]
+    }
+  },
+  "security_audit": {
+    "command": "npm audit --audit-level=high"
   },
   "runners": {
     "test_command": "npm test"

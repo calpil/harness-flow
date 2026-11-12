@@ -89,7 +89,7 @@
     "official_docs": "https://developer.android.com/docs",
     "security_advisories": "https://source.android.com/security/bulletin",
     "context7": {
-      "library_id": "/google/android",
+      "library_id": "/websites/developer_android_develop_ui_compose",
       "ecosystem": "gradle",
       "suggested_queries": [
         "Jetpack Compose UI patterns and state",

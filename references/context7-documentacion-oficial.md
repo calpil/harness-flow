@@ -91,13 +91,30 @@ Reinicia el agente después de configurarlo. Si en un host no está disponible:
 | **`dotnet-hexagonal`** | `/dotnet/runtime` | [learn.microsoft.com/dotnet](https://learn.microsoft.com/en-us/dotnet/) | `dotnet list package --vulnerable` | .NET 8.0 LTS / .NET 10.0+ |
 | **`rust-hexagonal`** | `/tokio-rs/axum`, `/rust-lang/rust` | [doc.rust-lang.org](https://doc.rust-lang.org/) | `cargo audit` | Rust 2021+ (recomendado 2024) |
 | **`nextjs-product`** | `/vercel/next.js` | [nextjs.org/docs](https://nextjs.org/docs) | `npm audit --audit-level=high` | Next.js 15+ / React 19 |
-| **`springboot-hexagonal`** | `/spring-projects/spring-boot` | [docs.spring.io](https://docs.spring.io/spring-boot/) | `./mvnw org.owasp:dependency-check-maven:check` | Java 21 LTS / Spring Boot 3.4+ |
-| **`nestjs-hexagonal`** | `/nestjs/nest` | [docs.nestjs.com](https://docs.nestjs.com) | `npm audit --audit-level=high` | NestJS 10+ |
-| **`python-dataproduct`** | `/tiangolo/fastapi`, `/pola-rs/polars` | [fastapi.tiangolo.com](https://fastapi.tiangolo.com) | `pip-audit` o `safety check` | Python 3.12+ (recomendado 3.14) |
+| **`springboot-hexagonal`** | `/websites/spring_io_spring-boot` | [docs.spring.io](https://docs.spring.io/spring-boot/) | `./mvnw org.owasp:dependency-check-maven:check` | Java 21 LTS / Spring Boot 3.4+ |
+| **`nestjs-hexagonal`** | `/nestjs/docs.nestjs.com` | [docs.nestjs.com](https://docs.nestjs.com) | `npm audit --audit-level=high` | NestJS 10+ |
+| **`python-dataproduct`** | `/websites/fastapi_tiangolo` (Polars: resolver con `resolve-library-id`) | [fastapi.tiangolo.com](https://fastapi.tiangolo.com) | `pip-audit` o `safety check` | Python 3.12+ (recomendado 3.14) |
+| **`ios-swiftui-clean`** | `/swiftlang/swift` | [developer.apple.com/documentation/swift](https://developer.apple.com/documentation/swift) | `osv-scanner --lockfile=Package.resolved` | Swift tools 6.0+ |
+| **`android-compose-clean`** | `/websites/developer_android_develop_ui_compose` | [developer.android.com/docs](https://developer.android.com/docs) | `./gradlew dependencyCheckAnalyze` | Kotlin 2.0.0+ |
 
 ---
 
 ## 4. Protocolo Obligatorio por Rol de Harness Flow
+
+**Cómo llega esto a cada rol, en cualquier host.** No depende de que el agente abra esta
+referencia. Por cada stack que la feature toca, `contexto.py brief` (leader e implementer) y
+`revision.py --briefing` (revisor) imprimen el bloque `DOCUMENTACION VIGENTE DEL STACK`:
+documentación oficial, id de librería de Context7, consultas sugeridas y escáner de dependencias,
+tomados del `manifest.json` del stack. El rol producto lo recibe de todos los repos del proyecto
+al crear el borrador del SDD (`producto.py borrador --doc sdd`, o `contexto.py stacks`). La norma
+`[documentacion]` del bloque `NORMAS DE INGENIERIA` dice qué hacer con ello, y es la misma que el
+revisor audita. La consulta a Context7 la hace el agente con el MCP de su host: ningún script se
+conecta a Context7.
+
+**`stack.py auditar --repo <ruta>` mide, no informa.** Corre el escáner del stack y sale con
+exit 0 si está limpio, exit 1 si reporta hallazgos y exit 2 si no pudo medir (escáner no
+instalado, stack sin escáner declarado o repo sin stack). Un exit 2 no es un verde: instala el
+escáner o deja escrito en la evidencia que la auditoría no se hizo.
 
 ### Rol 0: Producto (PRD y SDD)
 - Al redactar el borrador del SDD (`docs/sdd.md`), la sección `## Contexto` y `## Decisiones` **debe declarar explícitamente las versiones mayores vigentes del stack**.
@@ -112,14 +129,14 @@ Reinicia el agente después de configurarlo. Si en un host no está disponible:
      - Prompt con sufijo: `"use context7"` o llamada directa a `query-docs`.
   2. Si Context7 no está disponible, consultar la documentación oficial vía `search_web`:
      - Consulta dirigida: `"[framework] [metodo] latest documentation and breaking changes"`.
-  3. Ejecutar el escáner de seguridad correspondiente (`govulncheck`, `npm audit`, `pip-audit`) antes de registrar evidencia en `docs/impl-<id>.md`.
+  3. Si el cambio agrega o sube una dependencia, ejecutar `stack.py auditar --repo <ruta>` (corre el escáner del stack: `govulncheck`, `npm audit`, `pip-audit`...) antes de registrar evidencia en `docs/impl-<id>.md`. Exit 1 o exit 2 no se dan por buenos.
   4. Ningún commit debe introducir dependencias con severidad crítica o alta sin justificación explícita documentada en `docs/development/dependencies.md`.
 
 ### Rol 3: Reviewer (Revisión Independiente)
 - El subagente revisor verifica que el diff:
   1. No utilice APIs marcadas como `@deprecated`.
   2. No introduzca librerías abandonadas o con reportes públicos de vulnerabilidad (CVEs).
-  3. Cumpla los estándares de seguridad declarados en `.claude/rules/security.md` y `AGENTS.md`.
+  3. Cumpla los estándares de seguridad de `security.md` del stack (su texto va en el briefing; en el repo vive en `.claude/rules/`, `.agents/rules/` o `.gemini/rules/`) y de `AGENTS.md`.
 - **Cualquier vulnerabilidad de seguridad conocida o API obsoleta que comprometa la estabilidad DEBE ser clasificada como hallazgo BLOQUEANTE o MAYOR.**
 
 ---

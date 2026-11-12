@@ -632,11 +632,14 @@ def _generar_agents_md(stack_id: str, manifest: dict[str, Any]) -> str:
         "## 4. Modo Pair Interactivo y Preguntas de Formulario",
         "",
         "- **Modo Pair Interactivo:** Al aplicar skills o implementar features, la IA actúa como Driver y el humano como Navigator.",
+        "- **Con harness-flow:** pair es el modo por defecto de toda feature y su rastro es la lista de tests aprobada por el usuario. El brief de la feature (`contexto.py brief --feature <id>`) trae el texto de estas reglas, el índice de las skills del stack y las `NORMAS DE INGENIERIA` que el revisor audita: cúmplelas con cualquier agente.",
         "- **Preguntas de Formulario:** La IA debe consultar al humano mediante formulario/pregunta interactiva **SOLO** ante decisiones de arquitectura no previstas, breaking changes o tras 2 intentos fallidos en TDD.",
         "",
         "## 5. Actualización Continua: Context7 y Documentación Oficial",
         "",
-        f"- **Context7 MCP:** Al implementar APIs o agregar librerías, utiliza Context7 (`https://mcp.context7.com/mcp` o prompt `'use context7'`) con library `{context7_cfg.get('library_id', stack_id)}`.",
+        ("- **Context7 MCP:** Al implementar APIs o agregar librerías, utiliza Context7 (`https://mcp.context7.com/mcp` o prompt `'use context7'`)"
+         + (f" con library `{context7_cfg['library_id']}`." if context7_cfg.get("library_id")
+            else ": resuelve antes el id de la librería con `resolve-library-id` (este stack no declara uno).")),
         f"- **Documentación Oficial:** Consulta siempre fuentes oficiales actualizadas en {doc_cfg.get('official_docs', 'sitio oficial del stack')}.",
         f"- **Auditoría de Seguridad:** Prohibido introducir paquetes con vulnerabilidades conocidas (CVEs críticas/altas). Ejecutar `{sec_cfg.get('command', 'auditoría de paquetes')}`.",
         "",
@@ -648,6 +651,18 @@ def _generar_agents_md(stack_id: str, manifest: dict[str, Any]) -> str:
 # ---------------------------------------------------------------------------
 # 4. Auditoría de Versiones y Seguridad (Context7 & Oficial)
 # ---------------------------------------------------------------------------
+
+AUDITORIA_LIMPIA, AUDITORIA_CON_HALLAZGOS, AUDITORIA_SIN_MEDIR = "limpio", "hallazgos", "sin_medir"
+# Un gate que no puede medir no devuelve verdadero: sin escáner, exit 2.
+EXIT_AUDITORIA = {AUDITORIA_LIMPIA: 0, AUDITORIA_CON_HALLAZGOS: 1, AUDITORIA_SIN_MEDIR: 2}
+
+
+def _herramienta_disponible(herramienta: str, repo: Path) -> bool:
+    """Un wrapper del repo (`./mvnw`, `./gradlew`) se busca en el repo, no en el PATH."""
+    if herramienta.startswith("./"):
+        return (repo / herramienta).is_file()
+    return shutil.which(herramienta) is not None
+
 
 def auditar_seguridad_y_versiones(
     repo: Path,
@@ -663,7 +678,8 @@ def auditar_seguridad_y_versiones(
         stack_id = det["stack"]
 
     if stack_id == "generico":
-        return {"status": "skipped", "message": "Repo genérico sin stack CALPIL identificado"}
+        return {"status": "skipped", "estado": AUDITORIA_SIN_MEDIR,
+                "message": "Repo genérico sin stack CALPIL identificado"}
 
     manifest = cargar_manifest(stack_id)
     doc_cfg = manifest.get("documentation", {})
@@ -676,16 +692,34 @@ def auditar_seguridad_y_versiones(
     warnings = []
     audit_output = ""
 
-    # 1. Comprobar escáner de seguridad si existe comando
-    if audit_cmd:
-        tool_name = audit_cmd.split()[0]
-        if shutil.which(tool_name):
-            code, out = _run_cmd(audit_cmd.split(), cwd=repo)
-            audit_output = out
-            if code != 0:
-                warnings.append(f"Escáner de seguridad detectó posibles avisos ({tool_name})")
+    # 1. Escáner de dependencias. Tres resultados, no dos: limpio, con hallazgos o
+    #    sin medir. Antes los tres salían con exit 0 y un aviso: un escáner ausente
+    #    o con vulnerabilidades se leía igual que uno limpio.
+    estado = AUDITORIA_SIN_MEDIR
+    candidatos = [c for c in [audit_cmd, *sec_cfg.get("alternative_commands", [])] if c]
+    if not candidatos:
+        findings.append(f"El stack {stack_id} no declara escáner de dependencias (security_audit.command): "
+                        "la auditoría no se pudo medir")
+    else:
+        elegido = next((c for c in candidatos if _herramienta_disponible(c.split()[0], repo)), None)
+        if elegido is None:
+            faltan = ", ".join(sorted({c.split()[0] for c in candidatos}))
+            findings.append(f"Escáner de dependencias no disponible ({faltan}): la auditoría no se pudo medir")
         else:
-            warnings.append(f"Herramienta de auditoría '{tool_name}' no instalada en el PATH.")
+            audit_cmd = elegido
+            code, out = _run_cmd(elegido.split(), cwd=repo)
+            audit_output = out
+            # Hay escáneres que listan vulnerabilidades y salen con 0 (`dotnet list package
+            # --vulnerable`): el manifest declara entonces el texto que delata el hallazgo.
+            patron = sec_cfg.get("findings_pattern")
+            delatado = bool(patron and re.search(patron, out or "", re.IGNORECASE))
+            if code == 0 and not delatado:
+                estado = AUDITORIA_LIMPIA
+            else:
+                estado = AUDITORIA_CON_HALLAZGOS
+                motivo = f"salió con código {code}" if code != 0 else "reportó paquetes vulnerables"
+                findings.append(f"El escáner de dependencias {motivo} ({elegido}): "
+                                "revisa su salida; vulnerabilidades altas o críticas bloquean")
 
     # 2. Comprobar versión mínima declarada
     if min_version:
@@ -830,6 +864,7 @@ def auditar_seguridad_y_versiones(
     return {
         "stack": stack_id,
         "repo": str(repo),
+        "estado": estado,
         "official_docs": doc_cfg.get("official_docs"),
         "security_advisories": doc_cfg.get("security_advisories"),
         "context7_library": context7_cfg.get("library_id"),
@@ -1108,6 +1143,21 @@ def generar_plan_refactor(repo: Path, stack_id: str | None = None) -> dict[str, 
                     "target": err.split(":")[0],
                     "description": f"Presentation debe consumir casos de uso y modelos de Domain, sin acceder a DTOs ni DAOs directamente: {err}"
                 })
+
+    if not steps:
+        # Un stack sin plan propio (o un incumplimiento que su plan no cubre) devolvia
+        # "hace falta refactorizar" con cero pasos. El plan generico sale de lo que el
+        # verificador midio: un paso por hallazgo, contra las reglas de ese stack.
+        reglas = ", ".join(cargar_manifest(stack_id).get("normative", {}).get("rules", [])) or "reglas del stack"
+        for i, hallazgo in enumerate(diag.get("findings") or
+                                     ["El verificador reporta incumplimiento: corre stack.py verificar --repo <ruta>"], 1):
+            steps.append({
+                "step": i,
+                "title": "Corregir incumplimiento de la normativa del stack",
+                "action": "fix_violation",
+                "target": f"assets/stacks/{stack_id}/rules ({reglas})",
+                "description": str(hallazgo),
+            })
 
     return {
         "needed": True,
@@ -1780,12 +1830,19 @@ def main() -> None:
             openapi_path=getattr(args, "openapi", None),
             target_url=getattr(args, "target_url", None),
         )
+        salida = EXIT_AUDITORIA.get(res.get("estado"), 2)
         if args.json:
             print(json.dumps(res, indent=2))
+        elif res.get("status") == "skipped":
+            print(f"[!!] auditoría no se pudo medir: {res.get('message')}")
         else:
             print("=" * 68)
             print(f"AUDITORÍA DE VERSIONES Y SEGURIDAD: {res.get('stack')} en {repo_path.name}")
             print("=" * 68)
+            print({AUDITORIA_LIMPIA: "[ok] escáner de dependencias limpio (exit 0)",
+                   AUDITORIA_CON_HALLAZGOS: "[!!] el escáner de dependencias reportó hallazgos (exit 1)",
+                   AUDITORIA_SIN_MEDIR: "[!!] la auditoría de dependencias NO se pudo medir (exit 2): "
+                                        "no es un verde"}[res["estado"]])
             print(f"Documentación Oficial: {res.get('official_docs') or 'No declarada'}")
             print(f"Avisos de Seguridad:   {res.get('security_advisories') or 'No declarada'}")
             print(f"Context7 Library ID:   {res.get('context7_library') or 'No declarada'}")
@@ -1820,7 +1877,7 @@ def main() -> None:
                     print("Salida DAST:")
                     for line in dast_info["output"].splitlines()[:15]:
                         print(f"  | {line}")
-        sys.exit(0)
+        sys.exit(salida)
 
     if args.cmd == "normalizar":
         res = normalizar_repositorio(repo_path, args.stack, args.dry_run, rules=rules_cli)

@@ -79,8 +79,9 @@ pasa ademas el `effort` que eligio para esa tarea, y ese le gana al del
 frontmatter. La tabla por rol, la banda de seleccion y lo que quedo comprobado
 estan en [`modelos.md`](modelos.md).
 
-**Modo Pair interactivo (`--pair`)**: `/harness-flow:implementar <id> --pair`
-no lanza al subagente `implementer`: la sesión principal de Claude actúa
+**Modo Pair interactivo (por defecto)**: `/harness-flow:implementar <id>`
+no lanza al subagente `implementer` salvo que los argumentos traigan
+`--delegado` o la sesión no tenga usuario: la sesión principal de Claude actúa
 directamente como Driver y el humano como Navigator en el worktree, acordando la
 lista de tests, avanzando un test a la vez (`Red -> Green -> Refactor`) y
 pausando tras cada micro-paso según [`vertical-slice.md`](vertical-slice.md).

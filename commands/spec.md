@@ -69,6 +69,20 @@ Para consultas puntuales de estructura (quien llama a X, impacto de un cambio) u
 el MCP `codebase-memory-mcp` (`search_graph`, `trace_path`, `detect_changes`) antes de
 leer archivos a ciegas.
 
+Al final trae el **texto completo de las reglas de cada stack** que toca la
+feature (front y backend, cada repo con las suyas) y el **indice de las skills**
+de ese stack: los AC y el plan vertical no las contradicen. Una feature que
+declara `microservicios` recibe las de cada uno; declaralos antes de escribir.
+
+Mientras el spec no esta sellado, el bloque **`NORMAS DE INGENIERIA`** del brief
+trae lineas `en el spec: ...`: lo que cada norma pide dejar escrito en un AC o
+en el plan cuando la feature toca su materia (idempotencia y concurrencia,
+esquema de salida de un LLM, version de un contrato compartido, librerias
+nuevas). **AC negativos:** todo AC que expone un endpoint o una accion con
+permisos lleva al menos un AC marcado `[negativo]` (sin permiso, entrada
+invalida, fuera de limite); `approve-spec` avisa si falta y el revisor lo marca
+como hallazgo mayor.
+
 Ese brief trae AC, reglas, la seccion **producto** (el PRD y el SDD: la `F-n`
 de la feature, los objetivos `O-n`/`NO-n` y las decisiones `D-n`), lecciones,
 impacto del hub, superficie de contacto del grafo y **documentos relacionados**:

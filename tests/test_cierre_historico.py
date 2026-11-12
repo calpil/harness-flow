@@ -60,6 +60,9 @@ class CierreHistoricoGoTests(unittest.TestCase):
         self.base_sha = self.git(self.repo, "rev-parse", "HEAD")
         self.retirados = self.home / "retirados.json"
         self.ok("gate.py", "approve-spec", "--feature", "15", "--yes", "--por", "Fixture")
+        # El fixture llega al cierre con el trabajo ya hecho por un script: es modo delegado.
+        # Sin declararlo, la primera aprobacion la deja en pair y close exige la lista de tests.
+        self.ok("worktree.py", "modo", "--feature", "15", "--delegado")
 
     def git(self, path, *args):
         r = subprocess.run(["git", "-C", str(path), *args], env=self.env, capture_output=True, text=True)
@@ -425,6 +428,9 @@ class CierreHistoricoFrontendTests(unittest.TestCase):
         (self.root / "docs/impl-15.md").write_text("## AC-1\nfront/feature.txt:1\n")
         (self.root / "harness/progress/current-15.md").write_text("Fixture progress\n")
         self.ok("gate.py", "approve-spec", "--feature", "15", "--yes", "--por", "Fixture")
+        # El fixture llega al cierre con el trabajo ya hecho por un script: es modo delegado.
+        # Sin declararlo, la primera aprobacion la deja en pair y close exige la lista de tests.
+        self.ok("worktree.py", "modo", "--feature", "15", "--delegado")
 
     def command(self, script, *args):
         argv = [sys.executable, "-B", str(SCRIPTS / script), *args]

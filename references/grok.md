@@ -50,11 +50,19 @@ exporta `H` ya resuelto y `HARNESS_HOST=grok`.
 El interprete es el venv neutro `~/.harness-flow/venv`, el mismo de Claude y de
 GPT. `psycopg` solo hace falta para el Memory Hub.
 
-## Implementer y Modo Pair (--pair)
+## Implementer y Modo Pair (por defecto)
+
+**Pair es el modo por defecto de toda feature**, con stack detectado o sin él: lo deja en el
+backlog `gate.py approve-spec` al sellar el spec por primera vez y `gate.py close` exige su rastro,
+la lista de tests aprobada (`gate.py aprobar-tests`). `--pair` ya no hace falta para activarlo. El
+modo delegado es decisión del usuario (`worktree.py modo --feature <id> --delegado`) o de una sesión
+sin usuario. En los dos modos el brief (`contexto.py brief`) trae el texto de las reglas de cada
+stack, el índice de sus skills y el bloque `NORMAS DE INGENIERIA`, que es la misma lista que audita
+el revisor: cúmplelas aunque tu host no cargue `agents/implementer.md`.
 
 En Grok el Rol 2 se divide según la modalidad:
 
-1. **Modo Pair interactivo (`--pair`)**: corre en la **sesión principal de Grok**
+1. **Modo Pair interactivo (por defecto)**: corre en la **sesión principal de Grok**
    (Driver = Grok, Navigator = humano). **NUNCA uses `spawn_subagent` aquí**:
    el subagente rompería la interactividad del Navigator. Grok utiliza
    `run_terminal_command`, `write` y `search_replace` directamente en el worktree
@@ -62,8 +70,10 @@ En Grok el Rol 2 se divide según la modalidad:
    antes de empezar, ejecuta `1 test -> Red -> código mínimo -> Green`, y pausa
    con el micro-mensaje del Navigator (`✅ Pasa "<test>"... ¿Seguimos?`). Respeta
    las 5 paradas XP de `references/vertical-slice.md`.
-2. **Modo Delegado (autónomo)**: Grok ejecuta la implementación en el worktree
-   hasta dejar la unidad en verde y el acta `docs/impl-<id>.md`.
+2. **Modo Delegado (autónomo)**: solo si el usuario lo pidió o la sesión no tiene
+   usuario. Regístralo (`worktree.py start --feature <id> --delegado`); Grok ejecuta
+   la implementación en el worktree hasta dejar la unidad en verde y el acta
+   `docs/impl-<id>.md`, siguiendo las reglas y normas de la salida de `contexto.py brief`.
 
 Una vez concluida la implementación y commiteado el trabajo en la rama de la
 feature, se pasa al Rol 3 (Revisor), donde **ahí sí** es obligatorio el subagente

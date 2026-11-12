@@ -147,7 +147,7 @@ flowchart LR
 
 ### 3.3. Fase de Planificación y Specs (`F-n`)
 1. **Negative Acceptance Criteria (ACs Negativos):**
-   * Toda feature con lógica de acceso debe incluir al menos un AC negativo comprobable.
+   * Toda feature con lógica de acceso debe incluir al menos un AC negativo comprobable, marcado `[negativo]` en su línea (`- AC-2 [costura: endpoint] [negativo]: ...`). `gate.py approve-spec` y `check-spec` avisan si un spec expone un endpoint y no tiene ninguno; el brief pide escribir su test de rechazo antes que el camino feliz.
    * *Ejemplo:* `AC-2: Petición sin header Authorization o con token vencido retorna 401 Unauthorized`.
    * *Ejemplo:* `AC-3: Inyección de payload SQL (' OR 1=1 --) en campo de búsqueda retorna 422 Unprocessable Entity o lista vacía, sin errores de base de datos`.
 
@@ -227,6 +227,6 @@ $PY "$H/stack.py" auditar --dast [--openapi ruta/a/openapi.json] [--target-url h
 | **Spec (`F-n`)** | Criterios de Aceptación Negativos (*Negative ACs*). | `feature_list.json` / Spec de feature |
 | **Patrones GoF** | Proxy de Auth, Value Objects autovalidados, Adapter HTTP seguro. | `references/design-patterns-gof.md` |
 | **Implementer** | Test-first negativo, Prepared Statements y Zero Hardcoded Secrets. | Código fuente y tests de costura |
-| **Revisor Aislado** | Auditoría estricta contra OWASP Top 10 en diffs (`agents/revisor.md`). | `docs/review-<id>.md` |
-| **Verify / Postmerge**| SAST de dependencias (`stack.py auditar`) y DAST (`OWASP ZAP`). | Salida de gates y reportes ZAP |
+| **Revisor Aislado** | Auditoría estricta contra OWASP Top 10 en diffs: norma `[seguridad]` del briefing (`revision.py --briefing`), igual en todos los hosts. | `docs/review-<id>.md` |
+| **Implementer y Revisor**| Escáner de dependencias (`stack.py auditar`, exit 1 = hallazgos, exit 2 = sin medir) cuando el diff toca dependencias; DAST (`stack.py auditar --dast`, OWASP ZAP) a pedido. Ningún gate los corre solo. | Salida de `auditar` y reportes ZAP |
 | **Cierre / Post-Mortem**| Registro de incidentes y lecciones aprendidas institucionales. | `references/lecciones-del-arnes.md` |

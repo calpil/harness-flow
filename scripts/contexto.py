@@ -1186,7 +1186,7 @@ def _lineas_stack(p: dict, data: dict, f: dict, micros: list[str]) -> list[str]:
             if reglas:
                 L.append("reglas del stack: " + ", ".join(reglas))
             if skills:
-                L.append("skills del stack: " + ", ".join(skills[:6]) + ("..." if len(skills) > 6 else ""))
+                L.append(f"skills del stack ({len(skills)}): " + ", ".join(skills))
             vistos.add(sid)
             continue
         otros.append(f"  {nombre}: {det['name']} ({sid}) · {ruta}")
@@ -1197,9 +1197,10 @@ def _lineas_stack(p: dict, data: dict, f: dict, micros: list[str]) -> list[str]:
             if reglas:
                 otros.append("      reglas: " + ", ".join(reglas))
             if skills:
-                otros.append("      skills: " + ", ".join(skills[:12]) + (f"... ({len(skills)})" if len(skills) > 12 else ""))
+                otros.append(f"      skills ({len(skills)}): " + ", ".join(skills))
         if not any((ruta / d / "rules").is_dir() for d in (".claude", ".agents", ".gemini")):
-            otros.append(f"      [!] reglas y skills del stack NO instaladas en ese repo: stack.py normalizar --repo {ruta}")
+            otros.append("      [!] reglas y skills del stack NO instaladas en ese repo: este brief las trae "
+                         f"desde la plantilla; para dejarlas en el repo: stack.py normalizar --repo {ruta}")
     if otros:
         L.append("")
         L.append("otros repos de la feature con stack normativo (cada uno con SUS reglas y skills):")
@@ -1224,8 +1225,8 @@ def lineas_modo(f: dict) -> list[str]:
                 f"usuario con gate.py aprobar-tests --feature {f['id']} --yes (close la exige)"]
     if modo == "delegado":
         return ["modo delegado: el usuario lo pidio o la sesion no tiene usuario (subagente implementer)"]
-    return ["modo de implementacion: sin registrar (feature anterior al registro de modo): "
-            "sigue lo acordado con el usuario"]
+    return ["modo de implementacion: sin registrar (spec aprobado antes de que el modo se registrara): "
+            f"fijalo con worktree.py modo --feature {f['id']} --pair|--delegado"]
 
 
 def _texto_regla(repos_del_stack: list[Path], sid: str, nombre: str) -> tuple[str, str]:
@@ -1240,37 +1241,233 @@ def _texto_regla(repos_del_stack: list[Path], sid: str, nombre: str) -> tuple[st
     return (stack._leer_cuerpo_sin_frontmatter(ruta), "plantilla de la skill") if ruta.is_file() else ("", "")
 
 
-def lineas_reglas(p: dict, data: dict, f: dict, micros: list[str]) -> list[str]:
-    """El TEXTO de las reglas de cada stack que la feature toca, una vez por stack.
-
-    El brief solo las nombraba. En un repo fuera del proyecto de la sesion, o en
-    un worktree, el host no las carga solo: el implementer podia escribir sin
-    haberlas visto. Aqui llegan por la salida del script, en cualquier host.
-    """
+def _skill_md(repos_del_stack: list[Path], sid: str, nombre: str) -> tuple[Path | None, str]:
+    """(SKILL.md, origen) de una skill del stack: la copia del proyecto si existe, si no la plantilla."""
     import stack
-    repos, _ = _repos_de_la_feature(p, f, micros)
-    por_stack: dict[str, list[tuple[str, Path]]] = {}
-    for nombre, ruta in repos:
-        det = stack.detectar_stack_directorio(ruta)
-        if det["stack"] != "generico":
-            por_stack.setdefault(det["stack"], []).append((nombre, ruta))
+    for repo in repos_del_stack:
+        for carpeta in (".claude", ".agents"):
+            ruta = repo / carpeta / "skills" / nombre / "SKILL.md"
+            if ruta.is_file():
+                return ruta, f"{repo.name}/{carpeta}/skills"
+    ruta = stack.STACKS_DIR / sid / "skills" / nombre / "SKILL.md"
+    return (ruta, "plantilla de harness-flow") if ruta.is_file() else (None, "")
+
+
+def _descripcion_skill(ruta: Path, tope: int = 160) -> str:
+    """La `description` del frontmatter, en una linea. Vacia si no la tiene."""
+    try:
+        texto = ruta.read_text(encoding="utf-8")
+    except OSError:
+        return ""
+    if not texto.startswith("---"):
+        return ""
+    lineas = texto.split("---", 2)[1].splitlines()
+    for i, linea in enumerate(lineas):
+        if not linea.startswith("description:"):
+            continue
+        valor = linea.split(":", 1)[1].strip()
+        if valor in ("", ">", "|", ">-", "|-"):   # escalar de bloque: sigue en las lineas indentadas
+            trozos = []
+            for sig in lineas[i + 1:]:
+                if sig.strip() and not sig.startswith((" ", "\t")):
+                    break
+                trozos.append(sig.strip())
+            valor = " ".join(t for t in trozos if t)
+        valor = " ".join(valor.strip("'\"").split())
+        return valor if len(valor) <= tope else valor[:tope - 3].rstrip() + "..."
+    return ""
+
+
+def _lineas_skills(repos_del_stack: list[Path], sid: str, skills: list[str]) -> list[str]:
+    """Indice de las skills de un stack: nombre, descripcion y la ruta de su SKILL.md.
+
+    El brief solo nombraba unas pocas y dependia de que el host las tuviera
+    instaladas en el repo de la sesion. Con la ruta en la mano, cualquier host
+    abre la que aplique, este o no instalada: nombre y descripcion siempre a la
+    vista, el cuerpo cuando la tarea lo pide.
+    """
+    if not skills:
+        return []
+    grupos: dict[tuple[str, str], list[str]] = {}
+    sin_archivo: list[str] = []
+    for nombre in skills:
+        ruta, origen = _skill_md(repos_del_stack, sid, nombre)
+        if ruta is None:
+            sin_archivo.append(nombre)
+            continue
+        desc = _descripcion_skill(ruta)
+        grupos.setdefault((str(ruta.parent.parent), origen), []).append(
+            f"  - {nombre}: {desc}" if desc else f"  - {nombre}")
+    L = [f"--- SKILLS DEL STACK {sid} ({len(skills)}): antes de una tarea que una de ellas cubre, "
+         "ABRE su SKILL.md y siguela"]
+    for (base, origen), filas in grupos.items():
+        L.append(f"    en {base}/<nombre>/SKILL.md ({origen}):")
+        L += filas
+    if sin_archivo:
+        L.append(f"  [!] sin SKILL.md localizable: {', '.join(sin_archivo)}")
+    return L
+
+
+def texto_restriccion(valor) -> str:
+    """Una restriccion de arquitectura del manifest, en una linea que diga algo.
+
+    Unas traen `rationale`; otras son un objeto con sus sub-reglas (limites de
+    capas, cabeceras, estandares de test). De esas se imprimia `rationale`, que
+    no tienen: el revisor recibia el nombre de la restriccion y nada mas.
+    """
+    if not isinstance(valor, dict):
+        return str(valor)
+    if valor.get("rationale"):
+        return str(valor["rationale"])
+
+    def plano(v) -> str:
+        if isinstance(v, (list, tuple)):
+            return ", ".join(str(x) for x in v)
+        if isinstance(v, bool):
+            return "si" if v else "no"
+        return str(v)
+    return "; ".join(f"{k}: {plano(v)}" for k, v in valor.items())
+
+
+def lineas_documentacion(sid: str, manifest: dict) -> list[str]:
+    """Donde contrastar versiones y APIs de un stack: doc oficial, Context7 y su escaner.
+
+    Solo lo recibia el revisor, y solo en los stacks cuyo manifest lo declaraba:
+    el resto salia con el id de Context7 vacio. Un stack sin el bloque lo dice
+    en vez de callarlo.
+    """
+    doc = manifest.get("documentation") or {}
+    c7 = doc.get("context7") or {}
+    sec = manifest.get("security_audit") or {}
+    L = [f"--- DOCUMENTACION VIGENTE DEL STACK {sid}: contrasta aqui cada API o dependencia nueva"]
+    if not doc:
+        L.append("  [!] el manifest del stack no declara `documentation`: usa la documentacion oficial "
+                 "del framework y dilo en la evidencia")
+        return L
+    if doc.get("official_docs"):
+        L.append(f"  documentacion oficial: {doc['official_docs']}")
+    if c7.get("library_id"):
+        L.append(f"  Context7: {c7['library_id']} (resolve-library-id / query-docs)")
+    for q in c7.get("suggested_queries", [])[:3]:
+        L.append(f"    consulta sugerida: {q}")
+    if doc.get("security_advisories"):
+        L.append(f"  avisos de seguridad: {doc['security_advisories']}")
+    if sec.get("command"):
+        L.append(f"  escaner de dependencias: stack.py auditar --repo <repo> (corre `{sec['command']}`)")
+    return L
+
+
+def lineas_normativa(por_stack: dict[str, list[tuple[str, Path]]], rules: dict | None) -> list[str]:
+    """Por cada stack: el TEXTO de sus reglas y el indice de sus skills, una vez por stack."""
+    import stack
     L: list[str] = []
     for sid, lista in por_stack.items():
         manifest = stack.cargar_manifest(sid)
-        reglas = manifest.get("normative", {}).get("rules", [])
-        if not reglas:
+        normativa = manifest.get("normative", {})
+        reglas = normativa.get("rules", [])
+        excluidas = stack.skills_excluidas(rules, sid)
+        skills = [x for x in normativa.get("skills", []) if x not in excluidas]
+        if not reglas and not skills and not manifest.get("documentation"):
             continue
+        rutas = [r for _, r in lista]
         L += ["", "=" * 72,
               f"REGLAS DEL STACK {sid} ({manifest.get('name', sid)}) - texto completo",
               f"obligatorias en: {', '.join(n for n, _ in lista)}",
               "=" * 72]
         for nombre in reglas:
-            cuerpo, origen = _texto_regla([r for _, r in lista], sid, nombre)
+            cuerpo, origen = _texto_regla(rutas, sid, nombre)
             if not cuerpo:
                 L.append(f"--- {nombre}: [!] no se encontro el archivo de la regla")
                 continue
             L += [f"--- {nombre} ({origen})", cuerpo]
+        L += _lineas_skills(rutas, sid, skills)
+        L += lineas_documentacion(sid, manifest)
     return L
+
+
+def _por_stack(repos: list[tuple[str, Path]]) -> tuple[dict[str, list[tuple[str, Path]]], list[str]]:
+    """({stack: [(nombre, ruta)]}, repos sin stack normativo)."""
+    import stack
+    por_stack: dict[str, list[tuple[str, Path]]] = {}
+    genericos: list[str] = []
+    for nombre, ruta in repos:
+        det = stack.detectar_stack_directorio(ruta)
+        if det["stack"] == "generico":
+            genericos.append(nombre)
+        else:
+            por_stack.setdefault(det["stack"], []).append((nombre, ruta))
+    return por_stack, genericos
+
+
+def lineas_reglas(p: dict, data: dict, f: dict, micros: list[str]) -> list[str]:
+    """El TEXTO de las reglas y el indice de skills de cada stack que la feature toca.
+
+    El brief solo las nombraba. En un repo fuera del proyecto de la sesion, o en
+    un worktree, el host no las carga solo: el implementer podia escribir sin
+    haberlas visto. Aqui llegan por la salida del script, en cualquier host.
+    """
+    repos, _ = _repos_de_la_feature(p, f, micros)
+    por_stack, _ = _por_stack(repos)
+    return lineas_normativa(por_stack, data.get("rules"))
+
+
+def _repos_del_proyecto(p: dict) -> list[tuple[str, Path]]:
+    """Todos los repos del proyecto: la raiz, los de harness/grafos.json y los servicios declarados."""
+    import stack
+    from comun import servicios_del_proyecto
+    raiz = p["root"].resolve()
+    repos: list[tuple[str, Path]] = []
+
+    def agregar(nombre: str, ruta: Path) -> None:
+        ruta = Path(ruta).resolve()
+        if ruta.is_dir() and all(ruta != r for _, r in repos):
+            repos.append((nombre, ruta))
+
+    agregar(raiz.name, raiz)
+    for d in stack.detectar_todos_los_destinos(raiz):
+        agregar(Path(d["path"]).name, Path(d["path"]))
+    for nombre, info in servicios_del_proyecto(p).items():
+        agregar(nombre, info["path"])
+    return repos
+
+
+def lineas_stacks_proyecto(p: dict, data: dict, resumen: bool = False) -> list[str]:
+    """Los stacks de TODO el proyecto, con sus reglas y skills: lo que el SDD tiene que respetar.
+
+    El rol producto no pasa por el brief de una feature (todavia no hay
+    features): redactaba la arquitectura sin ver la norma de los stacks que el
+    proyecto ya usa. `resumen` deja solo que stack hay en cada repo (PRD).
+    """
+    import stack
+    por_stack, genericos = _por_stack(_repos_del_proyecto(p))
+    proyecto = data.get("project") or p["root"].name
+    L = [f"== STACKS DEL PROYECTO ({proyecto}) =="]
+    if not por_stack:
+        disponibles = ", ".join(sorted(m.get("id", "") for m in stack.listar_stacks_disponibles() if m.get("id")))
+        L += ["ningun repo del proyecto tiene un stack normativo detectado.",
+              f"stacks con norma en harness-flow: {disponibles}",
+              "si el SDD elige uno de ellos, su norma es la de assets/stacks/<stack>/rules (stack.py stacks)."]
+        return L
+    for sid, lista in por_stack.items():
+        manifest = stack.cargar_manifest(sid)
+        L.append(f"{sid} ({manifest.get('name', sid)}): {', '.join(n for n, _ in lista)}")
+        if resumen:
+            continue
+        for ck, cv in manifest.get("normative", {}).get("architecture_constraints", {}).items():
+            L.append(f"    * {ck}: {texto_restriccion(cv)}")
+    if genericos:
+        L.append(f"sin stack normativo: {', '.join(genericos)}")
+    if resumen:
+        L.append("(la norma completa de cada stack: contexto.py stacks)")
+        return L
+    L.append("El SDD no contradice estas reglas: una decision que se aparte de ellas va como D-n, "
+             "con su alternativa descartada.")
+    return L + lineas_normativa(por_stack, data.get("rules"))
+
+
+def cmd_stacks(args) -> None:
+    p = paths()
+    print("\n".join(lineas_stacks_proyecto(p, load_backlog(p), resumen=args.resumen)))
 
 
 def cmd_brief(args) -> None:
@@ -1387,6 +1584,11 @@ def cmd_brief(args) -> None:
             reglas = lineas_reglas(p, data, f, micros)
         except Exception as exc:
             reglas = ["", f"[!] no se pudieron cargar las reglas del stack: {exc}"]
+        # Las normas de ingenieria salen del mismo registro que el briefing del
+        # revisor: quien escribe ve lo que despues se le audita, en pair o delegado
+        # y en cualquier host. Lo del spec se pide mientras el spec no esta sellado.
+        import normas
+        reglas += normas.lineas_para_construir(con_spec=not f.get("last_spec_sig"))
 
     if args.max_lineas and len(L) + len(pie) > args.max_lineas:
         # El recorte va por el MEDIO: truncar por el final se comia las rutas
@@ -1420,6 +1622,9 @@ def main() -> None:
                         "inalcanzable) y comprueba que un cliente nuevo conecta; con "
                         "--solo-avisar dice a quien afectaria")
     s.set_defaults(fn=cmd_limpiar_cbm)
+    s = sub.add_parser("stacks", help="stacks de todo el proyecto con sus reglas y skills (rol producto)")
+    s.add_argument("--resumen", action="store_true", help="solo que stack hay en cada repo")
+    s.set_defaults(fn=cmd_stacks)
     s = sub.add_parser("brief"); s.add_argument("--feature", required=True)
     s.add_argument("--max-lineas", type=int, default=90, dest="max_lineas")
     s.add_argument("--max-archivos", type=int, default=12, dest="max_archivos")

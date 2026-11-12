@@ -767,7 +767,69 @@ Comandos: `inventario`, `base`, `adoptar`, `check [--feature]`, `siguiente` (lo 
 
 ---
 
-## 32. Estado de Verificación y Métricas de Calidad
+## 32. Hito 30: La Norma del Stack y el Modo Pair Llegan a Cada Rol
+
+**Problema.** Medido en un proyecto con el front Angular en la raíz y un servicio Go fuera de ella:
+- El rol producto no veía el stack: no pasa por el brief de una feature, y el SDD se redactaba sin la norma de los stacks que el proyecto ya usa.
+- Las skills del stack solo se nombraban, y la lista del stack principal se cortaba a seis. Usarlas dependía de que estuvieran instaladas en el repo de la sesión.
+- El modo pair lo registraba solo `worktree.py start`. Una feature que llega al código por `worktree.py register` (raíz multi-repo) cerraba sin modo, y sin modo `close` no exige la lista de tests.
+- El briefing del revisor imprimía vacías las restricciones de arquitectura que no traen `rationale` (límites de capas en Angular, iOS y Android; cabeceras y estándares de test en Go, Rust y .NET).
+
+**Qué se implementó.**
+1. [`scripts/contexto.py`](../scripts/contexto.py): el bloque de cada stack trae, además del texto de sus reglas, el **índice de todas sus skills** (nombre, descripción y ruta del `SKILL.md`). La ruta es la copia del repo si está instalada y, si no, la plantilla de harness-flow: existe siempre. Va fuera del recorte de `--max-lineas`.
+2. `contexto.py stacks [--resumen]`: los stacks de todos los repos del proyecto con sus restricciones, reglas y skills. [`scripts/producto.py`](../scripts/producto.py) lo imprime al crear el borrador: completo para el SDD, en resumen para el PRD.
+3. [`scripts/gate.py`](../scripts/gate.py): `approve-spec` deja la feature en `modo: pair` al sellar el spec por **primera** vez. Un spec que ya estaba sellado no cambia de regla. `worktree.py register` avisa si la feature no tiene modo.
+4. `contexto.texto_restriccion`: una restricción sin `rationale` se imprime con sus sub-reglas.
+
+**Decisión.** No se bloquea cuando las skills no están instaladas en el repo: el brief ya las entrega desde la plantilla, así que la instalación dejó de ser condición para que lleguen al agente.
+
+**Efecto en los tests existentes.** Los fixtures que aprueban un spec y cierran con el trabajo hecho por un script declaran ahora su modo (`worktree.py modo --delegado`).
+
+**Tests.** [`tests/test_normativa_por_rol.py`](../tests/test_normativa_por_rol.py): 29 tests, que fallan contra el código anterior.
+
+---
+
+## 33. Hito 31: Una Sola Lista de Normas de Ingeniería para Quien Escribe y para Quien Revisa
+
+**Problema.** Los libros de referencia (DDIA, Ousterhout, Fowler, GoF, CLRS, Chip Huyen, Sam Newman, McConnell, OWASP, Context7, ASD-STE100, Orosz) no se aplicaban parejo por rol:
+- El briefing del revisor mandaba marcar sus violaciones como bloqueantes o mayores. El implementer en modo pair, que es el modo por defecto, no recibía ninguna: estaban solo en `agents/implementer.md`, el prompt del modo delegado en algunos hosts.
+- OWASP, McConnell y STE100 se auditaban solo donde el revisor carga `agents/revisor.md`. Codex y Hermes con OpenAI reciben solo el briefing.
+- El revisor marcaba como mayor un endpoint sin test de rechazo y a nadie se le pedía el AC negativo.
+- `design-patterns-gof.md` no lo citaba ningún rol.
+- Context7: cuatro manifests (NestJS, Next.js, Python, Spring Boot) no declaraban documentación ni escáner; iOS y Android declaraban ids de librería que no existen en Context7; el escáner de iOS era `swift package audit`, un subcomando que SwiftPM no tiene; y `stack.py auditar` salía con exit 0 con el escáner ausente o con hallazgos.
+
+**Qué se implementó.**
+1. [`scripts/normas.py`](../scripts/normas.py): registro de 12 normas. Cada una dice qué deja el rol producto en el PRD y el SDD, qué deja el leader en el spec, qué hace el implementer y qué audita el revisor. `normas.py --cuadro` imprime la tabla norma × rol y sale con exit 1 si una celda está vacía:
+
+| Norma | Producto | Leader | Implementer pair | Implementer delegado | Revisor |
+|---|---|---|---|---|---|
+| Datos confiables (DDIA, Kleppmann) | Sí | Sí | Sí | Sí | Sí |
+| Filosofia de diseno (Ousterhout) | Sí | Sí | Sí | Sí | Sí |
+| Dos sombreros y code smells (Beck, Fowler) | Sí | Sí | Sí | Sí | Sí |
+| Design Patterns (GoF: Gamma, Helm, Johnson, Vlissides) | Sí | Sí | Sí | Sí | Sí |
+| Algoritmos y estructuras de datos (CLRS) | Sí | Sí | Sí | Sí | Sí |
+| Ingenieria de IA (Chip Huyen) | Sí | Sí | Sí | Sí | Sí |
+| Microservicios y sistemas distribuidos (Sam Newman) | Sí | Sí | Sí | Sí | Sí |
+| Construccion y programacion defensiva (McConnell, Code Complete) | Sí | Sí | Sí | Sí | Sí |
+| Seguridad de aplicaciones (OWASP Top 10, CLASP) | Sí | Sí | Sí | Sí | Sí |
+| Versiones vigentes y documentacion oficial (Context7) | Sí | Sí | Sí | Sí | Sí |
+| Comunicacion ASD-STE100 y principios de Karpathy | Sí | Sí | Sí | Sí | Sí |
+| Entrega predecible y code review pragmatico (Gergely Orosz) | Sí | Sí | Sí | Sí | Sí |
+
+2. Entrega por la salida de un script, igual en todos los hosts: `producto.py borrador` (producto), `contexto.py brief` (leader mientras el spec no está sellado; implementer en pair y en delegado) y `revision.py --briefing` (revisor). El revisor sigue clasificando las violaciones como bloqueantes o mayores, pero ya no bloquea por algo que a quien escribió el código no se le dijo.
+3. AC negativos: se marcan `[negativo]` en la línea del AC. `approve-spec` y `check-spec` avisan si un spec expone un endpoint y no tiene ninguno ([`scripts/comun.py`](../scripts/comun.py)).
+4. Context7: los 10 manifests declaran documentación oficial, id de librería (resueltos contra Context7 el 2026-11-12) y escáner. El brief, el briefing y el borrador del SDD lo imprimen en el bloque `DOCUMENTACION VIGENTE` de cada stack.
+5. `stack.py auditar` mide: exit 0 limpio, exit 1 con hallazgos, exit 2 si no pudo medir. Un wrapper del repo (`./mvnw`, `./gradlew`) se busca en el repo; `findings_pattern` delata a los escáneres que listan vulnerabilidades y salen con 0 (`dotnet list package --vulnerable`).
+6. `stack.py refactorizar` ya no devuelve un plan vacío en los stacks sin plan propio: un paso por cada incumplimiento que midió el verificador. `producto.py aprobar` avisa si el SDD no trae ningún diagrama Mermaid.
+7. Textos por host alineados: `SKILL.md`, `references/openai.md`, `grok.md`, `kimi.md`, `claude.md` y `modelos.md` dicen que pair es el modo por defecto y mandan al bloque `NORMAS DE INGENIERIA` del brief.
+
+**Lo que sigue siendo instrucción y no gate.** Ningún script comprueba que el código cumple una norma: eso lo decide el revisor. Lo garantizado es la entrega: que cada rol recibe su parte, en cualquier host. Ningún gate corre `stack.py auditar` solo; el escaneo DAST sigue siendo informativo.
+
+**Tests.** [`tests/test_normas.py`](../tests/test_normas.py): 57 tests. El invariante central: una norma con hallazgo bloqueante o mayor tiene siempre su instrucción para quien escribe, y el cuadro no tiene celdas vacías.
+
+---
+
+## 34. Estado de Verificación y Métricas de Calidad
 
 * **Batería de Pruebas Automatizadas**: 50 archivos de test en `tests/`. La última corrida completa con el árbol limpio (2026-11-11, commit `5c0e650`) ejecutó 1.030 tests: 957 pasaron y 73 fallaron, los 73 por el mismo prerrequisito de entorno. Esos 73 están en `test_frontend_runner.py`, `test_retirados_frontend.py`, `test_frontend_close.py` y `test_cierre_historico.py`, que exigen `HARNESS_TEST_FRONTEND_MODULES` (un `node_modules` con Angular 22 y Vitest 4) y fallan a propósito en vez de omitirse cuando falta. Ningún otro test falla.
 * **Tests agregados en los hitos 19 a 29**: `test_indice_hermes.py`, `test_stack_adopcion.py`, `test_stack_normalizar.py`, `test_arquitectura.py`, `test_brief_stacks.py`, `test_hub.py`, `test_modelo.py`, `test_pair_y_reglas.py` y `test_feature_cero.py`, más casos nuevos en `test_plugin_claude.py`. Cada regresión se comprobó contra el código anterior: falla ahí y pasa con la corrección.

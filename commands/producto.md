@@ -96,6 +96,28 @@ eval "$(python3 "${CLAUDE_PLUGIN_ROOT}/scripts/entorno.py" --shell)" && "$PY" "$
 
 Para una pregunta puntual sobre el codigo, `graphify query "<pregunta>" --graph <combinado>`.
 
+**La norma de los stacks del proyecto.** El comando del borrador (paso 2)
+imprime los stacks de TODOS los repos del proyecto: para el SDD, con sus
+restricciones de arquitectura, el texto completo de sus reglas y el indice de
+sus skills; para el PRD, solo que stack hay en cada repo. El SDD no contradice
+esas reglas: una decision que se aparte de ellas va como `D-n`, con su
+alternativa descartada, y la aprueba el usuario. Para volver a verla:
+
+```bash
+eval "$(python3 "${CLAUDE_PLUGIN_ROOT}/scripts/entorno.py" --shell)" && "$PY" "$H/contexto.py" stacks
+```
+
+Si dice que ningun repo tiene stack normativo (proyecto nuevo), nombra los
+stacks que harness-flow norma: si el SDD elige uno, su norma es la de ese stack.
+
+El mismo comando imprime el bloque **`NORMAS DE INGENIERIA`** del documento: lo
+que cada norma pide dejar escrito en el PRD (casos de abuso, volumen, objetivos
+y no-objetivos) o en el SDD (persistencia y consistencia, fronteras de
+confianza, estrategia de errores, versiones del stack contrastadas con Context7
+o la documentacion oficial, patrones solo con eje real). El spec, el codigo y
+el review heredan esas mismas normas. Para verlas sueltas:
+`"$PY" "$H/normas.py" --rol producto --doc $ARGUMENTS[0]`.
+
 ## 2. Borrador
 
 ```bash

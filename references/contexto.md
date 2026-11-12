@@ -74,6 +74,17 @@ su comando, las reglas activas, las rutas protegidas, las lecciones instaladas y
 el impacto cross-repo del hub. `revision.py --briefing` lo incrusta al principio
 del paquete del revisor, con `--max-lineas-brief` para acotarlo.
 
+**La norma del stack viaja en la salida del script, para cada rol.** Despues del
+indice, y fuera del recorte de `--max-lineas`, el brief trae por cada stack que
+la feature toca (front y backend, cada repo con el suyo) el texto completo de
+sus reglas y el indice de sus skills: nombre, descripcion y la ruta del
+`SKILL.md`. Se toma la copia del repo si esta instalada y, si no, la plantilla
+de harness-flow: la ruta existe siempre, en cualquier host y aunque el repo
+quede fuera del proyecto de la sesion. Lo reciben el leader y el implementer
+(`contexto.py brief`), el revisor (`revision.py --briefing`) y el rol producto,
+que no tiene feature: `producto.py borrador --doc sdd` imprime la de todos los
+repos del proyecto, y `contexto.py stacks [--resumen]` la repite bajo demanda.
+
 **Documentos relacionados.** Al final, hasta 8 rutas de `docs/` (el vault de
 Obsidian), sin contenido, para que el leader sepa que abrir antes de disenar:
 

@@ -76,11 +76,19 @@ migracion, concurrencia o requisitos contradictorios. La skill decide y anuncia
 el motivo. Criterios y forma de aplicar el nivel en Codex y Hermes:
 [`modelos.md`](modelos.md), seccion "OpenAI en Codex y Hermes".
 
-## Implementer y Modo Pair (--pair)
+## Implementer y Modo Pair (por defecto)
+
+**Pair es el modo por defecto de toda feature**, con stack detectado o sin él: lo deja en el
+backlog `gate.py approve-spec` al sellar el spec por primera vez y `gate.py close` exige su rastro,
+la lista de tests aprobada (`gate.py aprobar-tests`). `--pair` ya no hace falta para activarlo. El
+modo delegado es decisión del usuario (`worktree.py modo --feature <id> --delegado`) o de una sesión
+sin usuario. En los dos modos el brief (`contexto.py brief`) trae el texto de las reglas de cada
+stack, el índice de sus skills y el bloque `NORMAS DE INGENIERIA`, que es la misma lista que audita
+el revisor: cúmplelas aunque tu host no cargue `agents/implementer.md`.
 
 En OpenAI (Codex CLI y ChatGPT):
 
-1. **Modo Pair interactivo (`--pair`)**: corre en la **sesión interactiva principal**
+1. **Modo Pair interactivo (por defecto)**: corre en la **sesión interactiva principal**
    (Driver = Codex, Navigator = humano). No utilices subagentes desatendidos
    ni `codex exec` aquí: la sesión de Codex opera directamente sobre el worktree
    (`worktree.py start --feature <id>`), propone la lista de tests antes de editar
@@ -88,9 +96,11 @@ En OpenAI (Codex CLI y ChatGPT):
    tras cada micro-ciclo con el mensaje de consulta al Navigator. Usa `gpt-6-astra`
    o `gpt-6.1-sol` con `medium` effort para mantener respuestas ágiles sin pausas
    largas de razonamiento.
-2. **Modo Delegado (autónomo)**: si se implementa de forma desatendida, corre en
+2. **Modo Delegado (autónomo)**: solo si el usuario lo pidió o la sesión no tiene
+   usuario. Regístralo (`worktree.py start --feature <id> --delegado`) y corre en
    el worktree con `--sandbox workspace-write` hasta dejar la evidencia en
-   `docs/impl-<id>.md`.
+   `docs/impl-<id>.md`. Pega la salida ENTERA de `contexto.py brief` en el prompt:
+   trae las reglas del stack y las normas que el revisor va a auditar.
 
 Al completar los tests y el commit en la rama de la feature, pasa al Rol 3
 (Revisor independiente) con contexto limpio y amnesia deliberada.

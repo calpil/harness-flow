@@ -15,8 +15,15 @@
       ".py"
     ],
     "content_matches": {
-      "pyproject.toml": ["fastapi", "polars", "pydantic"],
-      "requirements.txt": ["fastapi", "polars"]
+      "pyproject.toml": [
+        "fastapi",
+        "polars",
+        "pydantic"
+      ],
+      "requirements.txt": [
+        "fastapi",
+        "polars"
+      ]
     },
     "strong_indicators": [
       "src/**/domain",
@@ -55,6 +62,22 @@
       "adapters_isolation": "Adaptadores de entrada (source) y salida (output) implementan puertos de datos.",
       "typing_and_validation": "Modelos fuertemente tipados con Pydantic v2 y validaciones con Polars."
     }
+  },
+  "documentation": {
+    "official_docs": "https://fastapi.tiangolo.com/",
+    "security_advisories": "https://github.com/pypa/advisory-database",
+    "context7": {
+      "library_id": "/websites/fastapi_tiangolo",
+      "ecosystem": "pypi",
+      "suggested_queries": [
+        "FastAPI dependency injection and Pydantic models",
+        "Polars lazy frames and expressions",
+        "pytest fixtures for async FastAPI applications"
+      ]
+    }
+  },
+  "security_audit": {
+    "command": "pip-audit"
   },
   "runners": {
     "test_command": "pytest -q"

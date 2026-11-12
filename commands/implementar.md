@@ -12,8 +12,9 @@ Implementa la feature `$ARGUMENTS[0]`. Argumentos recibidos: `$ARGUMENTS`.
 **El modo es Pair, siempre, salvo que el usuario pida delegar.** No depende de
 que el repo tenga un stack detectado. Solo se delega al subagente si los
 argumentos traen `--delegado`, si el usuario lo pide, o si la sesion no tiene
-usuario (`claude -p`). El modo lo registra `worktree.py start` en el backlog y
-el brief lo repite; en modo pair, `close` exige la lista de tests aprobada.
+usuario (`claude -p`). El modo queda en el backlog desde que el usuario aprueba
+el spec (`gate.py approve-spec`), `worktree.py start` lo confirma y el brief lo
+repite; en modo pair, `close` exige la lista de tests aprobada.
 
 **Protocolo de Intervención con Preguntas de Formulario:**
 El agente ejecuta los ciclos TDD verticalmente (`1 test -> Red -> código mínimo -> Green -> Refactor en verde`) emitiendo su micro-reporte continuo. **Solo interviene consultando al usuario con preguntas interactivas de formulario (`ask_question` en Gemini/AGY, o formulario estructurado de opciones en otros LLMs) cuando sea REALMENTE NECESARIO:**
@@ -64,7 +65,10 @@ eval "$(python3 "${CLAUDE_PLUGIN_ROOT}/scripts/entorno.py" --shell)" && "$PY" "$
 ```
 
 Anota la ruta que imprime. En una raiz multi-repo sin `.git`, el arbol se
-declara con `worktree.py register`; ver `references/multirepo.md`.
+declara con `worktree.py register`; ver `references/multirepo.md`. `register`
+no cambia el modo: vale el que quedo al aprobar el spec. Si avisa que la
+feature no tiene modo (spec sellado antes de que se registrara) y aun no hay
+codigo, fijalo con `worktree.py modo --feature $ARGUMENTS[0] --pair`.
 
 ## 3. Brief
 
@@ -73,9 +77,18 @@ eval "$(python3 "${CLAUDE_PLUGIN_ROOT}/scripts/entorno.py" --shell)" && "$PY" "$
 ```
 
 Si dice que el contexto esta vencido, refresca con `contexto.py refrescar`
-antes de seguir. El brief trae el modo registrado y el **texto completo de las
-reglas de cada stack** que toca la feature: son obligatorias, las tengas
-cargadas por otra via o no.
+antes de seguir. El brief trae el modo registrado y, al final, el **texto
+completo de las reglas de cada stack** que toca la feature y el **indice de sus
+skills** (nombre, descripcion y ruta del `SKILL.md`). Las reglas son
+obligatorias, las tengas cargadas por otra via o no. Antes de una tarea que una
+skill del stack cubre, abre su `SKILL.md` en la ruta del indice y siguela: la
+ruta existe aunque la skill no este instalada en el repo.
+
+Trae tambien el bloque **`NORMAS DE INGENIERIA`** (datos, diseno, refactor,
+rendimiento, IA, servicios, construccion, seguridad, versiones y Context7) y, por
+cada stack, su **`DOCUMENTACION VIGENTE`**. Es la misma lista que audita el
+revisor: cumplela en modo pair y en delegado. Cada norma aplica solo si el
+cambio toca su materia; su violacion es hallazgo bloqueante o mayor.
 
 ## 4. Elige el effort
 
@@ -117,6 +130,9 @@ worktree y la salida ENTERA del paso 3:
 
 Es el modo de toda feature cuyo modo registrado es `pair` (estilo `/pair` de `hola-ai`):
 
+0. **Lee el brief del paso 3 antes de proponer nada:** las reglas del stack y el
+   bloque `NORMAS DE INGENIERIA` mandan sobre tu costumbre. Por cada AC marcado
+   `[negativo]`, el test de rechazo va en la lista antes que el camino feliz.
 1. **Revisa el plan y propone la Lista de Tests (sin escribirlos aun):**
    - No lances el subagente `implementer`: tu eres el **Driver** en el worktree y
      el usuario es el **Navigator**.

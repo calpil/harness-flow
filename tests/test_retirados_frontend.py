@@ -122,6 +122,9 @@ class FrontendRetirosTests(unittest.TestCase):
         (self.root / 'docs/constitution.md').write_text('User contract\n')
         (self.root / 'harness/progress/current-7.md').write_text('Fixture progress\n')
         self.ok('gate.py', 'approve-spec', '--feature', '7', '--yes', '--por', 'Fixture')
+        # El fixture llega al cierre con el trabajo ya hecho por un script: es modo delegado.
+        # Sin declararlo, la primera aprobacion la deja en pair y close exige la lista de tests.
+        self.ok('worktree.py', 'modo', '--feature', '7', '--delegado')
         self.medir_base()
 
     # --- utilidades de fixture -------------------------------------------------
