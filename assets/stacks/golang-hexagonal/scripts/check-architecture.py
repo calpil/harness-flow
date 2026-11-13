@@ -19,9 +19,12 @@ aviso y el verde dice que esa parte NO se midio.
 
 Adopcion progresiva: un servicio sin `internal/` no es un error. Lo existente no
 se mueve y los modulos nuevos nacen en internal/<modulo>/{domain,application,adapter}.
-Sin `internal/` las reglas 1 a 3 no se miden: sale un aviso y el verde dice que
+Sin `internal/` las reglas 1 y 2 no se miden: sale un aviso y el verde dice que
 esos limites NO se midieron. Con `internal/`, siguen siendo error.
-La composition root se exige siempre.
+La regla 3 y la composition root se exigen siempre. Las esperas no dependen de las
+capas: si solo se midieran con `internal/`, la feature que crea el primer modulo
+heredaria de golpe todos los time.Sleep viejos del repo. Lo heredado lo absorbe la
+base del trinquete (arquitectura.py).
 """
 from __future__ import annotations
 
@@ -204,16 +207,16 @@ def check_golang_architecture(root_dir: Path) -> tuple[list[str], list[str]]:
     elif not (root_dir / "cmd" / "server" / "main.go").exists():
         warnings.append(f"Composition Root no canónico: encontrado en {[str(m.relative_to(root_dir)) for m in main_files]}, se recomienda 'cmd/server/main.go'")
 
-    # 2. Internal layers
+    # 2. Tests deterministas: en todo el repo, haya o no internal/.
+    check_esperas(root_dir, errors)
+
+    # 3. Internal layers
     internal_dir = root_dir / "internal"
     if not internal_dir.is_dir():
-        warnings.append("Directorio 'internal/' ausente (adopción progresiva): pureza de dominio, "
-                        "aislamiento de application y tests deterministas NO se midieron. "
+        warnings.append("Directorio 'internal/' ausente (adopción progresiva): pureza de dominio y "
+                        "aislamiento de application NO se midieron. "
                         "Los módulos nuevos nacen en 'internal/<modulo>/{domain,application,adapter}'")
         return errors, warnings
-
-    # 3. Tests deterministas: con internal/ se miden en todo el repo (platform y cmd incluidos)
-    check_esperas(root_dir, errors)
 
     for go_file in sorted(root_dir.glob("internal/**/*.go")):
         rel = go_file.relative_to(root_dir)
@@ -268,7 +271,7 @@ def main() -> None:
 
     if not (repo_path / "internal").is_dir():
         # Un conteo parcial nunca se reporta como total: sin internal/ solo se midio la composition root.
-        print(f"[ARCH-OK] Composition root verificada en {repo_path.name}. "
+        print(f"[ARCH-OK] Composition root y tests deterministas verificados en {repo_path.name}. "
               "Sin 'internal/': límites hexagonales NO medidos.")
         sys.exit(0)
 

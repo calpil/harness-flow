@@ -207,8 +207,15 @@ class GoHuecosDelVerificadorTests(Base):
         self.assertEqual(1, r.returncode, r.stdout)
         self.assertIn("cmd/server/main_test.go:8: uso de time.Sleep prohibido", r.stderr)
 
-    def test_sin_internal_las_esperas_siguen_sin_medirse(self):
-        """Adopcion progresiva: un repo legado sin internal/ no empieza a fallar por sus tests."""
+    def test_sin_internal_las_esperas_igual_se_miden(self):
+        """Las esperas se miden haya o no internal/.
+
+        Antes solo se median con internal/: el mismo repo, en el mismo commit, pasaba
+        de conforme a no conforme cuando una feature creaba su primer modulo, por
+        time.Sleep heredados que esa feature no toco (realestate, 2026-11-12: client
+        2, tenant 4, condominium 11). Con el trinquete, lo heredado entra a la base
+        y solo lo nuevo falla; sin el, el verificador lo muestra igual en todos.
+        """
         repo = self.tmp / "ms-legado"
         escribir(repo / "go.mod", "module example.com/legado\n")
         escribir(repo / "cmd" / "server" / "main.go", "package main\nfunc main() {}\n")
@@ -216,8 +223,17 @@ class GoHuecosDelVerificadorTests(Base):
                  'package handlers\n\nimport (\n\t"testing"\n\t"time"\n)\n\n'
                  'func TestX(t *testing.T) { time.Sleep(time.Millisecond) }\n')
         r = correr(CHECK_GO, repo)
+        self.assertEqual(1, r.returncode, r.stdout)
+        self.assertIn("handlers/h_test.go:8: uso de time.Sleep prohibido", r.stderr)
+
+    def test_sin_internal_el_aviso_no_dice_que_las_esperas_no_se_midieron(self):
+        repo = self.tmp / "ms-legado-limpio"
+        escribir(repo / "go.mod", "module example.com/legado\n")
+        escribir(repo / "cmd" / "server" / "main.go", "package main\nfunc main() {}\n")
+        r = correr(CHECK_GO, repo)
         self.assertEqual(0, r.returncode, r.stderr)
-        self.assertIn("tests deterministas NO se midieron", r.stderr)
+        self.assertNotIn("tests deterministas NO se midieron", r.stderr)
+        self.assertIn("NO se midieron", r.stderr)
 
     def test_limpio_con_go_mide_lo_transitivo(self):
         r = correr(CHECK_GO, self._servicio())
