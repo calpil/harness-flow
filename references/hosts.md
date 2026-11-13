@@ -9,7 +9,7 @@ otros agentes. Si defines `HARNESS_SKILLS_DIR`, esa raíz es exclusiva.
 | Hermes | La raíz de la instalación activa (incluye perfiles), luego las rutas de Hermes del sistema |
 | Claude Code | `~/.claude/skills`, luego `.claude/skills` del proyecto |
 | GPT/Codex | `.agents/skills` y `.codex/skills` del proyecto, `~/.agents/skills`, `$CODEX_HOME/skills` (`~/.codex/skills`) y `/etc/codex/skills` |
-| Gemini / AGY | `.gemini/skills` y `.agents/skills` del proyecto, luego `~/.gemini/config/skills`, `~/.gemini/skills` y `~/.agents/skills` |
+| Gemini / AGY | `~/.gemini/config/skills`, `~/.gemini/skills` y `~/.agents/skills`, luego `.gemini/skills` y `.agents/skills` del proyecto |
 | Grok | `~/.grok/skills` |
 | Kimi Code | `$KIMI_CODE_HOME/skills` (`~/.kimi-code/skills`), luego `~/.agents/skills` |
 

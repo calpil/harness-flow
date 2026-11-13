@@ -14,7 +14,7 @@ Antes de emitir el reporte de seguridad:
 - Revisar las cabeceras HTTP inyectadas en `crates/api/src/middlewares/correlation_id.rs`.
 - Revisar el formato de errores en `crates/api/src/problem_details.rs`.
 - Inspeccionar `Dockerfile` y validar usuario no root.
-- Revisar `.agents/rules/security.md` (o `.agents/rules/security.md (o .claude/rules/security.md)`).
+- Revisar `.agents/rules/security.md` (o `.claude/rules/security.md`).
 
 ## Procedimiento ejecutable
 1. **Auditar consultas a bases de datos:** Verificar que el 100% de las consultas en `crates/infrastructure` utilicen sentencias preparadas con parámetros vinculados (`bind(...)`) y que ninguna concatene variables de usuario.

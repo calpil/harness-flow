@@ -14,7 +14,7 @@ Antes de codificar la fuente de datos:
 - Revisar el cliente de red en `Sources/CalpilData/Network/APIClient.swift`.
 - Revisar la estructura de errores RFC 7807 en `Sources/CalpilData/Network/HTTPProblemDetails.swift`.
 - Revisar los DTOs de transferencia en `Sources/CalpilData/DTOs/`.
-- Consultar `.agents/rules/security.md` (o `.agents/rules/security.md (o .claude/rules/security.md)`).
+- Consultar `.agents/rules/security.md` (o `.claude/rules/security.md`).
 
 ## Procedimiento ejecutable
 1. **Definir DTOs de transporte:** Crear las estructuras `Codable & Sendable` en `Sources/CalpilData/DTOs/` con sus respectivos métodos de mapeo hacia la entidad de dominio (`toDomain()`).

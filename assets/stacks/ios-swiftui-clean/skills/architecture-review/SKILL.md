@@ -14,7 +14,7 @@ Antes de emitir un veredicto:
 - Verificar que `CalpilDomain` no importe `SwiftUI`, `CalpilData` o `CalpilUI`.
 - Verificar que `CalpilData` no importe `CalpilUI` ni `SwiftUI`.
 - Verificar que los ViewModels en `CalpilUI` estén aislados en `@MainActor`.
-- Consultar las directrices en `.agents/rules/architecture.md` (o `.agents/rules/architecture.md (o .claude/rules/architecture.md)`).
+- Consultar las directrices en `.agents/rules/architecture.md` (o `.claude/rules/architecture.md`).
 
 ## Procedimiento ejecutable
 1. **Auditar dependencias de `CalpilDomain`:** Verificar en `Package.swift` que `CalpilDomain` tenga `dependencies: []` y no importe librerías de terceros o frameworks de interfaz.

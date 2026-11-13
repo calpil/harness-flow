@@ -14,7 +14,7 @@ Antes de escribir adaptadores:
 - Inspeccionar `crates/infrastructure/src/persistence/inmemory.rs`.
 - Inspeccionar `crates/infrastructure/src/persistence/postgres.rs`.
 - Revisar migraciones SQL existentes en `migrations/`.
-- Comprobar las reglas de seguridad en `.agents/rules/security.md` (o `.agents/rules/security.md (o .claude/rules/security.md)`).
+- Comprobar las reglas de seguridad en `.agents/rules/security.md` (o `.claude/rules/security.md`).
 
 ## Procedimiento ejecutable
 1. **Definir el contrato en Application:** Declarar o actualizar el trait `#[async_trait] pub trait EntityRepository: Send + Sync` en `crates/application/src/ports/out_ports.rs`.

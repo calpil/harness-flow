@@ -2,9 +2,9 @@
 """CLI conservadora para ADRs en Markdown. Solo biblioteca estándar de Python 3.9+.
 
 Uso:
-  python3 .claude/skills/adr/scripts/adr_tool.py new --title "Decisión" --dir docs/adr
-  python3 .claude/skills/adr/scripts/adr_tool.py validate --dir docs/adr
-  python3 .claude/skills/adr/scripts/adr_tool.py index --dir docs/adr --write
+  python3 .agents/skills/adr/scripts/adr_tool.py new --title "Decisión" --dir docs/adr
+  python3 .agents/skills/adr/scripts/adr_tool.py validate --dir docs/adr
+  python3 .agents/skills/adr/scripts/adr_tool.py index --dir docs/adr --write
 """
 
 from __future__ import annotations

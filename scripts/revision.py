@@ -6,7 +6,8 @@ gate.py revision --veredicto.
   revision.py --feature <id> --briefing   contexto para delegar a un subagente
 
 El review lo hace un SUBAGENTE en contexto aislado (delegate_task en Hermes;
-en Claude Code la tool Agent con subagent_type harness-flow:revisor), que no vio
+en Claude Code la tool Agent con subagent_type harness-flow:revisor; en AGY / Gemini
+`invoke_subagent` con TypeName "self", Model "inherit", Workspace "inherit"), que no vio
 como se implemento. Un revisor que recuerda haber escrito el codigo se aprueba
 solo; uno que solo ve spec + diff, no.
 """
@@ -146,7 +147,7 @@ def cmd_briefing(a) -> None:
 
     print("=" * 72)
     print("CONTEXTO PARA EL SUBAGENTE REVISOR "
-          "(delegate_task.context en Hermes | prompt de la tool Agent en Claude Code)")
+          "(delegate_task.context en Hermes | Agent en Claude Code | invoke_subagent 'self' en AGY)")
     print("=" * 72)
     for x in (aviso_arbol, aviso_diff):
         if x:

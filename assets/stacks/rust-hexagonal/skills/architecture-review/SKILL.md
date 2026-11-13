@@ -14,7 +14,7 @@ Antes de emitir un veredicto de arquitectura:
 - Inspeccionar `crates/application/Cargo.toml` y verificar que solo dependa de `crates/domain` y utilidades comunes.
 - Revisar que `crates/infrastructure` implemente puertos secundarios y no sea importado por `crates/application` ni `crates/domain`.
 - Revisar que `crates/api` solo consuma interfaces de `crates/application` y configure el composition root en `src/main.rs`.
-- Consultar `.agents/rules/architecture.md` (o `.agents/rules/architecture.md (o .claude/rules/architecture.md)`).
+- Consultar `.agents/rules/architecture.md` (o `.claude/rules/architecture.md`).
 
 ## Procedimiento ejecutable
 1. **Auditar dependencias de `crates/domain`:** Comprobar que en `crates/domain/Cargo.toml` no existan referencias a `axum`, `tokio`, `sqlx`, `tower` o crates de base de datos.

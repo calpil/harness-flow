@@ -14,7 +14,7 @@ Antes de escribir código:
 - Revisar protocolos de repositorio en `Sources/CalpilDomain/Repositories/`.
 - Revisar adaptadores de datos en `Sources/CalpilData/Repositories/`.
 - Revisar componentes de UI y temas en `Sources/CalpilUI/Core/`.
-- Consultar las directrices de arquitectura en `.agents/rules/architecture.md` (o `.agents/rules/architecture.md (o .claude/rules/architecture.md)`).
+- Consultar las directrices de arquitectura en `.agents/rules/architecture.md` (o `.claude/rules/architecture.md`).
 
 ## Procedimiento ejecutable
 1. **Modelar la entidad de Dominio:** Crear la estructura inmutable en `Sources/CalpilDomain/Models/` con constructores que validen invariantes de negocio y lancen `DomainError`.

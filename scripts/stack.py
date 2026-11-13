@@ -425,7 +425,7 @@ def verificar_cumplimiento(repo: Path, stack_id: str | None = None,
     has_agents_md = agents_md.exists()
 
     if missing_rules:
-        findings.append(f"Reglas modulares faltantes en (.claude/rules/ o .agents/rules/): {', '.join(missing_rules)}")
+        findings.append(f"Reglas modulares faltantes en (.claude/rules/, .agents/rules/ o .gemini/rules/): {', '.join(missing_rules)}")
     if not has_agents_md:
         warnings.append("Falta AGENTS.md en la raiz del microservicio/repo (recomendado para LLMs no-Claude: Codex, Gemini, Grok, Kimi)")
 
@@ -504,7 +504,7 @@ def verificar_cumplimiento(repo: Path, stack_id: str | None = None,
         hosts_active.append("claude-code")
     if has_agents_rules and has_agents_skills:
         hosts_active.append("openai-codex/hermes/grok/kimi")
-    if has_gemini_rules and (has_agents_skills or has_claude_skills):
+    if has_gemini_rules and has_agents_skills:
         hosts_active.append("gemini-cli/agy")
 
     multi_llm_ready = (not missing_rules) and (len(missing_skills) == 0) and has_agents_md

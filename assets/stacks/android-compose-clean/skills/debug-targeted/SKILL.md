@@ -13,7 +13,7 @@ Antes de modificar código:
 - Inspeccionar el mensaje de error o stack trace de JUnit / Logcat.
 - Identificar el paquete (`domain`, `data` o `presentation`) donde ocurre la anomalía.
 - Revisar posibles condiciones de carrera en coroutines o estados de StateFlow.
-- Consultar las reglas de testing en `.agents/rules/testing.md` (o `.agents/rules/testing.md (o .claude/rules/testing.md)`).
+- Consultar las reglas de testing en `.agents/rules/testing.md` (o `.claude/rules/testing.md`).
 
 ## Procedimiento ejecutable
 1. **Capturar la falla exacta:** Ejecutar `./gradlew testDebugUnitTest --tests "{NombreClaseTest}.{metodoTest}"` para aislar el fallo y observar el resultado.

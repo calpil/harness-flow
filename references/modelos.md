@@ -360,20 +360,20 @@ Sin Claude Code instalado, el revisor vuelve a `delegate_task` y hereda el
 modelo y el effort de la sesion: ahi no hay seleccion por tarea. No fijes `delegation.model` para esto: es global, y los
 subagentes de tus sesiones con otro modelo tambien pasarian a cobrarse por API.
 
-## Gemini 4 Argon en AGY y Hermes
+## Gemini 4 (Hydrogen / Argon) en AGY y Hermes
 
-Cuando la tarea corre sobre Gemini 4 Argon (`Gemini 4 Argon (High)` en AGY /
-Antigravity o `gemini-4-argon` en Hermes), todos los roles usan Argon en nivel
-`high` como base operativa.
+Cuando la tarea corre sobre Gemini 4 en AGY / Antigravity (`Gemini 4 Hydrogen (High)`
+o `Gemini 4 Argon (High)`) o sobre `gemini-4-argon` en Hermes, todos los roles usan
+nivel `high` como base operativa.
 
 | Rol | Modelo | Effort | Como corre en AGY | Como corre en Hermes |
 | --- | --- | --- | --- | --- |
-| 0 Producto: PRD/SDD | `gemini-4-argon` | `high` | Sesion principal (`Gemini 4 Argon (High)`) | Sesion o `--provider gemini -m gemini-4-argon` |
-| 1 Leader: spec y AC | `gemini-4-argon` | `high` | Sesion principal | Sesion |
-| 2 Implementer | `gemini-4-argon` | `high` (o `medium` en `--pair`) | Sesion principal o `invoke_subagent` (`TypeName: "self"`, `Model: "inherit"`) | Sesion o `delegate_task` |
-| 3 Revisor independiente | `gemini-4-argon` | `high` | `invoke_subagent` (`TypeName: "self"`, `Model: "inherit"`, `Workspace: "inherit"`) | `delegate_task` con el briefing en `context` |
-| 4 Cierre | `gemini-4-argon` | `medium` | Gates Python + sesion principal | Gates Python + sesion principal |
-| Estado y rutinas | `gemini-4-argon` o Flash | `low` o `medium` | Gates Python + sesion principal | Gates Python + sesion principal |
+| 0 Producto: PRD/SDD | Gemini 4 (`Hydrogen`/`Argon`) | `high` | Sesion principal (`Gemini 4 Hydrogen (High)` o `Argon (High)`) | Sesion o `--provider gemini -m gemini-4-argon` |
+| 1 Leader: spec y AC | Gemini 4 (`Hydrogen`/`Argon`) | `high` | Sesion principal | Sesion |
+| 2 Implementer | Gemini 4 (`Hydrogen`/`Argon`) | `high` (heredado) | Sesion principal (`--pair`) o `invoke_subagent` (`TypeName: "self"`, `Model: "inherit"`) | Sesion o `delegate_task` |
+| 3 Revisor independiente | Gemini 4 (`Hydrogen`/`Argon`) | `high` (heredado) | `invoke_subagent` (`TypeName: "self"`, `Model: "inherit"`, `Workspace: "inherit"`) | `delegate_task` con el briefing en `context` |
+| 4 Cierre | Gemini 4 (`Hydrogen`/`Argon`) | heredado / `medium` | Gates Python + sesion principal | Gates Python + sesion principal |
+| Estado y rutinas | Gemini 4 o Flash | `low` o `medium` | Gates Python + sesion principal (`Model: "flash"` solo si se delega y el usuario lo pide) | Gates Python + sesion principal |
 
 ### En AGY / Antigravity (`agy`)
 
@@ -382,10 +382,12 @@ Antigravity o `gemini-4-argon` en Hermes), todos los roles usan Argon en nivel
   en cualquier workspace de la maquina, enlazala en `~/.gemini/config/skills/harness-flow`
   (AGY tambien descubre `~/.gemini/skills/`; ademas de `~/.agents/skills/harness-flow` para Gemini CLI, Codex y Grok).
 - **Modelo y effort**: se fijan en `~/.gemini/antigravity-cli/settings.json`
-  (`"model": "Gemini 4 Argon (High)"`) o en el selector de la sesion. La regla de
-  `invoke_subagent` en AGY exige pasar siempre `Model: "inherit"` salvo pedido
-  explicito del usuario, por lo que los subagentes heredan el modelo y el effort
-  de la sesion.
+  (p. ej. `"model": "Gemini 4 Hydrogen (High)"` o `"Gemini 4 Argon (High)"`) o
+  en el selector de la sesion. `invoke_subagent` solo admite `Model: "inherit" |
+  "pro" | "flash" | "flash_lite"` y **no** tiene parametro `effort` por llamada:
+  la regla de AGY exige pasar `Model: "inherit"` salvo pedido explicito del
+  usuario, por lo que implementer (`--delegado`) y revisor heredan tanto el
+  modelo como el effort de la sesion.
 - **Revisor aislado**: usa `invoke_subagent` con `TypeName: "self"`,
   `Model: "inherit"` y `Workspace: "inherit"`. En `Prompt`, pega la salida
   completa de `revision.py --feature <id> --briefing` mas la instruccion de
@@ -396,6 +398,12 @@ Antigravity o `gemini-4-argon` en Hermes), todos los roles usan Argon en nivel
   Alternativa: registrar un subagente para la conversacion con
   `define_subagent(Name="revisor", EnableWriteTools=True, ...)` usando el
   cuerpo de `agents/revisor.md` y lanzarlo con `invoke_subagent`.
+- **Implementer (`--pair` vs `--delegado`)**: el modo por defecto es `--pair`
+  en la sesion principal (pausando tras cada paso o usando `ask_question` ante
+  decisiones reales). Si se pide `--delegado`, lanza `invoke_subagent` con
+  `TypeName: "self"`, `Model: "inherit"`, `Workspace: "inherit"`, el brief
+  completo de `contexto.py brief --feature <id>` y seguir el cuerpo de
+  `<skill>/agents/implementer.md` ignorando su frontmatter.
 - **Shell**: cada `run_command` (salvo terminal persistente) abre un subproceso
   nuevo; pega siempre el `eval` de `entorno.py --shell` en la misma llamada.
 

@@ -14,7 +14,7 @@ Antes de codificar, examina:
 - Casos de uso y puertos en `crates/application/src/ports/`.
 - Implementaciones de persistencia en `crates/infrastructure/src/persistence/`.
 - Endpoints en `crates/api/src/handlers/`.
-- Reglas de arquitectura en `.agents/rules/architecture.md` (o `.agents/rules/architecture.md (o .claude/rules/architecture.md)`).
+- Reglas de arquitectura en `.agents/rules/architecture.md` (o `.claude/rules/architecture.md`).
 
 ## Procedimiento ejecutable
 1. **Modelar el dominio en `crates/domain`:** Definir entidades, enumeraciones, invariantes de validación y errores con `thiserror`. Escribir pruebas unitarias en `crates/domain`.

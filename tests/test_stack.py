@@ -397,6 +397,40 @@ class TestStackManager(unittest.TestCase):
         self.assertTrue(diag["rules_ok"])
         self.assertEqual(diag["missing_rules"], [])
 
+    def test_verificar_gemini_agy_exige_agents_skills(self):
+        mock_repo = self.tmpdir / "claude-only-skills"
+        mock_repo.mkdir()
+        (mock_repo / "go.mod").write_text("module example.com/claudeonly\n", encoding="utf-8")
+        manifest = stack.cargar_manifest("golang-hexagonal")
+        for carpeta in (".claude", ".gemini"):
+            rdir = mock_repo / carpeta / "rules"
+            rdir.mkdir(parents=True, exist_ok=True)
+            for r in manifest["normative"]["rules"]:
+                (rdir / r).write_text("# regla\n", encoding="utf-8")
+        cskills = mock_repo / ".claude" / "skills"
+        for s in manifest["normative"]["skills"]:
+            sdir = cskills / s
+            sdir.mkdir(parents=True, exist_ok=True)
+            (sdir / "SKILL.md").write_text("---\nname: test\ndescription: test\n---\n", encoding="utf-8")
+
+        diag = stack.verificar_cumplimiento(mock_repo, "golang-hexagonal")
+        self.assertIn("claude-code", diag["hosts_active"])
+        self.assertNotIn("gemini-cli/agy", diag["hosts_active"])
+
+    def test_contexto_skill_md_encuentra_copia_agents_vigente(self):
+        import shutil
+        import contexto
+        mock_repo = self.tmpdir / "agents-skills-repo"
+        mock_repo.mkdir()
+        (mock_repo / "go.mod").write_text("module example.com/agentsskill\n", encoding="utf-8")
+        origen = stack.STACKS_DIR / "golang-hexagonal" / "skills" / "add-feature"
+        destino = mock_repo / ".agents" / "skills" / "add-feature"
+        shutil.copytree(origen, destino)
+
+        ruta, origen_txt = contexto._skill_md([mock_repo], "golang-hexagonal", "add-feature")
+        self.assertEqual(ruta, destino / "SKILL.md")
+        self.assertEqual(origen_txt, f"{mock_repo.name}/.agents/skills")
+
     def test_refactorizar_plan(self):
         mock_repo = self.tmpdir / "unstructured-repo"
         mock_repo.mkdir()

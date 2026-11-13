@@ -123,9 +123,9 @@ class RaicesTests(Base):
         os.environ["HARNESS_HOST"] = "gemini"
         os.chdir(repo)
         raices = [r.resolve() for r in leccion.skills_roots()]
-        self.assertEqual(raices[0], repo_skills.resolve())
-        self.assertIn(personal.resolve(), raices)
+        self.assertEqual(raices[0], personal.resolve())
         self.assertIn(personal_cli.resolve(), raices)
+        self.assertIn(repo_skills.resolve(), raices)
         self.assertIn("repo-gemini", leccion.buscar("repo-only").read_text(encoding="utf-8"))
         self.assertIn("personal-gemini", leccion.buscar("tdd").read_text(encoding="utf-8"))
         self.assertIn("personal-gemini-cli", leccion.buscar("cli-skill").read_text(encoding="utf-8"))

@@ -119,11 +119,12 @@ Opus 5.5 `xhigh`; **el implementer y el revisor reciben el effort que la skill e
 `xhigh` ante un riesgo concreto; revisor `xhigh` en la primera ronda y `high` en la
 de seguimiento. Se anuncia igual y se pasa en la invocacion (`effort` de la tool
 `Agent`, o `claude -p --effort`).
-Con Gemini 4 Argon (`gemini-4-argon`) en AGY o Hermes, la sesion y los subagentes
-corren en `high` (`Gemini 4 Argon (High)`); en AGY los subagentes se lanzan con
-`Model: "inherit"` y `TypeName: "self"`, y en Hermes se anuncia el esfuerzo antes de
-cada rol (detalle y limite actual de `_build_gemini_thinking_config` en
-[`references/modelos.md`](references/modelos.md)).
+Con Gemini 4 (`Hydrogen` / `Argon`) en AGY o Hermes, la sesion y los subagentes
+corren con el nivel elegido en la sesion (`high`, p.ej. `Gemini 4 Hydrogen (High)` o
+`Gemini 4 Argon (High)`); en AGY los subagentes se lanzan con `Model: "inherit"`
+y `TypeName: "self"` (sin override por llamada de `effort`), y en Hermes se
+anuncia el esfuerzo antes de cada rol (detalle y limite actual de
+`_build_gemini_thinking_config` en [`references/modelos.md`](references/modelos.md)).
 
 ### 0. Producto — PRD inicial y SDD de arquitectura, antes del backlog
 

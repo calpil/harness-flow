@@ -14,7 +14,7 @@ Antes de emitir un veredicto:
 - Verificar que el paquete `domain` no contenga dependencias hacia `data`, `presentation` ni `android.*`.
 - Verificar que `data` no dependa de `presentation`.
 - Verificar que los ViewModels expongan `StateFlow` inmutables.
-- Consultar las directrices en `.agents/rules/architecture.md` (o `.agents/rules/architecture.md (o .claude/rules/architecture.md)`).
+- Consultar las directrices en `.agents/rules/architecture.md` (o `.claude/rules/architecture.md`).
 
 ## Procedimiento ejecutable
 1. **Auditar pureza del Dominio:** Comprobar que en `domain/` no existan imports de paquetes de Android (`android.os.*`, `androidx.compose.*`) ni de red/persistencia.

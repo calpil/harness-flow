@@ -13,7 +13,7 @@ Antes de escribir pruebas:
 - Revisar pruebas unitarias existentes en `crates/domain/src/model.rs`.
 - Revisar pruebas de repositorio en `crates/infrastructure/tests/inmemory_repo_tests.rs`.
 - Revisar pruebas de integración HTTP en `crates/api/tests/api_tests.rs`.
-- Consultar las directrices de testing en `.agents/rules/testing.md` (o `.agents/rules/testing.md (o .claude/rules/testing.md)`).
+- Consultar las directrices de testing en `.agents/rules/testing.md` (o `.claude/rules/testing.md`).
 
 ## Procedimiento ejecutable
 1. **Identificar la capa a evaluar:** Determinar si la prueba pertenece a reglas de dominio puras (`crates/domain`), casos de uso (`crates/application`), adaptadores (`crates/infrastructure`) o API HTTP (`crates/api`).

@@ -14,7 +14,7 @@ Antes de emitir el reporte de seguridad:
 - Revisar que no se almacenen secretos en `SharedPreferences` sin cifrar.
 - Verificar el uso de HTTPS y la propagación de la cabecera `x-correlation-id`.
 - Verificar que `allowBackup="false"` esté configurado en el manifiesto.
-- Consultar las directrices en `.agents/rules/security.md` (o `.agents/rules/security.md (o .claude/rules/security.md)`).
+- Consultar las directrices en `.agents/rules/security.md` (o `.claude/rules/security.md`).
 
 ## Procedimiento ejecutable
 1. **Auditar almacenamiento local:** Comprobar que ningún secreto, token de autenticación o información personal identificable (PII) se guarde en `SharedPreferences` sin cifrar.

@@ -12,7 +12,7 @@ Esta skill se activa cuando es necesario evaluar, agregar o actualizar dependenc
 Antes de modificar dependencias:
 - Revisar `gradle/libs.versions.toml`.
 - Revisar `app/build.gradle.kts`.
-- Consultar las directrices de dependencias en `.agents/rules/dependencies.md` (o `.agents/rules/dependencies.md (o .claude/rules/dependencies.md)`).
+- Consultar las directrices de dependencias en `.agents/rules/dependencies.md` (o `.claude/rules/dependencies.md`).
 
 ## Procedimiento ejecutable
 1. **Evaluar necesidad técnica:** Verificar si la funcionalidad requerida puede implementarse con bibliotecas oficiales de Jetpack o KotlinX antes de incorporar librerías de terceros.

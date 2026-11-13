@@ -184,8 +184,18 @@ def _raices_kimi() -> list[Path]:
 
 
 def _raices_gemini() -> list[Path]:
-    """Gemini / AGY: .gemini/skills y .agents/skills de repo, luego personal ~/.gemini/config/skills, ~/.gemini/skills y ~/.agents/skills."""
-    raices: list[Path] = []
+    """Gemini / AGY: personal ~/.gemini/config/skills, ~/.gemini/skills y ~/.agents/skills primero; luego repo .gemini/skills y .agents/skills.
+
+    La leccion es memoria del usuario, no del proyecto: con stack.py normalizar los
+    repos ya tienen .agents/skills/, asi que poner el repo primero meteria las
+    lecciones personales dentro del microservicio en vez de ~/.gemini/config/skills.
+    """
+    casa = _casa()
+    raices: list[Path] = [
+        casa / ".gemini" / "config" / "skills",
+        casa / ".gemini" / "skills",
+        casa / ".agents" / "skills",
+    ]
     try:
         cwd = Path.cwd()
         root = _repo_root(cwd)
@@ -195,14 +205,11 @@ def _raices_gemini() -> list[Path]:
         else:
             padres = [cwd]
         for padre in padres:
-            if padre.resolve() != _casa().resolve():
+            if padre.resolve() != casa.resolve():
                 raices.append(padre / ".gemini" / "skills")
                 raices.append(padre / ".agents" / "skills")
     except OSError:
         pass
-    raices.append(_casa() / ".gemini" / "config" / "skills")
-    raices.append(_casa() / ".gemini" / "skills")
-    raices.append(_casa() / ".agents" / "skills")
     return raices
 
 

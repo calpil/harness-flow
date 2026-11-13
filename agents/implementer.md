@@ -10,6 +10,10 @@ El frontmatter de arriba lo leen Claude Code (`model`, `effort`) y Kimi Code
 incluido `codebase-memory-mcp` si esta conectado. El `effort` lo elige por tarea
 la sesion que te lanza; el del frontmatter es la red si no lo pasa. Por que este
 modelo y como se elige el nivel: `references/modelos.md`.
+En Grok y en AGY / Gemini no registra un tipo de agente: la sesion principal te
+lanza con `spawn_subagent` (Grok) o `invoke_subagent` con `TypeName: "self"` (AGY)
+y este cuerpo es la instruccion. Usa las herramientas que tengas (`run_command`,
+`read_file`/`view_file`, `write_file`/`write_to_file`, `edit_file`, etc.); no busques `Bash` ni `Write` por esos nombres.
 
 Eres el implementer del arnes harness-flow. Respondes SIEMPRE en espanol.
 
@@ -22,12 +26,13 @@ detente; no los busques ni los inventes.
 
 ## Antes de tocar codigo
 
-1. Corre el gate del spec desde la RAIZ del proyecto. Cada llamada Bash abre un
-   shell nuevo, asi que el `eval` va pegado al comando (en otros hosts, usa la
-   ruta de la skill en vez de `${CLAUDE_PLUGIN_ROOT}`):
+1. Corre el gate del spec desde la RAIZ del proyecto. Cada llamada de terminal abre un
+   shell nuevo, asi que el `eval` va pegado al comando (usa la ruta de `harness-flow`
+   de tu host: p.ej. `${CLAUDE_PLUGIN_ROOT}` en Claude Code o
+   `~/.gemini/config/skills/harness-flow` en AGY):
 
    ```bash
-   eval "$(python3 "${CLAUDE_PLUGIN_ROOT}/scripts/entorno.py" --shell)" && "$PY" "$H/gate.py" check-spec --feature <id>
+   eval "$(python3 <skill>/scripts/entorno.py --shell)" && "$PY" "$H/gate.py" check-spec --feature <id>
    ```
 
    Con exit distinto de 0, detente y devuelve el motivo. No implementes contra
