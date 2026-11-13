@@ -80,7 +80,7 @@ el motivo. Criterios y forma de aplicar el nivel en Codex y Hermes:
 
 **Pair es el modo por defecto de toda feature**, con stack detectado o sin él: lo deja en el
 backlog `gate.py approve-spec` al sellar el spec por primera vez y `gate.py close` exige su rastro,
-la lista de tests aprobada (`gate.py aprobar-tests`). `--pair` ya no hace falta para activarlo. El
+la lista de tests sellada (`gate.py sellar-tests`, que corre quien implementa). `--pair` ya no hace falta para activarlo. El
 modo delegado es decisión del usuario (`worktree.py modo --feature <id> --delegado`) o de una sesión
 sin usuario. En los dos modos el brief (`contexto.py brief`) trae el texto de las reglas de cada
 stack, el índice de sus skills y el bloque `NORMAS DE INGENIERIA`, que es la misma lista que audita
@@ -90,14 +90,15 @@ subagente, pégale el brief entero y nada más: trae el comando que imprime cada
 
 En OpenAI (Codex CLI y ChatGPT):
 
-1. **Modo Pair interactivo (por defecto)**: corre en la **sesión interactiva principal**
-   (Driver = Codex, Navigator = humano). No utilices subagentes desatendidos
-   ni `codex exec` aquí: la sesión de Codex opera directamente sobre el worktree
-   (`worktree.py start --feature <id>`), propone la lista de tests antes de editar
-   código, y ejecuta el bucle `1 test -> Red -> código mínimo -> Green`, pausando
-   tras cada micro-ciclo con el mensaje de consulta al Navigator. Usa `gpt-6-astra`
-   o `gpt-6.1-sol` con `medium` effort para mantener respuestas ágiles sin pausas
-   largas de razonamiento.
+1. **Modo Pair automático (por defecto)**: corre en la **sesión interactiva principal**.
+   La sesión de Codex opera directamente sobre el worktree
+   (`worktree.py start --feature <id>`), escribe la lista de tests, la sella
+   (`gate.py sellar-tests`), la muestra y ejecuta el bucle `1 test -> Red -> código
+   mínimo -> Green` ciclo tras ciclo, sin pausar ni preguntar si sigue. Pregunta
+   con un formulario solo en las paradas que lo piden
+   (`references/vertical-slice.md`, sección 6). Pausa tras cada ciclo solo si el
+   usuario pide "paso a paso". Usa `gpt-6-astra` o `gpt-6.1-sol` con `medium`
+   effort para mantener respuestas ágiles.
 2. **Modo Delegado (autónomo)**: solo si el usuario lo pidió o la sesión no tiene
    usuario. Regístralo (`worktree.py start --feature <id> --delegado`) y corre en
    el worktree con `--sandbox workspace-write` hasta dejar la evidencia en

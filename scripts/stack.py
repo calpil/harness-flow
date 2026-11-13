@@ -884,7 +884,7 @@ def _generar_agents_md(stack_id: str, manifest: dict[str, Any]) -> str:
         "## 4. Modo Pair Interactivo y Preguntas de Formulario",
         "",
         "- **Modo Pair Interactivo:** Al aplicar skills o implementar features, la IA actúa como Driver y el humano como Navigator.",
-        "- **Con harness-flow:** pair es el modo por defecto de toda feature y su rastro es la lista de tests aprobada por el usuario. El brief de la feature (`contexto.py brief --feature <id>`) trae el texto de estas reglas, el índice de las skills del stack y las `NORMAS DE INGENIERIA` que el revisor audita: cúmplelas con cualquier agente.",
+        "- **Con harness-flow:** pair es el modo por defecto de toda feature: la IA avanza ciclo tras ciclo sin pausar y su rastro es la lista de tests sellada (un test por AC). El brief de la feature (`contexto.py brief --feature <id>`) trae el texto de estas reglas, el índice de las skills del stack y las `NORMAS DE INGENIERIA` que el revisor audita: cúmplelas con cualquier agente.",
         "- **Preguntas de Formulario:** La IA debe consultar al humano mediante formulario/pregunta interactiva **SOLO** ante decisiones de arquitectura no previstas, breaking changes o tras 2 intentos fallidos en TDD.",
         "",
         "## 5. Actualización Continua: Context7 y Documentación Oficial",

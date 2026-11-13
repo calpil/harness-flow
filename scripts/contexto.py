@@ -1216,7 +1216,8 @@ def lineas_modo(f: dict) -> list[str]:
 
     Antes el brief "activaba" el modo pair solo si detectaba un stack, y nada lo
     registraba. Ahora pair es el modo por defecto en cualquier repo, queda en el
-    backlog, y close exige su rastro: la lista de tests aprobada por el usuario.
+    backlog, y close exige su rastro: la lista de tests sellada. En pair el agente
+    avanza solo: el brief le dice cuando un formulario hace falta y cuando no.
     """
     import normas
     modo = f.get("modo")
@@ -1228,27 +1229,38 @@ def lineas_modo(f: dict) -> list[str]:
         "  5 paradas: (1) decision de diseno fuera del plan/spec, (2) alcance que ningun AC pide, "
         "(3) pasar exige cambiar, saltar o borrar un test, (4) dos intentos sin verde, "
         "(5) el paso supera ~50 lineas o 3 archivos.",
+        "  que hace cada una: (1), (3) y (4) preguntan. (2) no pregunta: no lo agregues, anotalo como "
+        "hallazgo y sigue. (5) no pregunta: parte el paso tu y sigue.",
         "  detalle: " + normas.comando("normas.py", "--ref", "vertical-slice"),
         "  hallazgos: lo que encuentres fuera de los AC no abre una ficha. Si es de esta feature, "
         "arreglalo aqui (enmienda si cambia un AC); si no, anotalo: "
         + normas.comando("hallazgo.py", "anotar", "--texto", "<hallazgo>") + " [--feature <id>]",
     ]
     if modo == "pair":
-        return [f"modo pair interactivo: ACTIVADO (por defecto en cualquier repo; registrado en el backlog)",
-                f"  antes de escribir codigo: lista de tests en docs/tests-{f['id']}.md, aprobada por el "
-                f"usuario con gate.py aprobar-tests --feature {f['id']} --yes (close la exige)",
+        return ["modo pair automatico: ACTIVADO (por defecto en cualquier repo; registrado en el backlog)",
+                f"  antes de escribir codigo: lista de tests en docs/tests-{f['id']}.md (un test por AC). "
+                "Sellala tu: " + normas.comando("gate.py", "sellar-tests", "--feature", str(f["id"]))
+                + ". Muestrala en el chat y empieza: no esperes aprobacion (close exige el sello).",
+                "  ritmo: avanza ciclo tras ciclo, sin preguntar si sigues. Reporta cada ciclo en una "
+                "linea. Commitea en la rama de la feature sin pedir permiso, funcionalidad y refactor "
+                "en commits separados. Pausa tras cada ciclo solo si el usuario pide \"paso a paso\".",
                 *protocolo,
-                "  en una parada: detente y pregunta al usuario."]
+                "  formulario SOLO para: las paradas (1), (3) y (4); quitar un test sellado; un AC que "
+                "queda solo con verificacion manual; y lo que sella el usuario (enmienda, ficha nueva, "
+                "cierre). Lo demas lo decides tu y lo reportas.",
+                "  como preguntar: junta las preguntas pendientes en UN formulario, con la opcion "
+                "recomendada primero. Mientras esperas, sigue con lo que no depende de la respuesta.",
+                "  si eres un subagente: no puedes preguntar al usuario. Devuelve la pregunta a quien te lanzo."]
     if modo == "delegado":
         return ["modo delegado: el usuario lo pidio o la sesion no tiene usuario (subagente implementer)",
                 *protocolo,
-                "  en una parada: detente y devuelve la pregunta a quien te delego; no decidas tu.",
+                "  en una parada que pregunta: detente y devuelve la pregunta a quien te delego; no decidas tu.",
                 "  este brief es tu paquete completo: reglas del stack, indice de skills con el comando "
                 "para leer cada una, y normas con el comando para leer cada referencia."]
     return ["modo de implementacion: sin registrar (spec aprobado antes de que el modo se registrara): "
             f"fijalo con worktree.py modo --feature {f['id']} --pair|--delegado",
             *protocolo,
-            "  en una parada: detente y pregunta (al usuario, o a quien te delego)."]
+            "  en una parada que pregunta: detente y pregunta (al usuario, o a quien te delego)."]
 
 
 def _texto_regla(repos_del_stack: list[Path], sid: str, nombre: str) -> tuple[str, str]:

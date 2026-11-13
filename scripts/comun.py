@@ -381,7 +381,7 @@ def impl_path(p: dict, f: dict) -> Path:
     return p["docs"] / f"impl-{f['id']}.md"
 
 def tests_path(p: dict, f: dict) -> Path:
-    """La lista de tests del modo pair, que el usuario aprueba antes de implementar."""
+    """La lista de tests del modo pair, que quien implementa sella antes de escribir codigo."""
     return p["docs"] / f"tests-{f['id']}.md"
 
 def review_path(p: dict, f: dict) -> Path:

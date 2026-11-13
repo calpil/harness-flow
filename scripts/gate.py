@@ -8,7 +8,7 @@ sea un exit 0.
   gate.py check
   gate.py check-spec   --feature <id>
   gate.py approve-spec --feature <id> --yes
-  gate.py aprobar-tests --feature <id> --yes        (modo pair: la lista de tests)
+  gate.py sellar-tests --feature <id>               (modo pair: la lista de tests; --yes si quita uno)
   gate.py enmienda     --feature <id> --propuesta docs/<propuesta>.md --yes
   gate.py revision     --feature <id> --veredicto approved|changes_requested|blocked
   gate.py verify       --feature <id>
@@ -500,8 +500,8 @@ def cmd_approve_spec(args) -> None:
                 + (" modo=pair" if modo_fijado else ""))
     print(f"[ok] spec #{f['id']} aprobado y sellado. AC: {', '.join(acs)}")
     if modo_fijado:
-        print(f"[i]  modo pair (por defecto): close exigira la lista de tests aprobada por el usuario\n"
-              f"     (docs/tests-{f['id']}.md, gate.py aprobar-tests --feature {f['id']} --yes).\n"
+        print(f"[i]  modo pair (por defecto): close exigira la lista de tests sellada\n"
+              f"     (docs/tests-{f['id']}.md, gate.py sellar-tests --feature {f['id']}; la sella quien implementa).\n"
               f"     Si el usuario decide delegar: worktree.py modo --feature {f['id']} --delegado")
     for x in avisos:
         print(f"[!]  {x}")
@@ -626,12 +626,19 @@ def _registrar_sello(p: dict, f: dict, sp: Path, text: str, quien: str, cuando: 
 
 # --- lista de tests (modo pair) --------------------------------------------
 #
-# El modo pair no dejaba rastro: la lista de tests que aprueba el usuario vivia
-# en el chat, y ningun gate podia comprobar que hubo pair. Ahora la lista es un
-# archivo que se sella con --yes, como el spec, y close la exige en las
-# features cuyo modo registrado es pair.
+# El modo pair no dejaba rastro: la lista de tests vivia en el chat, y ningun
+# gate podia comprobar que hubo pair. La lista es un archivo que se sella, y
+# close la exige en las features cuyo modo registrado es pair.
+#
+# La sella quien implementa, sin formulario. Medido en un proyecto real: el
+# usuario aprobo 17 listas de 17 sin cambiar una linea, y cada lista que crecia
+# volvia a preguntarle. El gate comprueba lo que se puede comprobar (un test por
+# AC) y deja al usuario lo que es suyo: quitar un test ya sellado, y aceptar que
+# un AC quede solo con verificacion manual cuando el spec no lo dice.
 
 ITEM_TEST_RE = re.compile(r"^\s*[-*]\s*(AC-\d+)\s*:\s*\S", re.M)
+ITEM_LINEA_RE = re.compile(r"^[^\S\n]*[-*][^\S\n]*(AC-\d+)[^\S\n]*:[^\S\n]*(\S[^\n]*)$", re.M)
+_COSTURA_RE = re.compile(r"\[\s*costura\s*:[^\]]*\]", re.I)
 
 
 def _acs_sin_test(lista: str, acs: list[str]) -> list[str]:
@@ -640,31 +647,56 @@ def _acs_sin_test(lista: str, acs: list[str]) -> list[str]:
     return [ac for ac in acs if ac not in declarados]
 
 
+def _items_lista(lista: str) -> list[list[str]]:
+    """[AC, nombre] de cada linea de la lista, sin su `[costura: ...]` ni espacios de mas."""
+    limpio = COMENTARIO_RE.sub("", lista)
+    return [[ac, " ".join(_COSTURA_RE.sub("", nombre).split())]
+            for ac, nombre in ITEM_LINEA_RE.findall(limpio)]
+
+
+def _es_manual(nombre: str) -> bool:
+    return _normal(nombre).startswith("verificacion manual")
+
+
+def _solo_manuales(items: list[list[str]], spec: str) -> list[str]:
+    """AC que la lista cubre SOLO con verificacion manual sin que el spec lo declare manual."""
+    costuras = ac_costuras(COMENTARIO_RE.sub("", spec))
+    por_ac: dict[str, list[str]] = {}
+    for ac, nombre in items:
+        por_ac.setdefault(ac, []).append(nombre)
+    return [ac for ac, nombres in por_ac.items()
+            if all(_es_manual(n) for n in nombres)
+            and "manual" not in _normal(costuras.get(ac, ""))]
+
+
+def _quitados(previos: list | None, items: list[list[str]], acs: list[str]) -> list[str]:
+    """Tests del sello anterior que ya no estan. Los de un AC que el spec ya no trae no cuentan:
+    ese AC lo quito el usuario con una enmienda."""
+    ahora = {(ac, _normal(n)) for ac, n in items}
+    return [f"{ac}: {n}" for ac, n in (previos or [])
+            if ac in acs and (ac, _normal(n)) not in ahora]
+
+
 def fallos_lista_tests(p: dict, f: dict, acs: list[str]) -> list[str]:
     """Por que close no acepta la lista de tests de una feature en modo pair."""
     if f.get("modo") != "pair":
         return []   # delegado, o feature anterior al registro de modo: no se le cambia la regla
     tp = tests_path(p, f)
-    orden = f"gate.py aprobar-tests --feature {f['id']} --yes"
+    orden = f"gate.py sellar-tests --feature {f['id']}"
     if not f.get("tests_sig") or not tp.is_file():
-        return [f"modo pair: falta la lista de tests aprobada por el usuario ({tp.name}; {orden}). "
+        return [f"modo pair: falta la lista de tests sellada ({tp.name}; {orden}). "
                 "Si el usuario decidio delegar: worktree.py modo --feature <id> --delegado"]
     if not sig_fresh(tp, f["tests_sig"]):
-        return [f"modo pair: la lista de tests ({tp.name}) cambio despues de aprobarla: "
-                f"muestrasela al usuario y vuelve a sellarla ({orden})"]
+        return [f"modo pair: la lista de tests ({tp.name}) cambio despues de sellarla: "
+                f"vuelve a sellarla ({orden}); no hace falta preguntar al usuario salvo que quite un test"]
     faltan = _acs_sin_test(tp.read_text(encoding="utf-8"), acs)
     if faltan:
-        return [f"modo pair: la lista de tests aprobada no cubre {', '.join(faltan)} "
+        return [f"modo pair: la lista de tests sellada no cubre {', '.join(faltan)} "
                 f"(el spec cambio): completala y vuelve a sellarla ({orden})"]
     return []
 
 
-def cmd_aprobar_tests(args) -> None:
-    if not args.yes:
-        sys.exit("[!!] aprobar-tests requiere --yes.\n"
-                 "     La lista de tests del modo pair la aprueba el USUARIO: MUESTRASELA\n"
-                 "     (solo nombres y costura, antes de escribir codigo), PREGUNTALE, y solo\n"
-                 "     con su SI corre este comando con --yes.")
+def cmd_sellar_tests(args) -> None:
     p = paths()
     data = load_backlog(p)
     f = get_feature(data, args.feature)
@@ -677,30 +709,52 @@ def cmd_aprobar_tests(args) -> None:
     if not sp.exists():
         sys.exit(f"[!!] no existe {sp}: la lista de tests sale de los AC del spec")
     texto = tp.read_text(encoding="utf-8")
-    faltan = _acs_sin_test(texto, spec_acs(sp.read_text(encoding="utf-8")))
+    spec = sp.read_text(encoding="utf-8")
+    acs = spec_acs(spec)
+    faltan = _acs_sin_test(texto, acs)
     if faltan:
         sys.exit(f"[!!] la lista de tests no declara ningun test para: {', '.join(faltan)}\n"
                  "     Cada AC del spec necesita al menos una linea `- AC-n: <test>`\n"
                  "     (o `- AC-n: verificacion manual: ...`). Una mencion en prosa no cuenta.")
+    items = _items_lista(texto)
+    quitados = _quitados(f.get("tests_sellados"), items, acs)
+    manuales = _solo_manuales(items, spec)
+    if (quitados or manuales) and not args.yes:
+        L = ["[!!] esta lista la decide el USUARIO: sellarla requiere --yes."]
+        if quitados:
+            L.append("     Quita tests que ya estaban sellados:")
+            L += [f"       - {q}" for q in quitados]
+        if manuales:
+            L.append(f"     Deja solo con verificacion manual a {', '.join(manuales)}, y el spec no "
+                     "declara ese AC `[costura: manual]`.")
+        L += ["     PREGUNTALE con un formulario (que se quita o que queda manual, y por que) y, con",
+              "     su SI, repite el comando con --yes. Agregar tests no necesita su SI."]
+        sys.exit("\n".join(L))
     quien, cuando = _firmante(args.por), now_iso()
-    sello = f"Aprobada: {quien} · {cuando} · sellado por gate.py aprobar-tests --yes"
+    con_si = bool(quitados or manuales)
+    sello = (f"Sellada: {quien} · {cuando} · gate.py sellar-tests"
+             + (" --yes (con el si del usuario)" if con_si else ""))
     if re.search(r"^Estado:.*$", texto, flags=re.M):
-        texto = re.sub(r"^Estado:.*$", "Estado: approved", texto, count=1, flags=re.M)
+        texto = re.sub(r"^Estado:.*$", "Estado: sellada", texto, count=1, flags=re.M)
     else:
-        texto = texto.replace("\n", "\n\nEstado: approved\n", 1)
-    if re.search(r"^Aprobada:.*$", texto, flags=re.M):
-        texto = re.sub(r"^Aprobada:.*$", lambda _: sello, texto, count=1, flags=re.M)
+        texto = texto.replace("\n", "\n\nEstado: sellada\n", 1)
+    if re.search(r"^(?:Sellada|Aprobada):.*$", texto, flags=re.M):
+        texto = re.sub(r"^(?:Sellada|Aprobada):.*$", lambda _: sello, texto, count=1, flags=re.M)
     else:
-        texto = re.sub(r"^(Estado: approved)$", lambda m: m.group(1) + "\n" + sello,
+        texto = re.sub(r"^(Estado: sellada)$", lambda m: m.group(1) + "\n" + sello,
                        texto, count=1, flags=re.M)
     tp.write_text(texto, encoding="utf-8")
     f["tests_sig"] = sign(tp)   # se firma DESPUES de escribir el sello
-    f["tests_aprobados"] = {"por": quien, "at": cuando}
+    f["tests_sellados"] = items  # contra esto se mide, en el sello siguiente, que nada se quito
+    f["tests_aprobados"] = {"por": quien, "at": cuando, "con_si_del_usuario": con_si}
     f.setdefault("tests_primera_aprobacion", cuando)
     save_backlog(p, data)
-    n = len(ITEM_TEST_RE.findall(texto))
-    bitacora(p, f"lista de tests #{f['id']} aprobada por {quien} ({n} tests)")
-    print(f"[ok] lista de tests de #{f['id']} aprobada y sellada ({n} tests) -> {tp.name}")
+    n = len(items)
+    bitacora(p, f"lista de tests #{f['id']} sellada por {quien} ({n} tests)"
+                + (f"; con el si del usuario: quita {len(quitados)}, solo manual {', '.join(manuales) or '-'}"
+                   if con_si else ""))
+    print(f"[ok] lista de tests de #{f['id']} sellada ({n} tests) -> {tp.name}")
+    print("[i]  Muestrale la lista al usuario en el chat y empieza: no esperes su aprobacion.")
 
 
 # --- enmienda --------------------------------------------------------------
@@ -1334,7 +1388,7 @@ def cmd_close(args) -> None:
                     "(creala antes de cerrar: skill_manage en Hermes; SKILL.md en Claude Code, GPT o Grok)")
 
     if args.status == "done":
-        # Modo pair: su rastro es la lista de tests que aprobo el usuario.
+        # Modo pair: su rastro es la lista de tests sellada (un test por AC).
         fallos.extend(fallos_lista_tests(p, f, acs))
 
     if args.status == "done":
@@ -1508,9 +1562,12 @@ def main() -> None:
                    choices=["approved", "changes_requested", "blocked"])
     s.add_argument("--por"); s.set_defaults(fn=cmd_revision)
 
-    s = sub.add_parser("aprobar-tests"); s.add_argument("--feature", required=True)
-    s.add_argument("--yes", action="store_true"); s.add_argument("--por")
-    s.set_defaults(fn=cmd_aprobar_tests)
+    # `aprobar-tests` es el nombre anterior: sigue valiendo para no romper a quien lo tenga escrito.
+    for nombre in ("sellar-tests", "aprobar-tests"):
+        s = sub.add_parser(nombre); s.add_argument("--feature", required=True)
+        s.add_argument("--yes", action="store_true",
+                       help="solo con el SI del usuario: la lista quita un test sellado o deja un AC solo manual")
+        s.add_argument("--por"); s.set_defaults(fn=cmd_sellar_tests)
 
     s = sub.add_parser("verify"); s.add_argument("--feature", required=True)
     s.set_defaults(fn=cmd_verify)

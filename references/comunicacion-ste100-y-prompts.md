@@ -103,10 +103,10 @@ flowchart TD
     ✅ Pasa: "WorkItemRepository_Save_PersistsRecord"
     ⚙️ Decisión: Usar Dapper con parámetro tipado @Id.
     🔍 Comprobación: dotnet test --filter Name=WorkItemRepository_Save (65ms).
-    ❓ ¿Continuamos con "WorkItemService_Create"?
     ```
-* **Comandos en Ráfaga (Navigator):**
-  - El usuario puede comandar bloques de trabajo usando verbos agrupados: `"Haz 3: codifica, compila y testea los siguientes 3 casos de la lista."`
+  - En modo pair automático el reporte no termina en pregunta: la IA sigue con el test siguiente. La línea `❓ ¿Continuamos con "<siguiente test>"?` va solo si el usuario pidió "paso a paso".
+* **Comandos en Ráfaga (paso a paso):**
+  - Con "paso a paso" activo, el usuario puede comandar bloques de trabajo usando verbos agrupados: `"Haz 3: codifica, compila y testea los siguientes 3 casos de la lista."`
 
 ### Fase 3: Reviewer Aislado (`docs/review-<id>.md`)
 

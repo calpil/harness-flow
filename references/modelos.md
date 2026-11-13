@@ -399,7 +399,7 @@ nivel `high` como base operativa.
   `define_subagent(Name="revisor", EnableWriteTools=True, ...)` usando el
   cuerpo de `agents/revisor.md` y lanzarlo con `invoke_subagent`.
 - **Implementer (`--pair` vs `--delegado`)**: el modo por defecto es `--pair`
-  en la sesion principal (pausando tras cada paso o usando `ask_question` ante
+  en la sesion principal (ciclo tras ciclo sin pausar; `ask_question` solo ante
   decisiones reales). Si se pide `--delegado`, lanza `invoke_subagent` con
   `TypeName: "self"`, `Model: "inherit"`, `Workspace: "inherit"`, el brief
   completo de `contexto.py brief --feature <id>` y seguir el cuerpo de
@@ -419,16 +419,16 @@ nivel `high` como base operativa.
   efectivo si corres `gemini-4-argon` desde Hermes. Verificado en el codigo el
   2026-10-16.
 
-## Modo Pair interactivo (`--pair`: Driver = IA, Navigator = Humano)
+## Modo Pair automático (`--pair`: la sesión implementa y avanza sola)
 
-El Rol 2 (Implementer) corre en **modo Pair interactivo por defecto, en toda feature**
+El Rol 2 (Implementer) corre en **modo Pair automático por defecto, en toda feature**
 (ver `references/vertical-slice.md`): no depende de que se detecte un stack ni del host.
 `gate.py approve-spec` lo registra al sellar el spec por primera vez y `gate.py close`
-exige la lista de tests aprobada. Solo se delega si el usuario lo pide (`--delegado`) o si
+exige la lista de tests sellada. Solo se delega si el usuario lo pide (`--delegado`) o si
 la sesión no tiene usuario. La implementación corre en la **sesión principal**
-en vez de un subagente batch sin visibilidad, para pausar en cada ciclo
-(`1 test -> Red -> codigo minimo -> Green`) y esperar la dirección del usuario.
-Para mantener baja latencia entre micro-pasos sin perder rigor:
+en vez de un subagente batch sin visibilidad: el usuario ve cada ciclo
+(`1 test -> Red -> codigo minimo -> Green`) y la sesión le pregunta solo en las
+paradas que lo piden. Para mantener baja latencia entre ciclos sin perder rigor:
 
 | Proveedor / Host | Modelo en `--pair` | Effort recomendado en `--pair` | Mecanismo de Preguntas de Formulario |
 | --- | --- | --- | --- |
@@ -444,5 +444,7 @@ Solo despliega el formulario interactivo cuando:
 1. Se requiere una decisión de arquitectura o diseño no definida en el SDD/Spec (ej. tipo de persistencia, contrato de error, nombres de endpoints).
 2. Se detecta una discrepancia normativa con `stack.py verificar` que requiera plan de refactorización o normalización.
 3. Se activa la Parada 4 de Pair (2 intentos fallidos consecutivos sin alcanzar verde).
-4. Aprobación de la lista de tests antes de empezar, o confirmación de gates formales (`approve-spec`, `enmienda`, `cierre`).
+4. Confirmación de gates formales del usuario (`approve-spec`, `enmienda`, `cierre`). La lista de tests no se pregunta: la sella quien implementa (`gate.py sellar-tests`), salvo que quite un test sellado.
+
+No pregunta si sigue con el test siguiente, ni el mensaje de un commit, ni un refactor en verde. Detalle en `references/vertical-slice.md`, sección 6.
 

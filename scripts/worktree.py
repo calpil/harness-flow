@@ -69,7 +69,7 @@ def _fijar_modo(p: dict, f: dict, args) -> str:
     Se registra aqui, no en el texto de un comando: antes el modo pair dependia
     de que el brief detectara un stack y de que el agente lo siguiera, y nada
     quedaba escrito. Con el modo en el backlog, close puede exigir su rastro
-    (la lista de tests aprobada, gate.py aprobar-tests).
+    (la lista de tests sellada, gate.py sellar-tests).
     """
     previo = f.get("modo")
     if getattr(args, "delegado", False):
@@ -83,8 +83,9 @@ def _fijar_modo(p: dict, f: dict, args) -> str:
 
 def _decir_modo(f: dict) -> None:
     if f["modo"] == "pair":
-        print(f"[i]  modo pair (por defecto): la lista de tests va en docs/tests-{f['id']}.md y la aprueba\n"
-              f"     el usuario con gate.py aprobar-tests --feature {f['id']} --yes; close la exige.\n"
+        print(f"[i]  modo pair automatico (por defecto): la lista de tests va en docs/tests-{f['id']}.md y la\n"
+              f"     sella quien implementa (gate.py sellar-tests --feature {f['id']}); close la exige.\n"
+              "     Avanza sin pausar tras cada ciclo; formulario solo en las paradas que preguntan (ver el brief).\n"
               "     Para delegar al subagente: worktree.py modo --feature <id> --delegado (decision del usuario).")
     else:
         print("[i]  modo delegado: lo pidio el usuario o la sesion no tiene usuario.")
@@ -206,7 +207,7 @@ def cmd_register(args) -> None:
     f["multi_repo_protected"] = protected
     # register NO fija el modo: registra worktrees que ya existen, con el trabajo
     # hecho, para validar una integracion. Ponerla en pair aqui exigiria una
-    # lista de tests "aprobada antes de implementar" despues de haber implementado.
+    # lista de tests "sellada antes de implementar" despues de haber implementado.
     # El modo lo fija gate.py approve-spec (primera aprobacion), start o `worktree.py modo`.
     save_backlog(p, data)
     bitacora(p, f"register #{f['id']} multi-repo")

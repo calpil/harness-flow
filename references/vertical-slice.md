@@ -13,7 +13,7 @@ harness-flow:  Rol 0 (Producto)  →  Rol 1 (Leader: spec)  →  Rol 2 (pair o -
 | --- | --- | --- | --- |
 | **`/backlog`** | **Rol 0: Producto** (`producto.py` / `/harness-flow:producto prd\|sdd` + `add.py`) | Convierte la idea en el PRD/SDD y en una lista corta (10–15 máx.) de candidatas verticales `F-n` de una línea con su frontera `requiere: F-m`. | Inventar requisitos sin preguntar, crear historias técnicas/por capa, estimar o escribir código final. |
 | **`/story`** | **Rol 1: Leader** (`gate.py approve-spec` / `/harness-flow:spec <id>`) | Toma **una** candidata `F-n`, define 2–3 AC (tope 5) en Given/When/Then con su costura pública, un `## Plan vertical` (≤5 bullets sin código ni rutas) y `## Sugerencias (decision del usuario)` para aprobación. | Escribir código o inflar un spec con más de 5 AC (propone partir la historia en nuevas `F-n`). |
-| **`/pair`** | **Rol 2: Implementer en Modo Pair** (`/harness-flow:implementar <id>`, pair por defecto) | Pair programming (Driver = IA, Navigator = humano): acuerda la **lista de tests** (solo nombres y costura) y ejecuta `1 test → Red → código mínimo → Green`, parando en cada paso con un micro-mensaje. | Editar/borrar tests para que pasen, agregar alcance no pedido, o commitear sin acuerdo del usuario en modo `--pair`. |
+| **`/pair`** | **Rol 2: Implementer en Modo Pair** (`/harness-flow:implementar <id>`, pair por defecto) | Pair automático: la IA escribe y sella la **lista de tests** (solo nombres y costura) y ejecuta `1 test → Red → código mínimo → Green` ciclo tras ciclo, sin pausar. Pregunta por formulario solo en las paradas que lo piden. | Editar/borrar tests para que pasen, agregar alcance no pedido, o preguntar lo que el spec ya decide. |
 | *(Review limpio)* | **Rol 3: Reviewer aislado** + **Rol 4: Cierre** (`revision.py` + `gate.py revision` + `close`) | Audita con contexto limpio cada AC (`archivo:linea`), la integridad de los tests (sin tests borrados ni valores calculados con la misma lógica del código) y sella el cierre. | Aprobarse a sí mismo desde la sesión que escribió el código. |
 
 ---
@@ -84,7 +84,7 @@ Al refinar **una sola** feature en `docs/spec-feature-<id>-<slug>.md` desde `tem
 ## 4. Rol 2 (Implementer = `/pair` o Subagente): Lista de Tests, Ciclo TDD y las 5 Paradas
 
 El Rol 2 soporta dos modos:
-- **Modo Pair interactivo (por defecto, en toda feature):** la IA actúa como **Driver** (escribe los tests y el código en el worktree) y el humano como **Navigator** (revisa, decide y da el sí o no en cada paso). No hay que activarlo: `gate.py approve-spec` lo registra al sellar el spec por primera vez y `/harness-flow:implementar <id>` lo sigue.
+- **Modo Pair automático (por defecto, en toda feature):** la IA escribe los tests y el código en el worktree y **avanza sola, ciclo tras ciclo**. El humano decide solo lo que es suyo: las paradas que preguntan y lo que él sella. No hay que activarlo: `gate.py approve-spec` lo registra al sellar el spec por primera vez y `/harness-flow:implementar <id>` lo sigue.
 - **Modo delegado (solo si el usuario lo pide o la sesión no tiene usuario):** subagente autónomo (`harness-flow:implementer` o equivalente del host) que ejecuta los ciclos TDD verticalmente en el worktree y entrega `docs/impl-<id>.md`. Se registra con `worktree.py start --feature <id> --delegado` o `worktree.py modo --feature <id> --delegado`.
 
 **El protocolo viaja en el brief.** `contexto.py brief --feature <id>` imprime, en cualquier modo, el resumen del protocolo de esta sección (un test a la vez y las 5 paradas) y el comando que imprime este archivo entero (`normas.py --ref vertical-slice`). Trae además las reglas de cada stack, el índice de sus skills con el comando que imprime cada una (`stack.py skill`) y las normas de ingeniería. Un agente al que se le delega con el brief pegado tiene el paquete completo: no hay que anexarle nada.
@@ -96,33 +96,36 @@ El Rol 2 soporta dos modos:
 - Contrasta el `## Plan vertical` del spec contra el código actual del worktree. Si algo ya no encaja, díselo al usuario antes de empezar. Si el spec no tiene plan vertical, propón uno de máximo 5 bullets y espera su aprobación.
 
 #### Paso 2. Lista de tests (`2. Test list`)
-- En modo `--pair`, a partir de los AC del spec, **propón primero la lista de tests: solo los nombres, sin escribir el código de los tests todavía**.
-- Indica **dónde** se prueba cada uno (`endpoint`, `servicio`, `componente/ui`, `integracion` — prefiriendo el nivel práctico más alto) y marca los que no se puedan automatizar bien (por ejemplo, visuales) como **verificación manual**.
-- **Espera la aprobación del usuario** antes de iniciar el primer ciclo. (En modo subagente delegado, el implementer arma esta misma lista internamente desde los AC antes de escribir el primer test).
+- A partir de los AC del spec, **escribe primero la lista de tests: solo los nombres, sin escribir el código de los tests todavía**, en `docs/tests-<id>.md`.
+- Indica **dónde** se prueba cada uno (`endpoint`, `servicio`, `componente/ui`, `integracion` — prefiriendo el nivel práctico más alto). Un AC va como **verificación manual** solo si el spec lo declara `[costura: manual]`.
+- **Séllala tú** con `gate.py sellar-tests --feature <id>`, muéstrala en el chat y empieza el primer ciclo. **No esperes aprobación.** Si el usuario objeta un test, corrige y vuelve a sellar. (En modo subagente delegado, el implementer arma esta misma lista internamente desde los AC antes de escribir el primer test).
+- La lista puede crecer mientras implementas: se vuelve a sellar sin preguntar. **Quitar un test sellado, o dejar un AC solo con verificación manual que el spec no declara, lo decide el usuario**: el gate se niega sin `--yes`.
 
 #### Paso 3. Ciclo (`3. Cycle`: 1 paso = 1 test de la lista)
 1. Escribe **el test** (uno solo).
-2. Córrelo y **muestra que falla** (**Red**).
+2. Córrelo y **comprueba que falla** (**Red**).
 3. Escribe el **código mínimo** que lo hace pasar. Nada que el test no exija.
-4. Corre los tests y **muestra que pasan** (**Green**).
+4. Corre los tests y **comprueba que pasan** (**Green**).
+5. Refactor en verde, dentro de los archivos de la feature.
 
-En modo `--pair`, por defecto haces **1 paso y te detienes**, enviando este micro-mensaje:
+Reporta el ciclo en una línea y **sigue con el siguiente sin preguntar**:
 
 ```text
-✅ Pasa "<nombre del test>". <qué hice en una línea> (<archivo:línea>)
-Decisión tomada: <criterio o decisión menor tomada, si hubo alguna>
-¿Cambiamos algo o seguimos con "<siguiente test>"?
+✅ "<nombre del test>" — <qué hice o qué decisión menor tomé> (<archivo:línea>)
 ```
 
-Si el usuario dice **"haz N"** / **"avanza N"**, ejecutas `N` ciclos completos (`test → código → green`, uno tras otro), **nunca "N tests y luego el código"**. En un lote de `N`, **muestra primero los tests y después el código** (los tests son lo que el Navigator más necesita revisar).
+**Nunca "N tests y luego el código"**: un ciclo completo por test.
 
-#### Las 5 paradas inmediatas (incluso a mitad de un lote de `N`)
-Detente de inmediato y consulta al usuario (o al coordinador si eres subagente) si:
-1. **Decisión de diseño no prevista:** necesitas tomar una decisión de diseño que no está en el plan ni en el spec.
-2. **Alcance no pedido (YAGNI):** se te ocurre agregar algo que no pidieron, aunque parezca razonable.
-3. **Integridad de tests:** hacer pasar un test requeriría cambiar, saltar (`skip`) o borrar un test existente.
-4. **Dos intentos sin verde:** llevas **dos intentos** en el mismo paso sin llegar a verde (revierte al último estado verde antes de replantear).
-5. **Tamaño del paso excesivo:** el paso supera **~50 líneas o toca más de 3 archivos** — propón partirlo en pasos más pequeños.
+**Paso a paso, solo si el usuario lo pide.** Si dice "paso a paso", pausa tras cada ciclo con `¿Cambiamos algo o seguimos con "<siguiente test>"?`. Con **"haz N"** / **"avanza N"** ejecutas `N` ciclos completos y vuelves a pausar, mostrando primero los tests y después el código.
+
+#### Las 5 paradas
+| # | Qué pasa | Qué haces |
+| --- | --- | --- |
+| 1 | **Decisión de diseño no prevista:** necesitas una decisión que no está en el plan ni en el spec | **Pregunta** al usuario (o a quien te delegó) |
+| 2 | **Alcance no pedido (YAGNI):** se te ocurre agregar algo que ningún AC pide | **No lo agregues.** Anótalo como hallazgo (`hallazgo.py anotar`) y sigue |
+| 3 | **Integridad de tests:** hacer pasar un test requeriría cambiar, saltar (`skip`) o borrar un test existente | **Pregunta** |
+| 4 | **Dos intentos sin verde** en el mismo paso | Vuelve al último verde y **pregunta** |
+| 5 | **Paso excesivo:** supera ~50 líneas o toca más de 3 archivos | **Pártelo tú** en pasos más chicos y sigue |
 
 #### Reglas de los tests (`Test rules`)
 - **Independencia del valor esperado:** el valor esperado del test sale del criterio de aceptación, **nunca calculado con la misma lógica o fórmula que el código de producción**.
@@ -130,15 +133,15 @@ Detente de inmediato y consulta al usuario (o al coordinador si eres subagente) 
 
 #### Paso 4. Chequeo final (`4. Check`)
 Cuando toda la lista de tests está en verde:
-- En `--pair`, verifica junto con el usuario los criterios marcados como **verificación manual** (`[costura: manual]`).
-- Si algo se repite o quedó desprolijo, **sugiere** el refactor; el usuario decide. **Refactoriza solo con los tests en verde y nunca mezclado con funcionalidad nueva.**
+- Pide al usuario, en un solo formulario, los criterios de **verificación manual** (`[costura: manual]`).
+- Si algo se repite o quedó desprolijo dentro de los archivos de la feature, **refactoriza con los tests en verde, en su propio commit**. Un refactor que cambia una interfaz pública o sale de esos archivos es una decisión de diseño: parada 1.
 - Si se tomó una decisión que aplica a todo el proyecto, propón registrarla en una lección (`leccion.py`) o en la guía del proyecto.
 - Escribe `docs/impl-<id>.md` en la raíz con una sección `## AC-n` por cada criterio citando `archivo:linea` y el comando ejecutado.
-- Sugiere correr el **Rol 3 (`/harness-flow:review <id>` / `revision.py --feature <id> --briefing`)** en un subagente aislado con contexto limpio (nunca revises tu propio código).
+- Sigue con el **Rol 3 (`/harness-flow:review <id>` / `revision.py --feature <id> --briefing`)** en un subagente aislado con contexto limpio (nunca revises tu propio código).
 
 #### Paso 5. Commits (`5. Commit`)
 - **Separa siempre funcionalidad y refactor en commits distintos** (`feat:`/`fix:` vs `refactor:`).
-- **En modo `--pair`:** no hagas commits silenciosos en mitad del ciclo; cuando haya un buen punto (tests en verde, unidad lógica completa), avisa al usuario y **sugiere el mensaje de commit**. Con su confirmación, commitea en la rama del worktree de la feature (requerido antes de lanzar el Rol 3 y `gate.py close`, que exigen el árbol limpio y diffean `merge-base(base, HEAD)..HEAD`).
+- Commitea en la rama del worktree de la feature cada unidad lógica en verde, **sin pedir permiso**, con la convención de commits del proyecto. La rama de la feature es tuya; lo que sale de ella (merge, push, deploy) sigue las reglas del proyecto. El Rol 3 y `gate.py close` exigen el árbol limpio y diffean `merge-base(base, HEAD)..HEAD`.
 
 ---
 
@@ -147,35 +150,55 @@ Cuando toda la lista de tests está en verde:
 | Host / Proveedor | Rol 0 (`/backlog` → PRD/SDD) y Rol 1 (`/story` → Spec) | Rol 2 en Modo Pair (por defecto) | Rol 2 Delegado (`--delegado`) | Rol 3 (Revisor aislado) |
 | --- | --- | --- | --- | --- |
 | **Claude Code** | `/harness-flow:producto`, `/harness-flow:spec` (`claude-opus-5-5`, `xhigh`) | `/harness-flow:implementar <id>` en la sesión principal (pair por defecto) | `Agent(harness-flow:implementer)` (`claude-sonnet-5-5`, `high`/`xhigh`) | `/harness-flow:review <id>` → `Agent(harness-flow:revisor)` (`claude-opus-5-5`, `xhigh`/`high`) |
-| **Hermes** | Sesión en `gpt-6-astra` (`medium`/`high`), `claude-opus-5-5` (`xhigh`) o `gemini-4-argon` (`high`) | Sesión interactiva de Hermes ejecutando 1 ciclo por turno | `claude -p --agent harness-flow:implementer` o perfil del rol | `claude -p --agent harness-flow:revisor` o `delegate_task` con briefing |
+| **Hermes** | Sesión en `gpt-6-astra` (`medium`/`high`), `claude-opus-5-5` (`xhigh`) o `gemini-4-argon` (`high`) | Sesión interactiva de Hermes, ciclo tras ciclo sin pausar | `claude -p --agent harness-flow:implementer` o perfil del rol | `claude -p --agent harness-flow:revisor` o `delegate_task` con briefing |
 | **GPT / Codex** | `gpt-6-astra` (`medium`/`high`) | Sesión interactiva de Codex en el worktree | Sesión o `codex exec` (`gpt-6.1-sol`, `xhigh`) | `codex exec` / subagente aislado con briefing |
-| **AGY / Gemini** | Sesión en Gemini 4 (`Hydrogen (High)` / `Argon (High)`) | Sesión principal de AGY pausando tras cada micro-mensaje (`ask_question` en paradas) | `invoke_subagent` (`TypeName: "self"`, `Model: "inherit"`, `Workspace: "inherit"`) | `invoke_subagent` (`TypeName: "self"`, `Model: "inherit"`, `Workspace: "inherit"`) |
+| **AGY / Gemini** | Sesión en Gemini 4 (`Hydrogen (High)` / `Argon (High)`) | Sesión principal de AGY, ciclo tras ciclo sin pausar (`ask_question` solo en las paradas que preguntan) | `invoke_subagent` (`TypeName: "self"`, `Model: "inherit"`, `Workspace: "inherit"`) | `invoke_subagent` (`TypeName: "self"`, `Model: "inherit"`, `Workspace: "inherit"`) |
 | **Grok** | Sesión principal de Grok | Sesión principal de Grok en el worktree | Sesión principal en el worktree | `spawn_subagent` y espera el id ([grok.md](grok.md)) |
 | **Kimi Code** | `/harness-flow:producto`, `/harness-flow:spec` | `/harness-flow:implementar <id>` en la sesión (pair por defecto) | `Agent(implementer)` | `/harness-flow:review <id>` → `Agent(revisor)` o `kimi -p` |
 
 ---
 
-## 6. Activación Automática de Modo Pair en Stacks CALPIL y Protocolo de Preguntas de Formulario
+## 6. Modo Pair Automático y Protocolo de Preguntas de Formulario
 
-### Activación Automática
-- **El Modo Pair es el modo por defecto en cualquier repo**, tenga o no un stack detectado. Antes dependía de que el brief detectara un stack y de que el agente lo siguiera; ahora lo registra `gate.py approve-spec` en el backlog (`modo: pair`) al sellar el spec por primera vez, `worktree.py start` lo confirma y el brief lo repite. Así queda fijado también en una raíz multi-repo, donde el árbol se declara con `worktree.py register` y `start` no corre.
+### Activación automática
+- **El Modo Pair es el modo por defecto en cualquier repo**, tenga o no un stack detectado. Lo registra `gate.py approve-spec` en el backlog (`modo: pair`) al sellar el spec por primera vez, `worktree.py start` lo confirma y el brief lo repite. Así queda fijado también en una raíz multi-repo, donde el árbol se declara con `worktree.py register` y `start` no corre.
 - **Se delega solo por decisión del usuario** (`worktree.py start --delegado`, o `worktree.py modo --feature <id> --delegado`) o cuando la sesión no tiene usuario (`claude -p`).
-- **El rastro del modo pair es la lista de tests aprobada.** Se escribe en `docs/tests-<id>.md` (plantilla `templates/tests.md`), con al menos una línea `- AC-n: <test> [costura: ...]` por AC, y el usuario la sella con `gate.py aprobar-tests --feature <id> --yes`. `gate.py close` se niega sin ese sello, si la lista cambió después de aprobarla, o si el spec ganó un AC que la lista no cubre.
+- **El rastro del modo pair es la lista de tests sellada.** Se escribe en `docs/tests-<id>.md` (plantilla `templates/tests.md`), con al menos una línea `- AC-n: <test> [costura: ...]` por AC, y la sella quien implementa con `gate.py sellar-tests --feature <id>`. `gate.py close` se niega sin ese sello, si la lista cambió después de sellarla, o si el spec ganó un AC que la lista no cubre.
 - Una feature cuyo spec se selló antes de este registro no tiene `modo` y no queda sujeta al gate: puede tener el trabajo hecho. `worktree.py register` lo avisa; si aún no hay código, se fija con `worktree.py modo --feature <id> --pair`.
-- **Lo que el gate comprueba y lo que no.** Comprueba que el usuario aprobó la lista de tests y que cubre cada AC. No puede comprobar que el agente se detuvo después de cada paso: eso lo ve el usuario en la sesión.
+- **Lo que el gate comprueba y lo que no.** Comprueba que la lista cubre cada AC, que el sello está fresco y que ningún test sellado se quitó sin el SÍ del usuario. No comprueba el ritmo: eso lo ve el usuario en la sesión.
 
-### Protocolo de Intervención Humana con Preguntas de Formulario
-Para no degradar la velocidad del desarrollo ni saturar al usuario con micro-preguntas irrelevantes, el agente avanza de forma autónoma en el ciclo TDD (`1 test -> Red -> código mínimo -> Green -> Refactor en verde`), emitiendo su micro-reporte en el chat.
+### "Pair automático": qué significa
+El agente avanza solo. No pausa tras cada ciclo ni pregunta si sigue. Un formulario le cuesta al usuario una interrupción: se usa cuando la respuesta cambia lo que se construye, no para confirmar lo que el spec ya decidió.
 
-**El agente DEBE formular preguntas interactivas estructuradas de formulario ÚNICAMENTE en las siguientes situaciones:**
+### Cuándo un formulario hace falta
 
-1. **Uso de Herramientas según el Host:**
-   - **En AGY / Gemini:** Invoca la herramienta `ask_question` con opciones claras y recomendación explícita `(Recommended)`.
-   - **En Claude Code, GPT/Codex, Grok, Kimi, Hermes:** Presenta un formulario estructurado en Markdown con opciones unívocas `[A]`, `[B]`, `[C]`, destacando `(Recomendada)`.
+| Caso | Por qué pregunta |
+| --- | --- |
+| Parada 1: decisión de diseño que el plan o el spec no trae | La decisión es del usuario |
+| Parada 3: pasar exige cambiar, saltar o borrar un test | Debilitar un test no lo decide quien implementa |
+| Parada 4: dos intentos sin verde | Seguir a ciegas gasta más que preguntar |
+| La lista quita un test sellado, o deja un AC solo manual que el spec no declara | El gate lo exige (`sellar-tests --yes`) |
+| Lo que sella el usuario: enmienda, ficha nueva, y el cierre o la publicación que el proyecto reserve | Son sus rituales |
+| Verificación manual, al final | Solo el usuario puede mirarlo |
 
-2. **Condiciones Estrictas de Intervención Humana:**
-   - **Decisión de Diseño o Arquitectura no prevista:** el plan o spec omite un detalle crítico (ej. seleccionar entre persistencia PostgreSQL vs memoria, nombres de endpoints públicos, estrategias de particionado).
-   - **Normalización o Refactorización:** cuando `stack.py verificar` detecta infracciones de arquitectura y se requiere elegir entre scaffolding automatizado o refactor progresivo mediante *Expand-Contract*.
-   - **Alarma de Dos Intentos sin Verde (Parada 4):** tras dos intentos fallidos en el mismo test, detenerse inmediatamente y preguntar al usuario con opciones: `[A] Revertir al último verde`, `[B] Ajustar aserción según spec`, `[C] Explorar enfoque alternativo`.
-   - **Aprobación de Lista de Tests y Costuras:** presentación previa de los tests a implementar antes de escribir código.
-   - **Aprobación de Gates y Commits:** confirmación explícita para sellar spec (`approve-spec --yes`), enmienda (`enmienda --yes`) o cierre (`close`).
+### Cuándo NO hace falta
+
+| No preguntes | Qué haces |
+| --- | --- |
+| Si sigues con el test siguiente | Sigues |
+| Si apruebas la lista de tests | La sellas, la muestras y empiezas |
+| El orden o el nombre de los tests | Los decides |
+| El mensaje de un commit en la rama de la feature | Commiteas |
+| Un refactor en verde dentro de los archivos de la feature | Lo aplicas en su commit |
+| Cómo partir un paso grande | Lo partes |
+| Algo que ningún AC pide | No lo agregas; lo anotas como hallazgo |
+| Algo que el spec ya decide | Lees el spec |
+
+### Cómo preguntar
+- **Un formulario, no varios.** Junta las preguntas pendientes, también las de otras features en curso. La opción recomendada va primera.
+- **No te quedes esperando.** Mientras llega la respuesta, sigue con lo que no depende de ella.
+- **Una enmienda es un solo formulario.** Lleva la propuesta ya escrita (`templates/enmienda.md`). No preguntes primero "dónde lo arreglo" y después "apruebas".
+- **Herramienta según el host.** En AGY / Gemini, `ask_question` con opciones y recomendación `(Recommended)`. En Claude Code, `AskUserQuestion`. En GPT/Codex, Grok, Kimi y Hermes, un formulario Markdown con opciones `[A]`, `[B]`, `[C]` y la `(Recomendada)` marcada.
+
+### Varias features en paralelo
+Si el usuario pide avanzar varias features a la vez y el host tiene subagentes, va un implementer por feature, cada uno en su worktree y con su brief entero. El modo sigue siendo `pair`: cada subagente escribe su lista de tests y la sesión principal la sella. Un subagente no puede preguntar al usuario: devuelve la parada. La sesión principal la responde desde el spec si el spec ya la decide; si no, la lleva al usuario en un solo formulario con las de las otras features.

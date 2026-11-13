@@ -100,14 +100,14 @@ flowchart TD
 ### Rol 2: Implementer (`implementer.md`, `worktree.py`)
 - Crea un `git worktree` dedicado para no ensuciar la rama base (`develop` o `main`).
 - Ejecuta TDD vertical estricto (`1 test en costura pública -> Red -> código mínimo -> Green -> Refactor`).
-- **Modo Pair interactivo (por defecto en toda feature)**: la IA actúa como Driver y el humano como Navigator, pausando en cada micro-ciclo. `gate.py approve-spec` lo registra al sellar el spec por primera vez y `gate.py close` exige la lista de tests aprobada. Se delega solo con `--delegado`.
+- **Modo Pair automático (por defecto en toda feature)**: la IA implementa y avanza ciclo tras ciclo sin pausar; pregunta por formulario solo cuando hace falta. `gate.py approve-spec` lo registra al sellar el spec por primera vez y `gate.py close` exige la lista de tests sellada (`gate.py sellar-tests`). Se delega solo con `--delegado`.
 - **El brief es el paquete completo** de quien implementa: protocolo, reglas de cada stack, índice de skills y normas de ingeniería, con los comandos que imprimen cada skill (`stack.py skill`) y cada referencia (`normas.py --ref`).
-- **5 paradas inmediatas de Extreme Programming**:
-  1. Decisión de diseño imprevista.
-  2. Alcance no pedido (YAGNI).
-  3. Integridad de tests comprometida (prohibido modificar o borrar tests viejos para forzar el verde).
-  4. Dos intentos sin verde (revertir al último verde).
-  5. Incremento excesivo (> 50 líneas o > 3 archivos).
+- **5 paradas de Extreme Programming**. Tres preguntan y dos se resuelven sin preguntar:
+  1. Decisión de diseño imprevista: pregunta.
+  2. Alcance no pedido (YAGNI): no se agrega; se anota como hallazgo.
+  3. Integridad de tests comprometida (prohibido modificar o borrar tests viejos para forzar el verde): pregunta.
+  4. Dos intentos sin verde: vuelve al último verde y pregunta.
+  5. Incremento excesivo (> 50 líneas o > 3 archivos): lo parte quien implementa.
 - Produce `docs/impl-<id>.md` con citas `archivo:linea` para cada AC.
 
 ### Rol 3: Reviewer Aislado (`revisor.md`, `revision.py`)
@@ -205,6 +205,12 @@ Tras una auditoría exhaustiva de los scripts, manifiestos de plugins y configur
 * **Estado:** **Corregido (Hito 35).** En un proyecto real el agente dio de alta 16 fichas en cuatro horas y media, desde hallazgos de specs y reviews. Preguntó por formulario, pero solo ofrecía "ficha aparte". El usuario retiró siete: eran enmiendas de features abiertas. El arnés no decía qué hacer con un hallazgo, no tenía dónde dejarlo y `add.py` no pedía aprobación.
 * **Corrección:** un hallazgo se resuelve en una feature abierta (rama, AC o enmienda) o se anota con `hallazgo.py`. `add.py` se niega sin `--yes --peso` y lista las features abiertas donde cabe. `close` se niega mientras la feature tenga hallazgos abiertos.
 
+### ✅ Hallazgo 10 (Corregido): El modo pair preguntaba sin necesidad y no avanzaba
+
+* **Ubicación:** [`scripts/gate.py`](../scripts/gate.py) (`sellar-tests`), [`scripts/contexto.py`](../scripts/contexto.py) (`lineas_modo`), [`commands/implementar.md`](../commands/implementar.md), [`references/vertical-slice.md`](../references/vertical-slice.md) y [`tests/test_pair_automatico.py`](../tests/test_pair_automatico.py).
+* **Estado:** **Corregido (Hito 36).** En una sesión real hubo 166 preguntas de formulario y en 150 el usuario eligió la primera opción. Los textos decían a la vez "avanza de forma autónoma" y "haz 1 paso y detente", y `close` exigía el SÍ del usuario para cada versión de la lista de tests.
+* **Corrección:** el agente avanza ciclo tras ciclo y sella él mismo la lista de tests. Pregunta por formulario en una decisión de diseño fuera del spec, al cambiar o borrar un test, tras dos intentos sin verde, al quitar un test sellado y en lo que sella el usuario. Todos los textos de rol dicen lo mismo, y un test lo vigila.
+
 ---
 
 ## 5. Resumen de Salud del Sistema
@@ -214,12 +220,13 @@ Tras una auditoría exhaustiva de los scripts, manifiestos de plugins y configur
 | **Gates Python (`gate.py`, `comun.py`)** | ✅ Óptimo | Tests unitarios en verde. Firmas, sellos, hashes y validación de AC funcionan de manera determinística. |
 | **Detección de Entorno (`entorno.py`)** | ✅ Óptimo | Soporta los 6 hosts (`hermes`, `claude`, `gemini`, `gpt`, `grok`, `kimi`) con aislamiento de venv en `~/.harness-flow/venv`. |
 | **Rol Producto y SDD (`producto.py`)** | ✅ Óptimo | Control de candidatos verticales, prohibición de código final en PRD y bloqueo de dependencias circulares. |
-| **Subagente Implementer (`implementer.md`)**| ✅ Óptimo | Hereda herramientas completas (incluido MCP) y dispone del modo interactivo `--pair`. |
+| **Subagente Implementer (`implementer.md`)**| ✅ Óptimo | Hereda herramientas completas (incluido MCP) y dispone del modo pair automático (`--pair`). |
 | **Subagente Revisor (`revisor.md`)** | ✅ Óptimo | Habilitado `mcp__codebase-memory-mcp__*` en su allowlist de `tools:`, sin permitir `Edit` sobre el código. |
 | **Permisos de Plugin (`.claude/settings.json`)** | ✅ Óptimo | Incluye permisos para `~/.harness-flow/venv/bin/python` y `eval "$(python3 ...)"`. |
 | **Neutralización de `postmerge.py`** | ✅ Óptimo | Código muerto eliminado; falla rápido con `exit 2` tanto en CLI como por importación, redirigiendo a `postmerge_medido.py`. |
 | **Gestión de CBM (`cbm_procesos.py`)** | ✅ Óptimo | Telemetría y saneamiento automático en macOS/Linux (aviso controlado en Windows). |
 | **Normalización de stacks (`stack.py`, `copias.py`)** | ✅ Óptimo | El alcance de las reglas sale del código del repo, las copias viejas se actualizan o se avisan, y `verificar` no da un OK sobre código sin medir. Quedan pendientes en los proyectos las copias que cada repo versiona. |
+| **Modo pair automático (`gate.py sellar-tests`, brief)** | ✅ Óptimo | El agente avanza solo y sella la lista de tests; el formulario queda para las paradas que preguntan y para lo que sella el usuario. |
 | **Alta de fichas y hallazgos (`add.py`, `hallazgo.py`)** | ✅ Óptimo | Una ficha nueva exige el SÍ del usuario y su peso; un hallazgo va a una feature abierta o al proyecto, y `close` no lo pierde. |
 | **Matriz de Modelos y Reasoning Effort** | ✅ Óptimo | Calibrada por coste/latencia: roles pesados en máxima capacidad, implementer en alta velocidad y tareas de lectura/rutina en esfuerzo medio/bajo sin extended thinking innecesario. |
 

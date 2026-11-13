@@ -98,8 +98,10 @@ NORMAS: list[dict] = [
         "construye": [
             "Sombrero 1 (Red -> Green): un test en la costura publica y el codigo mas simple que lo pasa. "
             "Sin jerarquias ni patrones en este paso.",
-            "Sombrero 2 (refactor en verde): con el test verde, sanea los smells de abajo. En modo pair "
-            "PROPON el refactor y aplicalo con el OK del usuario; en modo delegado aplicalo tu.",
+            "Sombrero 2 (refactor en verde): con el test verde, sanea los smells de abajo. Aplicalo tu, en "
+            "pair y en delegado, dentro de los archivos que la feature ya toca y en su propio commit. Un "
+            "refactor que cambia una interfaz publica o sale de esos archivos es una decision de diseno: "
+            "parada (1).",
             "Un concepto del dominio (identificador, importe, estado) es un Value Object con validacion, "
             "no un `string` o `int` crudo.",
             "Un cambio conceptual toca un lugar: si te obliga a editar muchos archivos, mueve el "

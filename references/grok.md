@@ -54,7 +54,7 @@ GPT. `psycopg` solo hace falta para el Memory Hub.
 
 **Pair es el modo por defecto de toda feature**, con stack detectado o sin él: lo deja en el
 backlog `gate.py approve-spec` al sellar el spec por primera vez y `gate.py close` exige su rastro,
-la lista de tests aprobada (`gate.py aprobar-tests`). `--pair` ya no hace falta para activarlo. El
+la lista de tests sellada (`gate.py sellar-tests`, que corre quien implementa). `--pair` ya no hace falta para activarlo. El
 modo delegado es decisión del usuario (`worktree.py modo --feature <id> --delegado`) o de una sesión
 sin usuario. En los dos modos el brief (`contexto.py brief`) trae el texto de las reglas de cada
 stack, el índice de sus skills y el bloque `NORMAS DE INGENIERIA`, que es la misma lista que audita
@@ -64,14 +64,15 @@ subagente, pégale el brief entero y nada más: trae el comando que imprime cada
 
 En Grok el Rol 2 se divide según la modalidad:
 
-1. **Modo Pair interactivo (por defecto)**: corre en la **sesión principal de Grok**
-   (Driver = Grok, Navigator = humano). **NUNCA uses `spawn_subagent` aquí**:
-   el subagente rompería la interactividad del Navigator. Grok utiliza
-   `run_terminal_command`, `write` y `search_replace` directamente en el worktree
-   de la feature (`worktree.py start --feature <id>`), acuerda la lista de tests
-   antes de empezar, ejecuta `1 test -> Red -> código mínimo -> Green`, y pausa
-   con el micro-mensaje del Navigator (`✅ Pasa "<test>"... ¿Seguimos?`). Respeta
-   las 5 paradas XP de `references/vertical-slice.md`.
+1. **Modo Pair automático (por defecto)**: corre en la **sesión principal de Grok**.
+   Grok utiliza `run_terminal_command`, `write` y `search_replace` directamente
+   en el worktree de la feature (`worktree.py start --feature <id>`), escribe la
+   lista de tests, la sella (`gate.py sellar-tests`), la muestra y ejecuta
+   `1 test -> Red -> código mínimo -> Green` ciclo tras ciclo, sin pausar ni
+   preguntar si sigue. Pregunta con un formulario Markdown solo en las paradas
+   que lo piden (`references/vertical-slice.md`, sección 6). Pausa tras cada
+   ciclo solo si el usuario pide "paso a paso". Usa `spawn_subagent` para
+   implementar solo si el usuario pide varias features en paralelo.
 2. **Modo Delegado (autónomo)**: solo si el usuario lo pidió o la sesión no tiene
    usuario. Regístralo (`worktree.py start --feature <id> --delegado`); Grok ejecuta
    la implementación en el worktree hasta dejar la unidad en verde y el acta

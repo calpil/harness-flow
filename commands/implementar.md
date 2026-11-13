@@ -1,5 +1,5 @@
 ---
-description: Rol implementer de harness-flow — verifica el gate del spec e implementa en modo Pair (por defecto, con la lista de tests aprobada por el usuario) o delega al subagente implementer con --delegado, en el worktree de la feature y contrasta su evidencia antes del review.
+description: Rol implementer de harness-flow — verifica el gate del spec e implementa en modo Pair automatico (por defecto: avanza solo y pregunta por formulario solo cuando hace falta) o delega al subagente implementer con --delegado, en el worktree de la feature y contrasta su evidencia antes del review.
 argument-hint: <id-feature> [--delegado]
 model: claude-opus-5-5
 effort: xhigh
@@ -14,20 +14,34 @@ que el repo tenga un stack detectado. Solo se delega al subagente si los
 argumentos traen `--delegado`, si el usuario lo pide, o si la sesion no tiene
 usuario (`claude -p`). El modo queda en el backlog desde que el usuario aprueba
 el spec (`gate.py approve-spec`), `worktree.py start` lo confirma y el brief lo
-repite; en modo pair, `close` exige la lista de tests aprobada.
+repite; en modo pair, `close` exige la lista de tests sellada.
 
-**Protocolo de Intervención con Preguntas de Formulario:**
-El agente ejecuta los ciclos TDD verticalmente (`1 test -> Red -> código mínimo -> Green -> Refactor en verde`) emitiendo su micro-reporte continuo. **Solo interviene consultando al usuario con preguntas interactivas de formulario (`ask_question` en Gemini/AGY, o formulario estructurado de opciones en otros LLMs) cuando sea REALMENTE NECESARIO:**
-1. **Decisión de arquitectura o diseño no prevista:** cuando el spec o SDD no especifica detalles críticos (ej. elección de adaptador, contrato de endpoints, nombres de eventos de dominio).
-2. **Refactorización o normalización de stack:** ante decisiones de reestructuración o cambios en interfaces públicas.
-3. **Las 5 paradas de `/pair`:**
-   - (a) Decisión fuera del plan/spec.
-   - (b) Detección de alcance no solicitado (YAGNI).
-   - (c) Conflicto con tests existentes (prohibido debilitarlos).
-   - (d) **Dos intentos sin llegar a verde** (detenerse y pedir guía o revertir al último verde).
-   - (e) Paso que supera ~50 líneas o 3 archivos.
-4. **Aprobación de la Lista de Tests y Costuras:** antes de empezar el primer ciclo.
-5. **Aprobación de commits y cierre:** confirmando mensaje de commit o gates.
+**Pair automatico: avanzas solo y preguntas solo cuando hace falta.** Ejecutas
+los ciclos TDD uno tras otro (`1 test -> Red -> codigo minimo -> Green -> Refactor
+en verde`) y reportas cada ciclo en una linea. No preguntas si sigues.
+
+**Un formulario (`AskUserQuestion`, `ask_question` en AGY/Gemini, o un formulario
+de opciones en otros hosts) hace falta SOLO en estos casos:**
+
+1. **Parada (1):** una decision de diseno que el plan o el spec no trae (contrato
+   de un endpoint, modelo de datos, nombre de un evento, un refactor que cambia
+   una interfaz publica).
+2. **Parada (3):** hacer pasar un test exige cambiar, saltar o borrar un test.
+3. **Parada (4):** dos intentos sin llegar a verde. Vuelve al ultimo verde y pregunta.
+4. **La lista de tests pierde algo:** quitas un test ya sellado, o un AC queda
+   solo con verificacion manual sin que el spec lo declare `[costura: manual]`.
+5. **Lo que sella el usuario:** una enmienda, una ficha nueva, y el cierre o la
+   publicacion que el proyecto reserve.
+6. **Verificacion manual:** al final, los AC que solo el usuario puede mirar.
+
+**No preguntes** si sigues con el test siguiente, el orden o el nombre de los
+tests, el mensaje de un commit, un refactor en verde dentro de los archivos de
+la feature, ni como partir un paso grande. Decidelo, hazlo y reportalo.
+
+**Como preguntar:** junta las preguntas pendientes en UN formulario, con la opcion
+recomendada primero. Mientras esperas la respuesta de una feature, sigue con lo
+que no depende de ella. Una enmienda es un solo formulario: lleva la propuesta
+ya escrita, no preguntes antes "donde lo arreglo" y despues "apruebas".
 
 Con `--delegado` implementa el subagente `harness-flow:implementer` (sección 5a).
 
@@ -130,56 +144,70 @@ worktree y la salida ENTERA del paso 3:
   enmienda (`/harness-flow:spec $ARGUMENTS[0]`, seccion 4), no una instruccion nueva al
   implementer.
 
-### 5b. Modo Pair interactivo (por defecto: Driver = IA, Navigator = humano)
+### 5b. Modo Pair automatico (por defecto: la sesion implementa y avanza sola)
 
-Es el modo de toda feature cuyo modo registrado es `pair` (estilo `/pair` de `hola-ai`):
+Es el modo de toda feature cuyo modo registrado es `pair`:
 
-0. **Lee el brief del paso 3 antes de proponer nada:** las reglas del stack y el
+0. **Lee el brief del paso 3 antes de escribir:** las reglas del stack y el
    bloque `NORMAS DE INGENIERIA` mandan sobre tu costumbre. Por cada AC marcado
    `[negativo]`, el test de rechazo va en la lista antes que el camino feliz.
-1. **Revisa el plan y propone la Lista de Tests (sin escribirlos aun):**
-   - No lances el subagente `implementer`: tu eres el **Driver** en el worktree y
-     el usuario es el **Navigator**.
-   - Contrasta el `## Plan vertical` contra el codigo del worktree (si algo ya no
-     encaja, avisalo; si no hay plan, propon uno de ≤5 bullets).
-   - A partir de los AC, escribe **la lista de tests (solo nombres)** en
-     `docs/tests-$ARGUMENTS[0].md` desde `${CLAUDE_PLUGIN_ROOT}/templates/tests.md`: una linea
+1. **Revisa el plan y escribe la lista de tests (solo nombres):**
+   - Contrasta el `## Plan vertical` contra el codigo del worktree. Si algo ya no
+     encaja y cambia un AC, es la parada (1). Si no hay plan, escribe uno de ≤5
+     bullets y sigue.
+   - A partir de los AC, escribe la lista en `docs/tests-$ARGUMENTS[0].md` desde
+     `${CLAUDE_PLUGIN_ROOT}/templates/tests.md`: una linea
      `- AC-n: <nombre> [costura: ...]` por test (o `- AC-n: verificacion manual: ...`
-     si es visual). MUESTRALA, PREGUNTA, y solo con el SI del usuario:
+     si el spec declara ese AC `[costura: manual]`). Sellala tu:
 
      ```bash
-     eval "$(python3 "${CLAUDE_PLUGIN_ROOT}/scripts/entorno.py" --shell)" && "$PY" "$H/gate.py" aprobar-tests --feature $ARGUMENTS[0] --yes
+     eval "$(python3 "${CLAUDE_PLUGIN_ROOT}/scripts/entorno.py" --shell)" && "$PY" "$H/gate.py" sellar-tests --feature $ARGUMENTS[0]
      ```
 
-     Sin ese sello `close` se niega. Si la lista cambia mientras implementas
-     (un test nuevo, uno que sobra), vuelve a mostrarla y a sellarla.
-2. **Ciclo (`1 paso = 1 test de la lista`):**
-   - Escribe 1 test -> correlo y muestra que falla (**Red**) -> escribe el
+   - **Muestra la lista en el chat y empieza. No esperes aprobacion.** Si el
+     usuario objeta un test, corrige la lista y vuelve a sellarla.
+   - Sin el sello `close` se niega. Si la lista crece mientras implementas,
+     vuelve a sellarla sin preguntar. El gate se niega sin `--yes` solo si la
+     lista quita un test sellado o deja un AC solo con verificacion manual que el
+     spec no declara: eso se pregunta, y con el SI del usuario se repite con `--yes`.
+2. **Ciclo (`1 paso = 1 test de la lista`), uno tras otro:**
+   - Escribe 1 test -> correlo y comprueba que falla (**Red**) -> escribe el
      **codigo minimo** (con el valor esperado del AC, nunca calculado con la misma
-     logica del codigo) -> corre los tests y muestra que pasan (**Green**).
-   - Por defecto haz **1 paso y detente** con este micro-mensaje bajo norma ASD-STE100 (ver `references/comunicacion-ste100-y-prompts.md`):
-     `✅ Pasa: "<nombre del test>"`
-     `⚙️ Decisión: <decisión técnica adoptada en <= 20 palabras>`
-     `🔍 Comprobación: <comando exacto y duración/resultado en < 5 min>`
-     `❓ ¿Cambiamos algo o seguimos con "<siguiente test>"?`
-   - Si el usuario dice `"haz N"` / `"avanza N"` con verbos agrupados (ej. `"haz 3: codifica, compila y testea los siguientes 3"`), ejecuta `N` ciclos completos uno
-     tras otro (nunca `N` tests juntos y luego el codigo) mostrando **primero los
-     tests y despues el codigo**.
-3. **Detente de inmediato (incluso a mitad de un lote de `N`) ante las 5 paradas:**
-   - (1) necesitas tomar una decision de diseno que no esta en el plan/spec;
-   - (2) se te ocurre agregar algo que no pidieron (YAGNI);
-   - (3) hacer pasar un test requeriria cambiar, saltar (`skip`) o borrar un test;
-   - (4) llevas **dos intentos** sin llegar a verde;
-   - (5) el paso supera **~50 lineas o toca mas de 3 archivos** (propon partirlo).
+     logica del codigo) -> corre los tests y comprueba que pasan (**Green**) ->
+     refactor en verde dentro de los archivos de la feature.
+   - Reporta cada ciclo en una linea y **sigue con el siguiente sin preguntar**
+     (norma ASD-STE100, `references/comunicacion-ste100-y-prompts.md`):
+     `✅ "<nombre del test>" — <decision tecnica en <= 20 palabras> (<archivo:linea>)`
+   - Nunca escribas todos los tests y despues el codigo.
+   - **Solo si el usuario pide "paso a paso"**, pausa tras cada ciclo con
+     `❓ ¿Cambiamos algo o seguimos con "<siguiente test>"?`. Con `"haz N"` ejecuta
+     `N` ciclos y vuelve a pausar.
+3. **Las 5 paradas:**
+   - (1) necesitas una decision de diseno que no esta en el plan/spec: **pregunta**;
+   - (2) se te ocurre agregar algo que ningun AC pide: **no lo agregues**, anotalo
+     como hallazgo y sigue;
+   - (3) hacer pasar un test requeriria cambiar, saltar (`skip`) o borrar un test:
+     **pregunta**;
+   - (4) llevas **dos intentos** sin llegar a verde: vuelve al ultimo verde y **pregunta**;
+   - (5) el paso supera **~50 lineas o toca mas de 3 archivos**: **partelo tu** en
+     pasos mas chicos y sigue.
 
    **Un hallazgo no abre una ficha.** Lo que encuentres fuera de los AC se arregla
    en la rama si es de esta feature (enmienda si cambia un AC) o se anota con
    `hallazgo.py anotar [--feature <id>]`. Una ficha nueva la decide el usuario, y
    si le preguntas, la primera opcion es la enmienda (`references/hallazgos.md`).
-4. **Chequeo y Commits:** con toda la lista en verde, verifica con el usuario los
-   AC de verificacion manual, **sugiere** refactors sin aplicarlos solo (solo en
-   verde), y **sugiere el mensaje de commit** separando funcionalidad y refactor
-   para commitear en el worktree con su OK y escribir `docs/impl-$ARGUMENTS[0].md`.
+4. **Commits:** commitea en la rama de la feature cada unidad logica en verde,
+   sin pedir permiso, separando funcionalidad (`feat:`/`fix:`) y refactor
+   (`refactor:`). Sigue la convencion de commits del proyecto.
+5. **Cierre del rol:** con toda la lista en verde, pide al usuario en un solo
+   formulario los AC de verificacion manual, y escribe `docs/impl-$ARGUMENTS[0].md`.
+
+**Varias features en paralelo.** Si el usuario pide avanzar varias a la vez y el
+host tiene subagentes, lanza un implementer por feature, cada uno en su worktree
+y con su brief entero. El modo sigue siendo `pair`: cada uno escribe su lista de
+tests y tu la sellas. Un subagente no puede preguntar al usuario: te devuelve la
+parada. Si el spec ya la decide, respondele tu; si no, llevala al usuario, junto
+con las de las otras features, en un solo formulario.
 
 ## 6. Contrasta la evidencia
 

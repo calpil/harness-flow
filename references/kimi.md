@@ -58,7 +58,7 @@ GPT. `psycopg` solo hace falta para el Memory Hub.
 
 **Pair es el modo por defecto de toda feature**, con stack detectado o sin él: lo deja en el
 backlog `gate.py approve-spec` al sellar el spec por primera vez y `gate.py close` exige su rastro,
-la lista de tests aprobada (`gate.py aprobar-tests`). `--pair` ya no hace falta para activarlo. El
+la lista de tests sellada (`gate.py sellar-tests`, que corre quien implementa). `--pair` ya no hace falta para activarlo. El
 modo delegado es decisión del usuario (`worktree.py modo --feature <id> --delegado`) o de una sesión
 sin usuario. En los dos modos el brief (`contexto.py brief`) trae el texto de las reglas de cada
 stack, el índice de sus skills y el bloque `NORMAS DE INGENIERIA`, que es la misma lista que audita
@@ -68,12 +68,13 @@ subagente, pégale el brief entero y nada más: trae el comando que imprime cada
 
 En Kimi Code hay dos caminos para implementar:
 
-1. **Modo Pair interactivo (por defecto)**: corre en la **sesión principal de Kimi**
-   (Driver = Kimi, Navigator = humano). No uses subagentes aquí: Kimi interactúa
-   en el TUI sobre el worktree de la feature, acuerda la lista de tests antes de
-   tocar código, y avanza `1 test -> Red -> código mínimo -> Green`, pausando en
-   cada micro-ciclo con el micro-mensaje (`✅ Pasa "<test>"... ¿Seguimos?`) y
-   respetando las 5 paradas XP de `references/vertical-slice.md`.
+1. **Modo Pair automático (por defecto)**: corre en la **sesión principal de Kimi**,
+   en el TUI sobre el worktree de la feature. Kimi escribe la lista de tests, la
+   sella (`gate.py sellar-tests`), la muestra y avanza `1 test -> Red -> código
+   mínimo -> Green` ciclo tras ciclo, sin pausar ni preguntar si sigue. Pregunta
+   con un formulario Markdown solo en las paradas que lo piden
+   (`references/vertical-slice.md`, sección 6). Pausa tras cada ciclo solo si el
+   usuario pide "paso a paso".
 2. **Modo Delegado (autónomo)**: solo si el usuario lo pidió o la sesión no tiene usuario
    (`worktree.py start --feature <id> --delegado`). Con el plugin instalado, usa la tool `Agent` con
    `subagent_type: "implementer"`, pasando el prompt con el spec, el worktree y la

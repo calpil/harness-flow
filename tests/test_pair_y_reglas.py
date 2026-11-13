@@ -10,8 +10,9 @@ Dos cosas dependian de que el agente leyera bien el brief y decidiera cumplir:
    gate podia comprobar que hubo pair.
 
 Decisiones del usuario que estos tests fijan: pair por defecto en cualquier
-repo (se desactiva solo si lo pide), la lista de tests se sella como el spec, y
-el brief trae el texto completo de las reglas.
+repo (se desactiva solo si lo pide), la lista de tests se sella, y el brief trae
+el texto completo de las reglas. Quien sella la lista y cuando hace falta el SI
+del usuario esta en test_pair_automatico.py.
 """
 import json
 import os
@@ -182,19 +183,19 @@ class ModoTests(Proyecto):
 
     def test_el_brief_ordena_pair_sin_depender_de_que_haya_stack(self):
         out = self.brief("pair")
-        self.assertIn("modo pair interactivo: ACTIVADO", out)
-        self.assertIn("aprobar-tests", out)
+        self.assertIn("modo pair automatico: ACTIVADO", out)
+        self.assertIn("sellar-tests", out)
         self.assertNotIn("por normativa de stack", out)
 
     def test_el_brief_dice_delegado_cuando_el_usuario_lo_pidio(self):
         out = self.brief("delegado")
         self.assertIn("modo delegado", out)
-        self.assertNotIn("modo pair interactivo: ACTIVADO", out)
+        self.assertNotIn("modo pair automatico: ACTIVADO", out)
 
     def test_una_feature_anterior_sin_modo_no_se_inventa_uno(self):
         out = self.brief()
         self.assertIn("sin registrar", out)
-        self.assertNotIn("modo pair interactivo: ACTIVADO", out)
+        self.assertNotIn("modo pair automatico: ACTIVADO", out)
 
 
 class ListaDeTestsTests(Proyecto):
@@ -206,13 +207,14 @@ class ListaDeTestsTests(Proyecto):
         escribir(ruta, texto)
         return ruta
 
-    def test_sin_yes_no_se_sella(self):
+    def test_la_lista_completa_se_sella_sin_yes(self):
+        """Antes pedia el SI del usuario: 17 formularios de 17 aprobados sin cambios
+        (test_pair_automatico.py). Lo que si lo pide esta en ese archivo."""
         ruta = self.lista()
         r = self.aprobar()
-        self.assertNotEqual(0, r.returncode)
-        self.assertIn("--yes", r.stdout + r.stderr)
-        self.assertIn("Estado: draft", ruta.read_text(encoding="utf-8"))
-        self.assertNotIn("tests_sig", self.feature())
+        self.assertEqual(0, r.returncode, r.stdout + r.stderr)
+        self.assertIn("Estado: sellada", ruta.read_text(encoding="utf-8"))
+        self.assertIn("tests_sig", self.feature())
 
     def test_sin_archivo_se_niega(self):
         r = self.aprobar("--yes")
@@ -236,8 +238,9 @@ class ListaDeTestsTests(Proyecto):
         r = self.aprobar("--yes")
         self.assertEqual(0, r.returncode, r.stdout + r.stderr)
         texto = ruta.read_text(encoding="utf-8")
-        self.assertIn("Estado: approved", texto)
-        self.assertIn("sellado por gate.py aprobar-tests --yes", texto)
+        self.assertIn("Estado: sellada", texto)
+        self.assertIn("Sellada: T", texto)
+        self.assertIn("gate.py sellar-tests", texto)
         self.assertIn("tests_sig", self.feature())
 
     def test_la_verificacion_manual_es_una_entrada_valida(self):
@@ -284,7 +287,7 @@ class CloseTests(Proyecto):
             ruta.write_text(ruta.read_text(encoding="utf-8") + "- AC-1: otro_test_agregado\n", encoding="utf-8")
         r = self.cerrar("pair", preparar)
         self.assertEqual(1, r.returncode, r.stdout + r.stderr)
-        self.assertIn("cambio despues de aprobarla", r.stdout)
+        self.assertIn("cambio despues de sellarla", r.stdout)
 
     def test_delegado_cierra_sin_lista(self):
         """El control: el gate es del modo pair, no de toda feature."""

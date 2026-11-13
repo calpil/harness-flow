@@ -956,11 +956,64 @@ Cada ficha paga spec, aprobación, lista de tests, review aislado, verify y cier
 
 ---
 
-## 38. Estado de Verificación y Métricas de Calidad
+## 38. Hito 36: El Pair Avanza Solo
 
-* **Batería de Pruebas Automatizadas**: 60 archivos de test en `tests/`, 1.232 tests. Última medición (2026-11-13, sobre el árbol del Hito 35, antes de su commit), en una sola corrida con el toolchain de frontend (`~/.harness-flow/frontend-toolchain`: Angular 22.2.1, Vitest 4.1.11, Node 22):
-  * 1.232 tests, 1.232 pasaron. Ningún test falla ni queda sin medir. Duración: 24 minutos.
-  * Son los 1.198 de la medición anterior más los 34 de `test_hallazgos.py`.
+**Problema.** Reportado por el usuario el 2026-11-13: "la idea es que pregunte en formulario cuando sea realmente necesario; ahora se da muchas vueltas y no avanza". Medido en la transcripción de una sesión de un proyecto real:
+
+| Qué se midió | Resultado |
+| --- | --- |
+| Preguntas de formulario en la sesión | 166 |
+| Preguntas donde el usuario eligió la primera opción | 150 |
+| Listas de tests que el usuario aprobó | 17 de 17, sin cambiar una línea |
+| Preguntas con opción recomendada, y cuántas aceptó | 103, aceptó 92 |
+
+El usuario había pedido "pair automatic", y aun así una corrección chica costó tres formularios seguidos: dónde arreglarlo, si aprobaba la enmienda, y si aprobaba la lista de tests con tres tests nuevos.
+
+**Qué fallaba en el arnés.**
+
+| # | Falla | Efecto |
+| --- | --- | --- |
+| 1 | Los textos decían dos cosas a la vez: "avanza de forma autónoma" (`vertical-slice.md`, sección 6) y "haz 1 paso y detente" con `¿seguimos?` (`commands/implementar.md`, sección 4 de la misma guía, guías de Kimi, Codex, Grok y Claude) | El agente no sabía cuál seguir |
+| 2 | `gate.py aprobar-tests` exigía `--yes`, y `close` exigía el sello fresco | Un formulario por lista, y otro cada vez que la lista crecía |
+| 3 | Las 5 paradas no decían cuáles preguntan | Alcance no pedido y paso grande terminaban en pregunta |
+| 4 | El commit y el refactor en verde esperaban el OK del usuario | Más pausas sin decisión real |
+| 5 | Ningún texto decía qué no se pregunta, ni cómo juntar preguntas | Un formulario por duda |
+
+**Decisiones del usuario** (formulario del 2026-11-13):
+
+- La lista de tests no pide formulario. El agente pregunta solo si quita un test o no puede cubrir un AC.
+- Una decisión de diseño que el spec no trae se sigue preguntando, como antes.
+- El rol de spec no cambia.
+
+**Qué se implementó.**
+
+- **`gate.py sellar-tests --feature <id>`** reemplaza a `aprobar-tests`, que sigue valiendo como nombre anterior. La sella quien implementa, sin `--yes`, si la lista declara un test por AC. Exige `--yes`, con el SÍ del usuario, en dos casos: la lista quita un test que ya estaba sellado (renombrarlo cuenta), o deja un AC solo con verificación manual sin que el spec lo declare `[costura: manual]`. El backlog guarda las líneas selladas (`tests_sellados`) para medirlo. Los tests de un AC que una enmienda quitó se van sin preguntar.
+- **El brief** (`contexto.py brief`) dice en modo pair: sella la lista y empieza, avanza ciclo tras ciclo sin preguntar si sigues, commitea en la rama sin pedir permiso, cuándo un formulario hace falta, cómo juntar las preguntas, y que un subagente devuelve la pregunta a quien lo lanzó.
+- **Las 5 paradas dicen qué hace cada una.** Preguntan la 1 (decisión de diseño), la 3 (cambiar o borrar un test) y la 4 (dos intentos sin verde). La 2 (alcance no pedido) no pregunta: no se agrega y se anota como hallazgo. La 5 (paso grande) no pregunta: lo parte quien implementa.
+- **El refactor en verde** dentro de los archivos de la feature lo aplica quien implementa, en su commit. Uno que cambia una interfaz pública es una decisión de diseño: parada 1.
+- **"Paso a paso"** queda como pedido del usuario: ahí sí se pausa tras cada ciclo.
+- **Varias features en paralelo**: un implementer por feature. El modo sigue siendo pair, la sesión principal sella las listas y lleva las paradas al usuario en un solo formulario.
+- **Los textos dicen lo mismo**: `SKILL.md`, `commands/implementar.md`, `references/vertical-slice.md` (dos tablas: cuándo un formulario hace falta y cuándo no), `references/modelos.md`, las guías de Claude, Kimi, Codex y Grok, `README.md` y el contrato `AGENTS.md` que genera `stack.py`.
+
+**Decisiones.**
+
+- El gate de `close` sigue: sin lista sellada, con el sello viejo o con un AC sin test, no cierra. Se quitó el formulario, no la comprobación.
+- Renombrar un test sellado cuenta como quitarlo. Comparar por cantidad de tests por AC dejaría cambiar un test por otro más débil sin que nadie lo vea.
+- Una lista sellada antes de este hito no tiene línea base. El primer sello nuevo la crea.
+- El contrato `AGENTS.md` cambió una frase. Las copias de los repos salen como desactualizadas hasta correr `stack.py normalizar`; no bloquean nada.
+
+**Verificación.** [`tests/test_pair_automatico.py`](../tests/test_pair_automatico.py): 28 tests. 27 fallan contra el código anterior; el otro es un control (un delegado no recibe el protocolo de formularios). Un test recorre los textos de rol y falla si alguno vuelve a decir "1 paso y detente", "pausando tras cada" o "lista de tests aprobada".
+
+**Lo que este hito no hace.** No cambia las preguntas del rol de spec ni las aprobaciones del usuario (`approve-spec`, `enmienda`, ficha nueva, cierre). No comprueba el ritmo: que el agente no pause lo ve el usuario en la sesión.
+
+---
+
+## 39. Estado de Verificación y Métricas de Calidad
+
+* **Batería de Pruebas Automatizadas**: 61 archivos de test en `tests/`, 1.260 tests. Última medición (2026-11-13, sobre el árbol del Hito 36, antes de su commit), en una sola corrida con el toolchain de frontend (`~/.harness-flow/frontend-toolchain`: Angular 22.2.1, Vitest 4.1.11, Node 22):
+  * 1.260 tests, 1.260 pasaron. Ningún test falla ni queda sin medir. Duración: 29 minutos.
+  * Son los 1.232 de la medición anterior más los 28 de `test_pair_automatico.py`.
+  * Medición anterior (2026-11-13, sobre el árbol del Hito 35, `86379f6`): 1.232 tests, 1.232 pasaron, 24 minutos. Son los 1.198 de antes más los 34 de `test_hallazgos.py`.
   * Medición anterior (2026-11-13, sobre `2475ba3`): 1.198 tests, 1.198 pasaron. Cubre los hitos 33 y 34 y los tres commits posteriores: paridad de Gemini/AGY (`3f7d0ba`), esperas de los tests Go sin `internal/` (`10c29ec`) y el verificador de `angular-product` que mide `shared` y `core` (`cf8bbf7`).
   * Medición anterior (2026-11-12, sobre `e8c269c`), también en una sola corrida con el toolchain: 1.192 tests, 1.192 pasaron.
   * Las mediciones del Hito 33 se hicieron en dos corridas (la suite sin el toolchain y los cuatro archivos de frontend con él). Desde `e8c269c` la suite se mide entera de una vez.

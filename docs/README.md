@@ -58,8 +58,9 @@ flowchart TD
 
     H34["<b>Hito 34: El Medidor de Frontend Mide el Layout Declarado</b><br/>Un proyecto Angular en la raíz del repo cierra sin moverse a projects/"]
     H35["<b>Hito 35: Un Hallazgo no Abre una Ficha</b><br/>Enmienda antes que ficha: hallazgo.py, add.py con el SÍ y el peso, close sin hallazgos abiertos"]
+    H36["<b>Hito 36: El Pair Avanza Solo</b><br/>La lista de tests la sella quien implementa; formulario solo en las paradas que preguntan"]
 
-    H1 --> H2 --> H3 --> H4 --> H5 --> H6 --> H7 --> H8 --> H9 --> H10 --> H11 --> H12 --> H13 --> H14 --> H15 --> H16 --> H17 --> H18 --> H19 --> H20 --> H21 --> H22 --> H23 --> H24 --> H25 --> H26 --> H27 --> H28 --> H29 --> H30 --> H31 --> H32 --> H33 --> H34 --> H35
+    H1 --> H2 --> H3 --> H4 --> H5 --> H6 --> H7 --> H8 --> H9 --> H10 --> H11 --> H12 --> H13 --> H14 --> H15 --> H16 --> H17 --> H18 --> H19 --> H20 --> H21 --> H22 --> H23 --> H24 --> H25 --> H26 --> H27 --> H28 --> H29 --> H30 --> H31 --> H32 --> H33 --> H34 --> H35 --> H36
 ```
 
 ---
@@ -80,7 +81,7 @@ Los documentos de `docs/` complementan y fundamentan las guías operativas que l
 * [`references/patrones-datos-ddia.md`](../references/patrones-datos-ddia.md): Patrones de datos distribuidos basados en Martin Kleppmann (Transactional Outbox, OCC, Idempotencia).
 * [`references/comunicacion-ste100-y-prompts.md`](../references/comunicacion-ste100-y-prompts.md): Norma de redacción técnica ASD-STE100 y optimización de prompts de Karpathy.
 * [`references/context7-documentacion-oficial.md`](../references/context7-documentacion-oficial.md): Integración con Context7 MCP, enlaces oficiales por stack y escáneres de seguridad CVE.
-* [`references/vertical-slice.md`](../references/vertical-slice.md): Metodología de desarrollo vertical, costuras públicas y modo Pair interactivo.
+* [`references/vertical-slice.md`](../references/vertical-slice.md): Metodología de desarrollo vertical, costuras públicas y modo Pair automático (cuándo un formulario hace falta).
 * [`references/normas-de-ingenieria.md`](../references/normas-de-ingenieria.md): Registro de las 12 normas de ingeniería (`scripts/normas.py`), cuadro norma × rol, cómo llega cada una a producto, leader, implementer y revisor en cualquier host, AC negativos, bloque `documentation`/`security_audit` del manifest y exit de `stack.py auditar`.
 * [`references/hallazgos.md`](../references/hallazgos.md): Qué hacer con lo que se encuentra en el código mientras se trabaja en otra cosa: enmienda antes que ficha, `hallazgo.py` y cuándo `add.py` crea una ficha.
 * [`references/arquitectura-heredada.md`](../references/arquitectura-heredada.md): Trinquete de arquitectura para proyectos con código anterior al arnés: inventario, base, cuota de normalización y casos límite.

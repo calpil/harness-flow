@@ -79,12 +79,13 @@ pasa ademas el `effort` que eligio para esa tarea, y ese le gana al del
 frontmatter. La tabla por rol, la banda de seleccion y lo que quedo comprobado
 estan en [`modelos.md`](modelos.md).
 
-**Modo Pair interactivo (por defecto)**: `/harness-flow:implementar <id>`
+**Modo Pair automático (por defecto)**: `/harness-flow:implementar <id>`
 no lanza al subagente `implementer` salvo que los argumentos traigan
-`--delegado` o la sesión no tenga usuario: la sesión principal de Claude actúa
-directamente como Driver y el humano como Navigator en el worktree, acordando la
-lista de tests, avanzando un test a la vez (`Red -> Green -> Refactor`) y
-pausando tras cada micro-paso según [`vertical-slice.md`](vertical-slice.md).
+`--delegado`, la sesión no tenga usuario o el usuario pida varias features en
+paralelo. La sesión principal de Claude implementa en el worktree: escribe y
+sella la lista de tests, avanza un test a la vez (`Red -> Green -> Refactor`)
+ciclo tras ciclo sin pausar, y usa `AskUserQuestion` solo en las paradas que
+preguntan, según [`vertical-slice.md`](vertical-slice.md) (sección 6).
 
 **Al delegar** (`--delegado`), el prompt del subagente lleva la salida entera de
 `contexto.py brief` y nada más. El brief trae el protocolo, las reglas de cada
