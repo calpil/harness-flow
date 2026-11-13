@@ -397,14 +397,28 @@ def verificar_cumplimiento(repo: Path, stack_id: str | None = None,
         stack_id = det["stack"]
 
     if stack_id == "generico":
+        # Misma forma que el diagnostico completo: quien lo imprime o lo serializa no distingue stacks.
+        # Sin stack CALPIL no hay norma que exigir; se avisa, no es un hallazgo a corregir.
         return {
             "compliant": True,
             "stack": "generico",
             "repo": str(repo),
-            "findings": ["No se identifico stack CALPIL especifico para este repositorio."],
             "rules_ok": True,
+            "missing_rules": [],
             "skills_ok": True,
+            "missing_skills": [],
+            "skills_excluidas": [],
             "architecture_ok": True,
+            "architecture_errors": [],
+            "architecture_warnings": [],
+            "heredado": None,
+            "copias_viejas": [],
+            "copias_modificadas": [],
+            "multi_llm_ready": True,
+            "full_multi_llm_parity": False,
+            "hosts_active": [],
+            "findings": [],
+            "warnings": ["No se identifico stack CALPIL especifico para este repositorio: no hay norma que verificar."],
         }
 
     manifest = cargar_manifest(stack_id)

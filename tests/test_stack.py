@@ -361,6 +361,21 @@ class TestStackManager(unittest.TestCase):
         self.assertFalse(diag["skills_ok"])
         self.assertGreater(len(diag["findings"]), 0)
 
+    def test_verificar_cli_repo_generico_no_revienta(self):
+        # Un repo sin stack CALPIL (p. ej. Terraform) debe imprimir el diagnostico, no un KeyError.
+        import subprocess
+        import sys
+        repo = self.tmpdir / "infra-generica"
+        repo.mkdir()
+        (repo / "main.tf").write_text('terraform {}\n', encoding="utf-8")
+        script = Path(stack.__file__).resolve()
+        res = subprocess.run([sys.executable, str(script), "verificar", "--repo", str(repo)],
+                             capture_output=True, text=True, cwd=str(repo))
+        self.assertNotIn("Traceback", res.stderr)
+        self.assertEqual(res.returncode, 0, res.stdout + res.stderr)
+        self.assertIn("COMPLIANT", res.stdout)
+        self.assertIn("Skills operativas:   OK", res.stdout)
+
     def test_normalizar_repositorio(self):
         mock_repo = self.tmpdir / "target-repo"
         mock_repo.mkdir()
