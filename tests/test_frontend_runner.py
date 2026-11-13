@@ -132,6 +132,65 @@ class FrontendFixture(unittest.TestCase):
         self.assertTrue(data['execution'])
         self.assertEqual(data['toolchain']['versions']['vitest'].split('.')[0], '4')
 
+    def to_repo_root_layout(self):
+        """El workspace que crea `ng new`: un proyecto con root '' y fuentes en src/."""
+        self.git('mv', 'projects/app/src', 'src')
+        shutil.rmtree(self.repo / 'projects')
+        angular = json.loads((self.repo / 'angular.json').read_text())
+        app = angular['projects']['app']
+        app.update(root='', sourceRoot='src')
+        app['architect']['build']['options']['browser'] = 'src/main.ts'
+        self.write('angular.json', json.dumps(angular))
+        tsconfig = json.loads((self.repo / 'tsconfig.json').read_text())
+        tsconfig['include'] = ['src/**/*.ts']
+        self.write('tsconfig.json', json.dumps(tsconfig))
+        return self.commit('proyecto en la raiz del repo')
+
+    def test_a_project_at_the_repo_root_is_measured_where_it_lives(self):
+        """Antes el contrato exigia projects/<nombre>: cerrar obligaba a mover el proyecto entero."""
+        self.to_repo_root_layout()
+        data = self.measured_base()
+        self.assertEqual({tuple(x['id']) for x in data['results']}, {
+            ('angular:app', 'src/a.spec.ts', 'healthy'),
+            ('node:test', NODE_FILES[0], 'healthy'), ('node:test', NODE_FILES[1], 'healthy')})
+        self.assertEqual({x['state'] for x in data['results']}, {'pass'})
+        self.assertFalse((self.repo / 'projects').exists())
+        self.expect(self.cli('check'), 0)
+
+    def test_a_project_at_the_repo_root_still_catches_a_new_red(self):
+        self.to_repo_root_layout()
+        self.measured_base()
+        self.write('src/a.spec.ts', "import {test, expect} from 'vitest';\ntest('healthy', () => expect(1).toBe(2));\n")
+        self.commit('rojo nuevo')
+        self.expect(self.cli('check'), 1)
+
+    def test_a_project_at_the_repo_root_ignores_specs_that_are_not_its_sources(self):
+        """e2e/*.spec.ts es de Playwright: ng test no lo recoge y no es un test omitido."""
+        self.to_repo_root_layout()
+        self.write('e2e/flujo.spec.ts', "import {test} from '@playwright/test'; test('e2e', async () => {});\n")
+        self.commit('e2e fuera de sourceRoot')
+        data = self.measured_base()
+        self.assertEqual(['src/a.spec.ts'], data['scope']['files']['angular:app'])
+
+    def test_a_project_at_the_repo_root_must_declare_its_source_root(self):
+        self.to_repo_root_layout()
+        angular = json.loads((self.repo / 'angular.json').read_text())
+        del angular['projects']['app']['sourceRoot']
+        self.write('angular.json', json.dumps(angular))
+        self.commit('sin sourceRoot')
+        self.expect(self.cli('base'), 2, 'sourceRoot')
+        self.assertFalse(self.base.exists())
+
+    def test_a_project_root_outside_the_repo_is_rejected(self):
+        for root in ('../fuera', '/abs', 'projects/../..'):
+            with self.subTest(root=root):
+                angular = json.loads((self.repo / 'angular.json').read_text())
+                angular['projects']['app']['root'] = root
+                self.write('angular.json', json.dumps(angular))
+                self.commit('root ' + root)
+                self.expect(self.cli('base'), 2, 'root fuera del repo')
+                self.assertFalse(self.base.exists())
+
     def test_real_debt_new_red_and_cure_keep_identity(self):
         file = 'projects/app/src/a.spec.ts'
         original = (self.repo / file).read_text()

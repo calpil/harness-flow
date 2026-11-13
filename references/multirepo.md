@@ -583,7 +583,13 @@ proyecto, ni cambia el protocolo Go. El runner frontend no instala dependencias.
   binario: cambiar `.nvmrc`/`engines`, el Node o el lock entre base y destino
   deja la base incomparable (exit 2).
 - Cada target test es `@angular/build:unit-test`, options solo `tsConfig` y sin
-  configuraciones/defaultConfiguration. Raices `projects/<nombre>`; ningun
+  configuraciones/defaultConfiguration. La carpeta de cada proyecto es la que
+  DECLARA `angular.json`: su `root` (`projects/<nombre>` en un workspace de
+  varios proyectos) o, con `root: ""` (el proyecto unico que crea `ng new`), su
+  `sourceRoot` (`src`). El runner no impone un layout: no hay que mover un
+  proyecto a `projects/` para cerrar. Un `root` fuera del repo se rechaza, y un
+  proyecto en la raiz sin `sourceRoot` tambien. Con el proyecto en la raiz, lo
+  que queda fuera de `sourceRoot` (`e2e/`, scripts) no es del proyecto. Ningun
   symlink en tests Node/fuentes Angular. Cotejar archivos esperados contra
   archivos y tests efectivamente terminados; ausencias no son curaciones.
 - El runner descompone ese comando en los entrypoints NATIVOS con el Node

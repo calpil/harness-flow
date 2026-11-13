@@ -12,7 +12,7 @@ import hashlib
 import json
 import os
 import re
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 import shutil
 import subprocess
 import sys
@@ -120,6 +120,35 @@ def cumple(version, kind, spec):
     return version[:fixed] == want[:fixed] and version >= want
 
 
+def _inside_repo(path):
+    parts = PurePosixPath(path).parts
+    return (isinstance(path, str) and not path.startswith('/') and '\\' not in path
+            and not path.endswith('/') and '..' not in parts and '.' not in parts)
+
+
+def project_tree(project):
+    """Carpeta donde viven las fuentes y los tests del proyecto, segun angular.json.
+
+    El contrato exigia `projects/<nombre>`. Un workspace de un solo proyecto, el
+    que crea `ng new`, declara `root: ""` y sus fuentes en `src/`: para cerrar
+    una feature habia que mover el proyecto entero a `projects/<nombre>`. El
+    runner mide el layout que el repo declara y no impone otro.
+
+    - `root` no vacio: esa carpeta entera, como antes.
+    - `root` vacio: el proyecto es la raiz del repo y sus fuentes son
+      `sourceRoot`. El resto de la raiz (e2e, scripts, config) no es del
+      proyecto: `ng test` tampoco lo recoge.
+    """
+    root = project.get('root', '')
+    require(isinstance(root, str) and (not root or _inside_repo(root)), 'contrato Angular: root fuera del repo')
+    if root:
+        return root
+    source = project.get('sourceRoot')
+    require(isinstance(source, str) and source and _inside_repo(source),
+            'contrato Angular: un proyecto en la raiz del repo declara sourceRoot')
+    return source
+
+
 def scope(repo):
     package = read_manifest(repo / 'package.json')
     angular = read_manifest(repo / 'angular.json')
@@ -139,9 +168,10 @@ def scope(repo):
             and set(order) == set(projects) and all(c == 'ng test ' + n for c, n in zip(commands[1:], order)),
             'contrato npm test omite/duplica/filtra proyectos')
     inventory = {}
+    trees = {name: project_tree(project) for name, project in projects.items()}
+    require(len(set(trees.values())) == len(trees), 'contrato Angular: dos proyectos comparten carpeta')
     for name, project in projects.items():
-        root = 'projects/' + name
-        require(project['root'] == root, 'contrato Angular requiere raiz projects/<nombre>')
+        root = trees[name]
         target = project['architect']['test']
         require(set(target) == {'builder', 'options'} and target['builder'] == '@angular/build:unit-test'
                 and set(target['options']) == {'tsConfig'}, 'contrato Angular no permite filtros/configuracion runner')

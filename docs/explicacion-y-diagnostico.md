@@ -191,6 +191,12 @@ Tras una auditoría exhaustiva de los scripts, manifiestos de plugins y configur
 * **Estado:** **No era un defecto del código ni del entorno.** Esos tests exigen `HARNESS_TEST_FRONTEND_MODULES` y fallan a propósito si falta. El toolchain estaba instalado en `~/.harness-flow/frontend-toolchain`; la suite se corría sin pasar su ruta y los 73 fallos se daban por conocidos.
 * **Corrección:** la suite se corre siempre con el toolchain. El comando está en [`diagnostico-normalizacion-de-stacks.md`](diagnostico-normalizacion-de-stacks.md) y en `references/multirepo.md`.
 
+### ✅ Hallazgo 8 (Corregido): El medidor de frontend obligaba a mover el proyecto Angular a `projects/<nombre>`
+
+* **Ubicación:** [`scripts/postmerge_frontend.py`](../scripts/postmerge_frontend.py) (`project_tree`) y [`tests/test_frontend_runner.py`](../tests/test_frontend_runner.py).
+* **Estado:** **Corregido (Hito 34).** El contrato exigía `root == projects/<nombre>` en `angular.json`. Un repo con un solo proyecto en la raíz no podía cerrar una feature, y en un proyecto real los agentes movieron el proyecto entero a `projects/<nombre>` para pasar el gate.
+* **Corrección:** el medidor toma la carpeta que el repo declara: `root`, o `sourceRoot` cuando `root` es `""`. No impone un layout. Los workspaces que ya usan `projects/` no cambian.
+
 ---
 
 ## 5. Resumen de Salud del Sistema

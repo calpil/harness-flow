@@ -56,7 +56,9 @@ flowchart TD
     H32["<b>Hito 32: Brief como Paquete para Delegar</b><br/>Protocolo en el brief y comandos que imprimen cada skill del stack y cada referencia"]
     H33["<b>Hito 33: La Norma Sigue al Código</b><br/>Alcance de las reglas medido en el repo, copias viejas actualizadas, raíz y monorepos normalizados, verificar sin OK sobre código sin medir"]
 
-    H1 --> H2 --> H3 --> H4 --> H5 --> H6 --> H7 --> H8 --> H9 --> H10 --> H11 --> H12 --> H13 --> H14 --> H15 --> H16 --> H17 --> H18 --> H19 --> H20 --> H21 --> H22 --> H23 --> H24 --> H25 --> H26 --> H27 --> H28 --> H29 --> H30 --> H31 --> H32 --> H33
+    H34["<b>Hito 34: El Medidor de Frontend Mide el Layout Declarado</b><br/>Un proyecto Angular en la raíz del repo cierra sin moverse a projects/"]
+
+    H1 --> H2 --> H3 --> H4 --> H5 --> H6 --> H7 --> H8 --> H9 --> H10 --> H11 --> H12 --> H13 --> H14 --> H15 --> H16 --> H17 --> H18 --> H19 --> H20 --> H21 --> H22 --> H23 --> H24 --> H25 --> H26 --> H27 --> H28 --> H29 --> H30 --> H31 --> H32 --> H33 --> H34
 ```
 
 ---

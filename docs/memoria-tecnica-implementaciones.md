@@ -889,12 +889,40 @@ Comandos: `inventario`, `base`, `adoptar`, `check [--feature]`, `siguiente` (lo 
 
 ---
 
-## 36. Estado de Verificación y Métricas de Calidad
+## 36. Hito 34: El Medidor de Frontend Mide el Layout que el Repo Declara
+
+**Problema.** Reportado por el usuario el 2026-11-12 con dos repos de un proyecto real (`calpilingenieria` y `front-admin-dashboard`): el proyecto Angular había quedado dentro de `projects/<nombre>`, repetido bajo la raíz del repo. No lo hizo `stack.py normalizar`. Lo causó el contrato de `postmerge_frontend.py`, el medidor de tests de frontend que corre `gate.py close`:
+
+```python
+root = 'projects/' + name
+require(project['root'] == root, 'contrato Angular requiere raiz projects/<nombre>')
+```
+
+El contrato se escribió sobre un workspace de varios proyectos y exigía ese layout a todos. Un workspace de un solo proyecto, el que crea `ng new` (`root: ""`, fuentes en `src/`), no podía cerrar una feature. El 2026-11-11 los agentes de ese proyecto movieron el proyecto entero a `projects/<nombre>` para pasar el gate (commits `653da98` y `6b923f5` de sus repos).
+
+La intención era la contraria: usar `projects/` cuando el repo ya la tiene, no crearla.
+
+**Qué se implementó.** `postmerge_frontend.project_tree`: la carpeta de cada proyecto es la que declara `angular.json`.
+
+- `root` no vacío: esa carpeta entera, como antes. Los workspaces con `projects/<nombre>` no cambian.
+- `root` vacío: el proyecto es la raíz del repo y sus fuentes son `sourceRoot`. Lo que queda fuera (`e2e/`, scripts) no es del proyecto: `ng test` tampoco lo recoge.
+- Se rechaza un `root` fuera del repo, un proyecto en la raíz sin `sourceRoot` y dos proyectos que comparten carpeta.
+
+**Consecuencia para las features en curso.** La base de frontend graba el sha256 del runner. Al cambiar `postmerge_frontend.py`, las bases medidas antes quedan STALE y hay que volver a medirlas antes de integrar. Es el protocolo ya documentado en `references/multirepo.md`.
+
+**Verificación.** Cinco tests nuevos en [`tests/test_frontend_runner.py`](../tests/test_frontend_runner.py): un proyecto en la raíz se mide donde vive, detecta un rojo nuevo, no cuenta los specs de `e2e/`, exige `sourceRoot` y rechaza un `root` fuera del repo. Los cuatro archivos de frontend con el toolchain: 98 tests, 98 pasan. Medido además en solo lectura: el contrato nuevo acepta ADR (5 proyectos en `projects/`), los dos repos como están hoy y los dos repos con el proyecto de vuelta en la raíz.
+
+**Lección.** Una regla sacada de un proyecto real no se generaliza sin mirar el caso más simple. El contrato se validó contra un workspace de varios proyectos y nunca contra el que crea `ng new`.
+
+---
+
+## 37. Estado de Verificación y Métricas de Calidad
 
 * **Batería de Pruebas Automatizadas**: 58 archivos de test en `tests/`, 1.184 tests. Última medición (2026-11-12, sobre el árbol de trabajo del Hito 33, antes de su commit), en dos corridas:
   * Suite completa sin el toolchain de frontend: 1.184 tests, 1.111 pasaron y 73 fallaron. Los 73 están en `test_frontend_runner.py`, `test_retirados_frontend.py`, `test_frontend_close.py` y `test_cierre_historico.py`, que exigen `HARNESS_TEST_FRONTEND_MODULES` y fallan a propósito cuando falta.
   * Esos cuatro archivos con el toolchain (`~/.harness-flow/frontend-toolchain`: Angular 22.2.1, Vitest 4.1.11, Node 22): 93 tests, 93 pasaron.
   * Entre las dos corridas, los 1.184 tests pasan. Ningún test falla.
+  * Tras el Hito 34 (2026-11-12), que solo cambia `postmerge_frontend.py` y agrega 5 tests: los cuatro archivos de frontend con el toolchain, 98 tests, 98 pasaron. También se corrieron los tests de `medicion_destino.py`, que usa funciones de ese script. El resto de la suite no se volvió a correr.
 * **Corrección de las mediciones anteriores**: las corridas sobre `50e04e9`, `3ff2f0c` y `77f1eee` reportaron esos 73 fallos como "prerrequisito de entorno". El toolchain estaba instalado desde el 2026-10-01; lo que faltó fue pasar su ruta. En esas corridas el runner de frontend quedó sin medir. La suite se corre siempre así: `T=~/.harness-flow/frontend-toolchain; PATH=$T/node_modules/node/bin:$PATH HARNESS_TEST_FRONTEND_MODULES=$T/node_modules "$PY" -m unittest discover -s tests`.
 * **Historial**: la corrida sobre `50e04e9` mostró además 3 tests que ese commit dejó desactualizados (`test_contexto`, `test_multirepo_close` y `test_spec_acs`); se corrigieron en `04a4fc5`.
 * **Tests agregados en los hitos 19 a 33**: `test_indice_hermes.py`, `test_stack_adopcion.py`, `test_stack_normalizar.py`, `test_arquitectura.py`, `test_brief_stacks.py`, `test_hub.py`, `test_modelo.py`, `test_pair_y_reglas.py`, `test_feature_cero.py`, `test_normativa_por_rol.py`, `test_normas.py` y `test_copias.py`, más casos nuevos en `test_plugin_claude.py`. Cada regresión se comprobó contra el código anterior: falla ahí y pasa con la corrección.
