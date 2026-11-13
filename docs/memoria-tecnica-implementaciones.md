@@ -916,16 +916,57 @@ La intención era la contraria: usar `projects/` cuando el repo ya la tiene, no 
 
 ---
 
-## 37. Estado de Verificación y Métricas de Calidad
+## 37. Hito 35: Un Hallazgo no Abre una Ficha
 
-* **Batería de Pruebas Automatizadas**: 59 archivos de test en `tests/`, 1.198 tests. Última medición (2026-11-13, sobre el commit `2475ba3`), en una sola corrida con el toolchain de frontend (`~/.harness-flow/frontend-toolchain`: Angular 22.2.1, Vitest 4.1.11, Node 22):
-  * 1.198 tests, 1.198 pasaron. Ningún test falla ni queda sin medir. Duración: 26 minutos.
-  * Cubre los hitos 33 y 34 y los tres commits posteriores: paridad de Gemini/AGY (`3f7d0ba`), esperas de los tests Go sin `internal/` (`10c29ec`) y el verificador de `angular-product` que mide `shared` y `core` (`cf8bbf7`).
+**Problema.** Reportado por el usuario el 2026-11-13 sobre ADR: "de los hallazgos del código empezó a crear como loco feat y bugfix en vez de crear enmiendas". Medido en el backlog y en la transcripción de la sesión de ese proyecto:
+
+- En cuatro horas y media (2026-11-12, 22:06 a 02:34 UTC) el agente dio de alta 16 fichas, de la #190 a la #205.
+- Salieron de hallazgos de specs y reviews: una constante repetida (#197), un tipo sin un valor (#198), un test lento (#201), los cortes de una feature sin arrancar (#202 a #204), un bug vecino (#205).
+- El agente preguntó por formulario en siete ocasiones. Cada pregunta ofrecía solo la ficha aparte ("¿Lo doy de alta como bug aparte?"), y la recomendaba. Ninguna ofreció la enmienda.
+- El usuario retiró siete fichas a mano, con la nota "no es ficha aparte; entra como enmienda".
+
+Cada ficha paga spec, aprobación, lista de tests, review aislado, verify y cierre. Una constante repetida no vale ese costo.
+
+**Qué fallaba en el arnés.**
+
+| # | Falla | Efecto |
+| --- | --- | --- |
+| 1 | Ningún texto decía qué hacer con un hallazgo | El agente usaba lo único que conocía: `add.py` |
+| 2 | No había dónde dejar un hallazgo que no fuera una ficha | "Anotarlo para después" no existía |
+| 3 | `add.py` era el único ritual sin `--yes`, y no pedía un motivo | Una ficha entraba sin que nadie dijera por qué no era una enmienda |
+| 4 | La guía decía "propón partir la historia en nuevas `F-n`" y "ficha el choque" | Se leía como dar de alta |
+
+**Qué se implementó.**
+
+- **La regla**, en `SKILL.md`, en los roles (`commands/`, `agents/`) y en [`references/hallazgos.md`](../references/hallazgos.md): un hallazgo va, en orden, a la feature en curso (rama, o enmienda si cambia un AC), a otra feature abierta, o al proyecto. Una ficha nueva la decide el usuario y solo con peso propio: un comportamiento nuevo que ve el usuario del producto, o un riesgo de plata, datos o seguridad.
+- **`scripts/hallazgo.py`** (nuevo): `anotar`, `list`, `mover` y `resolver`. Los hallazgos viven en `hallazgos` del backlog, con id `H-n`. Una feature cerrada no los recibe.
+- **`add.py` exige `--yes --peso "<por qué es ficha y no enmienda>"`**. Sin `--yes` entran solo la primera ficha de una candidata `F-n` del PRD y una normalización con el trinquete adoptado: el usuario ya las decidió. La negativa repite la regla, pide que el formulario ofrezca primero el destino sin ficha y lista las features abiertas donde el hallazgo cabe. El peso queda escrito en la ficha.
+- **Nadie pierde un hallazgo**: el brief de la feature lista los suyos y los del proyecto que tocan sus repos; `estado.py` los cuenta; `approve-spec` los avisa; `gate.py close --status done` **se niega** mientras la feature tenga hallazgos abiertos.
+- El brief agrega la regla al protocolo de quien implementa, en pair y en delegado. El revisor no recibe los hallazgos y no recomienda fichas.
+
+**Decisiones.**
+
+- `anotar` no pide `--yes`: anotar no gasta ni compromete trabajo. Lo que cuesta es la ficha.
+- Un rojo nuevo tras un merge se anota y se muestra al usuario: tiene peso, y la ficha de bug la decide él.
+- `--yes` y `--peso` son una barrera de proceso, igual que la de `approve-spec`. No impiden que un agente los pase por su cuenta; lo obligan a escribir por qué.
+
+**Verificación.** [`tests/test_hallazgos.py`](../tests/test_hallazgos.py): 34 tests. 19 fallan contra el código anterior; los otros 15 miden `hallazgo.py`, que no existía. Probado además contra el backlog real de ADR, sin escribir: el alta de "contract de la 179 sin email_normalizado" (la #204 que el usuario retiró) se niega y nombra primero la #180.
+
+**Lo que este hito no hace.** No toca el backlog de ningún proyecto. Las fichas que ya existen en ADR siguen como el usuario las dejó.
+
+---
+
+## 38. Estado de Verificación y Métricas de Calidad
+
+* **Batería de Pruebas Automatizadas**: 60 archivos de test en `tests/`, 1.232 tests. Última medición (2026-11-13, sobre el árbol del Hito 35, antes de su commit), en una sola corrida con el toolchain de frontend (`~/.harness-flow/frontend-toolchain`: Angular 22.2.1, Vitest 4.1.11, Node 22):
+  * 1.232 tests, 1.232 pasaron. Ningún test falla ni queda sin medir. Duración: 24 minutos.
+  * Son los 1.198 de la medición anterior más los 34 de `test_hallazgos.py`.
+  * Medición anterior (2026-11-13, sobre `2475ba3`): 1.198 tests, 1.198 pasaron. Cubre los hitos 33 y 34 y los tres commits posteriores: paridad de Gemini/AGY (`3f7d0ba`), esperas de los tests Go sin `internal/` (`10c29ec`) y el verificador de `angular-product` que mide `shared` y `core` (`cf8bbf7`).
   * Medición anterior (2026-11-12, sobre `e8c269c`), también en una sola corrida con el toolchain: 1.192 tests, 1.192 pasaron.
   * Las mediciones del Hito 33 se hicieron en dos corridas (la suite sin el toolchain y los cuatro archivos de frontend con él). Desde `e8c269c` la suite se mide entera de una vez.
 * **Corrección de las mediciones anteriores**: las corridas sobre `50e04e9`, `3ff2f0c` y `77f1eee` reportaron esos 73 fallos como "prerrequisito de entorno". El toolchain estaba instalado desde el 2026-10-01; lo que faltó fue pasar su ruta. En esas corridas el runner de frontend quedó sin medir. La suite se corre siempre así: `T=~/.harness-flow/frontend-toolchain; PATH=$T/node_modules/node/bin:$PATH HARNESS_TEST_FRONTEND_MODULES=$T/node_modules "$PY" -m unittest discover -s tests`.
 * **Historial**: la corrida sobre `50e04e9` mostró además 3 tests que ese commit dejó desactualizados (`test_contexto`, `test_multirepo_close` y `test_spec_acs`); se corrigieron en `04a4fc5`.
-* **Tests agregados en los hitos 19 a 33**: `test_indice_hermes.py`, `test_stack_adopcion.py`, `test_stack_normalizar.py`, `test_arquitectura.py`, `test_brief_stacks.py`, `test_hub.py`, `test_modelo.py`, `test_pair_y_reglas.py`, `test_feature_cero.py`, `test_normativa_por_rol.py`, `test_normas.py` y `test_copias.py`, más casos nuevos en `test_plugin_claude.py`. Después: 5 casos en `test_frontend_runner.py` (Hito 34) y `test_check_angular_shared_core.py` (`cf8bbf7`). Cada regresión se comprobó contra el código anterior: falla ahí y pasa con la corrección.
+* **Tests agregados en los hitos 19 a 33**: `test_indice_hermes.py`, `test_stack_adopcion.py`, `test_stack_normalizar.py`, `test_arquitectura.py`, `test_brief_stacks.py`, `test_hub.py`, `test_modelo.py`, `test_pair_y_reglas.py`, `test_feature_cero.py`, `test_normativa_por_rol.py`, `test_normas.py` y `test_copias.py`, más casos nuevos en `test_plugin_claude.py`. Después: 5 casos en `test_frontend_runner.py` (Hito 34) `test_check_angular_shared_core.py` (`cf8bbf7`) y `test_hallazgos.py` (Hito 35). Cada regresión se comprobó contra el código anterior: falla ahí y pasa con la corrección.
 * **Aislamiento**: los tests no abren el Memory Hub real (`HARNESS_SIN_CONTEXTO=1`, `HARNESS_SIN_HUB=1`), y la lógica de `hub.py` se prueba con una conexión falsa.
 * **Validación de Habilidades de Agentes**: 100% de las habilidades validadas en los 10 stacks con `validate-agent-skills.mjs`.
 * **Verificación de Arquitectura en las 10 Plantillas Reales de CALPIL**:

@@ -118,8 +118,14 @@ Las lecciones se leen **antes** de disenar, no despues de romper algo.
   se implementa). **Redacción ASD-STE100 (Karpathy):** redacta cada AC en frases de máximo 20
   palabras, en voz activa y con una sola acción verificable por AC (ver `references/comunicacion-ste100-y-prompts.md`).
   Apunta a **2-3 AC** (tope en `rules.max_acs_por_slice`, por
-  defecto 5): si necesita mas, **no infles el spec**, propon partir la historia
-  en nuevas candidatas `F-n`.
+  defecto 5): si necesita mas, **no infles el spec**, propon al usuario partir la
+  historia en nuevas candidatas `F-n`. Los cortes entran al backlog solo con su
+  SI (`add.py --yes --peso`); mientras tanto anotalos con `hallazgo.py anotar`.
+- **Hallazgos anotados en la feature.** El brief los lista (`HALLAZGOS ANOTADOS EN
+  ESTA FEATURE`). Cada uno entra como AC o en el plan, y se resuelve con
+  `hallazgo.py resolver --id H-n --como "AC-n"`. Lo que encuentres al escribir el
+  spec y no sea de esta feature no abre una ficha: `hallazgo.py anotar` (ver
+  `references/hallazgos.md`).
 - **Límites negativos explícitos:** El spec no autoriza tocar rutas protegidas
   (`docs/prd/**`, `docs/sdd.md`, `.env`) ni incorporar alcances fuera del PRD.
 - Cada AC declara su **costura publica de prueba** (`[costura: endpoint|servicio|ui|integracion|manual]`

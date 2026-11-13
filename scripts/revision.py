@@ -163,7 +163,7 @@ def cmd_briefing(a) -> None:
                   "contexto.py refrescar antes de delegar.\n")
         contexto.cmd_brief(argparse.Namespace(
             feature=str(f["id"]), max_lineas=a.max_lineas_brief,
-            max_archivos=10, max_lecciones=10, max_relacionados=0, con_producto=False,
+            max_archivos=10, max_lecciones=10, max_relacionados=0, con_producto=False, con_hallazgos=False,
             con_reglas=False))   # las reglas van una vez, en el bloque de normativa de abajo
         print()
     except Exception as exc:

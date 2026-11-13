@@ -748,7 +748,8 @@ def avisos_vertical_spec(text: str, rules: dict | None = None) -> list[str]:
     if len(acs) > max_acs:
         avisos.append(
             f"vertical-slice: el spec declara {len(acs)} AC (recomendado <= {max_acs} por slice); "
-            "considera dividir la feature en slices verticales mas chicos"
+            "considera dividir la feature en slices verticales mas chicos "
+            "(partirla es una propuesta al usuario: una ficha nueva exige add.py --yes --peso)"
         )
     m_plan = _PLAN_VERTICAL_RE.search(limpio)
     if m_plan:

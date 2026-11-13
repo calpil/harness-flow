@@ -480,6 +480,12 @@ def cmd_approve_spec(args) -> None:
     bloq = bloqueos_feature(data, f)
     if bloq:
         avisos.append(f"dependencias pendientes antes de implementar: {', '.join(bloq)}")
+    import hallazgo
+    anotados = hallazgo.de_la_feature(data, f["id"])
+    if anotados:
+        avisos.append(f"hallazgos anotados en esta feature sin resolver ({', '.join(h['id'] for h in anotados)}): "
+                      "cada uno entra como AC o en el plan, o se resuelve en la rama; close se niega "
+                      "mientras sigan abiertos (hallazgo.py list --feature " + str(f["id"]) + ")")
     quien = _firmante(args.por)
     cuando = now_iso()
     text = _sellar_spec(text, f"Aprobado: {quien} · {cuando} · sellado por gate.py approve-spec --yes")
@@ -1223,6 +1229,13 @@ def cmd_close(args) -> None:
                 fallos.append("el spec cambio despues de aprobarse (sello invalido)")
 
     if args.status == "done":
+        import hallazgo
+        sin_resolver = hallazgo.de_la_feature(data, fid)
+        if sin_resolver:
+            # Un hallazgo anotado aqui se prometio resolver aqui: cerrar sin mirarlo lo pierde.
+            fallos.append(f"hallazgos anotados sin resolver ({', '.join(h['id'] for h in sin_resolver)}): "
+                          "resuelvelos (hallazgo.py resolver --id H-n --como ...) o pasalos a otra "
+                          "feature abierta o al proyecto (hallazgo.py mover)")
         ip = impl_path(p, f)
         if not ip.exists():
             fallos.append(f"sin evidencia ({ip.name})")

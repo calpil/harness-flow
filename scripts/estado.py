@@ -106,6 +106,11 @@ def main() -> None:
         resumen += f", {len(desconocidas)} con estado desconocido"
     print(resumen + "\n")
 
+    import hallazgo
+    linea_hallazgos = hallazgo.linea_estado(data)
+    if linea_hallazgos:
+        print(f"   hallazgos: {linea_hallazgos}\n")
+
     for f in desconocidas:
         print(f"   [!] #{f['id']} [{f.get('status')}] {f.get('name')}: "
               "estado desconocido; revisa status en feature_list.json")

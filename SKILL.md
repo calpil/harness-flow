@@ -144,7 +144,7 @@ El agente NUNCA escribe `docs/prd/**` ni `docs/sdd.md`: redacta en `docs/borrado
    (`search_graph`, `trace_path`) o `graphify query "<pregunta>" --graph <combinado>`.
 2. Consulta impacto cross-repo: `$PY "$H/hub.py" impacto --microservicio <proyecto>/<servicio>`.
 3. Revisa lecciones aplicables: `$PY "$H/leccion.py" list` **antes** de diseñar.
-4. Escribe `docs/spec-feature-<id>-<slug>.md` con `Estado: draft` usando `templates/spec.md` (`add.py` ya lo crea desde ahi, estilo `/story` de `hola-ai`). Apunta a **2–3 AC** en Given/When/Then (tope en `rules.max_acs_por_slice = 5`; si necesita mas, propon partir la historia en nuevas `F-n`), declara en cada AC su **costura publica de prueba** (`[costura: endpoint|servicio|ui|integracion|manual]` o `Costura: ...` debajo, en el nivel practico mas alto, sin acoplar a detalles internos/mocks), define `## Plan vertical` (≤5 bullets sin codigo ni nombres de archivos) y `## Sugerencias (decision del usuario)` solo si hay senal concreta en el codigo actual. El Contexto cita lo que cumple del PRD (`cumple: O1`) y las decisiones del SDD que aplica (`decisiones que aplica: D2`); `approve-spec` avisa si no cita ninguna, si excede el tamano del slice o si falta costura. **AC negativos**: todo AC que expone un endpoint o una accion con permisos lleva al menos un AC marcado `[negativo]` (sin permiso, entrada invalida, fuera de limite); `approve-spec` avisa si falta y el revisor lo marca como hallazgo mayor. Mientras el spec no esta sellado, el brief trae en el bloque **`NORMAS DE INGENIERIA`** lo que cada norma pide dejar escrito en el spec (`en el spec: ...`): idempotencia y concurrencia, esquema de salida de un LLM, version de un contrato compartido, librerias nuevas.
+4. Escribe `docs/spec-feature-<id>-<slug>.md` con `Estado: draft` usando `templates/spec.md` (`add.py` ya lo crea desde ahi, estilo `/story` de `hola-ai`). Apunta a **2–3 AC** en Given/When/Then (tope en `rules.max_acs_por_slice = 5`; si necesita mas, propon al usuario partir la historia en nuevas `F-n`: los cortes entran al backlog solo con su SI, `add.py --yes --peso`), declara en cada AC su **costura publica de prueba** (`[costura: endpoint|servicio|ui|integracion|manual]` o `Costura: ...` debajo, en el nivel practico mas alto, sin acoplar a detalles internos/mocks), define `## Plan vertical` (≤5 bullets sin codigo ni nombres de archivos) y `## Sugerencias (decision del usuario)` solo si hay senal concreta en el codigo actual. El Contexto cita lo que cumple del PRD (`cumple: O1`) y las decisiones del SDD que aplica (`decisiones que aplica: D2`); `approve-spec` avisa si no cita ninguna, si excede el tamano del slice o si falta costura. **AC negativos**: todo AC que expone un endpoint o una accion con permisos lleva al menos un AC marcado `[negativo]` (sin permiso, entrada invalida, fuera de limite); `approve-spec` avisa si falta y el revisor lo marca como hallazgo mayor. Mientras el spec no esta sellado, el brief trae en el bloque **`NORMAS DE INGENIERIA`** lo que cada norma pide dejar escrito en el spec (`en el spec: ...`): idempotencia y concurrencia, esquema de salida de un LLM, version de un contrato compartido, librerias nuevas.
 5. Si los comandos de AC usan rutas de worktree, crea el worktree con `$PY "$H/worktree.py" start --feature <id>` antes de sellar el spec. Esto prepara las rutas; no autoriza implementar todavía.
 6. **Ritual de aprobación**: MUESTRA el spec al usuario en el chat, PREGUNTA si lo aprueba, y solo con su SÍ explícito corre:
    `$PY "$H/gate.py" approve-spec --feature <id> --yes`
@@ -156,6 +156,12 @@ El agente NUNCA escribe `docs/prd/**` ni `docs/sdd.md`: redacta en `docs/borrado
 ### Enmienda — cambiar un spec que ya tiene trabajo encima
 
 Con evidencia, review o verify encima, `approve-spec` se niega a re-sellar un spec cambiado: es una **enmienda**. Escribe `docs/propuesta-<id>-enmienda-<slug>.md` desde [`templates/enmienda.md`](templates/enmienda.md), aplica los cambios al spec, MUESTRA ambos y, solo con el SÍ explícito: `$PY "$H/gate.py" enmienda --feature <id> --propuesta docs/<propuesta>.md --yes`. Se niega si cambió un AC que la propuesta no nombra; numera `E-n`, la anota en el spec, sella spec y propuesta, y deja sin valor para `close` el review y el verify anteriores.
+
+### Hallazgos — enmienda antes que ficha
+
+Un hallazgo del código (en un spec, al implementar, en un review, al cerrar) **no abre una ficha**: cada ficha paga spec, lista de tests, review, verify y cierre. Va, en este orden: (1) a la feature en curso que toca ese código: se arregla en su rama, y si cambia un AC es una enmienda; (2) a otra feature abierta que lo cubre: `$PY "$H/hallazgo.py" anotar --feature <id> --texto "<una línea>"`; (3) al proyecto, si ninguna lo cubre: el mismo comando sin `--feature`. El brief de cada feature muestra los suyos y los del proyecto que tocan sus repos, y `close` se niega mientras la feature tenga hallazgos abiertos (`hallazgo.py resolver --id H-n --como "<AC-n, E-n o commit>"`, o `mover`).
+
+Una **ficha nueva la decide el usuario** y solo con peso propio: un comportamiento nuevo que ve el usuario del producto, o un riesgo de plata, datos o seguridad que no espera a otra feature. `add.py` se niega sin `--yes --peso "<por qué es ficha y no enmienda>"`, salvo la primera ficha de una candidata `F-n` del PRD y una normalización con el trinquete adoptado. Si le preguntas al usuario, la primera opción es el destino sin ficha; no recomiendes la ficha si el hallazgo cabe en una feature abierta. Partir una feature en cortes es una propuesta, no un alta. Detalle en [`references/hallazgos.md`](references/hallazgos.md).
 
 ### 2. Implementer — TDD vertical y modo Pair (por defecto)
 
@@ -190,7 +196,8 @@ El review NO lo haces tú mismo. Un revisor que recuerda haber escrito el códig
    El script estampa `Revisado: ...` con la firma entera (veredicto · fecha ISO · autor ·
    `estampado por gate.py revision`). Un `Veredicto:` o un `Revisado:` tipeado a mano NO cuenta.
 5. **Criterio y tope de rondas** (regla del usuario): `approved` = cada AC cumplido y medido, sin
-   hallazgos bloqueantes ni mayores; menores e info van a Observaciones y NO abren ronda. La ronda
+   hallazgos bloqueantes ni mayores; menores e info van a Observaciones y NO abren ronda ni ficha
+   (se arreglan en la rama o se anotan con `hallazgo.py`). La ronda
    siguiente solo verifica lo bloqueante/mayor de la anterior y los AC, sin buscar hallazgos nuevos
    (el briefing lo dice solo si ya hay un sello `changes_requested`/`blocked`). Tope: 2 rondas por
    feature; algo mayor nuevo en la segunda se escala al usuario, no abre una tercera. No le pidas
@@ -249,7 +256,9 @@ no es evidencia de integración. Para publicar en Atlassian se requiere
 | `gate.py enmienda --feature <id> --propuesta <md> --yes` | Solo con SÍ del usuario; la propuesta nombra cada AC que cambió; deja sin valor el review y el verify anteriores |
 | `producto.py aprobar --doc prd\|sdd --yes` | Solo con SÍ del usuario; borrador completo y sin bloque generado; copia al destino y sella |
 | `gate.py revision --feature <id> --veredicto <v>` | Review responde por CADA AC-n con `archivo:linea` |
-| `gate.py close --feature <id> --status done --to <rama>` | Todas las reglas activas |
+| `gate.py close --feature <id> --status done --to <rama>` | Todas las reglas activas, y que la feature no tenga hallazgos anotados sin resolver |
+| `add.py --name "<n>" --yes --peso "<por qué>"` | Solo con SÍ del usuario; una ficha nueva dice por qué no es una enmienda. Sin `--yes` entran la primera ficha de una candidata `F-n` y una normalización con trinquete |
+| `hallazgo.py anotar\|list\|mover\|resolver` | Lo que se encuentra en el código va a una feature abierta o al proyecto, no a una ficha. Ver `references/hallazgos.md` |
 | `postmerge_medido.py base --repo <r> --guardar <j>` | Foto medida de los rojos ANTES del merge |
 | `postmerge_medido.py check --repo <r> --base <j>` | Rojos NUEVOS, build roto o tests desaparecidos (exit 2) |
 | `arquitectura.py check [--feature <id>]` | Trinquete de arquitectura: lo heredado no crece; `close` lo corre solo. Ver `references/arquitectura-heredada.md` |
@@ -271,7 +280,8 @@ $PY "$H/postmerge_medido.py" check --repo <ruta> --base /tmp/base-<svc>.json    
 paquete que no compila, un `panic` en `init()` o tests borrados. Usa siempre la
 version medida (por que, en `references/lecciones-del-arnes.md`).
 
-Si aparecen rojos nuevos: ficha el choque, no bajes la asercion que lo detecto.
+Si aparecen rojos nuevos: anota el choque (`hallazgo.py anotar`) y muestraselo al usuario, que
+decide si es una ficha de bug; no bajes la asercion que lo detecto.
 Al verificar el exit a mano no uses un pipe (`| tail`): te devuelve el status
 del tail, no el del gate.
 
@@ -396,6 +406,7 @@ solicita publicar. No inventes el binding ni publiques por defecto; consulta
 ## Reglas duras
 
 - Todo hallazgo relevante se escribe en `harness/progress/`. Una respuesta en el chat no reemplaza evidencia persistida.
+- Un hallazgo no abre una ficha: se resuelve en una feature abierta (rama, AC o enmienda) o se anota con `hallazgo.py`. Una ficha nueva exige el SÍ del usuario y su peso (`add.py --yes --peso`).
 - `gate.py verify` corre en el WORKTREE de la feature cuando existe. Si el
   worktree declarado no existe, **bloquea** en vez de caer a la raíz; sin
   worktree, avisa que mide la raíz. Un rojo o un verde sobre el árbol
@@ -460,6 +471,7 @@ Python. Si no hay revisor aislado, puedes revisar localmente con
 | [`references/multirepo.md`](references/multirepo.md) | raiz multi-repo sin `.git`: registro, `--integrated`, postmerge medido |
 | [`references/contexto.md`](references/contexto.md) | varias raices de grafo, el parte de `refrescar`, algo del contexto no cuadra |
 | [`references/lecciones-del-arnes.md`](references/lecciones-del-arnes.md) | **antes de tocar o escribir un gate** |
+| [`references/hallazgos.md`](references/hallazgos.md) | encuentras algo en el código mientras trabajas en otra cosa, o `add.py` se niega a crear una ficha: enmienda antes que ficha, `hallazgo.py` |
 | [`references/arquitectura-heredada.md`](references/arquitectura-heredada.md) | proyecto con mucho código anterior al arnés: trinquete, base, cuota de normalización, `arquitectura.py` |
 | [`references/normalizacion-de-stacks.md`](references/normalizacion-de-stacks.md) | un repo no recibe las rules o skills de su stack, una regla no nombra el código del repo, una copia instalada quedó vieja, worktree sin normativa, `stack.py verificar` |
 | [`references/normas-de-ingenieria.md`](references/normas-de-ingenieria.md) | una norma no llega a un rol, quieres agregar o cambiar una, AC negativos, bloque `documentation`/`security_audit` del manifest, exit de `stack.py auditar` |

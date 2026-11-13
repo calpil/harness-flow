@@ -98,7 +98,12 @@ Compara `(paquete, test)` contra la base y falla (exit 2) por rojos NUEVOS, buil
 roto o tests desaparecidos. Al verificar el exit a mano **no uses un pipe**
 (`| tail`): te devuelve el status del tail, no el del gate.
 
-Si aparecen rojos nuevos: ficha el choque, no bajes la asercion que lo detecto.
+Si aparecen rojos nuevos: anota el choque (`hallazgo.py anotar`) y muestraselo al
+usuario, que decide si es una ficha de bug. No bajes la asercion que lo detecto.
+
+`close` se niega si la feature tiene hallazgos anotados sin resolver. Resuelve
+cada uno (`hallazgo.py resolver --id H-n --como "<AC-n, E-n o commit>"`) o pasalo
+a otra feature abierta o al proyecto (`hallazgo.py mover`).
 
 ## 5. Comprueba que el merge existe
 

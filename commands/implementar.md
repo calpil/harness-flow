@@ -171,6 +171,11 @@ Es el modo de toda feature cuyo modo registrado es `pair` (estilo `/pair` de `ho
    - (3) hacer pasar un test requeriria cambiar, saltar (`skip`) o borrar un test;
    - (4) llevas **dos intentos** sin llegar a verde;
    - (5) el paso supera **~50 lineas o toca mas de 3 archivos** (propon partirlo).
+
+   **Un hallazgo no abre una ficha.** Lo que encuentres fuera de los AC se arregla
+   en la rama si es de esta feature (enmienda si cambia un AC) o se anota con
+   `hallazgo.py anotar [--feature <id>]`. Una ficha nueva la decide el usuario, y
+   si le preguntas, la primera opcion es la enmienda (`references/hallazgos.md`).
 4. **Chequeo y Commits:** con toda la lista en verde, verifica con el usuario los
    AC de verificacion manual, **sugiere** refactors sin aplicarlos solo (solo en
    verde), y **sugiere el mensaje de commit** separando funcionalidad y refactor

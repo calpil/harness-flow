@@ -3,6 +3,12 @@
 
   add.py --name "cobro idempotente" [--kind bug|task|normalizacion] [--microservicio a --microservicio b]
          [--prd docs/prd/PRD-master.md] [--candidata F-1] [--requiere F-1]
+         [--yes --peso "<por que es ficha y no enmienda>"]
+
+Una ficha nueva es decision del usuario. Entra sin --yes solo lo que el ya
+decidio: la primera ficha de una candidata F-n del PRD aprobado y una
+normalizacion con el trinquete adoptado. Todo lo demas exige --yes y --peso, y
+un hallazgo no abre ficha: va a una feature abierta (hallazgo.py, enmienda).
 """
 from __future__ import annotations
 
@@ -26,6 +32,52 @@ def plantilla() -> str:
     return m.group(1)
 
 
+def _ya_decidida(p: dict, a, candidata_cubierta: bool) -> bool:
+    """El usuario ya decidio esta ficha: aprobo la candidata en el PRD o adopto el trinquete."""
+    if a.candidata and not candidata_cubierta:
+        return True
+    if a.kind == "normalizacion":
+        import arquitectura
+        return bool(arquitectura.modo_trinquete(p))
+    return False
+
+
+def _negar_sin_si(data: dict, a) -> None:
+    """Sin el SI del usuario no hay ficha: dice a donde va un hallazgo y donde cabe."""
+    import hallazgo
+    import normas
+    L = ["[!!] add.py requiere --yes: una ficha nueva la decide el usuario.",
+         "     Cada ficha paga spec, lista de tests, review, verify y cierre. Un hallazgo del",
+         "     codigo NO abre ficha. Va, en este orden:",
+         "     1. A la feature en curso que toca ese codigo: arreglalo en su rama. Si cambia un AC",
+         "        es una enmienda (templates/enmienda.md, gate.py enmienda); si no, citalo en la evidencia.",
+         "     2. A otra feature abierta que lo cubre:",
+         "        " + normas.comando("hallazgo.py", "anotar", "--feature", "<id>", "--texto", "<hallazgo>"),
+         "     3. Al proyecto, si ninguna lo cubre (mismo comando sin --feature).",
+         "     Ficha nueva solo si tiene peso propio: un comportamiento nuevo que ve el usuario, o",
+         "     un riesgo de plata, datos o seguridad que no espera a otra feature.",
+         "     Si le preguntas al usuario, la primera opcion es el destino sin ficha (enmienda o",
+         "     anotar); la ficha es otra opcion y no la recomendada si cabe en una feature abierta.",
+         "     Solo con su SI repite con --yes --peso '<por que es ficha y no enmienda>'."]
+    donde = hallazgo.features_donde_cabe(data, a.microservicio,
+                                         requiere_declarados({"requiere": a.requiere}))
+    if donde:
+        L.append("     Features abiertas donde puede caber:")
+        L += [f"       #{f['id']} [{f.get('status')}] {f.get('name')}" for f in donde]
+    sys.exit("\n".join(L))
+
+
+def _peso(valor: str | None) -> str:
+    """Por que esta ficha no cabe como enmienda. Queda escrito en el backlog."""
+    limpio = (valor or "").strip()
+    if len(limpio) < 15 or any(c in limpio for c in "\n\r\x85\u2028\u2029"):
+        sys.exit("[!!] --yes va con --peso '<por que es ficha y no enmienda>': una linea que diga el\n"
+                 "     comportamiento nuevo o el riesgo que la justifica, o que el usuario la pidio.\n"
+                 "     Queda escrito en el backlog. Si no sabes que poner, no es una ficha:\n"
+                 "     hallazgo.py anotar.")
+    return limpio
+
+
 def main() -> None:
     import producto
     ap = argparse.ArgumentParser()
@@ -37,6 +89,10 @@ def main() -> None:
     ap.add_argument("--requiere", action="append", default=[],
                     help="vertical slice del que depende (p.ej. F-1 o #1; repetible)")
     ap.add_argument("--acceptance", action="append", default=[])
+    ap.add_argument("--yes", action="store_true",
+                    help="el usuario pidio o aprobo esta ficha (no hace falta para la primera ficha "
+                         "de una candidata F-n ni para una normalizacion con el trinquete adoptado)")
+    ap.add_argument("--peso", help="con --yes: por que es una ficha y no una enmienda de una feature abierta")
     a = ap.parse_args()
 
     p = paths()
@@ -52,6 +108,7 @@ def main() -> None:
                  "producto.py aprobar. Una candidata F-n no es otro archivo; su historia la cuenta el spec.")
     linea = None
     deps_prd: list[str] = []
+    candidata_cubierta = False
     if a.candidata:
         if not re.fullmatch(r"F-\d+", a.candidata):
             sys.exit(f"[!!] --candidata {a.candidata!r}: usa el id del PRD, por ejemplo F-1")
@@ -66,9 +123,15 @@ def main() -> None:
         ).get(a.candidata, [])
         otras = [x for x in data["features"]
                  if x.get("prd_candidata") == a.candidata and x.get("status") != "superseded"]
+        candidata_cubierta = bool(otras)
         if otras:
             print(f"[i]  {a.candidata} ya la cubre " + ", ".join(f"#{x['id']}" for x in otras)
                   + ": esta feature sera otra parte de la misma candidata")
+
+    decidida = _ya_decidida(p, a, candidata_cubierta)
+    if not a.yes and not decidida:
+        _negar_sin_si(data, a)
+    peso = None if decidida and not a.peso else _peso(a.peso)
 
     fid = max([int(f["id"]) for f in data["features"]] or [0]) + 1
     reqs = requiere_declarados({"requiere": [*deps_prd, *a.requiere]})
@@ -86,6 +149,8 @@ def main() -> None:
         f["prd_candidata"] = a.candidata
     if reqs:
         f["requiere"] = reqs
+    if peso:
+        f["peso"] = peso
     data["features"].append(f)
     save_backlog(p, data)
 

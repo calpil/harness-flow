@@ -73,6 +73,12 @@ autoinforme, igual que la evidencia del implementer. Antes de sellar:
 
 Si una fila no aguanta, no selles: devuelve el hallazgo.
 
+Las `## Observaciones` (menores e info) no abren ronda ni ficha. Antes de cerrar:
+las de esta feature que no cambian un AC se arreglan en la rama; las de otra
+feature abierta se anotan ahi (`hallazgo.py anotar --feature <id>`); el resto, en
+el proyecto (`hallazgo.py anotar`). Una ficha nueva la decide el usuario
+(`references/hallazgos.md`).
+
 ## 4. Sella
 
 ```bash

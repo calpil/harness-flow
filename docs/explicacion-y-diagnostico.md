@@ -62,6 +62,8 @@ El arnés se instala **una sola vez en la raíz del proyecto** (espacio de traba
 | `stack.py` | Gobernanza de los 10 stacks tecnológicos CALPIL: detección dinámica, auditoría de cumplimiento, normalización multi-LLM (Claude, Codex, Gemini, Hermes), scaffolding y verificadores AST/regex. |
 | `copias.py` | Copias de la normativa instaladas en un repo: alcance real de cada regla (medido en el código del repo), huellas, registro de lo instalado e historial de la plantilla para distinguir una copia vieja de una editada por el proyecto. |
 | `arquitectura.py` | Trinquete de arquitectura: mide el código que vive fuera del layout del stack, sella la base y exige que solo baje. `inventario` dice también el código que el layout no mira. |
+| `add.py` | Alta de una ficha en el backlog. Una ficha nueva exige el SÍ del usuario y su peso (`--yes --peso`), salvo la primera de una candidata `F-n` y una normalización con trinquete. |
+| `hallazgo.py` | Hallazgos del código: se anotan en una feature abierta o en el proyecto y se resuelven dentro de una feature. `close` se niega mientras la feature tenga hallazgos abiertos. |
 | `normas.py` | Registro único de las normas de ingeniería (12 normas × 5 roles) que imprimen el brief, el briefing y el borrador de producto. |
 | `documentacion.py` | Sincronización automática de bloques generados en `PRD-master.md` y `sdd.md`. |
 | `vault.py` | Generación del panel visual en Obsidian (`docs/vault/`). |
@@ -197,6 +199,12 @@ Tras una auditoría exhaustiva de los scripts, manifiestos de plugins y configur
 * **Estado:** **Corregido (Hito 34).** El contrato exigía `root == projects/<nombre>` en `angular.json`. Un repo con un solo proyecto en la raíz no podía cerrar una feature, y en un proyecto real los agentes movieron el proyecto entero a `projects/<nombre>` para pasar el gate.
 * **Corrección:** el medidor toma la carpeta que el repo declara: `root`, o `sourceRoot` cuando `root` es `""`. No impone un layout. Los workspaces que ya usan `projects/` no cambian.
 
+### ✅ Hallazgo 9 (Corregido): Cada hallazgo del código terminaba en una ficha nueva
+
+* **Ubicación:** [`scripts/add.py`](../scripts/add.py), [`scripts/hallazgo.py`](../scripts/hallazgo.py), [`references/hallazgos.md`](../references/hallazgos.md) y [`tests/test_hallazgos.py`](../tests/test_hallazgos.py).
+* **Estado:** **Corregido (Hito 35).** En un proyecto real el agente dio de alta 16 fichas en cuatro horas y media, desde hallazgos de specs y reviews. Preguntó por formulario, pero solo ofrecía "ficha aparte". El usuario retiró siete: eran enmiendas de features abiertas. El arnés no decía qué hacer con un hallazgo, no tenía dónde dejarlo y `add.py` no pedía aprobación.
+* **Corrección:** un hallazgo se resuelve en una feature abierta (rama, AC o enmienda) o se anota con `hallazgo.py`. `add.py` se niega sin `--yes --peso` y lista las features abiertas donde cabe. `close` se niega mientras la feature tenga hallazgos abiertos.
+
 ---
 
 ## 5. Resumen de Salud del Sistema
@@ -212,6 +220,7 @@ Tras una auditoría exhaustiva de los scripts, manifiestos de plugins y configur
 | **Neutralización de `postmerge.py`** | ✅ Óptimo | Código muerto eliminado; falla rápido con `exit 2` tanto en CLI como por importación, redirigiendo a `postmerge_medido.py`. |
 | **Gestión de CBM (`cbm_procesos.py`)** | ✅ Óptimo | Telemetría y saneamiento automático en macOS/Linux (aviso controlado en Windows). |
 | **Normalización de stacks (`stack.py`, `copias.py`)** | ✅ Óptimo | El alcance de las reglas sale del código del repo, las copias viejas se actualizan o se avisan, y `verificar` no da un OK sobre código sin medir. Quedan pendientes en los proyectos las copias que cada repo versiona. |
+| **Alta de fichas y hallazgos (`add.py`, `hallazgo.py`)** | ✅ Óptimo | Una ficha nueva exige el SÍ del usuario y su peso; un hallazgo va a una feature abierta o al proyecto, y `close` no lo pierde. |
 | **Matriz de Modelos y Reasoning Effort** | ✅ Óptimo | Calibrada por coste/latencia: roles pesados en máxima capacidad, implementer en alta velocidad y tareas de lectura/rutina en esfuerzo medio/bajo sin extended thinking innecesario. |
 
 ---

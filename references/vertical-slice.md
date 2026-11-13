@@ -65,7 +65,7 @@ Al refinar **una sola** feature en `docs/spec-feature-<id>-<slug>.md` desde `tem
 
 1. **2 a 3 AC ideales (máximo 5 por slice):**
    - Redacta entre 2 y 3 criterios en formato Given/When/Then (hasta un tope de `rules.max_acs_por_slice = 5`). Solo describen *qué* ve o recibe el usuario, nunca *cómo* se implementa.
-   - **Si necesita más criterios, no infles el spec:** propón al usuario partir la feature en nuevas candidatas `F-n` para agregarlas con `add.py`, y continúa con la primera. `gate.py check-spec` y `approve-spec` avisan con `[!]` si hay más de 5 AC.
+   - **Si necesita más criterios, no infles el spec:** propón al usuario partir la feature en nuevas candidatas `F-n`, y continúa con la primera. Los cortes entran al backlog solo con su SÍ (`add.py --yes --peso`); un corte chico va como enmienda o se anota con `hallazgo.py` (ver [`hallazgos.md`](hallazgos.md)). `gate.py check-spec` y `approve-spec` avisan con `[!]` si hay más de 5 AC.
 2. **Costuras públicas de prueba (`[costura: ...]` o `Costura: ...`):**
    - Cada AC declara dónde se probará en el nivel práctico más alto:
      - `endpoint` / `api` / `http` / `grpc` / `cli`

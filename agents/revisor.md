@@ -145,7 +145,9 @@ evidencia y el codigo tu mismo.
 
 Clasifica cada hallazgo como bloqueante, mayor, menor o info, y di por que.
 `approved` es: cada AC cumplido y medido por ti, sin hallazgos bloqueantes ni
-mayores. Los menores e informativos van a Observaciones y no bajan el veredicto:
+mayores. Los menores e informativos van a Observaciones y no bajan el veredicto
+ni piden una ficha nueva (no recomiendes abrir features, bugs ni tasks: la sesion
+principal los arregla en la rama o los anota):
 una feature con sus AC verdes paso cinco rondas porque cada revisor trataba un
 mutante raro o un test mejorable como motivo de otra ronda.
 

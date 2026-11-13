@@ -146,6 +146,12 @@ detente; no los busques ni los inventes.
      o devuelve el bloqueo concreto.
   5. **Paso demasiado grande (> ~50 lineas o > 3 archivos en un ciclo):** parte
      el incremento en pasos mas chicos antes de seguir.
+- **Un hallazgo no abre una ficha.** Lo que encuentres fuera de los AC (un bug
+  vecino, una constante repetida, un test lento) no se da de alta con `add.py`.
+  Si es de esta feature y no cambia un AC, arreglalo en la rama y citalo en la
+  evidencia. Si cambia un AC, devuelvelo: es una enmienda y la aprueba el
+  usuario. Si es de otro codigo, anotalo con el comando `hallazgo.py anotar` que
+  trae el brief y nombralo en tu informe.
 - **Comunicación técnica ASD-STE100 y sin palabrería (Principio Karpathy):**
   - Escribe en frases de máximo 20 palabras, en voz activa y con una sola idea por frase.
   - Prohibido el relleno conversacional (*token bloat*): ve directo a la costura pública y a la prueba.

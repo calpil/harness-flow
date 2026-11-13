@@ -41,7 +41,8 @@ class AbortoDeStartTests(unittest.TestCase):
         git("-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q",
             "--allow-empty", "-m", "base", cwd=self.raiz)
         harness("init.py", "--project", "demo", cwd=self.raiz)
-        harness("add.py", "--name", "Checkout", cwd=self.raiz)
+        harness("add.py", "--name", "Checkout", "--yes",
+                "--peso", "la pidio el usuario para el fixture", cwd=self.raiz)
         self.contenedor = self.raiz.parent / f"{self.raiz.name}-wt"
 
     def rama_huerfana(self, nombre):

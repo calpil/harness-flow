@@ -57,8 +57,9 @@ flowchart TD
     H33["<b>Hito 33: La Norma Sigue al Código</b><br/>Alcance de las reglas medido en el repo, copias viejas actualizadas, raíz y monorepos normalizados, verificar sin OK sobre código sin medir"]
 
     H34["<b>Hito 34: El Medidor de Frontend Mide el Layout Declarado</b><br/>Un proyecto Angular en la raíz del repo cierra sin moverse a projects/"]
+    H35["<b>Hito 35: Un Hallazgo no Abre una Ficha</b><br/>Enmienda antes que ficha: hallazgo.py, add.py con el SÍ y el peso, close sin hallazgos abiertos"]
 
-    H1 --> H2 --> H3 --> H4 --> H5 --> H6 --> H7 --> H8 --> H9 --> H10 --> H11 --> H12 --> H13 --> H14 --> H15 --> H16 --> H17 --> H18 --> H19 --> H20 --> H21 --> H22 --> H23 --> H24 --> H25 --> H26 --> H27 --> H28 --> H29 --> H30 --> H31 --> H32 --> H33 --> H34
+    H1 --> H2 --> H3 --> H4 --> H5 --> H6 --> H7 --> H8 --> H9 --> H10 --> H11 --> H12 --> H13 --> H14 --> H15 --> H16 --> H17 --> H18 --> H19 --> H20 --> H21 --> H22 --> H23 --> H24 --> H25 --> H26 --> H27 --> H28 --> H29 --> H30 --> H31 --> H32 --> H33 --> H34 --> H35
 ```
 
 ---
@@ -81,6 +82,7 @@ Los documentos de `docs/` complementan y fundamentan las guías operativas que l
 * [`references/context7-documentacion-oficial.md`](../references/context7-documentacion-oficial.md): Integración con Context7 MCP, enlaces oficiales por stack y escáneres de seguridad CVE.
 * [`references/vertical-slice.md`](../references/vertical-slice.md): Metodología de desarrollo vertical, costuras públicas y modo Pair interactivo.
 * [`references/normas-de-ingenieria.md`](../references/normas-de-ingenieria.md): Registro de las 12 normas de ingeniería (`scripts/normas.py`), cuadro norma × rol, cómo llega cada una a producto, leader, implementer y revisor en cualquier host, AC negativos, bloque `documentation`/`security_audit` del manifest y exit de `stack.py auditar`.
+* [`references/hallazgos.md`](../references/hallazgos.md): Qué hacer con lo que se encuentra en el código mientras se trabaja en otra cosa: enmienda antes que ficha, `hallazgo.py` y cuándo `add.py` crea una ficha.
 * [`references/arquitectura-heredada.md`](../references/arquitectura-heredada.md): Trinquete de arquitectura para proyectos con código anterior al arnés: inventario, base, cuota de normalización y casos límite.
 * [`references/modelos.md`](../references/modelos.md): Modelo y esfuerzo por rol y proveedor; elección de Fable 5.2 u Opus 5.5 en Producto y Leader.
 * [`references/hub.md`](../references/hub.md): Memory Hub Postgres: qué es un servicio, purga de dependencias y cómo apagarlo en tests.

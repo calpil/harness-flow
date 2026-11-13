@@ -1229,6 +1229,9 @@ def lineas_modo(f: dict) -> list[str]:
         "(3) pasar exige cambiar, saltar o borrar un test, (4) dos intentos sin verde, "
         "(5) el paso supera ~50 lineas o 3 archivos.",
         "  detalle: " + normas.comando("normas.py", "--ref", "vertical-slice"),
+        "  hallazgos: lo que encuentres fuera de los AC no abre una ficha. Si es de esta feature, "
+        "arreglalo aqui (enmienda si cambia un AC); si no, anotalo: "
+        + normas.comando("hallazgo.py", "anotar", "--texto", "<hallazgo>") + " [--feature <id>]",
     ]
     if modo == "pair":
         return [f"modo pair interactivo: ACTIVADO (por defecto en cualquier repo; registrado en el backlog)",
@@ -1531,6 +1534,12 @@ def cmd_brief(args) -> None:
     if e["cbm_pendientes"]:
         L.append("[i] el indice de codebase-memory-mcp esta atrasado en "
                  f"{', '.join(e['cbm_pendientes'])}: orienta menos; confirma leyendo el archivo.")
+
+    # Lo que otra feature o un review dejo anotado para resolver aqui, sin ficha nueva.
+    # El revisor no los recibe: juzga spec contra codigo.
+    if getattr(args, "con_hallazgos", True):
+        import hallazgo
+        L += hallazgo.lineas_brief(data, f, micros)
 
     L.append("")
     L.append(f"AC ({len(acs)}):")

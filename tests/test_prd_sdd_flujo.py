@@ -20,6 +20,8 @@ sys.path.insert(0, str(SCRIPTS))
 import bloques  # noqa: E402
 import multirepo  # noqa: E402
 
+PESO = "la pidio el usuario para el fixture"
+
 SPEC_CITADO = """# Spec - Feature #1: Cobro idempotente
 
 Estado: draft
@@ -77,7 +79,7 @@ class FlujoPrdSddTests(unittest.TestCase):
         self.assertEqual((f["prd"], f["prd_candidata"]), ("docs/prd/PRD-master.md", "F-1"))
 
     def test_add_sin_candidata_deja_el_hueco_explicito(self):
-        self.ok("add.py", "--name", "Arreglo", "--kind", "bug")
+        self.ok("add.py", "--name", "Arreglo", "--kind", "bug", "--yes", "--peso", PESO)
         spec = (self.root / "docs" / "spec-feature-1-arreglo.md").read_text(encoding="utf-8")
         self.assertIn("candidata: ninguna declarada", spec)
         self.assertNotIn("prd", self.datos()["features"][0])
@@ -102,7 +104,7 @@ class FlujoPrdSddTests(unittest.TestCase):
         self.ok("add.py", "--name", "Cobro idempotente", "--prd", "docs/prd/PRD-master.md", "--candidata", "F-1")
 
     def test_add_avisa_que_approve_spec_se_va_a_negar_sin_documentos(self):
-        r = self.ok("add.py", "--name", "Cobro idempotente")
+        r = self.ok("add.py", "--name", "Cobro idempotente", "--yes", "--peso", PESO)
         self.assertIn("approve-spec se va a negar", r.stdout)
         self.assertIn("prd: sin documento", r.stdout)
 
@@ -318,7 +320,7 @@ class FlujoPrdSddTests(unittest.TestCase):
         self.assertIn("manual del usuario sin sello", out)
         self.assertIn("Primero el rol producto", out)
         self.assertNotIn("Para arrancar: add.py", out)
-        r = self.ok("add.py", "--name", "Cobro idempotente")
+        r = self.ok("add.py", "--name", "Cobro idempotente", "--yes", "--peso", PESO)
         self.assertIn("approve-spec se va a negar", r.stdout)
         self.assertIn("sin sello vigente", r.stdout)
 
@@ -501,10 +503,10 @@ class SddProtegidoTests(unittest.TestCase):
         self.assertEqual(f2.get("requiere"), ["F-1"])
 
         # Flag explicito --requiere por id numerico y rechazo de auto-dependencia
-        r_f3 = self.ok("add.py", "--name", "Reporte", "--kind", "task", "--requiere", "1,F-2")
+        r_f3 = self.ok("add.py", "--name", "Reporte", "--kind", "task", "--requiere", "1,F-2", "--yes", "--peso", PESO)
         f3 = next(f for f in self.datos()["features"] if f["id"] == 3)
         self.assertEqual(f3.get("requiere"), ["#1", "F-2"])
-        r_auto = self.falla("add.py", "--name", "Ciclo propio", "--kind", "task", "--requiere", "4")
+        r_auto = self.falla("add.py", "--name", "Ciclo propio", "--kind", "task", "--requiere", "4", "--yes", "--peso", PESO)
         self.assertIn("no puede depender de si misma", r_auto.stdout + r_auto.stderr)
 
 

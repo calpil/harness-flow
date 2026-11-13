@@ -135,6 +135,7 @@ Para proyectos con mucho código anterior al arnés. En vez de bloquear todo el 
 - **El alcance de cada regla sale del código del repo**: si el código vive fuera de los `globs` de la plantilla (`projects/*/src/app/`, `handlers/`), la regla de ese repo se amplía a `**/*.<ext>`. Se mide en cada normalización.
 - **Repos del proyecto**: la raíz entra siempre; también una carpeta con otro stack dentro de un repo y los monorepos `apps/*`. Un clon ajeno dentro de la raíz se avisa y no se toca.
 - **`stack.py verificar`** no da `COMPLIANT` sobre código sin medir: dice cuántos archivos viven fuera de la norma y qué no midió el verificador. Guía: [`references/normalizacion-de-stacks.md`](references/normalizacion-de-stacks.md).
+- **Un hallazgo no abre una ficha**: lo que se encuentra en el código mientras se trabaja en otra cosa se arregla en la feature en curso (enmienda si cambia un AC) o se anota con `hallazgo.py` en otra feature abierta o en el proyecto. `add.py` exige `--yes --peso "<por qué es ficha y no enmienda>"`, salvo la primera ficha de una candidata `F-n` y una normalización con trinquete, y `close` se niega mientras la feature tenga hallazgos abiertos. Guía: [`references/hallazgos.md`](references/hallazgos.md).
 - **Verificadores sin falsos positivos**: workspaces Angular con varios proyectos, servicios Go sin `internal/` (aviso) y raíces de `grafos.json` como objetos.
 - **Context7** documentado para Claude Code, Codex, Gemini CLI, Antigravity, Grok y Hermes; el revisor tiene Context7 y lectura web entre sus herramientas.
 
@@ -305,7 +306,8 @@ harness-flow/
 │   ├── estado.py                     <- Diagnóstico global de sesión, backlog y documentos
 │   ├── gate.py                       <- Orquestador determinístico de gates (exit ≠ 0)
 │   ├── comun.py, bloques.py          <- Parsing de ACs, firmas, hashes y manipulación segura
-│   ├── init.py, add.py               <- Inicialización de proyecto y alta de features
+│   ├── init.py, add.py               <- Inicialización de proyecto y alta de features (ficha nueva: --yes --peso)
+│   ├── hallazgo.py                   <- Hallazgos del código: a una feature abierta o al proyecto, no a una ficha
 │   ├── producto.py                   <- Rol 0: borradores y aprobación de PRD/SDD
 │   ├── documentacion.py              <- Sincronización de bloques generados en PRD/SDD
 │   ├── worktree.py, multirepo.py     <- Aislamiento de ramas y verificación multi-repo
@@ -350,6 +352,7 @@ harness-flow/
 │   ├── multirepo.md, claude.md, openai.md, grok.md, kimi.md, entorno.md
 │   ├── hub.md, obsidian.md, atlassian.md, documentacion.md
 │   ├── arquitectura-heredada.md      <- Trinquete: base, cuota de normalización y código anterior al arnés
+│   ├── hallazgos.md                  <- Enmienda antes que ficha: hallazgo.py y cuándo add.py crea una ficha
 │   ├── normalizacion-de-stacks.md    <- Qué repos se normalizan, alcance de las reglas y copias viejas
 │   ├── context7-documentacion-oficial.md <- Context7 MCP, documentación oficial y seguridad
 │   ├── comunicacion-ste100-y-prompts.md <- Principios Karpathy, norma ASD-STE100 y micro-reportes

@@ -8,7 +8,7 @@ spec que ya tiene evidencia, review o verify encima. El `Estado:` arranca en
 # Enmienda - Feature #<id>: <que cambia, en una linea>
 
 Estado: draft
-Origen: <decision del usuario, hallazgo del review (R-n) o bloqueo>, con fecha.
+Origen: <decision del usuario, hallazgo del review (R-n), hallazgo anotado (H-n) o bloqueo>, con fecha.
 
 ## Por que
 
