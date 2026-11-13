@@ -918,14 +918,14 @@ La intención era la contraria: usar `projects/` cuando el repo ya la tiene, no 
 
 ## 37. Estado de Verificación y Métricas de Calidad
 
-* **Batería de Pruebas Automatizadas**: 58 archivos de test en `tests/`, 1.184 tests. Última medición (2026-11-12, sobre el árbol de trabajo del Hito 33, antes de su commit), en dos corridas:
-  * Suite completa sin el toolchain de frontend: 1.184 tests, 1.111 pasaron y 73 fallaron. Los 73 están en `test_frontend_runner.py`, `test_retirados_frontend.py`, `test_frontend_close.py` y `test_cierre_historico.py`, que exigen `HARNESS_TEST_FRONTEND_MODULES` y fallan a propósito cuando falta.
-  * Esos cuatro archivos con el toolchain (`~/.harness-flow/frontend-toolchain`: Angular 22.2.1, Vitest 4.1.11, Node 22): 93 tests, 93 pasaron.
-  * Entre las dos corridas, los 1.184 tests pasan. Ningún test falla.
-  * Tras el Hito 34 (2026-11-12), que solo cambia `postmerge_frontend.py` y agrega 5 tests: los cuatro archivos de frontend con el toolchain, 98 tests, 98 pasaron. También se corrieron los tests de `medicion_destino.py`, que usa funciones de ese script. El resto de la suite no se volvió a correr.
+* **Batería de Pruebas Automatizadas**: 59 archivos de test en `tests/`, 1.198 tests. Última medición (2026-11-13, sobre el commit `2475ba3`), en una sola corrida con el toolchain de frontend (`~/.harness-flow/frontend-toolchain`: Angular 22.2.1, Vitest 4.1.11, Node 22):
+  * 1.198 tests, 1.198 pasaron. Ningún test falla ni queda sin medir. Duración: 26 minutos.
+  * Cubre los hitos 33 y 34 y los tres commits posteriores: paridad de Gemini/AGY (`3f7d0ba`), esperas de los tests Go sin `internal/` (`10c29ec`) y el verificador de `angular-product` que mide `shared` y `core` (`cf8bbf7`).
+  * Medición anterior (2026-11-12, sobre `e8c269c`), también en una sola corrida con el toolchain: 1.192 tests, 1.192 pasaron.
+  * Las mediciones del Hito 33 se hicieron en dos corridas (la suite sin el toolchain y los cuatro archivos de frontend con él). Desde `e8c269c` la suite se mide entera de una vez.
 * **Corrección de las mediciones anteriores**: las corridas sobre `50e04e9`, `3ff2f0c` y `77f1eee` reportaron esos 73 fallos como "prerrequisito de entorno". El toolchain estaba instalado desde el 2026-10-01; lo que faltó fue pasar su ruta. En esas corridas el runner de frontend quedó sin medir. La suite se corre siempre así: `T=~/.harness-flow/frontend-toolchain; PATH=$T/node_modules/node/bin:$PATH HARNESS_TEST_FRONTEND_MODULES=$T/node_modules "$PY" -m unittest discover -s tests`.
 * **Historial**: la corrida sobre `50e04e9` mostró además 3 tests que ese commit dejó desactualizados (`test_contexto`, `test_multirepo_close` y `test_spec_acs`); se corrigieron en `04a4fc5`.
-* **Tests agregados en los hitos 19 a 33**: `test_indice_hermes.py`, `test_stack_adopcion.py`, `test_stack_normalizar.py`, `test_arquitectura.py`, `test_brief_stacks.py`, `test_hub.py`, `test_modelo.py`, `test_pair_y_reglas.py`, `test_feature_cero.py`, `test_normativa_por_rol.py`, `test_normas.py` y `test_copias.py`, más casos nuevos en `test_plugin_claude.py`. Cada regresión se comprobó contra el código anterior: falla ahí y pasa con la corrección.
+* **Tests agregados en los hitos 19 a 33**: `test_indice_hermes.py`, `test_stack_adopcion.py`, `test_stack_normalizar.py`, `test_arquitectura.py`, `test_brief_stacks.py`, `test_hub.py`, `test_modelo.py`, `test_pair_y_reglas.py`, `test_feature_cero.py`, `test_normativa_por_rol.py`, `test_normas.py` y `test_copias.py`, más casos nuevos en `test_plugin_claude.py`. Después: 5 casos en `test_frontend_runner.py` (Hito 34) y `test_check_angular_shared_core.py` (`cf8bbf7`). Cada regresión se comprobó contra el código anterior: falla ahí y pasa con la corrección.
 * **Aislamiento**: los tests no abren el Memory Hub real (`HARNESS_SIN_CONTEXTO=1`, `HARNESS_SIN_HUB=1`), y la lógica de `hub.py` se prueba con una conexión falsa.
 * **Validación de Habilidades de Agentes**: 100% de las habilidades validadas en los 10 stacks con `validate-agent-skills.mjs`.
 * **Verificación de Arquitectura en las 10 Plantillas Reales de CALPIL**:
