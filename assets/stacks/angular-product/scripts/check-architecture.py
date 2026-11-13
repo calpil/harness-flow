@@ -9,6 +9,9 @@ Verifica:
    - data-access/** sin ui/**
    - sin acceso directo entre features distintas
 3. Composition Root: existencia de src/app/app.routes.ts.
+4. Dependencia hacia dentro: src/app/shared/** (y src/app/core/**) no importan
+   src/app/features/**. Lo que otra feature o `shared` necesita se promueve a
+   `shared/<area>/`; `features/` si puede usar `shared/` y `core/`.
 
 Workspaces con varios proyectos: si `angular.json` declara `projects`, se
 verifica cada proyecto de tipo `application` en su propia raiz (`sourceRoot`,
@@ -36,6 +39,9 @@ FORBIDDEN_DOMAIN_PREFIXES = [
 IMPORT_RE = re.compile(r"""(?:from|import|export\s*\*\s*from)\s*['"]([^'"]+)['"]""")
 
 CAPAS = ("domain", "application", "data-access", "ui")
+
+# Carpetas de src/app que las features usan y que nunca dependen de ellas.
+TRANSVERSALES = ("shared", "core")
 
 
 def _feature_y_capa(parts: tuple[str, ...]) -> tuple[str | None, str | None]:
@@ -88,6 +94,36 @@ def _aplicaciones(root_dir: Path) -> tuple[list[tuple[str, Path]], list[str], li
     return apps, libs, errores, []
 
 
+def _verificar_transversales(root_dir: Path, app_dir: Path) -> tuple[list[str], list[str]]:
+    """Errores y avisos de `shared/**` y `core/**` de una aplicacion: ningun
+    import relativo suyo puede resolver dentro de `features/`. Se mide el
+    import estatico relativo, igual que el resto de las reglas; los `*.spec.ts`
+    no se miden, como en `features/`."""
+    errors: list[str] = []
+    warnings: list[str] = []
+    features_dir = (app_dir / "features").resolve()
+    for carpeta in TRANSVERSALES:
+        base = app_dir / carpeta
+        if not base.is_dir():
+            continue
+        for ts_file in sorted(base.rglob("*.ts")):
+            if ts_file.name.endswith(".spec.ts"):
+                continue
+            archivo = ts_file.relative_to(root_dir).as_posix()
+            try:
+                content = ts_file.read_text(encoding="utf-8")
+            except Exception as exc:
+                warnings.append(f"No se pudo leer {archivo}: {exc}")
+                continue
+            for spec in IMPORT_RE.findall(content):
+                if not (spec.startswith("./") or spec.startswith("../")):
+                    continue  # paquete o alias de tsconfig
+                target = (ts_file.parent / spec).resolve()
+                if target == features_dir or features_dir in target.parents:
+                    errors.append(f"{archivo}: {carpeta} -> features ({spec})")
+    return errors, warnings
+
+
 def _verificar_aplicacion(root_dir: Path, src_dir: Path) -> tuple[list[str], list[str]]:
     errors: list[str] = []
     warnings: list[str] = []
@@ -96,6 +132,10 @@ def _verificar_aplicacion(root_dir: Path, src_dir: Path) -> tuple[list[str], lis
     routes_file = src_dir / "app" / "app.routes.ts"
     if not routes_file.exists():
         errors.append(f"Composition Root ausente: se esperaba '{rel_src}/app/app.routes.ts'")
+
+    e, w = _verificar_transversales(root_dir, src_dir / "app")
+    errors.extend(e)
+    warnings.extend(w)
 
     features_dir = src_dir / "app" / "features"
     if not features_dir.exists():
