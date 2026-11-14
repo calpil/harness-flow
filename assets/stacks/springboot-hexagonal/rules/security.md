@@ -1,6 +1,7 @@
 ---
 description: Límites de seguridad para APIs, configuración y secretos
 globs: ["src/**", "Dockerfile", ".env.example"]
+trigger: always_on
 ---
 - No secretos en código, configuración ni logs. `.env.example` es documental.
 - API stateless: validar JWT real, scopes/roles/tenants y autorización por recurso en integración productiva.

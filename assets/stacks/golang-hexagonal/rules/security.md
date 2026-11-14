@@ -1,6 +1,7 @@
 ---
 description: Límites de seguridad para APIs, configuración y gestión de secretos en Golang
 globs: ["internal/**", "cmd/**", "Dockerfile", ".env*"]
+trigger: always_on
 ---
 
 # Reglas de Seguridad en Golang

@@ -1,6 +1,7 @@
 ---
 description: Dependencias
 globs: ['package.json']
+trigger: always_on
 ---
 
 - Solo estables. Justificar necesidad/mantenimiento/licencia/vulnerabilidades/alternativas.

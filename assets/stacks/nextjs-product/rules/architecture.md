@@ -1,6 +1,7 @@
 ---
 description: Límites feature-oriented layered
 globs: ['src/features/**', 'src/app/**', 'src/components/**/*.tsx']
+trigger: always_on
 ---
 
 - `domain/**`: TypeScript puro; sin Next/React/application/infrastructure/ui.

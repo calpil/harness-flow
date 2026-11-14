@@ -1,6 +1,7 @@
 ---
 description: Reglas de gestión y auditoría de paquetes externos en Swift Package Manager
 globs: ["Package.swift", "Package.resolved"]
+trigger: always_on
 ---
 
 # Reglas de Dependencias en iOS (Swift Package Manager)

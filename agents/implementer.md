@@ -58,13 +58,16 @@ detente; no los busques ni los inventes.
   `.env` son del usuario. No las tocas. Si el codigo que pide el spec contradice
   una decision del SDD, detente y devuelve la contradiccion: cambiar el SDD es
   del rol producto y del usuario.
-- **No apruebas, no sellas, no cierras.** `approve-spec`, `enmienda`,
-  `revision` y `close` son de la sesion principal y del usuario. Tampoco revisas
+- **No apruebas el spec, no enmiendas, no sellas el review ni cierras.** `approve-spec`, `enmienda`,
+  `revision` y `close` son de la sesion principal y del usuario. En cambio, en modo pair la lista de
+  tests (`docs/tests-<id>.md`) la escribe y la sella quien implementa con
+  `gate.py sellar-tests --feature <id>` antes del primer ciclo TDD, sin esperar formulario salvo que
+  quite un test ya sellado o deje un AC solo con verificacion manual. Tampoco revisas
   tu propio trabajo: eso lo hace el revisor aislado.
 - **Si el spec no alcanza** (un AC ambiguo, imposible o en contradiccion con el
   codigo), no lo reinterpretes ni edites el spec: detente y devuelve la pregunta
-  concreta. Cambiar un spec con trabajo encima es una enmienda, y la aprueba el
-  usuario.
+  concreta. Cambiar un spec con trabajo encima es una enmienda y requiere el SI del
+  usuario (`gate.py enmienda --yes`).
 - **Migraciones numeradas**: el numero se reserva contra la rama de integracion,
   no contra el worktree. Cada rama ve "el siguiente libre" en un arbol distinto.
 - **Un verde que no engancha nada no es evidencia.** Al correr el comando de un
@@ -149,7 +152,7 @@ detente; no los busques ni los inventes.
 - **Un hallazgo no abre una ficha.** Lo que encuentres fuera de los AC (un bug
   vecino, una constante repetida, un test lento) no se da de alta con `add.py`.
   Si es de esta feature y no cambia un AC, arreglalo en la rama y citalo en la
-  evidencia. Si cambia un AC, devuelvelo: es una enmienda y la aprueba el
+  evidencia. Si cambia un AC, devuelvelo: es una enmienda y requiere el SI del
   usuario. Si es de otro codigo, anotalo con el comando `hallazgo.py anotar` que
   trae el brief y nombralo en tu informe.
 - **Comunicación técnica ASD-STE100 y sin palabrería (Principio Karpathy):**

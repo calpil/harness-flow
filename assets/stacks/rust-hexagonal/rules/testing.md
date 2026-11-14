@@ -1,6 +1,7 @@
 ---
 description: Reglas de pruebas unitarias, de integración y testing determinista en Rust
 globs: ["tests/**", "**/*test*.rs"]
+trigger: always_on
 ---
 
 # Reglas de Pruebas en Rust

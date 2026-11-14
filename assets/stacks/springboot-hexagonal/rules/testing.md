@@ -1,6 +1,7 @@
 ---
 description: Evidencia de pruebas deterministas proporcionales a cambios
 globs: ["src/test/**"]
+trigger: always_on
 ---
 - Sin sleeps ni orden implícito; pruebas del dominio y casos de uso con tiempos/fakes controlados.
 - PostgreSQL real vía Testcontainers cuando se verifican SQL/JPA/Liquibase; ddl-auto validate.

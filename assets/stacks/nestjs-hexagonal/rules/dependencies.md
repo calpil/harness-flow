@@ -1,6 +1,7 @@
 ---
 description: Reglas de dependencias y gobierno de paquetes npm en NestJS
 globs: ["package.json", "package-lock.json"]
+trigger: always_on
 ---
 
 # Reglas de Dependencias en NestJS

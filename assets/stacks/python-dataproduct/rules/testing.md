@@ -1,6 +1,7 @@
 ---
 description: Estándares de pruebas automatizadas deterministas en Python con Pytest
 globs: ["tests/**", "test_*.py"]
+trigger: always_on
 ---
 
 # Reglas de Pruebas en Python Data Product

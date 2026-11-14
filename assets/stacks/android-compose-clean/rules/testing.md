@@ -1,6 +1,7 @@
 ---
 description: Reglas de pruebas unitarias, testing de coroutines y determinismo en Android
 globs: ["app/src/test/**", "**/*Test*.kt"]
+trigger: always_on
 ---
 
 # Reglas de Pruebas en Android (JUnit & Coroutines Test)

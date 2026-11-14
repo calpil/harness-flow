@@ -1,6 +1,7 @@
 ---
 description: Reglas de gestión y auditoría de dependencias en Android mediante Gradle Version Catalogs
 globs: ["gradle/libs.versions.toml", "**/*.gradle.kts"]
+trigger: always_on
 ---
 
 # Reglas de Dependencias en Android (Gradle Version Catalog)

@@ -1,6 +1,7 @@
 ---
 description: Seguridad
 globs: ['src/**', 'nginx.conf', 'Dockerfile', 'src/environments/**']
+trigger: always_on
 ---
 
 - Sin secretos en código ni bundle. Headers + CSP (nginx.conf). Imagen nginx non-root.

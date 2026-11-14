@@ -236,8 +236,9 @@ Reglas:
     try:
         import contexto
         import stack
-        from comun import micros_declarados
-        repos, _ = contexto._repos_de_la_feature(p, f, micros_declarados(f))
+        from comun import micros_declarados, spec_micros
+        micros = micros_declarados(f) or spec_micros(stext)
+        repos, _ = contexto._repos_de_la_feature(p, f, micros)
         if wt and all(Path(wt).resolve() != r for _, r in repos):
             repos.insert(0, (Path(wt).name, Path(wt).resolve()))
         por_stack: dict[str, list[str]] = {}
@@ -267,7 +268,7 @@ Reglas:
                   "  Context7 y el escaner de este stack van abajo, en su bloque DOCUMENTACION VIGENTE.\n")
         # El texto completo de las reglas y el indice de skills: el revisor no depende
         # de que su host los cargue ni de que esten instalados en el repo.
-        reglas = contexto.lineas_reglas(p, load_backlog(p), f, micros_declarados(f))
+        reglas = contexto.lineas_reglas(p, load_backlog(p), f, micros)
         if reglas:
             print("\n".join(reglas) + "\n")
     except Exception as exc:

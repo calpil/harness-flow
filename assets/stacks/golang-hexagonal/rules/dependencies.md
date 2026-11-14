@@ -1,6 +1,7 @@
 ---
 description: Evaluación y gobierno de dependencias en Go
 globs: ["go.mod", "go.sum"]
+trigger: always_on
 ---
 
 # Reglas de Dependencias en Golang

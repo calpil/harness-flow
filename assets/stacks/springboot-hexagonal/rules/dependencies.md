@@ -1,6 +1,7 @@
 ---
 description: Evaluación de dependencias Maven Spring Boot y remediaciones verificables
 globs: ["pom.xml"]
+trigger: always_on
 ---
 - Solo versiones estables publicadas y mutuamente compatibles con el parent Boot y Java 21.
 - No borrar pisos de seguridad del BOM/transitivas sin `effective-pom` + `dependency:tree` y tests que lo prueben.

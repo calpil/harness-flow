@@ -1,6 +1,7 @@
 ---
 description: Límites de Clean Architecture y Arquitectura Hexagonal en .NET / C#
 globs: ["src/**", "tests/**"]
+trigger: always_on
 ---
 
 # Reglas de Arquitectura Hexagonal en .NET / C#

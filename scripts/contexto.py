@@ -1160,6 +1160,11 @@ def _repos_de_la_feature(p: dict, f: dict, micros: list[str]) -> tuple[list[tupl
             sin_repo.append(m)
         elif ruta.resolve() != raiz.resolve() or principal == raiz:
             agregar(nombre, ruta)
+    if (len(repos) == 1 and not micros and not sin_repo
+            and stack.detectar_stack_directorio(principal)["stack"] == "generico"):
+        for d in stack.detectar_todos_los_destinos(raiz):
+            if d["stack"] != "generico":
+                agregar(Path(d["path"]).name, Path(d["path"]))
     return repos, sin_repo
 
 
@@ -1287,7 +1292,7 @@ def _skill_md(repos_del_stack: list[Path], sid: str, nombre: str) -> tuple[Path 
     """(SKILL.md, origen) de una skill del stack: la copia del proyecto si existe, si no la plantilla."""
     import stack
     for repo in repos_del_stack:
-        for carpeta in (".claude", ".agents"):
+        for carpeta in (".claude", ".agents", ".gemini"):
             ruta = repo / carpeta / "skills" / nombre / "SKILL.md"
             if ruta.is_file() and stack.copia_vigente(repo, sid, f"{carpeta}/skills/{nombre}"):
                 return ruta, f"{repo.name}/{carpeta}/skills"
@@ -1540,7 +1545,8 @@ def cmd_brief(args) -> None:
     acs = spec_acs(stext)
     cmds = ac_comandos(stext)
     costuras = ac_costuras(stext)
-    micros = _micros_declarados(f)
+    from comun import spec_micros
+    micros = _micros_declarados(f) or spec_micros(stext)
 
     L: list[str] = []
     L.append(f"== BRIEF #{f['id']} {f.get('name')} ({proyecto}) ==")

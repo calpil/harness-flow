@@ -369,6 +369,16 @@ def micros_declarados(f: dict) -> list[str]:
                 out.append(nombre)
     return out
 
+
+SPEC_MICROS_RE = re.compile(r"^[^\S\n]*(?:[-*][^\S\n]*)?microservicios?[^\S\n]*:[^\S\n]*(.+)$", re.M | re.I)
+
+
+def spec_micros(text: str) -> list[str]:
+    """Microservicios declarados en el cuerpo del spec (`Microservicios: a, b`)."""
+    crudo = [m.group(1).strip().strip("`") for m in SPEC_MICROS_RE.finditer(text or "")]
+    return micros_declarados({"microservicios": crudo}) if crudo else []
+
+
 def slugify(name: str) -> str:
     n = unicodedata.normalize("NFKD", name or "").encode("ascii", "ignore").decode()
     n = re.sub(r"[^a-zA-Z0-9]+", "-", n).strip("-").lower()
@@ -439,7 +449,7 @@ def enlazar_dependencias(data: dict, raiz: Path, destino: Path) -> list[str]:
 
 
 CARPETAS_NORMATIVA = (".claude/rules", ".claude/skills", ".agents/rules", ".agents/skills",
-                      ".gemini/rules")
+                      ".gemini/rules", ".gemini/skills")
 
 
 def enlazar_normativa(repo: Path, destino: Path) -> list[str]:

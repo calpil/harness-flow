@@ -1,6 +1,7 @@
 ---
 description: Reglas de gestión y auditoría de dependencias en Rust y Cargo Workspace
 globs: ["**/Cargo.toml", "Cargo.lock"]
+trigger: always_on
 ---
 
 # Reglas de Dependencias en Rust

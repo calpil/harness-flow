@@ -1,6 +1,7 @@
 ---
 description: Seguridad
 globs: ['src/**', 'next.config.mjs', '.env.example', 'Dockerfile']
+trigger: always_on
 ---
 
 - Sin secretos. Solo NEXT_PUBLIC_* al cliente. Headers + CSP. Problem Details sin stack traces.

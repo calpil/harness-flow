@@ -1,6 +1,7 @@
 ---
 description: Reglas de seguridad móvil en Android, almacenamiento seguro, HTTPS, data extraction y secrets
 globs: ["app/src/**", ".env*"]
+trigger: always_on
 ---
 
 # Reglas de Seguridad en Aplicaciones Móviles Android

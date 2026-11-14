@@ -613,6 +613,11 @@ def _sellar_spec(text: str, sello: str) -> str:
 
 def _registrar_sello(p: dict, f: dict, sp: Path, text: str, quien: str, cuando: str) -> None:
     import producto
+    from comun import spec_micros
+    if not f.get("microservicios"):
+        declarados = spec_micros(text)
+        if declarados:
+            f["microservicios"] = declarados
     f["last_spec_sig"] = sign(sp)   # se firma DESPUES de escribir el sello
     f["aprobado_por"] = quien
     f["aprobado_at"] = cuando

@@ -1,6 +1,7 @@
 ---
 description: Estándares de pruebas automatizadas deterministas en .NET con xUnit
 globs: ["tests/**", "**/*Tests.cs"]
+trigger: always_on
 ---
 
 # Reglas de Pruebas en .NET / C#

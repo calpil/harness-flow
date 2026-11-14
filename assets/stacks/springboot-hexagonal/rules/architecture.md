@@ -1,6 +1,7 @@
 ---
 description: Protección de límites hexagonales, independiente de la feature de ejemplo
 globs: ["src/main/java/**"]
+trigger: always_on
 ---
 - La regla se aplica a cualquier feature, no solo a `workitems`.
 - `domain/**`: solo Java y otros tipos de dominio; sin Spring/JPA/HTTP/Jackson/cloud.

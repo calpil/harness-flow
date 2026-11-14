@@ -1,6 +1,7 @@
 ---
 description: Dependencias
 globs: ['package.json', 'package-lock.json']
+trigger: always_on
 ---
 
 - Solo dependencias necesarias y estables; justificar mantenimiento/licencia/vulnerabilidades/alternativas.

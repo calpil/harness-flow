@@ -278,15 +278,18 @@ def fue_version_de_archivo(plantilla: Path, datos: bytes) -> bool | None:
 
 
 _cache_reglas: dict[tuple[Path, str], set[str] | None] = {}
+_TRIGGER_RE = re.compile(r"^[ \t]*trigger:[ \t]*\S+[ \t]*\n?", re.MULTILINE)
 
 
 def _sin_alcance(datos: bytes) -> str:
-    """Huella de una regla sin su linea `globs`: el alcance lo calcula el arnes por repo."""
+    """Huella de una regla sin su linea `globs` ni `trigger`: el alcance lo calcula el arnes por repo."""
     texto = datos.decode("utf-8", errors="replace")
     if texto.startswith("---"):
         partes = texto.split("---", 2)
         if len(partes) >= 3:
-            texto = "---".join([partes[0], _GLOBS_RE.sub("globs: []", partes[1], count=1), partes[2]])
+            cab = _GLOBS_RE.sub("globs: []", partes[1], count=1)
+            cab = _TRIGGER_RE.sub("", cab)
+            texto = "---".join([partes[0], cab, partes[2]])
     return huella(texto.encode("utf-8"))
 
 

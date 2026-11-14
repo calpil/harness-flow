@@ -1,6 +1,7 @@
 ---
 description: Límites de Clean Architecture y Arquitectura Hexagonal en NestJS / TypeScript
 globs: ["src/**", "test/**"]
+trigger: always_on
 ---
 
 # Reglas de Arquitectura Hexagonal en NestJS

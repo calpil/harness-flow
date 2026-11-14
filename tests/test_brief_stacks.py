@@ -123,6 +123,30 @@ class BriefTests(Proyecto):
         self.assertIn("· en ms-datos", out)
         self.assertNotIn("modo pair", out)
 
+    def test_si_la_raiz_no_tiene_stack_y_la_feature_aun_no_declara_microservicios_carga_todos_los_del_proyecto(self):
+        """En una raiz multi-repo generica (ej. calpil-ingenieria), una feature en spec draft sin
+        microservicios todavia declarados recibe todos los stacks normativos del proyecto."""
+        (self.root / "angular.json").unlink()
+        (self.root / "package.json").unlink()
+        out = self.lineas([])
+        self.assertIn("(python-dataproduct", out)
+        self.assertIn("(golang-hexagonal)", out)
+        self.assertIn("(rust-hexagonal)", out)
+
+    def test_approve_spec_sincroniza_microservicios_declarados_en_el_spec(self):
+        f = {"id": 1, "name": "cobro", "status": "todo", "microservicios": []}
+        escribir(self.root / "harness" / "feature_list.json",
+                 json.dumps({"rules": {"rama_base": "main", "require_docs_al_dia": False}, "features": [f]}))
+        spec_con_micros = SPEC.replace("Estado: draft\n", "Estado: draft\nMicroservicios: ms-pagos, ms-motor\n")
+        escribir(self.root / "docs" / "spec-feature-1-cobro.md", spec_con_micros)
+        env = dict(os.environ, HARNESS_SIN_CONTEXTO="1")
+        r = subprocess.run([sys.executable, str(SCRIPTS / "gate.py"), "approve-spec", "--feature", "1", "--yes"],
+                           cwd=str(self.root), capture_output=True, text=True, env=env)
+        self.assertEqual(0, r.returncode, r.stdout + r.stderr)
+        p = paths(self.root)
+        actualizada = load_backlog(p)["features"][0]
+        self.assertEqual(["ms-pagos", "ms-motor"], actualizada["microservicios"])
+
 
 class BriefingRevisorTests(Proyecto):
     def test_el_briefing_trae_la_normativa_de_cada_stack_con_sus_repos(self):

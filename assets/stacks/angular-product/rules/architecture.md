@@ -1,6 +1,7 @@
 ---
 description: Límites feature-oriented layered (Angular)
 globs: ['src/app/features/**', 'src/app/core/**', 'src/app/shared/**', 'projects/*/src/app/features/**', 'projects/*/src/app/core/**', 'projects/*/src/app/shared/**']
+trigger: always_on
 ---
 
 - `domain/**`: sin `@angular`. `application/**`: sin `data-access`/`ui`. `ui/**`: sin `data-access` directo.

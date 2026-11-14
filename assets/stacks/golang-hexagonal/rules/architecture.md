@@ -1,6 +1,7 @@
 ---
 description: Protección de límites de arquitectura hexagonal en Golang
 globs: ["internal/**", "cmd/**"]
+trigger: always_on
 ---
 
 # Reglas de Arquitectura Hexagonal en Golang

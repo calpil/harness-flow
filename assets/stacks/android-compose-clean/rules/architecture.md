@@ -1,6 +1,7 @@
 ---
 description: Límites de Feature-Driven Clean Architecture y separación de capas en Android con Jetpack Compose y Kotlin
 globs: ["app/src/**"]
+trigger: always_on
 ---
 
 # Reglas de Arquitectura en Android (Jetpack Compose + Clean Architecture)

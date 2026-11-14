@@ -32,7 +32,7 @@ PROPIO = "# AGENTS.md del proyecto\n\nProceso propio: no usar Vitest.\n"
 
 
 def instalada(repo: Path, skill: str) -> bool:
-    return any((repo / raiz / "skills" / skill).exists() for raiz in (".claude", ".agents"))
+    return any((repo / raiz / "skills" / skill).exists() for raiz in (".claude", ".agents", ".gemini"))
 
 
 class Base(unittest.TestCase):
@@ -126,7 +126,7 @@ class SkillsExcluidasTests(Base):
         raiz, data = self.proyecto({})
         stack.auto_normalizar_y_asegurar_cumplimiento(raiz, data)
         self.assertTrue(instalada(raiz, EXCLUIDA))
-        for base in (".claude", ".agents"):
+        for base in (".claude", ".agents", ".gemini"):
             shutil.rmtree(raiz / base / "skills" / EXCLUIDA)
         data["rules"].update(REGLA)
 
@@ -138,7 +138,7 @@ class SkillsExcluidasTests(Base):
         """El control del test anterior."""
         raiz, data = self.proyecto({})
         stack.auto_normalizar_y_asegurar_cumplimiento(raiz, data)
-        for base in (".claude", ".agents"):
+        for base in (".claude", ".agents", ".gemini"):
             shutil.rmtree(raiz / base / "skills" / EXCLUIDA)
         stack.auto_normalizar_y_asegurar_cumplimiento(raiz, data)
         self.assertTrue(instalada(raiz, EXCLUIDA))

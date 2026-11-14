@@ -1,6 +1,7 @@
 ---
 description: Reglas de pruebas unitarias, determinismo de estado y pruebas de integración en iOS
 globs: ["Tests/**", "**/*Test*.swift"]
+trigger: always_on
 ---
 
 # Reglas de Pruebas en iOS (XCTest & Swift Concurrency)

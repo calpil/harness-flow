@@ -446,6 +446,28 @@ class TestStackManager(unittest.TestCase):
         self.assertEqual(ruta, destino / "SKILL.md")
         self.assertEqual(origen_txt, f"{mock_repo.name}/.agents/skills")
 
+    def test_contexto_skill_md_encuentra_copia_gemini_vigente(self):
+        import shutil
+        import contexto
+        mock_repo = self.tmpdir / "gemini-skills-repo"
+        mock_repo.mkdir()
+        (mock_repo / "go.mod").write_text("module example.com/geminiskill\n", encoding="utf-8")
+        origen = stack.STACKS_DIR / "golang-hexagonal" / "skills" / "add-feature"
+        destino = mock_repo / ".gemini" / "skills" / "add-feature"
+        shutil.copytree(origen, destino)
+
+        ruta, origen_txt = contexto._skill_md([mock_repo], "golang-hexagonal", "add-feature")
+        self.assertEqual(ruta, destino / "SKILL.md")
+        self.assertEqual(origen_txt, f"{mock_repo.name}/.gemini/skills")
+
+    def test_todas_las_reglas_de_stacks_declaran_trigger_always_on_para_agy(self):
+        for regla in sorted(stack.STACKS_DIR.glob("*/rules/*.md")):
+            with self.subTest(regla=str(regla.relative_to(stack.STACKS_DIR))):
+                texto = regla.read_text(encoding="utf-8")
+                self.assertTrue(texto.startswith("---"))
+                cabecera = texto.split("---", 2)[1]
+                self.assertIn("trigger: always_on", cabecera)
+
     def test_refactorizar_plan(self):
         mock_repo = self.tmpdir / "unstructured-repo"
         mock_repo.mkdir()

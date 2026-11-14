@@ -1,6 +1,7 @@
 ---
 description: Límites de Feature-Driven Clean Architecture y separación de capas en iOS y Swift
 globs: ["Sources/**", "Tests/**"]
+trigger: always_on
 ---
 
 # Reglas de Arquitectura en iOS (SwiftUI + Clean Architecture)

@@ -1,6 +1,7 @@
 ---
 description: Reglas de seguridad para backend Rust, validación de inputs, SQL Injection y secrets
 globs: ["crates/**", "Dockerfile", ".env*"]
+trigger: always_on
 ---
 
 # Reglas de Seguridad en Backend Rust

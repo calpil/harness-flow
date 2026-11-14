@@ -1,6 +1,7 @@
 ---
 description: Reglas de seguridad para APIs, configuración y saneamiento de inputs en NestJS
 globs: ["src/**", ".env*"]
+trigger: always_on
 ---
 
 # Reglas de Seguridad en NestJS

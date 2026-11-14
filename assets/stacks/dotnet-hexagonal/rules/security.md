@@ -1,6 +1,7 @@
 ---
 description: Límites de seguridad para APIs, configuración y consultas SQL en .NET
 globs: ["src/**", "Dockerfile", "appsettings*.json"]
+trigger: always_on
 ---
 
 # Reglas de Seguridad en .NET / C#

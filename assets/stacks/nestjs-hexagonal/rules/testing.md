@@ -1,6 +1,7 @@
 ---
 description: Estándares de pruebas automatizadas deterministas en NestJS con Jest
 globs: ["test/**", "**/*.spec.ts"]
+trigger: always_on
 ---
 
 # Reglas de Pruebas en NestJS

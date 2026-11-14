@@ -1,6 +1,7 @@
 ---
 description: Reglas de seguridad para Data Products, APIs y credenciales en Python
 globs: ["src/**", ".env*"]
+trigger: always_on
 ---
 
 # Reglas de Seguridad en Python Data Product

@@ -1,6 +1,7 @@
 ---
 description: Evaluación y gobierno de paquetes NuGet en .NET
 globs: ["**/*.csproj", "Calpil.Template.sln*"]
+trigger: always_on
 ---
 
 # Reglas de Dependencias NuGet en .NET / C#

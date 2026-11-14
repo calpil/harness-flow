@@ -443,9 +443,10 @@ def verificar_cumplimiento(repo: Path, stack_id: str | None = None,
     if not has_agents_md:
         warnings.append("Falta AGENTS.md en la raiz del microservicio/repo (recomendado para LLMs no-Claude: Codex, Gemini, Grok, Kimi)")
 
-    # B. Chequeo de Skills (.claude/skills/ o .agents/skills/)
+    # B. Chequeo de Skills (.claude/skills/, .agents/skills/ o .gemini/skills/)
     skills_claude = repo / ".claude" / "skills"
     skills_agents = repo / ".agents" / "skills"
+    skills_gemini = repo / ".gemini" / "skills"
     excluidas = skills_excluidas(rules_del_proyecto(repo) if rules is None else rules, stack_id)
     normativas = manifest.get("normative", {}).get("skills", [])
     expected_skills = [s for s in normativas if s not in excluidas]
@@ -456,7 +457,11 @@ def verificar_cumplimiento(repo: Path, stack_id: str | None = None,
         warnings.append(f"rules.{REGLA_SKILLS_EXCLUIDAS}: '{nombre}' no es una skill del stack {stack_id} (revisa el nombre)")
 
     for s in expected_skills:
-        found = (skills_claude / s / "SKILL.md").exists() or (skills_agents / s / "SKILL.md").exists()
+        found = (
+            (skills_claude / s / "SKILL.md").exists()
+            or (skills_agents / s / "SKILL.md").exists()
+            or (skills_gemini / s / "SKILL.md").exists()
+        )
         if not found:
             missing_skills.append(s)
 
@@ -506,10 +511,11 @@ def verificar_cumplimiento(repo: Path, stack_id: str | None = None,
 
     has_claude_skills = all((skills_claude / s / "SKILL.md").exists() for s in expected_skills) if expected_skills else True
     has_agents_skills = all((skills_agents / s / "SKILL.md").exists() for s in expected_skills) if expected_skills else True
+    has_gemini_skills = all((skills_gemini / s / "SKILL.md").exists() for s in expected_skills) if expected_skills else True
 
     full_multi_llm_parity = (
         has_claude_rules and has_agents_rules and has_gemini_rules
-        and has_claude_skills and has_agents_skills
+        and has_claude_skills and has_agents_skills and has_gemini_skills
         and has_agents_md
     )
 
@@ -518,7 +524,7 @@ def verificar_cumplimiento(repo: Path, stack_id: str | None = None,
         hosts_active.append("claude-code")
     if has_agents_rules and has_agents_skills:
         hosts_active.append("openai-codex/hermes/grok/kimi")
-    if has_gemini_rules and has_agents_skills:
+    if has_gemini_rules and (has_gemini_skills or has_agents_skills):
         hosts_active.append("gemini-cli/agy")
 
     multi_llm_ready = (not missing_rules) and (len(missing_skills) == 0) and has_agents_md
@@ -586,7 +592,7 @@ def ruta_skill(nombre: str, stack_id: str | None = None, repo: Path | None = Non
         if not stack_id and repo.is_dir():
             stack_id = detectar_stack_directorio(repo)["stack"]
         del_stack = bool(stack_id) and (STACKS_DIR / stack_id / "skills" / nombre / "SKILL.md").is_file()
-        for carpeta in (".claude", ".agents"):
+        for carpeta in (".claude", ".agents", ".gemini"):
             ruta = repo / carpeta / "skills" / nombre / "SKILL.md"
             # Una copia que quedo vieja no le gana a la plantilla vigente.
             if ruta.is_file() and (not del_stack
@@ -611,7 +617,7 @@ def _skills_del_stack(stack_id: str) -> set[str]:
 
 
 _ETIQUETA_REGLA = {".claude": "regla", ".agents": "regla compartida", ".gemini": "regla Gemini/AGY"}
-_ETIQUETA_SKILL = {".claude": "skill", ".agents": "skill compartida"}
+_ETIQUETA_SKILL = {".claude": "skill", ".agents": "skill compartida", ".gemini": "skill Gemini/AGY"}
 
 
 def plan_de_copias(repo: Path, stack_id: str, excluidas=frozenset()) -> list[dict[str, Any]]:
@@ -779,11 +785,15 @@ def normalizar_repositorio(repo: Path, stack_id: str | None = None, dry_run: boo
                 continue
             accion = f"Actualizada {item['etiqueta']}: {rel} ({item['motivo']})"
         elif item["etiqueta"] == "contrato":
-            if "CALPIL" not in (repo / rel).read_text(encoding="utf-8", errors="ignore"):
-                # Antes se reemplazaba entero por la plantilla del stack: el AGENTS.md del
-                # proyecto se perdia. Un archivo que ya existe es del usuario.
-                avisos.append("AGENTS.md ya existe y no se reemplaza: el contrato del stack queda en las rules instaladas")
-            continue
+            texto_actual = (repo / rel).read_text(encoding="utf-8", errors="ignore")
+            if reemplazar and texto_actual.startswith("# AGENTS.md — Contrato Operativo y Normativo ("):
+                accion = "Actualizado contrato multi-LLM en AGENTS.md (--reemplazar)"
+            else:
+                if "CALPIL" not in texto_actual:
+                    # Antes se reemplazaba entero por la plantilla del stack: el AGENTS.md del
+                    # proyecto se perdia. Un archivo que ya existe es del usuario.
+                    avisos.append("AGENTS.md ya existe y no se reemplaza: el contrato del stack queda en las rules instaladas")
+                continue
         elif reemplazar:
             accion = f"Reemplazada {item['etiqueta']}: {rel} (--reemplazar)"
         else:
@@ -884,7 +894,7 @@ def _generar_agents_md(stack_id: str, manifest: dict[str, Any]) -> str:
     lines.extend([
         "## 3. Skills y Runbooks Disponibles",
         "",
-        "Disponibles en `.agents/skills/` y `.claude/skills/`:",
+        "Disponibles en `.agents/skills/`, `.claude/skills/` y `.gemini/skills/`:",
     ])
     for s in skills:
         lines.append(f"- `{s}`")

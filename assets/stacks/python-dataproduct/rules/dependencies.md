@@ -1,6 +1,7 @@
 ---
 description: Reglas de dependencias y gobierno de paquetes Python con Poetry / Pip
 globs: ["pyproject.toml", "requirements*.txt"]
+trigger: always_on
 ---
 
 # Reglas de Dependencias en Python Data Product

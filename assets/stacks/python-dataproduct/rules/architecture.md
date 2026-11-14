@@ -1,6 +1,7 @@
 ---
 description: Límites de Clean Architecture y Data Product en Python / FastAPI / Polars
 globs: ["src/**", "tests/**"]
+trigger: always_on
 ---
 
 # Reglas de Arquitectura en Python Data Product

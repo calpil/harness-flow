@@ -1,6 +1,7 @@
 ---
 description: Protección de límites de arquitectura hexagonal y Clean Architecture en Rust
 globs: ["crates/**", "tests/**"]
+trigger: always_on
 ---
 
 # Reglas de Arquitectura Hexagonal en Rust

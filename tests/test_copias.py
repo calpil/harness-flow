@@ -211,7 +211,7 @@ class CopiasViejasTests(Base):
         self.cambiar_plantilla()
         res = stack.normalizar_repositorio(self.repo, GO, rules={})
         actualizadas = [a for a in res["actions"] if a.startswith("Actualizada")]
-        self.assertEqual(6, len(actualizadas), res["actions"])  # 3 reglas, 2 skills, 1 validador
+        self.assertEqual(7, len(actualizadas), res["actions"])  # 3 reglas, 3 skills, 1 validador
         self.assertEqual(self.plantilla("rules/testing.md").read_bytes(), (self.repo / self.REGLA).read_bytes())
         self.assertEqual(self.plantilla("scripts/check-architecture.py").read_bytes(),
                          (self.repo / self.VALIDADOR).read_bytes())
@@ -223,7 +223,7 @@ class CopiasViejasTests(Base):
         self.borrar_registro()
         self.cambiar_plantilla()
         res = stack.normalizar_repositorio(self.repo, GO, rules={})
-        self.assertEqual(6, len([a for a in res["actions"] if a.startswith("Actualizada")]), res["actions"])
+        self.assertEqual(7, len([a for a in res["actions"] if a.startswith("Actualizada")]), res["actions"])
         self.assertTrue(all("version anterior de la plantilla" in a
                             for a in res["actions"] if a.startswith("Actualizada")), res["actions"])
 
@@ -288,13 +288,13 @@ class CopiasViejasTests(Base):
         # Quien corre `normalizar` a proposito si las actualiza, y las commitea.
         stack._planes.clear()
         res = stack.normalizar_repositorio(self.repo, GO, rules={})
-        self.assertEqual(6, len(res["actions"]), res["actions"])
+        self.assertEqual(7, len(res["actions"]), res["actions"])
         self.assertNotEqual("", sh("git", "status", "--porcelain", cwd=self.repo))
 
     def test_el_arranque_de_sesion_si_actualiza_lo_que_el_repo_no_versiona(self):
         self.cambiar_plantilla()
         res = stack.normalizar_repositorio(self.repo, GO, rules={}, conservar_versionadas=True)
-        self.assertEqual(6, len(res["actions"]), res["actions"])
+        self.assertEqual(7, len(res["actions"]), res["actions"])
         self.assertEqual([], res["pendientes"])
 
     def test_el_arranque_de_sesion_dice_que_repos_quedaron_con_copias_viejas(self):
@@ -496,6 +496,7 @@ class NormativaEnWorktreesTests(Base):
         self.assertEqual(list(comun.CARPETAS_NORMATIVA), enlazadas)
         self.assertTrue((arbol / ".claude/rules/architecture.md").is_file())
         self.assertTrue((arbol / ".agents/skills/add-feature/SKILL.md").is_file())
+        self.assertTrue((arbol / ".gemini/skills/add-feature/SKILL.md").is_file())
         self.assertEqual("", sh("git", "status", "--porcelain", cwd=arbol))
 
     def test_no_enlaza_dos_veces(self):

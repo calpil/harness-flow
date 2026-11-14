@@ -1,6 +1,7 @@
 ---
 description: Evidencia y estándares de pruebas deterministas en Golang
 globs: ["**/*_test.go", "tests/**"]
+trigger: always_on
 ---
 
 # Reglas de Pruebas en Golang

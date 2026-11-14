@@ -1,6 +1,7 @@
 ---
 description: Reglas de seguridad móvil en iOS, almacenamiento seguro, HTTPS, App Transport Security y secrets
 globs: ["Sources/**", "Tests/**", ".env*"]
+trigger: always_on
 ---
 
 # Reglas de Seguridad en Aplicaciones Móviles iOS

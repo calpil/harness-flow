@@ -259,9 +259,9 @@ class BriefTests(Proyecto):
 class LosTextosDicenLoMismoTests(unittest.TestCase):
     """La causa fue una contradiccion entre textos: uno decia avanzar y otro pausar."""
 
-    ROLES = ("SKILL.md", "README.md", "commands/implementar.md", "templates/tests.md",
-             "references/vertical-slice.md", "references/modelos.md", "references/claude.md",
-             "references/kimi.md", "references/openai.md", "references/grok.md")
+    ROLES = ("SKILL.md", "README.md", "commands/implementar.md", "agents/implementer.md",
+             "templates/tests.md", "references/vertical-slice.md", "references/modelos.md",
+             "references/claude.md", "references/kimi.md", "references/openai.md", "references/grok.md")
     RITMO_VIEJO = (r"1 paso y (te )?det", r"pausando (tras|en) cada", r"1 ciclo por turno",
                    r"lista de tests aprobada", r"aprobar-tests --feature", r"la aprueba\s+el\s+usuario",
                    r"espera el OK", r"espera la aprobaci[oó]n del usuario")
