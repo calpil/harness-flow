@@ -118,6 +118,15 @@ Mientras tanto nadie lee la copia vieja por el arnés: el brief y `stack.py
 skill` entregan la plantilla vigente cuando la copia del repo quedó vieja. La
 copia que el proyecto editó sí se entrega: su edición manda.
 
+## Grok, en el rol y no en el commit
+
+`stack.py normalizar` no escribe `.grok/`. Grok carga `.grok/rules/` y
+`.grok/skills/` de la sesión, y no entra a un repo hermano. Por eso el brief,
+el briefing del revisor y el borrador del SDD copian ahí las rules y skills de
+los stacks de ese rol (front y backend), con nombre `<stack>--<nombre>`. Van a
+`info/exclude`. El PRD no las copia. Contrato completo:
+[`grok-sesion-stacks.md`](grok-sesion-stacks.md).
+
 ## Worktrees
 
 `normalizar` instala en el checkout principal. Un repo que no versiona esas

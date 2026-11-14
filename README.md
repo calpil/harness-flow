@@ -67,7 +67,7 @@ Las lecciones aprendidas son memoria del usuario, no del agente donde se descubr
 - **Verificación Normativa y Refactorización Guiada**: Audita límites de arquitectura en caliente mediante verificadores AST/regex (`check-architecture.py`). Si un repositorio no cumple, `stack.py refactorizar` genera un plan de refactorización: detallado y con scaffolding del esqueleto canónico (`--scaffold`) en 6 stacks (Go, Angular, .NET, Rust, iOS y Android), y genérico —un paso por cada incumplimiento que midió el verificador— en NestJS, Next.js, Python y Spring Boot, que todavía no tienen scaffolding.
 - **Context7 & Documentación Oficial (`stack.py auditar`)**: los 10 stacks declaran en su manifest la documentación oficial, el id de librería de Context7 y su escáner de dependencias. El brief, el briefing del revisor y el borrador del SDD lo entregan en el bloque `DOCUMENTACION VIGENTE` de cada stack; la consulta a Context7 (`https://mcp.context7.com/mcp`) la hace el agente con el MCP de su host, ningún script se conecta. `stack.py auditar` corre el escáner del stack (`govulncheck`, `npm audit`, `pip-audit`, `cargo audit`, `osv-scanner`, `dependencyCheckAnalyze`...) y sale con exit 0 si está limpio, exit 1 si reporta hallazgos y exit 2 si no pudo medir. El escaneo DAST (`--dast`) es informativo: no cambia el exit. Ver [`references/context7-documentacion-oficial.md`](references/context7-documentacion-oficial.md).
 - **Modo Pair Automático**: es el modo por defecto de toda feature, con stack detectado o sin él. La IA avanza sola, ciclo TDD tras ciclo, con un reporte de una línea por ciclo. `gate.py approve-spec` lo deja en el backlog al sellar el spec por primera vez y `worktree.py start` lo confirma; `gate.py close` exige su rastro, la lista de tests sellada (`gate.py sellar-tests`, que corre quien implementa). Se delega solo por decisión del usuario (`--delegado`) o si la sesión no tiene usuario.
-- **La norma del stack llega a cada rol por la salida de un script**: el brief (leader e implementer), el briefing del revisor y el borrador del SDD (rol producto) traen el texto completo de las reglas de cada stack —front y backend, cada repo con las suyas— y el índice de sus skills con la ruta de cada `SKILL.md`. No depende de que el host las cargue ni de que estén instaladas en el repo.
+- **La norma del stack llega a cada rol por la salida de un script**: el brief (leader e implementer), el briefing del revisor y el borrador del SDD (rol producto) traen el texto completo de las reglas de cada stack —front y backend, cada repo con las suyas— y el índice de sus skills con la ruta de cada `SKILL.md`. No depende de que el host las cargue ni de que estén instaladas en el repo. En Grok, esos mismos comandos copian además las rules y skills a `.grok/rules/` y `.grok/skills/` de la sesión, con nombre `<stack>--<nombre>`, para que Grok las invoque. El PRD no las copia. Guía: [`references/grok-sesion-stacks.md`](references/grok-sesion-stacks.md).
 - **Protocolo de Preguntas de Formulario**: La IA interviene con formularios estructurados (`ask_question` en Gemini/AGY o formulario interactivo en otros hosts) **únicamente cuando es indispensable**: una decisión de diseño no prevista, un test que habría que cambiar o borrar, 2 fallos consecutivos sin verde, y lo que sella el usuario (enmienda, ficha nueva, cierre). No pregunta si sigue, ni la lista de tests, ni el mensaje de un commit.
 - **Principios de Karpathy y Norma Aeroespacial ASD-STE100**: Incorpora comunicación de alta densidad sin sobre-restricción (*over-constraining*), frases de máximo 20 palabras en voz activa, diagramas Mermaid en el SDD (`producto.py aprobar` avisa si no hay ninguno), criterios AC-n atómicos y micro-reportes telegráficos de pantalla de instrumentos en Pair Mode. Ver [`references/comunicacion-ste100-y-prompts.md`](references/comunicacion-ste100-y-prompts.md) y [`docs/principios-karpathy-ste100-harness-flow.md`](docs/principios-karpathy-ste100-harness-flow.md).
 - **Una sola lista de normas de ingeniería para quien escribe y para quien revisa (`scripts/normas.py`)**: las normas que salen de los libros de abajo (DDIA, Ousterhout, Fowler y GoF, CLRS, Chip Huyen, Sam Newman, McConnell, OWASP, Context7, ASD-STE100 y Orosz) viven en un registro. Cada norma dice qué deja el leader en el spec, qué hace el implementer y qué audita el revisor. `contexto.py brief` imprime las dos primeras —en modo pair y en delegado— y `revision.py --briefing` la tercera, en cualquier host: el revisor no bloquea por algo que a quien escribió el código no se le dijo. Los AC negativos se marcan `[negativo]` y `approve-spec` avisa si un spec expone un endpoint sin ninguno.
@@ -128,7 +128,7 @@ Para proyectos con mucho código anterior al arnés. En vez de bloquear todo el 
 - Guía: [`references/arquitectura-heredada.md`](references/arquitectura-heredada.md).
 
 ### 9. Contexto por Repo, Normalización Respetuosa y Context7 en Cada Host
-- **El brief y el briefing del revisor** anuncian el stack de cada repo que la feature declara y traen el **texto completo de sus reglas**, el **índice de sus skills** con la ruta de cada `SKILL.md` y su **documentación vigente** (doc oficial, id de Context7 y escáner), también para los repos que viven fuera de la raíz. El rol producto recibe lo mismo, de todo el proyecto, al crear el borrador del SDD.
+- **El brief y el briefing del revisor** anuncian el stack de cada repo que la feature declara y traen el **texto completo de sus reglas**, el **índice de sus skills** con la ruta de cada `SKILL.md` y su **documentación vigente** (doc oficial, id de Context7 y escáner), también para los repos que viven fuera de la raíz. El rol producto recibe lo mismo, de todo el proyecto, al crear el borrador del SDD. En Grok esa salida deja además las rules y skills en `.grok/` de la sesión ([`references/grok-sesion-stacks.md`](references/grok-sesion-stacks.md)).
 - **El brief es el paquete completo de un agente delegado**: trae el protocolo de implementación (TDD vertical y las 5 paradas) y, junto a cada índice, el comando con rutas absolutas que imprime una skill del stack (`stack.py skill`) o una referencia (`normas.py --ref`). Quien delega pega el brief entero y no anexa nada.
 - **Modo Pair por defecto en cualquier repo**: `gate.py approve-spec` lo registra en el backlog al sellar el spec por primera vez y `worktree.py start` lo confirma (`--delegado` para delegar), así que vale también en una raíz multi-repo que usa `worktree.py register`. La lista de tests la sella quien implementa con `gate.py sellar-tests` (`--yes`, con el SÍ del usuario, solo si quita un test sellado) y `close` la exige en las features en modo pair.
 - **`stack.py normalizar`** instala lo que falta, actualiza la copia que quedó vieja y nadie editó, y conserva la que el proyecto editó. No reemplaza un `AGENTS.md` que el arnés no generó ni reinstala las skills de `rules.stack_skills_excluidas`.
@@ -208,7 +208,7 @@ git clone https://github.com/calpil/harness-flow.git ~/.agents/skills/harness-fl
 Incluye metadata de invocación automática en `agents/openai.yaml`.
 
 ### 5. Grok y Kimi Code
-- **Grok**: lee `~/.agents/skills` y `~/.grok/skills` (ver [`references/grok.md`](references/grok.md)).
+- **Grok**: lee `~/.agents/skills` y `~/.grok/skills` (ver [`references/grok.md`](references/grok.md)). En un proyecto, el rol copia las rules y skills del stack a `.grok/` de la sesión ([`references/grok-sesion-stacks.md`](references/grok-sesion-stacks.md)).
 - **Kimi Code**: instala como plugin desde el TUI con `/plugins install <ruta-del-clone>` o symlink en `~/.kimi-code/skills/` (manifiesto [`kimi.plugin.json`](kimi.plugin.json)).
 
 ### 6. Entornos Windows
@@ -324,6 +324,7 @@ harness-flow/
 │   ├── postmerge.py                  <- Stub neutralizado (aborto con exit 2 hacia runner medido)
 │   ├── cbm_procesos.py               <- Telemetría forense y gestión de procesos CBM
 │   ├── contexto.py                   <- Cálculo de frescura del grafo y generación de briefs
+│   ├── grok_sesion.py                <- En Grok, copia rules y skills del rol a .grok/ de la sesión
 │   ├── stack.py                      <- Detección, verificación, normalización, refactorización y auditoría de stacks
 │   ├── arquitectura.py               <- Trinquete de arquitectura: inventario, base, cuota y gate de código heredado
 │   ├── modelo.py                     <- Elección de Fable 5.2 u Opus 5.5 para Producto y Leader
@@ -350,7 +351,7 @@ harness-flow/
 │   └── memoria-tecnica-implementaciones.md <- Memoria técnica exhaustiva: un hito por cada capacidad implementada
 ├── references/                       <- Documentación especializada por host y subsistema
 │   ├── hosts.md, modelos.md, vertical-slice.md, contexto.md, lecciones-del-arnes.md
-│   ├── multirepo.md, claude.md, openai.md, grok.md, kimi.md, entorno.md
+│   ├── multirepo.md, claude.md, openai.md, grok.md, grok-sesion-stacks.md, kimi.md, entorno.md
 │   ├── hub.md, obsidian.md, atlassian.md, documentacion.md
 │   ├── arquitectura-heredada.md      <- Trinquete: base, cuota de normalización y código anterior al arnés
 │   ├── hallazgos.md                  <- Enmienda antes que ficha: hallazgo.py y cuándo add.py crea una ficha
@@ -378,7 +379,7 @@ El arnés se valida con una suite `unittest` en `tests/`. Lo que cubre, por arch
 - Gates, sellos y enmiendas: `test_spec_acs.py`, `test_enmienda.py`, `test_evidencia_y_verify.py`, `test_review_rondas.py`, `test_close_fixes.py`.
 - Flujo de documentos y rutas protegidas: `test_prd_sdd_flujo.py`, `test_producto.py`, `test_documentacion.py`.
 - Runners post-merge medidos: `test_measured_runner_go.py`, `test_terraform_runner.py`, `test_frontend_runner.py`, `test_postmerge.py`.
-- Hosts: `test_entorno.py`, `test_leccion_multihost.py`, `test_plugin_claude.py`, `test_indice_hermes.py`, `test_modelo.py`.
+- Hosts: `test_entorno.py`, `test_leccion_multihost.py`, `test_plugin_claude.py`, `test_indice_hermes.py`, `test_modelo.py`, `test_grok_sesion.py`.
 - Contexto, hub y procesos: `test_contexto.py`, `test_brief_stacks.py`, `test_hub.py`, `test_cbm_procesos.py`.
 - Stacks y arquitectura: `test_stack.py`, `test_stack_adopcion.py`, `test_stack_normalizar.py`, `test_arquitectura.py`.
 

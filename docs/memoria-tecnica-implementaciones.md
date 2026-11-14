@@ -1008,7 +1008,26 @@ El usuario había pedido "pair automatic", y aun así una corrección chica cost
 
 ---
 
-## 39. Estado de Verificación y Métricas de Calidad
+## 39. Hito 37: Grok Carga el Stack del Rol
+
+**Problema.** En Grok el brief imprimía las reglas y el índice de skills, y la sesión no las tenía. Grok carga `.grok/rules/*.md` y `.grok/skills/<nombre>/SKILL.md` del repo donde está parada. No entra a un repo hermano: un front en la raíz y un servicio fuera dejaban al backend fuera. Varios stacks repiten el mismo nombre (`security-review`, `write-tests`, `add-feature`): copiarlos juntos haría que Grok se quede con uno.
+
+**Qué se implementó.**
+
+- **`scripts/grok_sesion.py`** copia, solo con host `grok`, las rules y skills del conjunto de ese rol. El nombre es `<stack>--<nombre>`. El `name` del frontmatter y el arranque de la descripción dicen el stack.
+- **Leader, implementer y revisor** (`contexto.py brief`, y el briefing porque llama a `lineas_reglas`) publican los stacks de la feature.
+- **El SDD** (`producto.py borrador --doc sdd` y `contexto.py stacks`) publica los stacks de todo el proyecto. **El PRD no copia.**
+- La copia va a la raíz del arnés, a cada repo del conjunto y al worktree. Lleva la marca `harness-flow-grok`. El rol siguiente retira lo que ya no nombra. Una skill creada por el usuario, sin marca, no se toca.
+- **`info/exclude`** deja la copia fuera de git. `close` no ve el árbol sucio. `stack.py normalizar` no escribe `.grok/` y sigue instalando `.claude/`, `.agents/` y `.gemini/`.
+- No se escribe a través de un enlace. Un destino sin git solo recibe los archivos.
+
+**Verificación.** [`tests/test_grok_sesion.py`](../tests/test_grok_sesion.py): 6 tests. Front Angular, servicio Go fuera y worktree; git limpio; skill excluida ausente y skill del usuario intacta; el rol siguiente retira el stack que ya no toca; el SDD publica y el PRD no; otro host no escribe `.grok/`.
+
+**Lo que este hito no hace.** No llama a Context7. No convierte las normas de los libros en gates. No publica al abrir Grok: hace falta correr el comando del rol. Dos features en paralelo, en la misma sesión, se pisan. Guía: [`references/grok-sesion-stacks.md`](../references/grok-sesion-stacks.md).
+
+---
+
+## 40. Estado de Verificación y Métricas de Calidad
 
 * **Batería de Pruebas Automatizadas**: 61 archivos de test en `tests/`, 1.260 tests. Última medición (2026-11-13, sobre el árbol del Hito 36, antes de su commit), en una sola corrida con el toolchain de frontend (`~/.harness-flow/frontend-toolchain`: Angular 22.2.1, Vitest 4.1.11, Node 22):
   * 1.260 tests, 1.260 pasaron. Ningún test falla ni queda sin medir. Duración: 29 minutos.

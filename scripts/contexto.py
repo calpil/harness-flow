@@ -1446,6 +1446,16 @@ def _por_stack(repos: list[tuple[str, Path]]) -> tuple[dict[str, list[tuple[str,
     return por_stack, genericos
 
 
+def _para_grok(p: dict, f: dict | None, por_stack: dict, rules: dict | None, rol: str) -> list[str]:
+    """En Grok, deja en .grok/ las rules y skills de este rol. En otro host no hace nada."""
+    try:
+        import grok_sesion
+        extras = grok_sesion.arboles_extra(p["root"], f) if f else []
+        return grok_sesion.publicar(p["root"], por_stack, rules, rol, extras)
+    except Exception as exc:
+        return [f"[!] grok sesion: no se pudieron publicar las skills y rules ({exc})"]
+
+
 def lineas_reglas(p: dict, data: dict, f: dict, micros: list[str]) -> list[str]:
     """El TEXTO de las reglas y el indice de skills de cada stack que la feature toca.
 
@@ -1455,7 +1465,8 @@ def lineas_reglas(p: dict, data: dict, f: dict, micros: list[str]) -> list[str]:
     """
     repos, _ = _repos_de_la_feature(p, f, micros)
     por_stack, _ = _por_stack(repos)
-    return lineas_normativa(por_stack, data.get("rules"))
+    return _para_grok(p, f, por_stack, data.get("rules"), "feature") + lineas_normativa(
+        por_stack, data.get("rules"))
 
 
 def _repos_del_proyecto(p: dict) -> list[tuple[str, Path]]:
@@ -1509,7 +1520,8 @@ def lineas_stacks_proyecto(p: dict, data: dict, resumen: bool = False) -> list[s
         return L
     L.append("El SDD no contradice estas reglas: una decision que se aparte de ellas va como D-n, "
              "con su alternativa descartada.")
-    return L + lineas_normativa(por_stack, data.get("rules"))
+    return (_para_grok(p, None, por_stack, data.get("rules"), "sdd")
+            + L + lineas_normativa(por_stack, data.get("rules")))
 
 
 def cmd_stacks(args) -> None:

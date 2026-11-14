@@ -62,6 +62,19 @@ el revisor: cúmplelas aunque tu host no cargue `agents/implementer.md`. Si dele
 subagente, pégale el brief entero y nada más: trae el comando que imprime cada skill del stack
 (`stack.py skill`) y cada referencia (`normas.py --ref`), con rutas absolutas.
 
+En Grok ese brief, el borrador del SDD (`producto.py borrador --doc sdd`) y el
+briefing del revisor hacen además otra cosa: copian las rules y las skills de
+los stacks de ESE rol a `.grok/rules/` y `.grok/skills/` de la raíz, de cada
+repo del conjunto y del worktree. Grok las carga como rules y skills de la
+sesión. El nombre es `<stack>--<nombre>` (`golang-hexagonal--add-api-endpoint`):
+así el front y el backend conviven, y cada una aplica solo a su stack. El PRD
+no las copia: ese rol recibe el resumen. La copia lleva la marca
+`harness-flow-grok`, entra en `info/exclude` y no ensucia `close`. El rol
+siguiente sustituye el conjunto. Una skill que el usuario haya creado en
+`.grok/skills/` no se toca. `stack.py normalizar` sigue instalando `.claude/`,
+`.agents/` y `.gemini/`; no versiona esta copia. Contrato, nombres,
+marca, `info/exclude` y limites: [`grok-sesion-stacks.md`](grok-sesion-stacks.md).
+
 En Grok el Rol 2 se divide según la modalidad:
 
 1. **Modo Pair automático (por defecto)**: corre en la **sesión principal de Grok**.
