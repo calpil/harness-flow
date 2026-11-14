@@ -116,3 +116,11 @@ aviso porque un checkout viejo no es una violacion.
   cuanto hay: `[!] N archivos en M carpetas viven fuera de la norma del stack`.
   Que repos se miden y como se instala la norma:
   [`normalizacion-de-stacks.md`](normalizacion-de-stacks.md).
+
+## Medir una normalización antes de `register` (2026-11-14, frontends CALPIL #21)
+
+`arquitectura.py check --feature N` evalúa la raíz (clave `.`) mientras la feature solo tiene `worktree.py start`: en una raíz
+multi-repo dice "vacia 0 unidades" y sale 0 sin medir el repo. Recién después de `register` mide el árbol integrado ("vacia 1
+unidades"). Por eso el AC de una normalización no debe apoyarse en ese comando para su rojo/verde: medir el árbol del worktree
+con las funciones del trinquete (unidades y archivos antes/después, lista de heredadas restantes) y dejar el `check --feature`
+como confirmación posterior al registro.

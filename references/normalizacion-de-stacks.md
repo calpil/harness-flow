@@ -133,10 +133,10 @@ los stacks de ese rol (front y backend), con nombre `<stack>--<nombre>`. Van a
 carpetas (un `.gitignore` con `.*`) daba worktrees sin rules ni skills.
 
 `worktree.py start`, `worktree.py register` y el arranque de sesión enlazan al
-worktree `.claude/rules`, `.claude/skills`, `.agents/rules`, `.agents/skills` y
-`.gemini/rules` desde el checkout principal. Solo enlazan una carpeta que el
-repo no versiona y que falta en el worktree. Una carpeta versionada la trae la
-rama.
+worktree `.claude/rules`, `.claude/skills`, `.agents/rules`, `.agents/skills`,
+`.gemini/rules` y `.gemini/skills` desde el checkout principal. Solo enlazan una
+carpeta que el repo no versiona y que falta en el worktree. Una carpeta
+versionada la trae la rama.
 
 ## `stack.py verificar` no da un OK sin medir
 
