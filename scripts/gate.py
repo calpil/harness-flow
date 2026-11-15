@@ -502,7 +502,7 @@ def cmd_approve_spec(args) -> None:
     if modo_fijado:
         print(f"[i]  modo pair (por defecto): close exigira la lista de tests sellada\n"
               f"     (docs/tests-{f['id']}.md, gate.py sellar-tests --feature {f['id']}; la sella quien implementa).\n"
-              f"     Si el usuario decide delegar: worktree.py modo --feature {f['id']} --delegado")
+              f"     Si el usuario decide delegar: worktree.py modo --feature {f['id']} --delegado --yes")
     for x in avisos:
         print(f"[!]  {x}")
 
@@ -690,7 +690,7 @@ def fallos_lista_tests(p: dict, f: dict, acs: list[str]) -> list[str]:
     orden = f"gate.py sellar-tests --feature {f['id']}"
     if not f.get("tests_sig") or not tp.is_file():
         return [f"modo pair: falta la lista de tests sellada ({tp.name}; {orden}). "
-                "Si el usuario decidio delegar: worktree.py modo --feature <id> --delegado"]
+                "Si el usuario decidio delegar: worktree.py modo --feature <id> --delegado --yes"]
     if not sig_fresh(tp, f["tests_sig"]):
         return [f"modo pair: la lista de tests ({tp.name}) cambio despues de sellarla: "
                 f"vuelve a sellarla ({orden}); no hace falta preguntar al usuario salvo que quite un test"]

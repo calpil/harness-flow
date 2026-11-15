@@ -1155,6 +1155,8 @@ def _repos_de_la_feature(p: dict, f: dict, micros: list[str]) -> tuple[list[tupl
     sin_repo = []
     for m in micros:
         nombre = m.split("/")[-1]
+        if any(n == nombre for n, _ in repos[1:]):
+            continue   # ya entro con su worktree: el checkout esta en la rama de integracion
         ruta = por_nombre.get(nombre) or (raiz / nombre if (raiz / nombre).is_dir() else None)
         if ruta is None:
             sin_repo.append(m)
@@ -1263,7 +1265,7 @@ def lineas_modo(f: dict) -> list[str]:
                 "  este brief es tu paquete completo: reglas del stack, indice de skills con el comando "
                 "para leer cada una, y normas con el comando para leer cada referencia."]
     return ["modo de implementacion: sin registrar (spec aprobado antes de que el modo se registrara): "
-            f"fijalo con worktree.py modo --feature {f['id']} --pair|--delegado",
+            f"fijalo con worktree.py modo --feature {f['id']} --pair (o --delegado --yes con el SI del usuario)",
             *protocolo,
             "  en una parada que pregunta: detente y pregunta (al usuario, o a quien te delego)."]
 
@@ -1381,6 +1383,15 @@ def texto_restriccion(valor) -> str:
     return "; ".join(f"{k}: {plano(v)}" for k, v in valor.items())
 
 
+def _host() -> str:
+    """El host del agente, o '' si no se puede resolver: el brief no se cae por esto."""
+    try:
+        import entorno
+        return entorno.host_agente()
+    except Exception:
+        return ""
+
+
 def lineas_documentacion(sid: str, manifest: dict) -> list[str]:
     """Donde contrastar versiones y APIs de un stack: doc oficial, Context7 y su escaner.
 
@@ -1400,6 +1411,10 @@ def lineas_documentacion(sid: str, manifest: dict) -> list[str]:
         L.append(f"  documentacion oficial: {doc['official_docs']}")
     if c7.get("library_id"):
         L.append(f"  Context7: {c7['library_id']} (resolve-library-id / query-docs)")
+        if _host() == "hermes":
+            # En Hermes el MCP entra como tools diferidas, con otro nombre.
+            L.append("    en Hermes: mcp__context7__query_docs con ese libraryId "
+                     "(tool_describe y tool_call; mcp__context7__resolve_library_id si no hay id)")
     for q in c7.get("suggested_queries", [])[:3]:
         L.append(f"    consulta sugerida: {q}")
     if doc.get("security_advisories"):
@@ -1545,14 +1560,20 @@ def cmd_brief(args) -> None:
     acs = spec_acs(stext)
     cmds = ac_comandos(stext)
     costuras = ac_costuras(stext)
-    from comun import spec_micros
-    micros = _micros_declarados(f) or spec_micros(stext)
+    from comun import micros_de_contexto
+    micros = micros_de_contexto(f, stext)
 
     L: list[str] = []
     L.append(f"== BRIEF #{f['id']} {f.get('name')} ({proyecto}) ==")
     L.append(f"estado: {f.get('status')} · rama: {f.get('branch') or '-'} · "
              f"worktree: {f.get('worktree') or '(sin worktree)'}")
-    L += lineas_modo(f)
+    if getattr(args, "con_modo", True):
+        L += lineas_modo(f)
+    else:
+        # El revisor: sabe como se implemento, sin las ordenes del implementer
+        # (sellar la lista, commitear sin pedir permiso) que el no debe cumplir.
+        L.append(f"modo de implementacion: {f.get('modo') or 'sin registrar'} "
+                 "(las instrucciones del implementer no aplican al revisor)")
     reqs = requiere_declarados(f)
     if reqs:
         bloq = bloqueos_feature(data, f)

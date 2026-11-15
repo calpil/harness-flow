@@ -142,6 +142,7 @@ class AltaDeFichasTests(Base):
             with self.subTest(peso=peso):
                 out = self.falla("add.py", "--name", "una sola constante", "--kind", "task", "--yes", *peso)
                 self.assertIn("--peso", out)
+                self.assertIn("al menos 15 caracteres", out, "un peso corto se negaba sin decir por que")
                 self.assertEqual(len(self.datos()["features"]), 3)
 
     def test_la_primera_ficha_de_una_candidata_del_prd_entra_sin_yes(self):

@@ -704,7 +704,7 @@ class CierreTerraformTests(TerraformFixture):
         self.script('gate.py', 'approve-spec', '--feature', '9', '--yes', '--por', 'Fixture')
         # El fixture llega al cierre con el trabajo ya hecho por un script: es modo delegado.
         # Sin declararlo, la primera aprobacion la deja en pair y close exige la lista de tests.
-        self.script('worktree.py', 'modo', '--feature', '9', '--delegado')
+        self.script('worktree.py', 'modo', '--feature', '9', '--delegado', '--yes')
 
     def script(self, name, *args, code=0):
         r = subprocess.run([sys.executable, '-B', str(SCRIPTS / name), *args], cwd=self.root, env=self.env,

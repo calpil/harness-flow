@@ -84,6 +84,36 @@ las features ya cerradas.
 `gate.py check` avisa si un checkout trae mas codigo heredado que la base; es un
 aviso porque un checkout viejo no es una violacion.
 
+## La cuota llena y la normalizacion mas barata
+
+- **Mira la cuota ANTES de escribir o mostrar el spec de una feature de
+  negocio.** `estado.py` la muestra (`cuota n/m`); el dato vive en
+  `arquitectura.negocio_desde_normalizacion` del backlog contra
+  `rules.arquitectura_cuota`. Con la cuota llena, `approve-spec` se niega aunque
+  el usuario apruebe: dilo en el MISMO formulario del spec, con las dos salidas
+  (cerrar una normalizacion antes, o subir la cuota, que decide el usuario). El
+  spec aprobado queda en borrador y se sella cuando la normalizacion cierra,
+  porque ese cierre reinicia la cuenta.
+- **Bajar las violaciones del verificador tambien cierra una normalizacion**, y
+  suele ser mucho mas chico que vaciar una unidad. `arquitectura.py siguiente`
+  solo lista unidades; las violaciones registradas estan en
+  `harness/arquitectura-base.json`, en `repos.<clave>.violaciones`. Ofrecele al
+  usuario esa opcion primero cuando la base las tenga.
+- **Al mover un archivo para quitar una violacion, llevalo a una capa**
+  (`features/<f>/application/`, no la raiz de la feature): en la raiz de una
+  unidad heredada cuenta como archivo heredado nuevo y `close` falla.
+- **Un AC que exige el verde del verificador nace rojo si la base ya trae
+  violaciones ajenas.** Corre el verificador sobre la rama base antes de
+  escribir ese AC. Si hay violaciones previas: o se normalizan primero, o el AC
+  lleva una excepcion CERRADA que nombra cada una y que falla cuando no hay ni
+  verde ni lineas de violacion (script roto). Probar la condicion contra cuatro
+  salidas: la real, la real con una violacion mas, el verde y una salida rota.
+- **Despues de cerrar, aprieta la base**: `close` no quita de la base las
+  violaciones que la feature resolvio. Corre `arquitectura.py check --ajustar`,
+  comprueba que `violaciones` bajo y commitea `harness/arquitectura-base.json`
+  con el resto del estado. Sin eso, una feature posterior puede reintroducirlas
+  sin que el trinquete lo note.
+
 ## Lo que ya estaba en curso y los repos sin arbol registrado
 
 - **Features en curso al adoptar.** `adoptar` anota las que estaban `in_progress`,

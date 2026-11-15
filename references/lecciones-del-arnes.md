@@ -43,6 +43,12 @@ gates y todas tienen repro verificada.
 - **En un cliente HTTP, el fallo de red debe tratarse como fallo en TODAS las
   ramas.** `code == 0` faltaba sólo en la creación de issue: persistía
   `jira_key: null` y el reintento duplicaba la issue en Jira.
+- **Una decisión del usuario que solo está en el texto no está protegida.**
+  `worktree.py --delegado` se aceptaba sin confirmación y nueve features pasaron
+  de pair a delegado segundos después de aprobarse. Si el usuario decide, el
+  script exige `--yes`, igual que `approve-spec`.
+- **Un paquete por rol no lleva las órdenes de otro rol.** El briefing del
+  revisor heredaba del brief "sella la lista" y "commitea sin pedir permiso".
 
 ## Como auditar el arnes
 

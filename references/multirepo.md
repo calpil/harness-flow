@@ -47,6 +47,38 @@ Estas reglas aplican tambien a features de un monorepo:
   comando del repo y comprueba que el contenido coincida en los repos que lo
   replican.
 
+### Integrar la rama destino en una feature que declara migraciones
+
+Cuando otra feature ya integro su migracion (la N) y la tuya trae la N+1, cada
+repo consumidor choca en la lista de migraciones cubiertas y en el manifiesto de
+huellas. Es un choque de declaracion, no de codigo:
+
+1. Antes de mergear, `git merge-tree --write-tree --name-only HEAD <destino>` en
+   cada repo: lista los conflictos sin tocar el arbol.
+2. `git merge --no-ff --no-commit <destino>` y comprueba que cada bloque en
+   conflicto solo nombra las dos migraciones (y la linea de sello del
+   manifiesto). Si aparece otra cosa, es un choque real: paralo y pregunta.
+3. Toma la version del destino (`git checkout --theirs`) en esos archivos y
+   regenera con el comando de declaracion del proyecto. Nunca combines hashes a
+   mano. Si el comando se niega porque los `.sql` de la N estan staged sin
+   commitear (vienen en el merge), nombralas a las dos en la misma invocacion
+   (`aplicar <N> <N+1>`): la N ya declarada es idempotente.
+4. Commitea primero los repos consumidores y al final el repo dueno de las
+   migraciones: su pre-commit verifica la flota entera y frena el commit si un
+   consumidor tiene la declaracion sin commitear.
+5. Verifica la declaracion (10/10) y, como las dos migraciones conviven por
+   primera vez, corre la suite completa del repo dueno sobre la rama ANTES del
+   merge al destino, ademas del `verify`, que solo mide los AC.
+
+### Postmerge que no mide
+
+`postmerge_medido check` con exit 2 ("alcance incompleto: faltan tests antes
+medidos") no es un veredicto. Antes de buscar un choque, mira la
+infraestructura que la suite usa (por ejemplo `docker info`: un daemon que se
+cae a mitad de corrida deja sin correr los tests que necesitan contenedor).
+Repara, avisa al usuario y repite el `check` contra la MISMA base; la base sigue
+valida porque se midio antes del merge.
+
 ## Manifiesto
 
 Esquema de ejemplo, NO evidencia de un proyecto. Sustituir los tres marcadores

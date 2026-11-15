@@ -118,7 +118,8 @@ Anthropic `haiku` es Haiku 4.5, que no acepta esfuerzo.
 | --- | --- | --- | --- |
 | 0 Producto | `claude-opus-5-5` o `claude-fable-5-2`, a eleccion del usuario | la sesion (`commands/producto.md` va en `inherit`) | Decide la arquitectura; pocos tokens, mucho peso aguas abajo |
 | 1 Leader | `claude-opus-5-5` o `claude-fable-5-2`, a eleccion del usuario | la sesion (`commands/spec.md` va en `inherit`) | Un AC mal planteado cuesta dos rondas de review o una enmienda |
-| 2 Implementer | `claude-sonnet-5-5` | `agents/implementer.md` | Concentra el volumen de tokens a la mitad de precio, y no es el modelo que lo revisa |
+| 2 Implementer, pair (por defecto) | el de la sesion: `claude-opus-5-5` | la sesion | Decision del usuario: el pair corre en Opus, que es la sesion que implementa |
+| 2 Implementer, delegado (`--delegado --yes`) | `claude-sonnet-5-5` | `agents/implementer.md` | Concentra el volumen de tokens a la mitad de precio, y no es el modelo que lo revisa |
 | 3 Revisor | `claude-opus-5-5` | `agents/revisor.md` | Al menos tan capaz como quien implemento |
 | 4 Cierre | `claude-opus-5-5` | `commands/cierre.md` | Merge irreversible y lectura de rojos; pocos tokens, no se ahorra ahi |
 | Estado | `claude-haiku-5-5` | `commands/estado.md` | Lee y cuenta al arrancar, con el contexto aun corto |
@@ -185,8 +186,10 @@ a `claude-opus-5-5` con el esfuerzo subido, y `/harness-flow:usar-fable`,
 invocado a continuacion, lo devolvio a `claude-fable-5-2` con `high`. Un comando
 agregado al plugin no existe en una sesion ya abierta hasta `/reload-plugins`.
 
-Cierre y Revisor siguen en Opus 5.5, y el Implementer en Sonnet 5.5: fue la
-decision del usuario al agregar Fable, y Revisor y Cierre conservan `xhigh`.
+Cierre y Revisor siguen en Opus 5.5, y el Implementer delegado en Sonnet 5.5: fue la
+decision del usuario al agregar Fable, y Revisor y Cierre conservan `xhigh`. En pair
+(el modo por defecto) implementa la sesion, en Opus 5.5: lo decidio el usuario el
+2026-11-15. Sonnet entra solo cuando el usuario delega (`--delegado --yes`).
 
 ### Seleccion automatica: implementer y revisor
 
@@ -283,7 +286,8 @@ global. Por eso los roles se reparten asi:
 | --- | --- | --- |
 | Producto, Leader | Sesion de Hermes en `claude-opus-5-5` o `claude-fable-5-2`, a eleccion del usuario (`modelo.py`) | API key de Console |
 | Cierre, Estado | Sesion de Hermes en `claude-opus-5-5` | API key de Console |
-| Implementer | `claude -p --agent harness-flow:implementer --effort <nivel>` | Login propio de Claude Code |
+| Implementer en pair (por defecto) | La sesion de Hermes en `claude-opus-5-5`: implementa la sesion, no Sonnet | API key de Console |
+| Implementer delegado (`--delegado --yes`) | `claude -p --agent harness-flow:implementer --effort <nivel>` (Sonnet 5.5) | Login propio de Claude Code |
 | Revisor | `claude -p --agent harness-flow:revisor --effort <nivel>` | Login propio de Claude Code |
 
 ### Sesion
@@ -356,9 +360,55 @@ segundo plano como indica la skill `claude-code` de Hermes. Al volver, la sesion
 de Hermes hace lo mismo que en Claude Code: contrasta `docs/impl-<id>.md` contra
 el worktree, lee `docs/review-<id>.md` y sella con `gate.py revision`.
 
-Sin Claude Code instalado, el revisor vuelve a `delegate_task` y hereda el
-modelo y el effort de la sesion: ahi no hay seleccion por tarea. No fijes `delegation.model` para esto: es global, y los
-subagentes de tus sesiones con otro modelo tambien pasarian a cobrarse por API.
+### Sin Claude Code o sin cupo: implementer y revisor por `delegate_task`
+
+El hijo de `delegate_task` corre en `delegation.model` si esta fijado y, si no,
+en el modelo de la sesion. No hay seleccion por tarea ni de effort.
+
+1. **Antes de ofrecer un modelo en el formulario, mira cual saldria de verdad**:
+   `hermes config get delegation.model` (vacio = hereda) y el modelo de la
+   sesion. Una opcion que nombra un modelo que el hijo no va a usar obliga a
+   preguntar dos veces.
+2. **Fijar el modelo del hijo es decision del usuario** (es global: cambia los
+   subagentes de todas sus sesiones de Hermes y su costo). Con su SI:
+   `hermes config set delegation.model claude-sonnet-5-5`. Vale desde la
+   siguiente llamada, sin reiniciar la sesion. No lo fijes por tu cuenta, ni
+   para el revisor.
+3. **Comprueba el modelo efectivo** con `delegate_task(action='list')` justo
+   despues de lanzar: trae el `model` de cada hijo. Anuncialo con ese dato, no
+   con el que pediste.
+4. **El pin queda puesto**: el revisor siguiente tambien lo hereda. Pregunta en
+   el formulario con que modelo va el revisor y cuando se quita el pin
+   (`hermes config unset delegation.model`), y dilo en cada informe mientras
+   siga fijado.
+
+**Que lleva el `context` del implementer delegado.** Guarda el brief en un
+archivo (`contexto.py brief --feature <id> > <scratch>/brief-<id>.md`) y pasa su
+ruta: el hijo lee archivos, y pegar decenas de KB no aporta. Ademas:
+
+- spec sellado, worktree y rama exactos, y lo ya creado (enlaces de
+  dependencias: que no instale nada);
+- donde escribe la evidencia (`docs/impl-<id>.md` de la RAIZ) y que NO hace:
+  `gate.py`, `worktree.py`, commits en `docs/` o en la raiz, push, merge;
+- que corra los `Comando:` del spec extraidos con un script, no reescritos, y
+  que todo este commiteado antes (comparan contra la base con `merge-base`);
+- las restricciones de la maquina que apliquen (una sola suite pesada a la
+  vez, salida de comandos largos a archivos);
+- `output_schema` con `estado` (`terminado | parada | bloqueado`), commits,
+  exit por AC, preguntas y hallazgos fuera de alcance.
+
+**Una parada vuelve como resultado, no como pregunta.** El hijo no puede usar
+el formulario: devuelve `estado: parada` y termina. La sesion la responde
+(midiendo, desde el spec, o llevandola al usuario en un formulario) y lanza
+OTRA tarea que retoma. Esa tarea dice: que commits ya existen y no se rehacen,
+que quedo sin commitear en el worktree, la respuesta a la parada con sus logs y
+lineas, y lo que falta. Antes de relanzar, mira `git log <base>..HEAD` y
+`git status` del worktree: el informe del hijo es un autoinforme.
+
+Si `gate.py verify` va a correr enseguida las suites pesadas de un AC, pidele al
+hijo solo las partes baratas de ese AC y que lo diga en la evidencia ("suites:
+las mide verify"). Correrlas dos veces seguidas no agrega evidencia y en una
+maquina cargada produce rojos de infraestructura.
 
 ## Gemini 4 (Hydrogen / Argon) en AGY y Hermes
 
@@ -433,7 +483,7 @@ paradas que lo piden. Para mantener baja latencia entre ciclos sin perder rigor:
 | Proveedor / Host | Modelo en `--pair` | Effort recomendado en `--pair` | Mecanismo de Preguntas de Formulario |
 | --- | --- | --- | --- |
 | **OpenAI (Codex / Hermes)** | `gpt-6-astra` o `gpt-6.1-sol` en la sesion | `medium` por defecto; `high` si el paso resuelve concurrencia o migracion | Formulario estructurado Markdown (`[A]`, `[B]`, `[C]`) con opción recomendada |
-| **Claude 5.5 (Claude Code / Hermes)** | Sesion en `claude-opus-5-5` o `claude-sonnet-5-5` | `high` (o `medium` si se prioriza velocidad; `xhigh` ante riesgo concreto) | Preguntas interactivas estructuradas con opciones claras |
+| **Claude 5.5 (Claude Code / Hermes)** | Sesion en `claude-opus-5-5` (decision del usuario; Sonnet solo al delegar) | `high` (o `medium` si se prioriza velocidad; `xhigh` ante riesgo concreto) | Preguntas interactivas estructuradas con opciones claras |
 | **Gemini 4 Argon (AGY / Hermes)** | `gemini-4-argon` en la sesion principal | `high` (`Gemini 4 Argon (High)`) | Herramienta nativa `ask_question` con preguntas y opciones |
 | **Grok** | Modelo activo de la sesion | El de la sesion: `spawn_subagent` no acepta effort. Espera del revisor en [grok.md](grok.md) | Opciones estructuradas en Markdown |
 | **Kimi Code** | Modelo activo de la sesion en Kimi | Sesion principal; el Rol 3 sigue corriendo en el subagente `revisor` | Formulario Markdown con opciones |

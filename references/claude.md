@@ -256,6 +256,44 @@ bloquearlo nunca. No toca nada cuando:
 Si el symlink no se puede crear (Windows sin Modo Desarrollador), la leccion
 vuelve a `~/.claude/skills` y el aviso lo dice.
 
+## Retomar una sesion de Claude Code desde otro host
+
+Cuando Claude Code se queda sin cupo (limite semanal o de subagentes) y el
+usuario pide seguir desde Hermes u otro host, `harness/` no basta: la sesion
+tenia autorizaciones, subagentes y corridas en segundo plano a medio camino.
+Reconstruye antes de actuar, en este orden:
+
+1. **Transcripcion**: `~/.claude/projects/<cwd con cada / cambiado por ->/<session-id>.jsonl`.
+   Pesa cientos de MB: lee la cola con `seek`, nunca entera. Saca (a) los
+   ultimos textos del asistente, que traen el plan vigente, y (b) cada
+   `AskUserQuestion` con su `tool_result`: ahi estan los SI del usuario
+   (cierres, enmiendas, modo delegado). Un cierre o una enmienda se ejecuta
+   solo si su SI esta ahi; si no, preguntalo de nuevo.
+2. **Subagentes**: `<session-id>/subagents/agent-<id>.jsonl`. El primer mensaje
+   `user` es el prompt: reutilizalo al relanzar, actualizando lo que cambio (un
+   verify que ya corrio, por ejemplo). La cola dice donde se corto. Un
+   implementer cortado puede haber commiteado y medido sin entregar informe:
+   mira `git log develop..HEAD` y `git status` de cada worktree y contrasta
+   `docs/impl-<id>.md` contra el codigo.
+3. **Corridas en segundo plano**:
+   `/private/tmp/claude-<uid>/<cwd-slug>/<session-id>/tasks/*.output` (una por
+   Bash en background) y `.../scratchpad/` (scripts de cierre, bases y checks de
+   postmerge por repo). El `.output` del script de cierre recorta el detalle: lee
+   el log por repo (`check-<id>-<repo>.log`) para saber que rojos son nuevos.
+4. **Procesos**: `ps -axo pid,lstart,command | grep claude`. Si el usuario
+   reabrio la sesion (`claude --resume <id>`), sigue viva: avisale que no la use
+   mientras trabajas, para no pisar el estado del arnes.
+5. **Estado**: `estado.py` en el host nuevo. Con `~/.claude/skills/harness-flow`
+   como symlink al clone de Hermes, `$H` resuelve a los mismos scripts.
+
+Despues sigue el flujo desde el paso donde quedo cada feature. Sin cupo de
+Claude Code, el revisor va por `delegate_task` (paso 2 del Reviewer en el
+SKILL.md). Un implementer delegado en Sonnet necesita `delegation.model` en la
+config de Hermes: el hijo de `delegate_task` hereda el modelo de la sesion.
+Como fijarlo con el SI del usuario, comprobarlo, que lleva el `context` y como
+se retoma una parada del hijo: [`modelos.md`](modelos.md), "Sin Claude Code o
+sin cupo".
+
 ## codebase-memory-mcp
 
 `codebase-memory-mcp` (consulta estructural + reindexado tras cerrar) se instala

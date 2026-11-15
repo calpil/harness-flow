@@ -55,7 +55,7 @@ GPT. `psycopg` solo hace falta para el Memory Hub.
 **Pair es el modo por defecto de toda feature**, con stack detectado o sin él: lo deja en el
 backlog `gate.py approve-spec` al sellar el spec por primera vez y `gate.py close` exige su rastro,
 la lista de tests sellada (`gate.py sellar-tests`, que corre quien implementa). `--pair` ya no hace falta para activarlo. El
-modo delegado es decisión del usuario (`worktree.py modo --feature <id> --delegado`) o de una sesión
+modo delegado es decisión del usuario (`worktree.py modo --feature <id> --delegado --yes`) o de una sesión
 sin usuario. En los dos modos el brief (`contexto.py brief`) trae el texto de las reglas de cada
 stack, el índice de sus skills y el bloque `NORMAS DE INGENIERIA`, que es la misma lista que audita
 el revisor: cúmplelas aunque tu host no cargue `agents/implementer.md`. Si delegas en un
@@ -87,7 +87,7 @@ En Grok el Rol 2 se divide según la modalidad:
    ciclo solo si el usuario pide "paso a paso". Usa `spawn_subagent` para
    implementar solo si el usuario pide varias features en paralelo.
 2. **Modo Delegado (autónomo)**: solo si el usuario lo pidió o la sesión no tiene
-   usuario. Regístralo (`worktree.py start --feature <id> --delegado`); Grok ejecuta
+   usuario. Regístralo (`worktree.py start --feature <id> --delegado --yes`); Grok ejecuta
    la implementación en el worktree hasta dejar la unidad en verde y el acta
    `docs/impl-<id>.md`, siguiendo las reglas y normas de la salida de `contexto.py brief`.
 

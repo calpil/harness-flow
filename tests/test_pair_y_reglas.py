@@ -131,6 +131,11 @@ class ReglasEnElBriefTests(Proyecto):
         self.assertNotIn(FRASE_GO, out)
 
     def test_sin_stack_normativo_no_hay_bloque(self):
+        """Ningun repo del proyecto tiene stack normativo. Si la raiz no tiene stack y la
+        feature no declara repos, el brief carga los de todo el proyecto
+        (test_brief_stacks): por eso aqui los servicios tampoco tienen stack."""
+        for ms in ("ms-pagos", "ms-media"):
+            (self.micros / ms / "go.mod").unlink()
         self.backlog({"id": 5, "name": "cobro", "status": "in_progress"})
         self.assertEqual("", self.reglas())
 
@@ -160,17 +165,45 @@ class ModoTests(Proyecto):
         self.assertIn("modo pair", r.stdout)
 
     def test_delegado_es_una_decision_explicita(self):
+        r = self.start("--delegado", "--yes")
+        self.assertEqual(0, r.returncode, r.stdout + r.stderr)
+        self.assertEqual("delegado", self.feature()["modo"])
+
+    def test_delegar_sin_el_si_del_usuario_se_niega_y_no_arranca(self):
+        """En calpil-ingenieria 9 features pasaron de pair a delegado 1 a 13 s despues
+        de aprobarse: el script aceptaba --delegado sin que nadie lo confirmara."""
         r = self.start("--delegado")
+        self.assertNotEqual(0, r.returncode, r.stdout + r.stderr)
+        self.assertIn("--yes", r.stdout + r.stderr)
+        self.assertEqual("todo", self.feature()["status"])
+        self.assertNotIn("modo", self.feature())
+
+    def test_una_feature_ya_delegada_arranca_otro_repo_sin_volver_a_preguntar(self):
+        self.backlog({"id": 5, "name": "cobro", "status": "todo", "modo": "delegado"})
+        self.commit("backlog")
+        r = harness("worktree.py", "start", "--feature", "5", "--delegado", "--sin-contexto", cwd=self.root)
         self.assertEqual(0, r.returncode, r.stdout + r.stderr)
         self.assertEqual("delegado", self.feature()["modo"])
 
     def test_el_modo_se_puede_cambiar_y_queda_en_la_bitacora(self):
         self.start()
-        r = harness("worktree.py", "modo", "--feature", "5", "--delegado", cwd=self.root)
+        r = harness("worktree.py", "modo", "--feature", "5", "--delegado", "--yes", cwd=self.root)
         self.assertEqual(0, r.returncode, r.stdout + r.stderr)
         self.assertEqual("delegado", self.feature()["modo"])
         historia = (self.root / "harness" / "progress" / "history.md").read_text(encoding="utf-8")
-        self.assertIn("modo de #5: delegado (antes pair)", historia)
+        self.assertIn("modo de #5: delegado (antes pair) con el SI del usuario", historia)
+
+    def test_pasar_a_delegado_sin_el_si_se_niega(self):
+        self.start()
+        r = harness("worktree.py", "modo", "--feature", "5", "--delegado", cwd=self.root)
+        self.assertNotEqual(0, r.returncode, r.stdout + r.stderr)
+        self.assertEqual("pair", self.feature()["modo"])
+
+    def test_volver_a_pair_no_necesita_el_si(self):
+        self.start("--delegado", "--yes")
+        r = harness("worktree.py", "modo", "--feature", "5", "--pair", cwd=self.root)
+        self.assertEqual(0, r.returncode, r.stdout + r.stderr)
+        self.assertEqual("pair", self.feature()["modo"])
 
     def brief(self, modo=None) -> str:
         f = {"id": 5, "name": "cobro", "status": "in_progress"}

@@ -65,7 +65,7 @@ despues del sello. Vuelve a `/harness-flow:spec $ARGUMENTS[0]`.
 ## 2. Worktree
 
 Si la feature aun no tiene `worktree` en `harness/feature_list.json`, crealo.
-Agrega `--delegado` SOLO si el usuario pidio delegar:
+Agrega `--delegado --yes` SOLO si el usuario dijo SI a delegar en un formulario (sin `--yes` el script se niega):
 
 ```bash
 eval "$(python3 "${CLAUDE_PLUGIN_ROOT}/scripts/entorno.py" --shell)" && "$PY" "$H/worktree.py" start --feature $ARGUMENTS[0]
@@ -75,7 +75,7 @@ eval "$(python3 "${CLAUDE_PLUGIN_ROOT}/scripts/entorno.py" --shell)" && "$PY" "$
 estaba arrancada y el usuario cambia de idea:
 
 ```bash
-eval "$(python3 "${CLAUDE_PLUGIN_ROOT}/scripts/entorno.py" --shell)" && "$PY" "$H/worktree.py" modo --feature $ARGUMENTS[0] --delegado
+eval "$(python3 "${CLAUDE_PLUGIN_ROOT}/scripts/entorno.py" --shell)" && "$PY" "$H/worktree.py" modo --feature $ARGUMENTS[0] --delegado --yes
 ```
 
 Anota la ruta que imprime. En una raiz multi-repo sin `.git`, el arbol se

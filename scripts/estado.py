@@ -119,7 +119,12 @@ def main() -> None:
     if f0_obj and f0_obj.get("status") != "done":
         print("   " + "=" * 68)
         print("   [!] PRIORIDAD ARQUITECTONICA: Feature #0 requerida antes de nuevas features.")
-        print(f"       El codigo base contiene violaciones que deben normalizarse primero.")
+        if norm_info is not None and not norm_info.get("nivel_2_violaciones"):
+            # Medido en este arranque: la #0 sigue abierta, pero ya no hay que normalizar.
+            print("       El verificador ya no reporta violaciones: cierra la #0 por el flujo")
+            print("       (sus AC lo miden con gate.py verify) para liberar las demas.")
+        else:
+            print("       El codigo base contiene violaciones que deben normalizarse primero.")
         print(f"       -> #{f0_obj['id']}: {f0_obj.get('name')} [{f0_obj.get('status')}]")
         print("       -> Siguiente paso: gate.py approve-spec --feature 0 --yes")
         print("          y resolver violaciones con TDD en worktree.py start --feature 0")

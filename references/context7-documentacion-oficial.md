@@ -57,6 +57,10 @@ Los modelos de lenguaje (LLMs) tienen fechas de corte de entrenamiento fijas (*k
     context7:
       url: https://mcp.context7.com/mcp
   ```
+  Las tools entran como diferidas: `mcp__context7__resolve_library_id` y
+  `mcp__context7__query_docs`. Se cargan con `tool_describe` y se llaman con `tool_call`;
+  con el id del bloque del stack (`/angular/angular`, `/golang/go`) basta `query_docs`.
+  En Hermes el brief lo recuerda bajo la línea `Context7:`.
 * **Kimi Code:** no está verificado en una instalación real. Context7 documenta que cualquier
   cliente MCP se conecta con la URL de arriba; sigue la guía de servidores MCP de Kimi.
 

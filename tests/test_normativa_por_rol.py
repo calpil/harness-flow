@@ -271,7 +271,7 @@ class ModoAlAprobarElSpecTests(Proyecto):
 
     def test_el_usuario_puede_delegar_antes_de_arrancar(self):
         self.aprobar()
-        r = harness("worktree.py", "modo", "--feature", "1", "--delegado", cwd=self.root)
+        r = harness("worktree.py", "modo", "--feature", "1", "--delegado", "--yes", cwd=self.root)
         self.assertEqual(0, r.returncode, r.stdout + r.stderr)
         self.assertEqual("delegado", self.feature()["modo"])
 

@@ -379,6 +379,17 @@ def spec_micros(text: str) -> list[str]:
     return micros_declarados({"microservicios": crudo}) if crudo else []
 
 
+def micros_de_contexto(f: dict, spec_text: str) -> list[str]:
+    """Repos cuya norma reciben el brief y el briefing: los del backlog y los del spec.
+
+    El backlog manda en el registro multi-repo (su lista exacta), pero no puede
+    callar un repo que el spec declara: `add.py --microservicio ms-pagos` y un spec
+    con `Microservicios: front, ms-pagos` dejaban al front sin reglas ni skills.
+    """
+    out = micros_declarados(f)
+    return out + [m for m in spec_micros(spec_text) if m not in out]
+
+
 def slugify(name: str) -> str:
     n = unicodedata.normalize("NFKD", name or "").encode("ascii", "ignore").decode()
     n = re.sub(r"[^a-zA-Z0-9]+", "-", n).strip("-").lower()

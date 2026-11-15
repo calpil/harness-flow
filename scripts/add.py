@@ -71,8 +71,8 @@ def _peso(valor: str | None) -> str:
     """Por que esta ficha no cabe como enmienda. Queda escrito en el backlog."""
     limpio = (valor or "").strip()
     if len(limpio) < 15 or any(c in limpio for c in "\n\r\x85\u2028\u2029"):
-        sys.exit("[!!] --yes va con --peso '<por que es ficha y no enmienda>': una linea que diga el\n"
-                 "     comportamiento nuevo o el riesgo que la justifica, o que el usuario la pidio.\n"
+        sys.exit("[!!] --yes va con --peso '<por que es ficha y no enmienda>': una linea de al menos 15 caracteres\n"
+                 "     que diga el comportamiento nuevo o el riesgo que la justifica, o que el usuario la pidio.\n"
                  "     Queda escrito en el backlog. Si no sabes que poner, no es una ficha:\n"
                  "     hallazgo.py anotar.")
     return limpio

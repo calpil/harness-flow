@@ -172,6 +172,34 @@ class ComandosDeLosAcTests(Proyecto):
         self.assertEqual(1, self.correr(self.arquitectura_de(self.rust)).returncode)
 
 
+class AvisoDeEstadoTests(Proyecto):
+    """estado.py decia 'el codigo contiene violaciones' mientras la #0 siguiera abierta,
+    aunque el verificador ya diera cero: el arranque contradecia su propia linea
+    de arquitectura ('0 archivos fuera de la norma')."""
+
+    def setUp(self):
+        super().setUp()
+        shutil.rmtree(self.rust)
+        self.normalizar()
+
+    def estado(self) -> str:
+        env = dict(os.environ, HARNESS_SIN_CONTEXTO="1", HARNESS_SIN_CBM="1", HARNESS_SIN_HUB="1")
+        r = subprocess.run([sys.executable, str(SCRIPTS / "estado.py")], cwd=str(self.root),
+                           env=env, capture_output=True, text=True, timeout=120)
+        self.assertEqual(0, r.returncode, r.stdout + r.stderr)
+        return r.stdout
+
+    def test_con_violaciones_lo_dice(self):
+        self.assertIn("contiene violaciones", self.estado())
+
+    def test_sin_violaciones_no_dice_que_las_hay(self):
+        escribir(self.go / "cmd" / "server" / "main.go", "package main\nfunc main() {}\n")
+        out = self.estado()
+        self.assertIn("Feature #0", out)
+        self.assertNotIn("contiene violaciones", out)
+        self.assertIn("ya no reporta violaciones", out)
+
+
 class SubcomandoArquitecturaTests(Proyecto):
     def cli(self, *args) -> subprocess.CompletedProcess:
         return subprocess.run([sys.executable, str(SCRIPTS / "stack.py"), "arquitectura", *args],

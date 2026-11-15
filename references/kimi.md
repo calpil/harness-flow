@@ -59,7 +59,7 @@ GPT. `psycopg` solo hace falta para el Memory Hub.
 **Pair es el modo por defecto de toda feature**, con stack detectado o sin él: lo deja en el
 backlog `gate.py approve-spec` al sellar el spec por primera vez y `gate.py close` exige su rastro,
 la lista de tests sellada (`gate.py sellar-tests`, que corre quien implementa). `--pair` ya no hace falta para activarlo. El
-modo delegado es decisión del usuario (`worktree.py modo --feature <id> --delegado`) o de una sesión
+modo delegado es decisión del usuario (`worktree.py modo --feature <id> --delegado --yes`) o de una sesión
 sin usuario. En los dos modos el brief (`contexto.py brief`) trae el texto de las reglas de cada
 stack, el índice de sus skills y el bloque `NORMAS DE INGENIERIA`, que es la misma lista que audita
 el revisor: cúmplelas aunque tu host no cargue `agents/implementer.md`. Si delegas en un
@@ -76,7 +76,7 @@ En Kimi Code hay dos caminos para implementar:
    (`references/vertical-slice.md`, sección 6). Pausa tras cada ciclo solo si el
    usuario pide "paso a paso".
 2. **Modo Delegado (autónomo)**: solo si el usuario lo pidió o la sesión no tiene usuario
-   (`worktree.py start --feature <id> --delegado`). Con el plugin instalado, usa la tool `Agent` con
+   (`worktree.py start --feature <id> --delegado --yes`). Con el plugin instalado, usa la tool `Agent` con
    `subagent_type: "implementer"`, pasando el prompt con el spec, el worktree y la
    salida de `contexto.py brief`. Sin plugin, puedes correr la sesión delegada con
    `kimi -p --agent-file <skill>/agents/implementer.md`.

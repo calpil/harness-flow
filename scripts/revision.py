@@ -164,6 +164,7 @@ def cmd_briefing(a) -> None:
         contexto.cmd_brief(argparse.Namespace(
             feature=str(f["id"]), max_lineas=a.max_lineas_brief,
             max_archivos=10, max_lecciones=10, max_relacionados=0, con_producto=False, con_hallazgos=False,
+            con_modo=False,      # las ordenes del implementer no son del revisor
             con_reglas=False))   # las reglas van una vez, en el bloque de normativa de abajo
         print()
     except Exception as exc:
@@ -236,8 +237,8 @@ Reglas:
     try:
         import contexto
         import stack
-        from comun import micros_declarados, spec_micros
-        micros = micros_declarados(f) or spec_micros(stext)
+        from comun import micros_de_contexto
+        micros = micros_de_contexto(f, stext)
         repos, _ = contexto._repos_de_la_feature(p, f, micros)
         if wt and all(Path(wt).resolve() != r for _, r in repos):
             repos.insert(0, (Path(wt).name, Path(wt).resolve()))

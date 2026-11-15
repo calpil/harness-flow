@@ -77,8 +77,22 @@ def _fijar_modo(p: dict, f: dict, args) -> str:
     elif getattr(args, "pair", False) or not previo:
         f["modo"] = "pair"
     if previo and previo != f["modo"]:
-        bitacora(p, f"modo de #{f['id']}: {f['modo']} (antes {previo})")
+        por = " con el SI del usuario" if f["modo"] == "delegado" else ""
+        bitacora(p, f"modo de #{f['id']}: {f['modo']} (antes {previo}){por}")
     return f["modo"]
+
+
+def _exigir_si_para_delegar(f: dict, args) -> None:
+    """Pasar a delegado exige --yes: el SI del usuario, o de quien lanzo una sesion sin usuario.
+
+    El texto decia "delegar es decision del usuario" y el script aceptaba
+    --delegado de cualquiera: en un proyecto real nueve features pasaron de pair a
+    delegado entre 1 y 13 segundos despues de aprobarse. Una feature que ya esta
+    en delegado no vuelve a preguntar (arrancar otro de sus repos).
+    """
+    if getattr(args, "delegado", False) and f.get("modo") != "delegado" and not getattr(args, "yes", False):
+        sys.exit(f"[!!] delegar #{f['id']} es decision del usuario: preguntaselo en un formulario y,\n"
+                 "     solo con su SI, repite con --delegado --yes. Sin eso la feature sigue en pair.")
 
 
 def _decir_modo(f: dict) -> None:
@@ -86,9 +100,9 @@ def _decir_modo(f: dict) -> None:
         print(f"[i]  modo pair automatico (por defecto): la lista de tests va en docs/tests-{f['id']}.md y la\n"
               f"     sella quien implementa (gate.py sellar-tests --feature {f['id']}); close la exige.\n"
               "     Avanza sin pausar tras cada ciclo; formulario solo en las paradas que preguntan (ver el brief).\n"
-              "     Para delegar al subagente: worktree.py modo --feature <id> --delegado (decision del usuario).")
+              "     Para delegar al subagente: worktree.py modo --feature <id> --delegado --yes (solo con el SI del usuario).")
     else:
-        print("[i]  modo delegado: lo pidio el usuario o la sesion no tiene usuario.")
+        print("[i]  modo delegado: lo decidio el usuario (--yes).")
 
 
 def cmd_modo(args) -> None:
@@ -98,6 +112,7 @@ def cmd_modo(args) -> None:
     p = paths()
     data = load_backlog(p)
     f = get_feature(data, args.feature)
+    _exigir_si_para_delegar(f, args)
     _fijar_modo(p, f, args)
     save_backlog(p, data)
     print(f"[ok] feature #{f['id']}: modo {f['modo']}")
@@ -108,6 +123,7 @@ def cmd_start(args) -> None:
     p = paths()
     data = load_backlog(p)
     f = get_feature(data, args.feature)
+    _exigir_si_para_delegar(f, args)
     fid, slug = f["id"], slugify(f.get("name", ""))
 
     f0 = next((x for x in data.get("features", []) if str(x.get("id")) == "0"), None)
@@ -223,7 +239,7 @@ def cmd_register(args) -> None:
         # Solo le pasa a un spec sellado antes de que el modo se registrara al aprobar.
         print(f"[!]  #{f['id']} no tiene modo registrado: close NO exigira la lista de tests.\n"
               f"     Si aun no hay codigo, fijalo: worktree.py modo --feature {f['id']} --pair\n"
-              f"     (o --delegado, si el usuario decide delegar).")
+              f"     (o --delegado --yes, si el usuario decide delegar).")
 
 
 def cmd_list(args) -> None:
@@ -265,13 +281,15 @@ def main() -> None:
     s.add_argument("--sin-contexto", action="store_true", dest="sin_contexto",
                    help="no refrescar grafo/hub/vault ni imprimir el brief")
     s.add_argument("--delegado", action="store_true",
-                   help="implementa el subagente, no en pair: solo si el usuario lo pide o no hay usuario")
+                   help="implementa el subagente, no en pair: solo con el SI del usuario (--yes)")
     s.add_argument("--pair", action="store_true", help="modo pair (es el modo por defecto)")
+    s.add_argument("--yes", action="store_true", help="el usuario decidio delegar (requerido con --delegado)")
     s.set_defaults(fn=cmd_start)
     s = sub.add_parser("register"); s.add_argument("--feature", required=True)
     s.add_argument("--manifest", required=True); s.set_defaults(fn=cmd_register)
     s = sub.add_parser("modo"); s.add_argument("--feature", required=True)
     s.add_argument("--pair", action="store_true"); s.add_argument("--delegado", action="store_true")
+    s.add_argument("--yes", action="store_true", help="el usuario decidio delegar (requerido con --delegado)")
     s.set_defaults(fn=cmd_modo)
     sub.add_parser("list").set_defaults(fn=cmd_list)
     s = sub.add_parser("drop"); s.add_argument("--feature", required=True)

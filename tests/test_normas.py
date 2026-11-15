@@ -457,6 +457,18 @@ class DocumentacionPorStackTests(Proyecto):
     def test_un_stack_sin_el_bloque_lo_dice(self):
         self.assertIn("no declara `documentation`", "\n".join(contexto.lineas_documentacion("x", {})))
 
+    def test_en_hermes_nombra_las_tools_de_context7_como_las_ve_hermes(self):
+        """En Hermes el MCP se llama mcp__context7__query_docs y es una tool diferida
+        (tool_call): 'query-docs' a secas no la encuentra quien busca por nombre."""
+        manifest = stack.cargar_manifest("golang-hexagonal")
+        with mock.patch.dict(os.environ, {"HARNESS_HOST": "hermes"}):
+            hermes = "\n".join(contexto.lineas_documentacion("golang-hexagonal", manifest))
+        with mock.patch.dict(os.environ, {"HARNESS_HOST": "grok"}):
+            grok = "\n".join(contexto.lineas_documentacion("golang-hexagonal", manifest))
+        self.assertIn("mcp__context7__query_docs", hermes)
+        self.assertIn("tool_call", hermes)
+        self.assertNotIn("mcp__context7__", grok)
+
     def test_el_agents_md_no_inventa_un_id_de_context7(self):
         manifest = dict(stack.cargar_manifest("golang-hexagonal"))
         manifest.pop("documentation")

@@ -256,6 +256,29 @@ class BriefTests(Proyecto):
         self.assertNotIn("la aprueba", r.stdout)
 
 
+class BriefingDelRevisorTests(Proyecto):
+    """El revisor recibia las ordenes del implementer en pair: sellar la lista y
+    commitear sin pedir permiso. agents/revisor.md dice lo contrario; un revisor
+    lanzado con delegate_task leia las dos."""
+
+    def briefing(self, modo):
+        self.backlog({"id": 5, "name": "cobro", "status": "in_progress", "modo": modo})
+        r = harness("revision.py", "--feature", "5", "--briefing", cwd=self.root)
+        self.assertEqual(0, r.returncode, r.stdout + r.stderr)
+        return r.stdout
+
+    def test_no_trae_las_ordenes_del_implementer(self):
+        for modo in ("pair", "delegado"):
+            with self.subTest(modo=modo):
+                out = self.briefing(modo)
+                self.assertNotIn("sellar-tests --feature", out)
+                self.assertNotIn("sin pedir permiso", out)
+                self.assertNotIn("formulario SOLO para", out)
+
+    def test_dice_en_que_modo_se_implemento(self):
+        self.assertIn("modo de implementacion: pair", self.briefing("pair"))
+
+
 class LosTextosDicenLoMismoTests(unittest.TestCase):
     """La causa fue una contradiccion entre textos: uno decia avanzar y otro pausar."""
 

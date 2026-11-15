@@ -369,7 +369,7 @@ class CierreTrasEnmiendaTests(unittest.TestCase):
         # El fixture trae el trabajo hecho en la rama: es modo delegado. Sin declararlo,
         # la primera aprobacion la deja en pair y close exige la lista de tests.
         r = subprocess.run([sys.executable, str(SCRIPTS / "worktree.py"), "modo", "--feature", "1",
-                            "--delegado"], cwd=str(self.repo), capture_output=True, text=True)
+                            "--delegado", "--yes"], cwd=str(self.repo), capture_output=True, text=True)
         assert r.returncode == 0, r.stdout + r.stderr
         self.ok("verify", "--feature", "1")
         (self.repo / "docs" / "impl-1.md").write_text(CITAS, encoding="utf-8")

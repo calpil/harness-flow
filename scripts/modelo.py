@@ -14,7 +14,8 @@ el usuario, con /model. Aqui se guarda lo que eligio y se dice con que modelo y
 esfuerzo tiene que correr el rol; si la sesion no coincide, el rol lo aplica por
 el turno con /harness-flow:usar-opus o usar-fable, sin pedirle nada al usuario.
 Los demas roles no pasan por aqui: Cierre y Revisor van en Opus 5.5 y el
-Implementer en Sonnet 5.5 (references/modelos.md).
+Implementer delegado en Sonnet 5.5; en pair implementa la sesion, en Opus 5.5
+(references/modelos.md).
 """
 from __future__ import annotations
 

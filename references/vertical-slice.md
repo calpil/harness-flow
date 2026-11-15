@@ -85,7 +85,7 @@ Al refinar **una sola** feature en `docs/spec-feature-<id>-<slug>.md` desde `tem
 
 El Rol 2 soporta dos modos:
 - **Modo Pair automático (por defecto, en toda feature):** la IA escribe los tests y el código en el worktree y **avanza sola, ciclo tras ciclo**. El humano decide solo lo que es suyo: las paradas que preguntan y lo que él sella. No hay que activarlo: `gate.py approve-spec` lo registra al sellar el spec por primera vez y `/harness-flow:implementar <id>` lo sigue.
-- **Modo delegado (solo si el usuario lo pide o la sesión no tiene usuario):** subagente autónomo (`harness-flow:implementer` o equivalente del host) que ejecuta los ciclos TDD verticalmente en el worktree y entrega `docs/impl-<id>.md`. Se registra con `worktree.py start --feature <id> --delegado` o `worktree.py modo --feature <id> --delegado`.
+- **Modo delegado (solo si el usuario lo pide o la sesión no tiene usuario):** subagente autónomo (`harness-flow:implementer` o equivalente del host) que ejecuta los ciclos TDD verticalmente en el worktree y entrega `docs/impl-<id>.md`. Se registra con `worktree.py start --feature <id> --delegado --yes` o `worktree.py modo --feature <id> --delegado --yes`.
 
 **El protocolo viaja en el brief.** `contexto.py brief --feature <id>` imprime, en cualquier modo, el resumen del protocolo de esta sección (un test a la vez y las 5 paradas) y el comando que imprime este archivo entero (`normas.py --ref vertical-slice`). Trae además las reglas de cada stack, el índice de sus skills con el comando que imprime cada una (`stack.py skill`) y las normas de ingeniería. Un agente al que se le delega con el brief pegado tiene el paquete completo: no hay que anexarle nada.
 
@@ -162,7 +162,7 @@ Cuando toda la lista de tests está en verde:
 
 ### Activación automática
 - **El Modo Pair es el modo por defecto en cualquier repo**, tenga o no un stack detectado. Lo registra `gate.py approve-spec` en el backlog (`modo: pair`) al sellar el spec por primera vez, `worktree.py start` lo confirma y el brief lo repite. Así queda fijado también en una raíz multi-repo, donde el árbol se declara con `worktree.py register` y `start` no corre.
-- **Se delega solo por decisión del usuario** (`worktree.py start --delegado`, o `worktree.py modo --feature <id> --delegado`) o cuando la sesión no tiene usuario (`claude -p`).
+- **Se delega solo por decisión del usuario** (`worktree.py start --delegado --yes`, o `worktree.py modo --feature <id> --delegado --yes`) o cuando la sesión no tiene usuario (`claude -p`).
 - **El rastro del modo pair es la lista de tests sellada.** Se escribe en `docs/tests-<id>.md` (plantilla `templates/tests.md`), con al menos una línea `- AC-n: <test> [costura: ...]` por AC, y la sella quien implementa con `gate.py sellar-tests --feature <id>`. `gate.py close` se niega sin ese sello, si la lista cambió después de sellarla, o si el spec ganó un AC que la lista no cubre.
 - Una feature cuyo spec se selló antes de este registro no tiene `modo` y no queda sujeta al gate: puede tener el trabajo hecho. `worktree.py register` lo avisa; si aún no hay código, se fija con `worktree.py modo --feature <id> --pair`.
 - **Lo que el gate comprueba y lo que no.** Comprueba que la lista cubre cada AC, que el sello está fresco y que ningún test sellado se quitó sin el SÍ del usuario. No comprueba el ritmo: eso lo ve el usuario en la sesión.

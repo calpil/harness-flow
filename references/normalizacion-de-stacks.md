@@ -4,6 +4,22 @@ Léelo cuando un repo del proyecto no reciba las rules o las skills de su stack,
 cuando una regla no nombre el código del repo, cuando una copia instalada quede
 distinta de la plantilla o cuando `stack.py verificar` diga algo que no esperas.
 
+## Stacks soportados
+
+Cada uno vive en `assets/stacks/<stack-id>/` (manifest, `rules/`, `skills/` y validadores). Lo que exige cada uno:
+
+- **Golang Hexagonal (`golang-hexagonal`)**: dominio Go puro en `internal/*/domain/**` (sin frameworks/SQL), puertos de entrada/salida en `application/`, adaptadores Chi HTTP (RFC 7807) y persistencia `pgx`/in-memory, composition root en `cmd/server/main.go`, tests deterministas sin `time.Sleep` (`go test -race`).
+- **Angular Product (`angular-product`)**: feature-oriented layered (`src/app/features/<feat>/(domain|application|ui|data-access)`), dominio TypeScript puro sin dependencias de `@angular`/RxJS, Signals para reactividad, componentes standalone, composition root en `app.routes.ts` y linter de límites (`check-architecture.py` / `check-architecture.mjs`).
+- **.NET Hexagonal (`dotnet-hexagonal`)**: C# 13 / .NET 10 (LTS) con Clean Architecture multi-proyecto (`Domain` puro en BCL sin dependencias externas, `Application` con puertos in/out, `Infrastructure` con Dapper/ADO.NET y `Npgsql`, `WebApi` con MVC Controllers, ProblemDetails RFC 7807 y `Program.cs` como Composition Root, y tests deterministas con xUnit y `WebApplicationFactory`).
+- **Rust Hexagonal (`rust-hexagonal`)**: Rust (edición 2021/2024) con Clean Architecture multi-crate o modular (`crates/domain` puro sin dependencias de red/SQLx, `crates/application` con puertos in/out y casos de uso, `crates/infrastructure` con SQLx PostgreSQL y repositorios en memoria, `crates/api` con handlers Axum, ProblemDetails RFC 7807 y `src/main.rs` como Composition Root, y tests deterministas sin `thread::sleep`).
+- **Next.js Product (`nextjs-product`)**: Next.js 15+ / React 19 con Server Components por defecto, aislamiento `server-only` y App Router.
+- **Spring Boot Hexagonal (`springboot-hexagonal`)**: Java 21 / Spring Boot 3.4 con dominio puro sin dependencias de Spring/JPA y ArchUnit.
+- **NestJS Hexagonal (`nestjs-hexagonal`)**: TypeScript / NestJS modular con Prisma ORM y puertos desacoplados.
+- **Python Data Product (`python-dataproduct`)**: Python 3.14 con FastAPI, Polars/Pydantic y adaptadores de origen/destino.
+- **iOS SwiftUI Clean (`ios-swiftui-clean`)**: Swift con Clean Architecture por módulos SPM (`*Domain` puro, `*Data`, `*UI`, `*App` como Composition Root).
+- **Android Compose Clean (`android-compose-clean`)**: Kotlin y Jetpack Compose con `features/*/(domain|data|presentation)` y `core`.
+- **Stacks Futuros**: cualquier nuevo stack se agrega simplemente creando una carpeta `assets/stacks/<nuevo-stack>/manifest.json` con su bloque `"detection"` (indicadores de archivos, extensiones, dependencias y anti-indicadores); el motor lo detectará y normalizará de forma automática sin tocar código Python. `detection.requires_any` declara la señal propia del stack: sin ninguno de esos archivos el repo no es de ese stack (un proyecto Gradle sin `AndroidManifest.xml` no es Android). Para que su código heredado se mida (trinquete), el manifest declara además el bloque `"layout"`.
+
 ## Qué hace y qué no
 
 `stack.py normalizar` instala en cada repo la norma de su stack: rules, skills,
@@ -117,6 +133,27 @@ repos afectados. Para actualizarlas:
 Mientras tanto nadie lee la copia vieja por el arnés: el brief y `stack.py
 skill` entregan la plantilla vigente cuando la copia del repo quedó vieja. La
 copia que el proyecto editó sí se entrega: su edición manda.
+
+### Una carpeta nueva de la plantilla aparece sin seguimiento
+
+Cuando la skill suma una carpeta de normativa (`.gemini/skills/` junto a
+`.claude/skills/` y `.agents/skills/`), el arranque la instala en TODOS los
+repos, y en los que versionan las otras queda como `??`. No es trabajo de otra
+sesión ni basura: es la normativa nueva sin commitear.
+
+1. Confirma el origen: fecha de la carpeta (la del arranque) y
+   `git log -S'<carpeta>' -- scripts/` en el clone de la skill.
+2. Mira cómo trata cada repo a las carpetas hermanas: `git ls-files | grep
+   '^\.(claude|agents|gemini)/'` y el `.gitignore` (un front puede ignorar `.gemini/*`
+   salvo `!.gemini/rules/`).
+3. Pregunta en el formulario, con la recomendada primero: versionar como las
+   demás (recomendado), ignorarla en `.gitignore`, o borrarla (vuelve en el
+   arranque siguiente: no es arreglo). Pregunta también si se normaliza completo
+   (actualiza las copias viejas) y cuándo (después de los cierres en curso).
+4. Versionar = `stack.py normalizar --repo <r>` y un commit por repo en la rama
+   base; en un repo que habilita carpeta por carpeta, suma la línea `!` que
+   falta. Fuera de la rama de una feature y después de los merges en curso, para
+   no mezclar normativa con el delta de una feature ni mover la base medida.
 
 ## Grok, en el rol y no en el commit
 

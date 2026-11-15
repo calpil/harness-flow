@@ -108,7 +108,7 @@ $PY "$H/normas.py" --cuadro
 $PY "$H/normas.py" --rol producto|leader|implementer|revisor [--doc prd|sdd]
 
 # 8. Fijar o cambiar el modo de implementación de una feature
-$PY "$H/worktree.py" modo --feature <id> --pair|--delegado
+$PY "$H/worktree.py" modo --feature <id> --pair|--delegado --yes
 
 # 9. Leer una skill de stack o una referencia entera (lo que usa un agente delegado)
 $PY "$H/stack.py" skill <nombre> --stack <stack-id> [--repo <ruta>]

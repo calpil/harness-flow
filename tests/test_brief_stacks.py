@@ -94,6 +94,20 @@ class BriefTests(Proyecto):
         self.assertEqual(1, out.count("add-persistence"))
         self.assertIn("mismas reglas y skills de golang-hexagonal", out.split("ms-media: ")[1])
 
+    def test_un_repo_con_worktree_registrado_no_aparece_tambien_con_su_checkout(self):
+        """El checkout principal esta en la rama de integracion: nombrarlo junto al
+        worktree invitaba a editar ahi. En ADR #192 cada servicio salia dos veces."""
+        wt = self.tmp / "wt" / "ms-pagos-1-cobro"
+        escribir(wt / "go.mod", "module example.com/ms-pagos\n")
+        f = {"id": 1, "name": "cobro", "status": "in_progress", "microservicios": ["ms-pagos"],
+             "multi_repo": {"repos": [{"microservicio": "ms-pagos", "worktree": str(wt)}]}}
+        escribir(self.root / "harness" / "feature_list.json", json.dumps({"rules": {}, "features": [f]}))
+        p = paths(self.root)
+        out = "\n".join(contexto._lineas_stack(p, load_backlog(p), f, micros_declarados(f)))
+        self.assertEqual(1, out.count("ms-pagos: "), out)
+        self.assertIn(str(wt.resolve()), out)
+        self.assertNotIn(f"· {(self.micros / 'ms-pagos').resolve()}\n", out + "\n")
+
     def test_avisa_si_las_reglas_del_stack_no_estan_instaladas_en_ese_repo(self):
         self.assertIn("NO instaladas", self.lineas(["ms-pagos"]))
         stack.normalizar_repositorio(self.micros / "ms-pagos", "golang-hexagonal", rules={})
@@ -165,6 +179,43 @@ class BriefingRevisorTests(Proyecto):
         self.assertIn("Stack detectado: rust-hexagonal", r.stdout)
         self.assertEqual(1, r.stdout.count("Stack detectado: golang-hexagonal"),
                          "la normativa va una vez por stack, no una por repo")
+
+
+class MicroserviciosDelSpecTests(Proyecto):
+    """El backlog trae un repo y el spec declara otro mas: los dos reciben su norma.
+
+    `add.py --microservicio ms-pagos` deja la lista del backlog con un solo repo, y
+    approve-spec solo la completa desde el spec si estaba vacia. El brief y el
+    briefing tomaban el backlog y descartaban el spec: en una raiz sin stack propio,
+    el repo que solo nombraba el spec (el front, por ejemplo) se quedaba sin reglas.
+    """
+
+    def setUp(self):
+        super().setUp()
+        (self.root / "angular.json").unlink()      # raiz multi-repo sin stack propio
+        (self.root / "package.json").unlink()
+        f = {"id": 1, "name": "cobro", "status": "in_progress", "microservicios": ["ms-pagos"]}
+        escribir(self.root / "harness" / "feature_list.json",
+                 json.dumps({"rules": {"rama_base": "main"}, "features": [f]}))
+        escribir(self.root / "docs" / "spec-feature-1-cobro.md",
+                 SPEC.replace("Estado: draft\n", "Estado: draft\nMicroservicios: ms-pagos, ms-motor\n"))
+        self.env = dict(os.environ, HARNESS_SIN_CONTEXTO="1")
+
+    def correr(self, script, *args):
+        r = subprocess.run([sys.executable, str(SCRIPTS / script), *args],
+                           cwd=str(self.root), capture_output=True, text=True, env=self.env)
+        self.assertEqual(0, r.returncode, r.stdout + r.stderr)
+        return r.stdout
+
+    def test_el_brief_trae_la_norma_del_repo_que_solo_nombra_el_spec(self):
+        out = self.correr("contexto.py", "brief", "--feature", "1")
+        self.assertIn("REGLAS DEL STACK golang-hexagonal", out)
+        self.assertIn("REGLAS DEL STACK rust-hexagonal", out)
+
+    def test_el_briefing_del_revisor_tambien(self):
+        out = self.correr("revision.py", "--feature", "1", "--briefing")
+        self.assertIn("Stack detectado: golang-hexagonal", out)
+        self.assertIn("Stack detectado: rust-hexagonal", out)
 
 
 if __name__ == "__main__":

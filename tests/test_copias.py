@@ -531,7 +531,7 @@ class NormativaEnWorktreesTests(Base):
         commit(repo, "base")
         stack.normalizar_repositorio(repo, GO, rules={})
         r = subprocess.run([PY, str(RAIZ / "scripts" / "worktree.py"), "start", "--feature", "1",
-                            "--delegado"], cwd=str(repo), capture_output=True, text=True)
+                            "--delegado", "--yes"], cwd=str(repo), capture_output=True, text=True)
         self.assertEqual(0, r.returncode, r.stdout + r.stderr)
         arbol = self.tmp / "proyecto-wt" / "1-cobro"
         self.assertTrue((arbol / ".claude/rules/architecture.md").is_file(), r.stdout + r.stderr)
