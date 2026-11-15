@@ -148,7 +148,7 @@ El arnés gestiona el modelo y el esfuerzo cognitivo según el proveedor del age
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | **Claude** (Claude Code / Hermes) | `claude-fable-5-2` (`high`) o `claude-opus-5-5` (`xhigh`), a elección del usuario | `claude-sonnet-5-5` (`high` / `xhigh`) | `claude-opus-5-5` (`xhigh` / `high` seg.) | `claude-opus-5-5` (`xhigh`) | `claude-haiku-5-5` (`medium`) |
 | **OpenAI GPT-6** (Codex / Hermes) | `gpt-6-astra` (`medium` / `high`) | `gpt-6-astra` o `gpt-6.1-sol` (`medium` / `high`) | `gpt-6.1-sol` (`xhigh` / `high` seg.) | `gpt-6-luna` (`medium`) | `gpt-6-luna` (`low` / `medium`) |
-| **Gemini 4** (`Hydrogen` / `Argon`, AGY / Hermes) | Gemini 4 (`high` en sesión) | Sesión `--pair` o `invoke_subagent` (`self`, `Model: "inherit"`) | `invoke_subagent` (`self`, `Model: "inherit"`, `Workspace: "inherit"`) | Gates locales + sesión | Gates locales (`Model: "flash"` opcional bajo pedido) |
+| **Gemini 4** (`Carbon` / `Argon` / `Hydrogen`, AGY / Hermes) | `Gemini 4 Carbon` (`high`) | `Gemini 4 Argon` (`high`; sesión `--pair` o `invoke_subagent` `self` `inherit`) | `Gemini 4 Argon` (`high`; `invoke_subagent` `self` `inherit`) | `Gemini 4 Hydrogen` + gates locales | `Gemini 4 Hydrogen` + gates locales |
 | **Grok** | Modelo de sesión | Sesión (`--pair` o autónomo) | Subagente `spawn_subagent` (espera id) | Gates locales | Gates locales |
 | **Kimi Code** | Sesión principal | Sesión (`--pair` o autónomo) | Subagente `Agent` (`subagent_type: revisor`) | Gates locales | Gates locales |
 

@@ -78,6 +78,12 @@ Al refinar **una sola** feature en `docs/spec-feature-<id>-<slug>.md` desde `tem
    - Explica cómo el slice atraviesa las capas con lo mínimo que cumple los AC. Si supera 5 pasos, `gate.py` emite aviso `[!]`.
 4. **`## Sugerencias (decision del usuario)` ("Sugiere, no decidas"):**
    - Si un patrón podría ayudar (composición de middlewares, extraer un componente, etc.), menciónalo en `## Sugerencias (decision del usuario)` con su porqué **únicamente si hay una señal concreta en el código actual** (por ejemplo, algo que ya se repite), nunca por adelantado. El usuario decide si entra o no antes de sellar con `approve-spec --yes`.
+5. **Censo de pruebas vecinas antes de escribir "ninguna otra prueba cambia":**
+   - Esa frase es una promesa que el implementer cumple al pie de la letra: una vecina en rojo que el spec no nombra es una parada y una enmienda. Antes de escribirla, busca en el arbol de pruebas de CADA repo que la feature toca:
+     - la ruta o el simbolo que el spec retira o renombra (toda prueba que lo llama cambia de verbo, de actor o de cuerpo);
+     - las pruebas de lista exacta: columnas de una tabla que la migracion amplia, pisos o conteos de rutas, rutas que el README debe nombrar, listas de migraciones, cobertura de auditoria por ruta;
+     - los routers o fixtures de prueba que montan "todas las superficies": un modulo nuevo hay que montarlo ahi.
+   - Nombra cada una en el spec con lo que le cambia ("pasa de 13 a 14", "suma tres columnas") y deja dicho que una vecina fuera de la lista es una parada. Una lista corta y falsa cuesta mas que una larga.
 
 ---
 
@@ -150,9 +156,9 @@ Cuando toda la lista de tests está en verde:
 | Host / Proveedor | Rol 0 (`/backlog` → PRD/SDD) y Rol 1 (`/story` → Spec) | Rol 2 en Modo Pair (por defecto) | Rol 2 Delegado (`--delegado`) | Rol 3 (Revisor aislado) |
 | --- | --- | --- | --- | --- |
 | **Claude Code** | `/harness-flow:producto`, `/harness-flow:spec` (`claude-opus-5-5`, `xhigh`) | `/harness-flow:implementar <id>` en la sesión principal (pair por defecto) | `Agent(harness-flow:implementer)` (`claude-sonnet-5-5`, `high`/`xhigh`) | `/harness-flow:review <id>` → `Agent(harness-flow:revisor)` (`claude-opus-5-5`, `xhigh`/`high`) |
-| **Hermes** | Sesión en `gpt-6-astra` (`medium`/`high`), `claude-opus-5-5` (`xhigh`) o `gemini-4-argon` (`high`) | Sesión interactiva de Hermes, ciclo tras ciclo sin pausar | `claude -p --agent harness-flow:implementer` o perfil del rol | `claude -p --agent harness-flow:revisor` o `delegate_task` con briefing |
+| **Hermes** | Sesión en `gpt-6-astra` (`medium`/`high`), `claude-opus-5-5` (`xhigh`) o `gemini-4-carbon` (`high`) | Sesión interactiva de Hermes (`gemini-4-argon` `high` con Gemini), ciclo tras ciclo sin pausar | `claude -p --agent harness-flow:implementer` o `delegate_task` (`gemini-4-argon` `high`) | `claude -p --agent harness-flow:revisor` o `delegate_task` (`gemini-4-argon` `high`) con briefing |
 | **GPT / Codex** | `gpt-6-astra` (`medium`/`high`) | Sesión interactiva de Codex en el worktree | Sesión o `codex exec` (`gpt-6.1-sol`, `xhigh`) | `codex exec` / subagente aislado con briefing |
-| **AGY / Gemini** | Sesión en Gemini 4 (`Hydrogen (High)` / `Argon (High)`) | Sesión principal de AGY, ciclo tras ciclo sin pausar (`ask_question` solo en las paradas que preguntan) | `invoke_subagent` (`TypeName: "self"`, `Model: "inherit"`, `Workspace: "inherit"`) | `invoke_subagent` (`TypeName: "self"`, `Model: "inherit"`, `Workspace: "inherit"`) |
+| **AGY / Gemini** | Sesión en `Gemini 4 Carbon (High)` | Sesión principal en `Gemini 4 Argon (High)`, ciclo tras ciclo sin pausar (`ask_question` solo en las paradas que preguntan) | `invoke_subagent` (`TypeName: "self"`, `Model: "inherit"`, `Workspace: "inherit"`) desde `Gemini 4 Argon (High)` | `invoke_subagent` (`TypeName: "self"`, `Model: "inherit"`, `Workspace: "inherit"`) desde `Gemini 4 Argon (High)` |
 | **Grok** | Sesión principal de Grok | Sesión principal de Grok en el worktree | Sesión principal en el worktree | `spawn_subagent` y espera el id ([grok.md](grok.md)) |
 | **Kimi Code** | `/harness-flow:producto`, `/harness-flow:spec` | `/harness-flow:implementar <id>` en la sesión (pair por defecto) | `Agent(implementer)` | `/harness-flow:review <id>` → `Agent(revisor)` o `kimi -p` |
 

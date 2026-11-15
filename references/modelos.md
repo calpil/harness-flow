@@ -437,20 +437,21 @@ hijo solo las partes baratas de ese AC y que lo diga en la evidencia ("suites:
 las mide verify"). Correrlas dos veces seguidas no agrega evidencia y en una
 maquina cargada produce rojos de infraestructura.
 
-## Gemini 4 (Hydrogen / Argon) en AGY y Hermes
+## Gemini 4 (Carbon / Argon / Hydrogen) en AGY y Hermes
 
-Cuando la tarea corre sobre Gemini 4 en AGY / Antigravity (`Gemini 4 Hydrogen (High)`
-o `Gemini 4 Argon (High)`) o sobre `gemini-4-argon` en Hermes, todos los roles usan
-nivel `high` como base operativa.
+Cuando la tarea corre sobre Gemini 4 en AGY / Antigravity o en Hermes, el modelo y el effort se asignan por rol:
+- **Producto (Rol 0) y Leader (Rol 1):** `Gemini 4 Carbon (High)` (`gemini-4-carbon`), effort `high`.
+- **Implementer (Rol 2) y Revisor independiente (Rol 3):** `Gemini 4 Argon (High)` (`gemini-4-argon`), effort `high`.
+- **Cierre (Rol 4) y Estado / rutinas:** `Gemini 4 Hydrogen` (`gemini-4-hydrogen`).
 
 | Rol | Modelo | Effort | Como corre en AGY | Como corre en Hermes |
 | --- | --- | --- | --- | --- |
-| 0 Producto: PRD/SDD | Gemini 4 (`Hydrogen`/`Argon`) | `high` | Sesion principal (`Gemini 4 Hydrogen (High)` o `Argon (High)`) | Sesion o `--provider gemini -m gemini-4-argon` |
-| 1 Leader: spec y AC | Gemini 4 (`Hydrogen`/`Argon`) | `high` | Sesion principal | Sesion |
-| 2 Implementer | Gemini 4 (`Hydrogen`/`Argon`) | `high` (heredado) | Sesion principal (`--pair`) o `invoke_subagent` (`TypeName: "self"`, `Model: "inherit"`) | Sesion o `delegate_task` |
-| 3 Revisor independiente | Gemini 4 (`Hydrogen`/`Argon`) | `high` (heredado) | `invoke_subagent` (`TypeName: "self"`, `Model: "inherit"`, `Workspace: "inherit"`) | `delegate_task` con el briefing en `context` |
-| 4 Cierre | Gemini 4 (`Hydrogen`/`Argon`) | heredado / `medium` | Gates Python + sesion principal | Gates Python + sesion principal |
-| Estado y rutinas | Gemini 4 o Flash | `low` o `medium` | Gates Python + sesion principal (`Model: "flash"` solo si se delega y el usuario lo pide) | Gates Python + sesion principal |
+| 0 Producto: PRD/SDD | `Gemini 4 Carbon` (`gemini-4-carbon`) | `high` | Sesion principal (`Gemini 4 Carbon (High)`) | Sesion o `--provider gemini -m gemini-4-carbon --reasoning high` |
+| 1 Leader: spec y AC | `Gemini 4 Carbon` (`gemini-4-carbon`) | `high` | Sesion principal (`Gemini 4 Carbon (High)`) | Sesion o `--provider gemini -m gemini-4-carbon --reasoning high` |
+| 2 Implementer | `Gemini 4 Argon` (`gemini-4-argon`) | `high` | Sesion principal (`--pair`, `Gemini 4 Argon (High)`) o `invoke_subagent` (`TypeName: "self"`, `Model: "inherit"`) | Sesion (`gemini-4-argon`) o `delegate_task` |
+| 3 Revisor independiente | `Gemini 4 Argon` (`gemini-4-argon`) | `high` | `invoke_subagent` (`TypeName: "self"`, `Model: "inherit"`, `Workspace: "inherit"`) desde sesion en `Gemini 4 Argon (High)` | `delegate_task` (`gemini-4-argon`) con el briefing en `context` |
+| 4 Cierre | `Gemini 4 Hydrogen` (`gemini-4-hydrogen`) | `medium` / `high` | Gates Python + sesion principal (`Gemini 4 Hydrogen`) | Gates Python + sesion (`gemini-4-hydrogen`) |
+| Estado y rutinas | `Gemini 4 Hydrogen` (`gemini-4-hydrogen`) | `low` o `medium` | Gates Python + sesion principal (`Gemini 4 Hydrogen`) | Gates Python + sesion (`gemini-4-hydrogen`) |
 
 ### En AGY / Antigravity (`agy`)
 
@@ -458,13 +459,14 @@ nivel `high` como base operativa.
   del proyecto (subiendo hasta `.git`). Para que `harness-flow` este disponible
   en cualquier workspace de la maquina, enlazala en `~/.gemini/config/skills/harness-flow`
   (AGY tambien descubre `~/.gemini/skills/`; ademas de `~/.agents/skills/harness-flow` para Gemini CLI, Codex y Grok).
-- **Modelo y effort**: se fijan en `~/.gemini/antigravity-cli/settings.json`
-  (p. ej. `"model": "Gemini 4 Hydrogen (High)"` o `"Gemini 4 Argon (High)"`) o
-  en el selector de la sesion. `invoke_subagent` solo admite `Model: "inherit" |
-  "pro" | "flash" | "flash_lite"` y **no** tiene parametro `effort` por llamada:
+- **Modelo y effort por rol**: se seleccionan en la sesion o en `~/.gemini/antigravity-cli/settings.json`:
+  - **Producto y Leader:** `"model": "Gemini 4 Carbon (High)"`.
+  - **Implementer y Revisor:** `"model": "Gemini 4 Argon (High)"`.
+  - **Cierre, estado y rutinas:** `"model": "Gemini 4 Hydrogen"` (o `Gemini 4 Hydrogen (High)`).
+  `invoke_subagent` solo admite `Model: "inherit" | "pro" | "flash" | "flash_lite"` y **no** tiene parametro `effort` por llamada:
   la regla de AGY exige pasar `Model: "inherit"` salvo pedido explicito del
   usuario, por lo que implementer (`--delegado`) y revisor heredan tanto el
-  modelo como el effort de la sesion.
+  modelo (`Gemini 4 Argon (High)`) como el effort (`high`) de la sesion.
 - **Revisor aislado**: usa `invoke_subagent` con `TypeName: "self"`,
   `Model: "inherit"` y `Workspace: "inherit"`. En `Prompt`, pega la salida
   completa de `revision.py --feature <id> --briefing` mas la instruccion de
@@ -484,16 +486,16 @@ nivel `high` como base operativa.
 - **Shell**: cada `run_command` (salvo terminal persistente) abre un subproceso
   nuevo; pega siempre el `eval` de `entorno.py --shell` en la misma llamada.
 
-### En Hermes con Gemini 4 Argon
+### En Hermes con Gemini 4 (Carbon / Argon / Hydrogen)
 
-- Lanza Hermes con `--provider gemini -m gemini-4-argon --reasoning high`
-  (requiere `GEMINI_API_KEY` o `GOOGLE_API_KEY` en `~/.hermes/.env`).
+- Lanza Hermes con `--provider gemini -m <gemini-4-carbon|gemini-4-argon|gemini-4-hydrogen> --reasoning high`
+  segun el rol (requiere `GEMINI_API_KEY` o `GOOGLE_API_KEY` en `~/.hermes/.env`).
 - **Limite actual de effort en Hermes**: en `agent/transports/chat_completions.py`
   (`_build_gemini_thinking_config`), Hermes solo traduce `reasoning.effort` a
   `thinkingLevel` cuando el ID empieza por `gemini-3` (y `thinkingBudget` para
   `gemini-2.5-`). Con `gemini-4-*` devuelve solo `{"includeThoughts": True}` sin
   `thinkingLevel` explicito. Informa el nivel solicitado y este comportamiento
-  efectivo si corres `gemini-4-argon` desde Hermes. Verificado en el codigo el
+  efectivo si corres `gemini-4-*` desde Hermes. Verificado en el codigo el
   2026-10-16.
 
 ## Modo Pair automático (`--pair`: la sesión implementa y avanza sola)
@@ -511,7 +513,7 @@ paradas que lo piden. Para mantener baja latencia entre ciclos sin perder rigor:
 | --- | --- | --- | --- |
 | **OpenAI (Codex / Hermes)** | `gpt-6-astra` o `gpt-6.1-sol` en la sesion | `medium` por defecto; `high` si el paso resuelve concurrencia o migracion | Formulario estructurado Markdown (`[A]`, `[B]`, `[C]`) con opción recomendada |
 | **Claude 5.5 (Claude Code / Hermes)** | Sesion en `claude-opus-5-5` (decision del usuario; Sonnet solo al delegar) | `high` (o `medium` si se prioriza velocidad; `xhigh` ante riesgo concreto) | Preguntas interactivas estructuradas con opciones claras |
-| **Gemini 4 (Hydrogen / Argon en AGY / Hermes)** | `Gemini 4 Hydrogen (High)` o `Gemini 4 Argon (High)` en AGY; `gemini-4-argon` en Hermes | `high` | Herramienta nativa `ask_question` con preguntas y opciones |
+| **Gemini 4 (AGY / Hermes)** | `Gemini 4 Argon (High)` en AGY (`gemini-4-argon` en Hermes) | `high` (`Gemini 4 Argon (High)`) | Herramienta nativa `ask_question` con preguntas y opciones |
 | **Grok** | Modelo activo de la sesion | El de la sesion: `spawn_subagent` no acepta effort. Espera del revisor en [grok.md](grok.md) | Opciones estructuradas en Markdown |
 | **Kimi Code** | Modelo activo de la sesion en Kimi | Sesion principal; el Rol 3 sigue corriendo en el subagente `revisor` | Formulario Markdown con opciones |
 

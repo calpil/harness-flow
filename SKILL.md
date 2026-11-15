@@ -124,9 +124,10 @@ Opus 5.5 `xhigh`; **el implementer y el revisor reciben el effort que la skill e
 `xhigh` ante un riesgo concreto; revisor `xhigh` en la primera ronda y `high` en la
 de seguimiento. Se anuncia igual y se pasa en la invocacion (`effort` de la tool
 `Agent`, o `claude -p --effort`).
-Con Gemini 4 (`Hydrogen` / `Argon`) en AGY o Hermes, la sesion y los subagentes
-corren con el nivel elegido en la sesion (`high`, p.ej. `Gemini 4 Hydrogen (High)` o
-`Gemini 4 Argon (High)`); en AGY los subagentes se lanzan con `Model: "inherit"`
+Con Gemini 4 en AGY o Hermes, **Producto y Leader usan `Gemini 4 Carbon (High)`
+(`gemini-4-carbon`, effort `high`), Implementer y Revisor usan `Gemini 4 Argon (High)`
+(`gemini-4-argon`, effort `high`), y Cierre / Estado / rutinas usan `Gemini 4 Hydrogen`
+(`gemini-4-hydrogen`)**; en AGY los subagentes se lanzan con `Model: "inherit"`
 y `TypeName: "self"` (sin override por llamada de `effort`), y en Hermes se
 anuncia el esfuerzo antes de cada rol (detalle y limite actual de
 `_build_gemini_thinking_config` en [`references/modelos.md`](references/modelos.md)).
@@ -160,7 +161,7 @@ El agente NUNCA escribe `docs/prd/**` ni `docs/sdd.md`: redacta en `docs/borrado
 
 ### Enmienda — cambiar un spec que ya tiene trabajo encima
 
-Con evidencia, review o verify encima, `approve-spec` se niega a re-sellar un spec cambiado: es una **enmienda**. Escribe `docs/propuesta-<id>-enmienda-<slug>.md` desde [`templates/enmienda.md`](templates/enmienda.md), aplica los cambios al spec, MUESTRA ambos y, solo con el SÍ explícito: `$PY "$H/gate.py" enmienda --feature <id> --propuesta docs/<propuesta>.md --yes`. Se niega si cambió un AC que la propuesta no nombra; numera `E-n`, la anota en el spec, sella spec y propuesta, y deja sin valor para `close` el review y el verify anteriores.
+Con evidencia, review o verify encima, `approve-spec` se niega a re-sellar un spec cambiado: es una **enmienda**. Escribe `docs/propuesta-<id>-enmienda-<slug>.md` desde [`templates/enmienda.md`](templates/enmienda.md), aplica los cambios al spec, MUESTRA ambos y, solo con el SÍ explícito: `$PY "$H/gate.py" enmienda --feature <id> --propuesta docs/<propuesta>.md --yes`. Se niega si cambió un AC que la propuesta no nombra; numera `E-n`, la anota en el spec, sella spec y propuesta, y deja sin valor para `close` el review y el verify anteriores. Por eso el orden es: enmienda decidida y sellada, y recien despues `gate.py verify` y el revisor; lanzarlos con una enmienda pendiente es correrlos dos veces. Mientras el formulario de la enmienda espera respuesta, se pueden pre-medir los `Comando:` de los AC fuera del gate (extraidos del spec con un script, salida a archivos): encuentra los rojos antes y no escribe ningun sello.
 
 ### Hallazgos — enmienda antes que ficha
 
@@ -254,6 +255,11 @@ raiz, y recien entonces `close`. `done` archiva el progreso y
 sincroniza PRD/SDD. Verifica el commit en la rama destino; el mensaje del script
 no es evidencia de integración. Para publicar en Atlassian se requiere
 `--publicar-atlassian` y el binding del proyecto.
+
+Si la raíz es un repo y la feature también cambió repos hermanos que no
+registró, ese `close` solo integra la raíz: los hermanos se integran antes, con
+base y check medidos. Orden y guardas en
+[`references/multirepo.md`](references/multirepo.md) ("cierre en dos tiempos").
 
 ## Gates (todos con exit≠0)
 
@@ -468,7 +474,7 @@ Python. Si no hay revisor aislado, puedes revisar localmente con
 | --- | --- |
 | [`references/vertical-slice.md`](references/vertical-slice.md) | Vertical Slice, frontera `requiere`, costuras de test, TDD vertical, 3 alarmas y modo Pair (`--pair`) |
 | [`references/entorno.md`](references/entorno.md) | `entorno.py` no resuelve el interprete o el host, falta `psycopg` |
-| [`references/multirepo.md`](references/multirepo.md) | raiz multi-repo sin `.git`: registro, `--integrated`, postmerge medido; integrar el destino en una rama que declara migraciones; postmerge que no mide (exit 2) |
+| [`references/multirepo.md`](references/multirepo.md) | raiz multi-repo sin `.git`: registro, `--integrated`, postmerge medido; integrar el destino en una rama que declara migraciones; postmerge que no mide (exit 2); raiz con `.git` y repos hermanos sin registrar (cierre en dos tiempos) |
 | [`references/contexto.md`](references/contexto.md) | varias raices de grafo, el parte de `refrescar`, algo del contexto no cuadra |
 | [`references/lecciones-del-arnes.md`](references/lecciones-del-arnes.md) | **antes de tocar o escribir un gate** |
 | [`references/hallazgos.md`](references/hallazgos.md) | encuentras algo en el código mientras trabajas en otra cosa, o `add.py` se niega a crear una ficha: enmienda antes que ficha, `hallazgo.py` |
@@ -480,7 +486,7 @@ Python. Si no hay revisor aislado, puedes revisar localmente con
 | [`references/obsidian.md`](references/obsidian.md) | que genera el vault, config sembrada, `--con-grafo` |
 | [`references/atlassian.md`](references/atlassian.md) | mapeo a Jira/Confluence y sus comandos |
 | [`references/claude.md`](references/claude.md) | Claude Code: plugin, comandos, Windows, raices de lecciones, retomar desde otro host una sesion cortada |
-| [`references/modelos.md`](references/modelos.md) | modelo por proveedor y rol; seleccion de effort para OpenAI, Claude 5.5 y Gemini 4 Argon (AGY y Hermes) |
+| [`references/modelos.md`](references/modelos.md) | modelo por proveedor y rol; seleccion de effort para OpenAI, Claude 5.5 y Gemini 4 (`Carbon`/`Argon`/`Hydrogen` en AGY y Hermes) |
 | [`references/openai.md`](references/openai.md) | GPT/Codex: instalacion, deteccion y raices |
 | [`references/grok.md`](references/grok.md) | Grok: host, `spawn_subagent` y espera del revisor, lecciones en `~/.grok/skills`, vault |
 | [`references/grok-sesion-stacks.md`](references/grok-sesion-stacks.md) | Grok carga en la sesion las rules y skills del stack del rol (front y backend) |
