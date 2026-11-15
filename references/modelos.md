@@ -134,7 +134,9 @@ y Leader no fijan esfuerzo: depende del modelo elegido.
 El usuario elige el modelo de estos dos roles en un formulario, una vez por
 feature (por documento, `prd` o `sdd`, en el rol producto, que corre antes de
 que existan features). La eleccion queda en el backlog y los turnos siguientes
-del rol la reutilizan:
+del rol la reutilizan. El usuario ya dio su regla permanente: Producto y Leader
+en `claude-fable-5-2`. Registrala con `elegir --modelo fable` y anuncialo; el
+formulario de modelo solo vuelve si el pide otro para esa feature:
 
 ```bash
 $PY "$H/modelo.py" ver    --feature <id>        # exit 3 si aun no se eligio
@@ -369,18 +371,22 @@ en el modelo de la sesion. No hay seleccion por tarea ni de effort.
    `hermes config get delegation.model` (vacio = hereda) y el modelo de la
    sesion. Una opcion que nombra un modelo que el hijo no va a usar obliga a
    preguntar dos veces.
-2. **Fijar el modelo del hijo es decision del usuario** (es global: cambia los
-   subagentes de todas sus sesiones de Hermes y su costo). Con su SI:
-   `hermes config set delegation.model claude-sonnet-5-5`. Vale desde la
-   siguiente llamada, sin reiniciar la sesion. No lo fijes por tu cuenta, ni
-   para el revisor.
+2. **El modelo del hijo sale del rol, no de una pregunta por lanzamiento.**
+   Regla permanente del usuario: implementer delegado `claude-sonnet-5-5`,
+   revisor `claude-opus-5-5`. No ofrezcas en un formulario el modelo del
+   implementer para el revisor ni "heredar el de la sesion": ya esta decidido.
+   Lo que sigue siendo decision suya es poner el pin la primera vez (es global:
+   cambia los subagentes de todas sus sesiones de Hermes y su costo). Con su SI:
+   `hermes config set delegation.model <modelo-del-rol>` antes de CADA despacho.
+   Vale desde la siguiente llamada, sin reiniciar la sesion.
 3. **Comprueba el modelo efectivo** con `delegate_task(action='list')` justo
    despues de lanzar: trae el `model` de cada hijo. Anuncialo con ese dato, no
    con el que pediste.
-4. **El pin queda puesto**: el revisor siguiente tambien lo hereda. Pregunta en
-   el formulario con que modelo va el revisor y cuando se quita el pin
-   (`hermes config unset delegation.model`), y dilo en cada informe mientras
-   siga fijado.
+4. **El pin queda puesto y se cambia por rol**: el hijo siguiente lo hereda tal
+   cual. Antes del revisor pasalo a `claude-opus-5-5`; antes de otra tanda del
+   implementer devuelvelo a `claude-sonnet-5-5`; repite el paso 3 cada vez.
+   Pregunta una sola vez cuando se quita (`hermes config unset
+   delegation.model`) y dilo en cada informe mientras siga fijado.
 
 **Que lleva el `context` del implementer delegado.** Guarda el brief en un
 archivo (`contexto.py brief --feature <id> > <scratch>/brief-<id>.md`) y pasa su
@@ -397,13 +403,34 @@ ruta: el hijo lee archivos, y pegar decenas de KB no aporta. Ademas:
 - `output_schema` con `estado` (`terminado | parada | bloqueado`), commits,
   exit por AC, preguntas y hallazgos fuera de alcance.
 
+**Feature con backend y front: una tanda por stack, en serie.** Un solo hijo
+con los dos stacks agota su presupuesto de turnos, y dos hijos a la vez corren
+suites de integracion y de navegador juntas, que en una maquina con poca
+memoria dan rojos de infraestructura. Lanza primero el backend, con la orden de
+NO tocar el front y de dejar en la evidencia una seccion "Contrato que deja el
+backend" (rutas, campos, codigos de rechazo, lo que el spec no fijaba). La
+tanda del front recibe la ruta de esa seccion como su contrato y la orden de no
+tocar el backend. Los worktrees de todos los repos se crean ANTES de la primera
+tanda, desde la base ya actualizada. Pide en las dos que, si no alcanzan a
+terminar, lleguen al ultimo verde, commiteen y devuelvan `estado: parcial` con
+el siguiente paso exacto. Una enmienda escrita ENTRE tandas no afirma nada
+sobre la tanda que falta: "de las pruebas existentes cambian solo estas" se
+acota al stack ya implementado ("en el backend cambian solo estas"). Dicho para
+toda la feature, la tanda siguiente lo vuelve falso y obliga a otra enmienda.
+
 **Una parada vuelve como resultado, no como pregunta.** El hijo no puede usar
 el formulario: devuelve `estado: parada` y termina. La sesion la responde
 (midiendo, desde el spec, o llevandola al usuario en un formulario) y lanza
 OTRA tarea que retoma. Esa tarea dice: que commits ya existen y no se rehacen,
 que quedo sin commitear en el worktree, la respuesta a la parada con sus logs y
 lineas, y lo que falta. Antes de relanzar, mira `git log <base>..HEAD` y
-`git status` del worktree: el informe del hijo es un autoinforme.
+`git status` del worktree: el informe del hijo es un autoinforme. Mira ademas
+que pruebas EXISTENTES cambio (`git diff --stat <base>..HEAD` y el diff de cada
+archivo de prueba que ya existia): un hijo que para por dos pruebas vecinas
+puede haber adaptado otras sin nombrarlas, porque las vio como consecuencia de
+una decision del spec. Si el spec decia que no cambiaban, la enmienda las
+nombra todas, no solo las dos de la parada. Pide en el `output_schema` un campo
+con las pruebas existentes tocadas y por que.
 
 Si `gate.py verify` va a correr enseguida las suites pesadas de un AC, pidele al
 hijo solo las partes baratas de ese AC y que lo diga en la evidencia ("suites:
@@ -484,7 +511,7 @@ paradas que lo piden. Para mantener baja latencia entre ciclos sin perder rigor:
 | --- | --- | --- | --- |
 | **OpenAI (Codex / Hermes)** | `gpt-6-astra` o `gpt-6.1-sol` en la sesion | `medium` por defecto; `high` si el paso resuelve concurrencia o migracion | Formulario estructurado Markdown (`[A]`, `[B]`, `[C]`) con opción recomendada |
 | **Claude 5.5 (Claude Code / Hermes)** | Sesion en `claude-opus-5-5` (decision del usuario; Sonnet solo al delegar) | `high` (o `medium` si se prioriza velocidad; `xhigh` ante riesgo concreto) | Preguntas interactivas estructuradas con opciones claras |
-| **Gemini 4 Argon (AGY / Hermes)** | `gemini-4-argon` en la sesion principal | `high` (`Gemini 4 Argon (High)`) | Herramienta nativa `ask_question` con preguntas y opciones |
+| **Gemini 4 (Hydrogen / Argon en AGY / Hermes)** | `Gemini 4 Hydrogen (High)` o `Gemini 4 Argon (High)` en AGY; `gemini-4-argon` en Hermes | `high` | Herramienta nativa `ask_question` con preguntas y opciones |
 | **Grok** | Modelo activo de la sesion | El de la sesion: `spawn_subagent` no acepta effort. Espera del revisor en [grok.md](grok.md) | Opciones estructuradas en Markdown |
 | **Kimi Code** | Modelo activo de la sesion en Kimi | Sesion principal; el Rol 3 sigue corriendo en el subagente `revisor` | Formulario Markdown con opciones |
 
