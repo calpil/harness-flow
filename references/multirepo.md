@@ -42,6 +42,12 @@ Estas reglas aplican tambien a features de un monorepo:
 - `verify` mide el worktree. Despues de cada cierre, ejecuta la suite completa
   sobre la rama destino y compara los fallos con una base medida antes del
   merge para detectar choques entre features.
+- Un spec sellado mientras su dependencia seguia abierta se midio contra un
+  destino que ya no existe. Cuando la dependencia cierra, y ANTES de crear los
+  worktrees o delegar, releelo contra el destino nuevo: citas `archivo:linea`,
+  numero de migracion, rutas y modulos que la otra feature creo o movio, y las
+  cifras medidas de sus AC. Lo que dejo de valer va al usuario en un formulario
+  (enmienda si toca un AC); no se lo dejes descubrir al implementer.
 - Reserva los numeros de migracion contra la rama de integracion antes de
   aprobar el spec. Al renumerar usa `git mv`, regenera los manifiestos con el
   comando del repo y comprueba que el contenido coincida en los repos que lo
@@ -78,6 +84,53 @@ infraestructura que la suite usa (por ejemplo `docker info`: un daemon que se
 cae a mitad de corrida deja sin correr los tests que necesitan contenedor).
 Repara, avisa al usuario y repite el `check` contra la MISMA base; la base sigue
 valida porque se midio antes del merge.
+
+### Raiz con `.git` y repos hermanos sin registrar: cierre en dos tiempos
+
+Cuando la raiz del arnes ES un repo (el front) y los servicios viven en repos
+hermanos que la feature no registro, `gate.py close` solo mergea la raiz y
+avisa que midio los demas "por su checkout". La integracion de los hermanos la
+haces tu, ANTES del `close`, con un script guardado en el scratch y este orden:
+
+1. `verify` en verde con el destino ya integrado en las ramas de la feature.
+2. Base medida (`postmerge_medido.py base`) en la rama destino de cada repo
+   cuyo COMPORTAMIENTO cambia. Los que solo cargan una declaracion replicada
+   (lista de migraciones, manifiesto de huellas) se cubren con el comando de
+   verificacion de la flota, no con una suite cada uno.
+3. El script de merge se niega a correr salvo que: el log del verify diga N/N,
+   existan las bases, la infraestructura de la suite responda (`docker info`),
+   cada repo este en la rama destino y limpio, la rama de la feature exista y
+   el destino no haya avanzado desde que la rama lo integro (`git rev-list
+   --count <rama>..<destino>` = 0: si avanzo, el arbol que sale del merge ya no
+   es el que midio el `verify`).
+   Despues: `git merge --no-ff` local repo por repo (ante conflicto,
+   `merge --abort` y salir), `postmerge_medido.py check` por cada base y la
+   verificacion de la flota. Sin push.
+4. Entre mediciones, espera: una sola suite pesada a la vez (el `verify`, otra
+   suite de integracion o el runner del front). Dos juntas en una maquina
+   cargada dan rojos de infraestructura que parecen choques.
+5. Anota en `docs/impl-<id>.md` los SHA de cada merge y el `base -> ahora` de
+   cada check; commitea `docs` y despues el puntero y `harness/` en la raiz.
+6. `gate.py close` de la raiz, y los commits de sync (docs, luego raiz).
+
+**El review de esos hermanos.** `revision.py --briefing` solo trae el diff del
+repo raiz: el revisor que recibe nada mas que el briefing aprueba el front sin
+haber visto el backend. Pasale ademas, por cada hermano que cambia, la ruta del
+worktree, la rama, la base (`git merge-base <destino> HEAD`) y el HEAD, y dile
+cuales solo cargan la declaracion replicada. Al leer el acta comprueba que cite
+`archivo:linea` de esos repos en los AC de backend; un acta que solo cita la
+raiz no reviso lo demas.
+
+Si `git status` de un hermano solo muestra normativa sin seguimiento que dejo
+el arranque, el script puede exigir limpio lo versionado
+(`--untracked-files=no`), diciendolo en su cabecera: es un puente.
+
+**El arbol que quedo en el destino, medido o no.** Si la rama de la feature ya
+contenia el tip del destino (`git rev-list --count <rama>..<destino>` = 0), el
+merge `--no-ff` deja el mismo arbol que midio el `verify`. Compruebalo
+(`git diff --stat <tip-de-la-rama> HEAD -- <rutas de codigo>` vacio) y dilo con
+esas palabras: "codigo identico a la rama medida", no "postmerge en verde". Si
+la rama NO traia el destino, ese atajo no existe: hay que medir el destino.
 
 ## Manifiesto
 

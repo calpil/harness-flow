@@ -154,6 +154,25 @@ sesión ni basura: es la normativa nueva sin commitear.
    base; en un repo que habilita carpeta por carpeta, suma la línea `!` que
    falta. Fuera de la rama de una feature y después de los merges en curso, para
    no mezclar normativa con el delta de una feature ni mover la base medida.
+5. Mide lo que el commit cambia. Normalizar completo no solo suma la carpeta:
+   actualiza las reglas viejas y el validador versionado
+   (`scripts/check-architecture.py`). Antes de tocar N repos:
+   - `stack.py normalizar --repo <r> --dry-run` en todos y lee las acciones; si
+     el dry-run cambia algo más que carpetas nuevas, dilo en el formulario
+     antes de elegir el momento.
+   - Un repo piloto primero; después el resto uno por uno con un script que
+     aborta ante: repo fuera de la rama base o con cambios versionados;
+     `git status --porcelain` que, tras normalizar, nombre una ruta que no sea
+     normativa (`.claude/`, `.agents/`, `.gemini/`, validadores, `AGENTS.md`);
+     o un `postmerge_medido.py check` de la suite unitaria que no quede igual
+     que su `base` tomada antes (`--cmd 'go test -count=1 -json ./...'`).
+   - Corre la copia del validador antes y después. Una plantilla nueva trae
+     reglas nuevas: el mismo código puede pasar de exit 0 a exit 1. No es una
+     regresión del código (esas violaciones son las que ya registra la base del
+     trinquete), pero rompe a quien ejecute esa copia: busca su nombre en
+     Makefile, CI, hooks y tests antes de commitear, y cuéntaselo al usuario.
+   - En el repo que no versiona el validador (usa el de la skill) solo cambian
+     reglas: comprueba que el verificador de la skill siga dando lo mismo.
 
 ## Grok, en el rol y no en el commit
 

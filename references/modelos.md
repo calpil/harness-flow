@@ -400,8 +400,24 @@ ruta: el hijo lee archivos, y pegar decenas de KB no aporta. Ademas:
   que todo este commiteado antes (comparan contra la base con `merge-base`);
 - las restricciones de la maquina que apliquen (una sola suite pesada a la
   vez, salida de comandos largos a archivos);
+- la regla de pruebas existentes, escrita como orden: cuales deja cambiar el
+  spec y en que (solo la ruta, solo el campo nuevo del cuerpo), y que cualquier
+  OTRA que quede en rojo o pida un cambio no se toca ni se commitea. El hijo
+  termina lo demas, guarda ese cambio como parche en el scratch
+  (`git diff -- <archivos> > <scratch>/vecinas-<id>-<repo>.patch`), revierte el
+  arbol, mide el AC con y sin el parche y lo devuelve como pregunta con el log
+  del rojo. La parada llega asi con el arreglo listo y sin un commit que el
+  spec no autoriza; sin esta orden el hijo adapta las pruebas por su cuenta y
+  te enteras leyendo el diff;
 - `output_schema` con `estado` (`terminado | parada | bloqueado`), commits,
-  exit por AC, preguntas y hallazgos fuera de alcance.
+  exit por AC, preguntas, hallazgos fuera de alcance, pruebas existentes
+  tocadas y las decisiones de diseno que tomo y el spec no fijaba. El hijo no
+  siempre reconoce esas decisiones como parada: pedirlas por nombre las saca a
+  la luz. Van al usuario en el informe y al revisor en su `context`, como
+  decisiones a auditar y no como hechos. Lee tambien sus hallazgos buscando
+  una promesa del spec que ningun AC mide ("el contrato lo admite, pero ningun
+  caso lo pide"): es un hueco del spec y va al usuario en el formulario, con
+  la enmienda como primera opcion.
 
 **Feature con backend y front: una tanda por stack, en serie.** Un solo hijo
 con los dos stacks agota su presupuesto de turnos, y dos hijos a la vez corren
@@ -417,6 +433,11 @@ el siguiente paso exacto. Una enmienda escrita ENTRE tandas no afirma nada
 sobre la tanda que falta: "de las pruebas existentes cambian solo estas" se
 acota al stack ya implementado ("en el backend cambian solo estas"). Dicho para
 toda la feature, la tanda siguiente lo vuelve falso y obliga a otra enmienda.
+Mejor que acotar: antes de pedir el SI, busca en el worktree del stack que
+falta las pruebas que nombran lo que esa tanda va a mover (rutas, entradas de
+menu, el cuerpo de un pedido que gana un campo) y sumalas a la MISMA enmienda,
+diciendo que esa parte es una prevision medida por busqueda y no un diff. Una
+enmienda que cubre los dos stacks se sella una vez.
 
 **Una parada vuelve como resultado, no como pregunta.** El hijo no puede usar
 el formulario: devuelve `estado: parada` y termina. La sesion la responde

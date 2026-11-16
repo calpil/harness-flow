@@ -105,6 +105,12 @@ cerrar:
 - los que son de otra feature abierta, se anotan ahí;
 - los demás, se anotan en el proyecto.
 
+Hazlo en el mismo paso en que sellas la revisión, antes de pedir el cierre: un
+menor que queda solo en el acta nadie lo vuelve a leer cuando la feature se
+archiva. Agrupa en un hallazgo los que se arreglan juntos (varios comentarios
+que dicen algo falso) y deja en cada uno el `archivo:linea` del acta; los
+informativos que solo describen lo que ya está bien no se anotan.
+
 ## Rojos nuevos tras un merge
 
 Un rojo nuevo después de integrar es una regresión. Anótalo con `hallazgo.py
