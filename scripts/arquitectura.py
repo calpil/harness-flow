@@ -126,10 +126,16 @@ def fuera_de_alcance(layout: Layout, rutas: list[str], stack_id: str) -> list[st
 # --- de donde salen las rutas ----------------------------------------------
 
 def rutas_en_disco(repo: Path) -> list[str]:
-    """Archivos versionados si es un repo git; si no, lo que hay en disco."""
+    """Archivos versionados si es un repo git; si no, lo que hay en disco.
+
+    Un repo recien creado (`git init`, sin nada versionado) tambien se mide por
+    lo que hay en disco, igual que `copias.archivos_versionados`: antes salia
+    como un repo sin codigo.
+    """
     code, out = git(["ls-files", "-z"], repo)
-    if code == 0 and (repo / ".git").exists():
-        return [x for x in out.split("\0") if x]
+    versionadas = [x for x in out.split("\0") if x] if code == 0 and (repo / ".git").exists() else []
+    if versionadas:
+        return versionadas
     rutas = []
     for actual, dirs, archivos in os.walk(str(repo)):
         dirs[:] = [d for d in dirs if d not in _IGNORADOS]

@@ -60,8 +60,9 @@ flowchart TD
     H35["<b>Hito 35: Un Hallazgo no Abre una Ficha</b><br/>Enmienda antes que ficha: hallazgo.py, add.py con el SÍ y el peso, close sin hallazgos abiertos"]
     H36["<b>Hito 36: El Pair Avanza Solo</b><br/>La lista de tests la sella quien implementa; formulario solo en las paradas que preguntan"]
     H37["<b>Hito 37: Grok Carga el Stack del Rol</b><br/>Rules y skills de front y backend en .grok/ de la sesión, con nombre de stack"]
+    H38["<b>Hito 38: Stacks .NET en Capas y .NET MVC</b><br/>dotnet-layered y dotnet-mvc; el stack específico desplaza al general (supersedes)"]
 
-    H1 --> H2 --> H3 --> H4 --> H5 --> H6 --> H7 --> H8 --> H9 --> H10 --> H11 --> H12 --> H13 --> H14 --> H15 --> H16 --> H17 --> H18 --> H19 --> H20 --> H21 --> H22 --> H23 --> H24 --> H25 --> H26 --> H27 --> H28 --> H29 --> H30 --> H31 --> H32 --> H33 --> H34 --> H35 --> H36 --> H37
+    H1 --> H2 --> H3 --> H4 --> H5 --> H6 --> H7 --> H8 --> H9 --> H10 --> H11 --> H12 --> H13 --> H14 --> H15 --> H16 --> H17 --> H18 --> H19 --> H20 --> H21 --> H22 --> H23 --> H24 --> H25 --> H26 --> H27 --> H28 --> H29 --> H30 --> H31 --> H32 --> H33 --> H34 --> H35 --> H36 --> H37 --> H38
 ```
 
 ---
@@ -92,7 +93,7 @@ Los documentos de `docs/` complementan y fundamentan las guías operativas que l
 
 ---
 
-## 4. Estado de los 10 Stacks Tecnológicos
+## 4. Estado de los 12 Stacks Tecnológicos
 
 Todos los stacks se encuentran auditados, normalizados y gobernados mediante sus correspondientes manifiestos, reglas modulares, habilidades y verificadores ejecutables:
 
@@ -106,3 +107,5 @@ Todos los stacks se encuentran auditados, normalizados y gobernados mediante sus
 8. [`assets/stacks/python-dataproduct/`](../assets/stacks/python-dataproduct/): Python Data Product, FastAPI, Polars, `check-architecture.py`.
 9. [`assets/stacks/ios-swiftui-clean/`](../assets/stacks/ios-swiftui-clean/): Swift 6, SwiftUI, Swift Package Manager (SPM) modular (`CalpilDomain`, `CalpilData`, `CalpilUI`, `CalpilApp`), `check-architecture.py`.
 10. [`assets/stacks/android-compose-clean/`](../assets/stacks/android-compose-clean/): Kotlin 2.0+, Jetpack Compose, Material 3, Clean Architecture (`domain`, `data`, `presentation`, `core`), `check-architecture.py`.
+11. [`assets/stacks/dotnet-layered/`](../assets/stacks/dotnet-layered/): C# / .NET 10, API REST en capas por feature (`Controller → Service → Repository`), Dapper y SQL Server sin ORM, `check-architecture.py`.
+12. [`assets/stacks/dotnet-mvc/`](../assets/stacks/dotnet-mvc/): C# / .NET 10, portal ASP.NET Core MVC con vistas Razor, datos solo por `I*Api`, `check-architecture.py`.

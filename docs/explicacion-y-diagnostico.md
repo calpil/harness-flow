@@ -59,7 +59,7 @@ El arnés se instala **una sola vez en la raíz del proyecto** (espacio de traba
 | `postmerge_medido.py` | Validador post-merge para Go: captura foto de rojos antes del merge y falla si hay rojos nuevos, build roto o tests desaparecidos. |
 | `postmerge_frontend.py`| Validador post-merge para Angular / Node / TypeScript. |
 | `postmerge_terraform.py`| Validador post-merge para infraestructura Terraform (`fmt`, `validate`, `test`). |
-| `stack.py` | Gobernanza de los 10 stacks tecnológicos CALPIL: detección dinámica, auditoría de cumplimiento, normalización multi-LLM (Claude, Codex, Gemini, Hermes), scaffolding y verificadores AST/regex. |
+| `stack.py` | Gobernanza de los 12 stacks tecnológicos CALPIL: detección dinámica, auditoría de cumplimiento, normalización multi-LLM (Claude, Codex, Gemini, Hermes), scaffolding y verificadores AST/regex. |
 | `copias.py` | Copias de la normativa instaladas en un repo: alcance real de cada regla (medido en el código del repo), huellas, registro de lo instalado e historial de la plantilla para distinguir una copia vieja de una editada por el proyecto. |
 | `arquitectura.py` | Trinquete de arquitectura: mide el código que vive fuera del layout del stack, sella la base y exige que solo baje. `inventario` dice también el código que el layout no mira. |
 | `add.py` | Alta de una ficha en el backlog. Una ficha nueva exige el SÍ del usuario y su peso (`--yes --peso`), salvo la primera de una candidata `F-n` y una normalización con trinquete. |

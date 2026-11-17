@@ -1,0 +1,177 @@
+{
+  "id": "dotnet-layered",
+  "name": "CALPIL .NET Layered API Stack",
+  "version": "1.0.0",
+  "language": "csharp",
+  "framework": "dotnet",
+  "architecture": "layered",
+  "description": "Stack backend C# / .NET 10 para API REST con ASP.NET Core controllers en un solo proyecto: una carpeta por feature y una clase por capa (Controller → Service → Repository), SQL Server con Dapper y Microsoft.Data.SqlClient sin ORM, migraciones T-SQL y Problem Details RFC 9457.",
+  "detection": {
+    "files_any": [
+      "*.sln",
+      "*.slnx",
+      "*.csproj",
+      "Directory.Build.props"
+    ],
+    "extensions": [
+      ".cs",
+      ".csproj",
+      ".sln",
+      ".slnx"
+    ],
+    "requires_any": [
+      "src/*Api/Program.cs",
+      "*Api/Program.cs",
+      "src/*/*/*Repository.cs"
+    ],
+    "strong_indicators": [
+      "src/*Api/Program.cs",
+      "src/*Api/Platform",
+      "db/migrations",
+      "Directory.Packages.props",
+      "tests/*.Tests"
+    ],
+    "anti_indicators": [
+      "go.mod",
+      "angular.json",
+      "pom.xml",
+      "**/*Domain.csproj",
+      "**/*Application.csproj",
+      "**/*Infrastructure.csproj",
+      "src/*/Views/_ViewImports.cshtml",
+      "*/Views/_ViewImports.cshtml",
+      "Views/_ViewImports.cshtml"
+    ],
+    "supersedes": [
+      "dotnet-hexagonal"
+    ]
+  },
+  "normative": {
+    "rules": [
+      "architecture.md",
+      "dependencies.md",
+      "security.md",
+      "testing.md"
+    ],
+    "skills": [
+      "add-api-endpoint",
+      "add-feature",
+      "add-persistence",
+      "architecture-review",
+      "debug-targeted",
+      "dependency-review",
+      "prepare-release",
+      "security-review",
+      "write-tests"
+    ],
+    "architecture_constraints": {
+      "layer_direction": {
+        "flow": "Controller -> Service -> Repository",
+        "controller_forbidden": [
+          "I*Repository",
+          "SqlConnection",
+          "Dapper",
+          "Microsoft.Data",
+          "System.Data",
+          "Platform.Database"
+        ],
+        "service_forbidden": [
+          "Microsoft.AspNetCore",
+          "HttpContext",
+          "IActionResult",
+          "StatusCodes",
+          "Dapper",
+          "Microsoft.Data",
+          "System.Data"
+        ],
+        "repository_forbidden": [
+          "Microsoft.AspNetCore",
+          "HttpContext",
+          "IActionResult",
+          "*Service"
+        ],
+        "rationale": "El controller solo conoce el service; el service solo conoce I*Repository, TimeProvider y AppException; el repositorio solo conoce SQL. Nunca al revés ni saltando una capa."
+      },
+      "feature_folders": {
+        "path_pattern": "src/<Proyecto>/<Feature>/",
+        "forbidden_folders": [
+          "Controllers",
+          "Services",
+          "Repositories"
+        ],
+        "rationale": "Un solo proyecto, una carpeta por feature con sus tres capas dentro. Platform/ es transversal y no referencia features; una feature no usa el repositorio de otra: llama a su service."
+      },
+      "composition_root": {
+        "required_entrypoint": "Program.cs",
+        "rationale": "Solo Program.cs registra dependencias, llamando al AddXxx() que cada feature define en su carpeta."
+      },
+      "data_access": {
+        "allowed": [
+          "Dapper",
+          "Microsoft.Data.SqlClient"
+        ],
+        "forbidden": [
+          "Microsoft.EntityFrameworkCore",
+          "NHibernate"
+        ],
+        "migrations": "db/migrations/",
+        "rationale": "Sin ORM. Todo valor externo viaja como parámetro de Dapper o de procedimiento almacenado: prohibido interpolar o concatenar valores en SQL. Las operaciones de estado van por procedimiento almacenado con rowversion (un conflicto es 409). Una migración aplicada no se edita; se agrega otra."
+      },
+      "security_headers_and_errors": {
+        "problem_details_rfc": "RFC 9457 (application/problem+json)",
+        "security_headers": [
+          "X-Content-Type-Options",
+          "X-Frame-Options",
+          "Referrer-Policy",
+          "Content-Security-Policy"
+        ],
+        "correlation_id": "X-Correlation-ID"
+      },
+      "testing_standards": {
+        "forbidden_calls": [
+          "Thread.Sleep"
+        ],
+        "clock": "TimeProvider (FakeTimeProvider en pruebas)",
+        "inmemory_repository_pattern": true
+      }
+    }
+  },
+  "runners": {
+    "test_command": "dotnet test",
+    "skills_validator": "node assets/stacks/dotnet-layered/scripts/validate-agent-skills.mjs"
+  },
+  "layout": {
+    "codigo": [
+      "**/*.cs"
+    ],
+    "excluir": [
+      "tests/**",
+      "**/*Tests/**",
+      "**/bin/**",
+      "**/obj/**"
+    ],
+    "normalizado": [
+      "src/*/*/*.cs",
+      "src/*/Platform/**",
+      "src/*/Program.cs"
+    ]
+  },
+  "documentation": {
+    "official_docs": "https://learn.microsoft.com/en-us/aspnet/core/",
+    "security_advisories": "https://github.com/dotnet/announcements/issues?q=is%3Aissue+label%3ASecurity",
+    "context7": {
+      "library_id": "/dotnet/aspnetcore.docs",
+      "ecosystem": "nuget",
+      "suggested_queries": [
+        "ASP.NET Core controllers Problem Details IExceptionHandler",
+        "Dapper CommandDefinition parameters stored procedure Microsoft.Data.SqlClient",
+        "xUnit WebApplicationFactory integration testing TimeProvider"
+      ]
+    }
+  },
+  "security_audit": {
+    "command": "dotnet list package --vulnerable --include-transitive",
+    "findings_pattern": "has the following vulnerable packages",
+    "minimum_version": "10.0.0"
+  }
+}

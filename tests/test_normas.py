@@ -410,9 +410,9 @@ class AcNegativosTests(unittest.TestCase):
 
 
 class DocumentacionPorStackTests(Proyecto):
-    def test_los_diez_stacks_declaran_documentacion_context7_y_escaner(self):
+    def test_los_doce_stacks_declaran_documentacion_context7_y_escaner(self):
         manifests = stack.listar_stacks_disponibles()
-        self.assertEqual(10, len(manifests))
+        self.assertEqual(12, len(manifests))
         for m in manifests:
             with self.subTest(stack=m["id"]):
                 doc = m.get("documentation", {})

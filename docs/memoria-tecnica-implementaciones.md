@@ -23,6 +23,7 @@ flowchart TD
         S3["<b>.NET Hexagonal (C# 13 / .NET 10)</b>"]
         S4["<b>Rust Hexagonal (Axum / SQLx)</b>"]
         S5["Next.js / Spring Boot / NestJS / Python"]
+        S6["<b>.NET Layered API y .NET MVC Web Portal</b>"]
     end
 
     subgraph Flujo["Flujo de Roles y Puertas de Calidad (Gates)"]
@@ -1027,11 +1028,37 @@ El usuario había pedido "pair automatic", y aun así una corrección chica cost
 
 ---
 
-## 40. Estado de Verificación y Métricas de Calidad
+## 40. Hito 38: Stacks .NET en Capas y .NET MVC
 
-* **Batería de Pruebas Automatizadas**: 61 archivos de test en `tests/`, 1.260 tests. Última medición (2026-11-13, sobre el árbol del Hito 36, antes de su commit), en una sola corrida con el toolchain de frontend (`~/.harness-flow/frontend-toolchain`: Angular 22.2.1, Vitest 4.1.11, Node 22):
-  * 1.260 tests, 1.260 pasaron. Ningún test falla ni queda sin medir. Duración: 29 minutos.
-  * Son los 1.232 de la medición anterior más los 28 de `test_pair_automatico.py`.
+**Problema.** CALPIL tiene tres plantillas .NET y el arnés conocía una. Medido antes del cambio: la plantilla de la API en capas (`calpil-dotnet-layered-template`) y la del portal MVC (`calpil-dotnet-mvc-template`) se detectaban como `dotnet-hexagonal` con 55% de confianza. Recibían la norma hexagonal, que no es la suya. Con tres stacks del mismo lenguaje el puntaje no decide: el stack general suma puntos en cualquier repo con un `.csproj`, y un empate lo resolvía el orden del disco.
+
+**Qué se implementó.**
+
+- **`assets/stacks/dotnet-layered/`** (API REST). C# / .NET 10, un solo proyecto, una carpeta por feature y una clase por capa (`Controller → Service → Repository`). SQL Server con Dapper y `Microsoft.Data.SqlClient`, sin ORM. 4 reglas, 9 skills (`add-feature`, `add-api-endpoint`, `add-persistence`, `write-tests`, `architecture-review`, `security-review`, `dependency-review`, `debug-targeted`, `prepare-release`).
+- **`assets/stacks/dotnet-mvc/`** (portal web). C# / .NET 10, ASP.NET Core MVC con vistas Razor. El portal no tiene base de datos ni reglas de negocio: todo dato pasa por una interfaz `I*Api`. 4 reglas, 9 skills (las de arriba, con `add-page` y `add-api-client` en lugar de `add-api-endpoint` y `add-persistence`).
+- **Reglas y skills** salen de las plantillas de CALPIL. Las reglas llevan además `trigger: always_on` (AGY) y el validador de skills es el del arnés, que descubre `.agents/skills` o `.claude/skills`.
+- **Verificador de cada stack** (`scripts/check-architecture.py`). Lee el código fuente, como `LayeringTests` y `ArchitectureTests` de las plantillas, y vale para cualquier nombre de proyecto.
+  - `dotnet-layered`: dirección de capas por `using` y por identificador; SQL con un valor interpolado en un repositorio (solo se acepta una `const` del propio archivo); carpetas por capa (`Controllers/`, `Services/`, `Repositories/`); `Platform/` que referencia una feature; una feature que usa el repositorio de otra; paquete de ORM; `Thread.Sleep` en pruebas.
+  - `dotnet-mvc`: controller con `HttpClient`, con el cliente concreto o con acceso a datos; vista con `@inject`, `Html.Raw` o código en línea; paquete o `using` de un proveedor de datos; CSP con `'unsafe-inline'`; `Thread.Sleep` en pruebas.
+  - Los dos dicen lo que no pudieron medir (`NO se midieron`) y su encabezado lista lo que queda al review.
+- **Detección entre stacks del mismo lenguaje.** El stack específico declara su señal propia (`requires_any`), lo que lo descarta (`anti_indicators`) y a qué stack general desplaza (`detection.supersedes`, clave nueva del motor). Con vistas Razor el repo es `dotnet-mvc`. Con un proyecto `*Api` con `Program.cs`, o con repositorios en carpetas de feature, es `dotnet-layered`. Con proyectos `*Domain`, `*Application` o `*Infrastructure` es `dotnet-hexagonal`, aunque sirva vistas. Un repo .NET sin esas señales queda en `dotnet-hexagonal`, como antes; también el que trae las dos (API y vistas en la misma solución, o un MVC con repositorios), porque ninguna de las dos normas es la suya. Un empate de puntaje lo decide el id.
+- **Familia de stacks** (`stack.familia_de`). Los stacks unidos por `supersedes` compiten por el mismo tipo de repo. Dentro de un repo, la carpeta de un proyecto que mirada sola califica para otro stack de la familia (`Acme.WebApi/` con vistas, en una solución con los proyectos en la raíz) no es otro destino: la gobierna la norma del repo. Una carpeta de otra familia (`web/` Angular) sigue siendo otro destino.
+- **Versión mínima de .NET** (`stack.py auditar`). Vale para todo stack con `framework: dotnet` y lee también `Directory.Build.props`, donde las dos plantillas nuevas declaran el `TargetFramework`. Se corrigió además la comparación: `net8.0` contra el mínimo `8.0.0` avisaba de la versión mínima misma.
+- **Repo recién creado.** `arquitectura.rutas_en_disco` mide lo que hay en disco cuando el repo git no versiona nada todavía. Antes un proyecto nuevo salido de la plantilla (`git init`, sin commits) salía como un repo sin código.
+- **Multi-LLM.** No hay código por host: `stack.py normalizar` instala las reglas y skills en `.claude/`, `.agents/` y `.gemini/`, y el brief, el briefing del revisor y el borrador del SDD entregan el texto de la norma a cualquier agente.
+
+**Verificación.** [`tests/test_stacks_dotnet.py`](../tests/test_stacks_dotnet.py): 55 tests, con repos armados en carpetas temporales. Detección de los tres stacks .NET, del caso mixto y de un proyecto con API y portal en repos separados; `supersedes` y la familia con manifests de prueba; cada regla de los dos verificadores, con su caso aceptado; paridad multi-LLM completa al normalizar; versión mínima; repo sin commits. Con el motor anterior (`stack.py` y `arquitectura.py` de `deec6f8`) fallan 8. Las tres plantillas .NET de CALPIL se detectan como su stack con 100% y pasan su verificador sin avisos.
+
+**Lo que este hito no hace.** No agrega plan de refactor detallado ni scaffolding para los dos stacks: reciben el plan genérico, un paso por incumplimiento medido. No mide SQL armado por concatenación, reglas de negocio dentro de un controller, cambios de estado por GET ni el uso de `[AllowAnonymous]`. No agrega stacks para las plantillas `nestjs-layered`, `nestjs-bff` y `springboot-layered`. Un repo .NET sin proyectos `*Domain`, `*Application` ni `*Infrastructure`, normalizado antes como `dotnet-hexagonal`, pasa al stack específico en la siguiente detección si tiene una sola de las dos señales: vistas Razor, o un proyecto `*Api` o repositorios en carpetas de feature.
+
+---
+
+## 41. Estado de Verificación y Métricas de Calidad
+
+* **Batería de Pruebas Automatizadas**: 64 archivos de test en `tests/`, 1.341 tests. Última medición (2026-11-17, sobre el árbol del Hito 38, antes de su commit), en una sola corrida con el toolchain de frontend (`~/.harness-flow/frontend-toolchain`: Angular 22.2.1, Vitest 4.1.11, Node 22):
+  * 1.341 tests, 1.341 pasaron. Ningún test falla ni queda sin medir. Duración: 20 minutos.
+  * Son los 1.286 que traía el árbol anterior (`deec6f8`) más los 55 de `test_stacks_dotnet.py`.
+  * Medición anterior (2026-11-13, sobre el árbol del Hito 36, antes de su commit): 1.260 tests, 1.260 pasaron, 29 minutos. Son los 1.232 de antes más los 28 de `test_pair_automatico.py`.
   * Medición anterior (2026-11-13, sobre el árbol del Hito 35, `86379f6`): 1.232 tests, 1.232 pasaron, 24 minutos. Son los 1.198 de antes más los 34 de `test_hallazgos.py`.
   * Medición anterior (2026-11-13, sobre `2475ba3`): 1.198 tests, 1.198 pasaron. Cubre los hitos 33 y 34 y los tres commits posteriores: paridad de Gemini/AGY (`3f7d0ba`), esperas de los tests Go sin `internal/` (`10c29ec`) y el verificador de `angular-product` que mide `shared` y `core` (`cf8bbf7`).
   * Medición anterior (2026-11-12, sobre `e8c269c`), también en una sola corrida con el toolchain: 1.192 tests, 1.192 pasaron.
@@ -1040,6 +1067,7 @@ El usuario había pedido "pair automatic", y aun así una corrección chica cost
 * **Historial**: la corrida sobre `50e04e9` mostró además 3 tests que ese commit dejó desactualizados (`test_contexto`, `test_multirepo_close` y `test_spec_acs`); se corrigieron en `04a4fc5`.
 * **Tests agregados en los hitos 19 a 33**: `test_indice_hermes.py`, `test_stack_adopcion.py`, `test_stack_normalizar.py`, `test_arquitectura.py`, `test_brief_stacks.py`, `test_hub.py`, `test_modelo.py`, `test_pair_y_reglas.py`, `test_feature_cero.py`, `test_normativa_por_rol.py`, `test_normas.py` y `test_copias.py`, más casos nuevos en `test_plugin_claude.py`. Después: 5 casos en `test_frontend_runner.py` (Hito 34) `test_check_angular_shared_core.py` (`cf8bbf7`) y `test_hallazgos.py` (Hito 35). Cada regresión se comprobó contra el código anterior: falla ahí y pasa con la corrección.
 * **Aislamiento**: los tests no abren el Memory Hub real (`HARNESS_SIN_CONTEXTO=1`, `HARNESS_SIN_HUB=1`), y la lógica de `hub.py` se prueba con una conexión falsa.
-* **Validación de Habilidades de Agentes**: 100% de las habilidades validadas en los 10 stacks con `validate-agent-skills.mjs`.
+* **Validación de Habilidades de Agentes**: 100% de las habilidades validadas en los 12 stacks con `validate-agent-skills.mjs`.
 * **Verificación de Arquitectura en las 10 Plantillas Reales de CALPIL**:
   * Medidas el 2026-11-12 con el `verificar` del Hito 33: 10/10 plantillas sin violaciones del verificador y con 0 archivos fuera de la norma (Golang Hexagonal, Angular Product, .NET Hexagonal, Rust Hexagonal, Next.js Product, Spring Boot Hexagonal, NestJS Hexagonal, Python Data Product, iOS SwiftUI Clean Architecture y Android Jetpack Compose Clean Architecture). Ya no salen todas como `COMPLIANT`: 8 de las 10 traen alguna rule más vieja que la de la skill, y `verificar` lo reporta como hallazgo (`Copias desactualizadas`). Las plantillas `nestjs-bff` y `nestjs-layered` tienen además rules y skills sin instalar.
+  * Medidas el 2026-11-17 (Hito 38): las plantillas `calpil-dotnet-layered-template` y `calpil-dotnet-mvc-template` se detectan como su stack con 100%, pasan su verificador sin violaciones ni avisos y tienen 0 archivos fuera de la norma. Sus 4 rules salen como `Copias desactualizadas`: no traen `trigger: always_on`.

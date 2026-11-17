@@ -1,0 +1,175 @@
+{
+  "id": "dotnet-mvc",
+  "name": "CALPIL .NET MVC Web Portal Stack",
+  "version": "1.0.0",
+  "language": "csharp",
+  "framework": "dotnet",
+  "architecture": "mvc",
+  "description": "Stack de portal web C# / .NET 10 con ASP.NET Core MVC, vistas Razor y Bootstrap 5. El portal presenta y captura datos: no tiene base de datos ni reglas de negocio, y todo dato entra y sale por HTTP a la API REST mediante un cliente tipado (I*Api). Sesión con cookie + OpenID Connect, antiforgery y CSP sin código en línea.",
+  "detection": {
+    "files_any": [
+      "*.sln",
+      "*.slnx",
+      "*.csproj",
+      "Directory.Build.props"
+    ],
+    "extensions": [
+      ".cs",
+      ".cshtml",
+      ".csproj",
+      ".sln",
+      ".slnx"
+    ],
+    "requires_any": [
+      "src/*/Views/_ViewImports.cshtml",
+      "*/Views/_ViewImports.cshtml",
+      "Views/_ViewImports.cshtml"
+    ],
+    "strong_indicators": [
+      "src/*/Views",
+      "src/*/Controllers",
+      "src/*/wwwroot",
+      "src/*/Services",
+      "tests/*.Tests"
+    ],
+    "anti_indicators": [
+      "go.mod",
+      "angular.json",
+      "pom.xml",
+      "**/*Domain.csproj",
+      "**/*Application.csproj",
+      "**/*Infrastructure.csproj",
+      "src/*Api/Program.cs",
+      "*Api/Program.cs",
+      "src/*/*/*Repository.cs"
+    ],
+    "supersedes": [
+      "dotnet-hexagonal"
+    ]
+  },
+  "normative": {
+    "rules": [
+      "architecture.md",
+      "dependencies.md",
+      "security.md",
+      "testing.md"
+    ],
+    "skills": [
+      "add-api-client",
+      "add-feature",
+      "add-page",
+      "architecture-review",
+      "debug-targeted",
+      "dependency-review",
+      "prepare-release",
+      "security-review",
+      "write-tests"
+    ],
+    "architecture_constraints": {
+      "no_data_access": {
+        "forbidden_imports": [
+          "Microsoft.Data",
+          "Dapper",
+          "Microsoft.EntityFrameworkCore",
+          "Npgsql",
+          "System.Data"
+        ],
+        "rationale": "El portal no toca datos: sin paquetes ni código de acceso a datos. Todo dato entra y sale por una interfaz I*Api; las reglas de negocio viven en la API y su respuesta es la verdad."
+      },
+      "thin_controllers": {
+        "path_pattern": "src/<Proyecto>/Controllers/*.cs",
+        "forbidden_identifiers": [
+          "HttpClient",
+          "HttpRequestMessage",
+          "System.Net.Http",
+          "SqlConnection",
+          "DbContext",
+          "cliente concreto *ApiClient"
+        ],
+        "rationale": "El controller recibe el request, llama a una interfaz I*Api, arma el modelo de vista y elige la vista o la redirección. Después de un POST exitoso siempre redirige (Post/Redirect/Get)."
+      },
+      "views_only_present": {
+        "path_pattern": "src/<Proyecto>/Views/**/*.cshtml",
+        "forbidden": [
+          "@inject",
+          "Html.Raw",
+          "<script> sin src",
+          "<style>",
+          "style=",
+          "on*="
+        ],
+        "rationale": "La vista solo presenta el modelo que recibe. La CSP bloquea el código en línea: el script o estilo propio va en wwwroot/js y wwwroot/css."
+      },
+      "composition_root": {
+        "required_entrypoint": "Program.cs",
+        "rationale": "Solo Program.cs registra dependencias. Services/ es la única salida hacia los datos y Platform/ es transversal: no conoce features."
+      },
+      "session_and_csrf": {
+        "session": "cookie HttpOnly + Secure + SameSite=Lax con prefijo __Host- y OpenID Connect",
+        "default": "toda acción exige sesión; lo público se marca con [AllowAnonymous]",
+        "state_changes": "POST con token antiforgery, nunca GET",
+        "rationale": "Sesión por defecto y todo cambio de estado es un POST con antiforgery. AUTH_MODE=dev solo en Development. Un returnUrl solo se usa si Url.IsLocalUrl lo acepta."
+      },
+      "security_headers": {
+        "content_security_policy": "default-src 'self' sin 'unsafe-inline' ni 'unsafe-eval'",
+        "security_headers": [
+          "X-Content-Type-Options",
+          "X-Frame-Options",
+          "Referrer-Policy",
+          "Content-Security-Policy",
+          "Strict-Transport-Security"
+        ],
+        "correlation_id": "X-Correlation-ID"
+      },
+      "testing_standards": {
+        "forbidden_calls": [
+          "Thread.Sleep"
+        ],
+        "fake_api_pattern": true,
+        "network": "sin llamadas a una API ni a un proveedor de identidad reales"
+      }
+    }
+  },
+  "runners": {
+    "test_command": "dotnet test",
+    "skills_validator": "node assets/stacks/dotnet-mvc/scripts/validate-agent-skills.mjs"
+  },
+  "layout": {
+    "codigo": [
+      "**/*.cs",
+      "**/*.cshtml"
+    ],
+    "excluir": [
+      "tests/**",
+      "**/*Tests/**",
+      "**/bin/**",
+      "**/obj/**"
+    ],
+    "normalizado": [
+      "src/*/Controllers/**",
+      "src/*/Models/**",
+      "src/*/Views/**",
+      "src/*/Services/**",
+      "src/*/Platform/**",
+      "src/*/Program.cs"
+    ]
+  },
+  "documentation": {
+    "official_docs": "https://learn.microsoft.com/en-us/aspnet/core/mvc/overview",
+    "security_advisories": "https://github.com/dotnet/announcements/issues?q=is%3Aissue+label%3ASecurity",
+    "context7": {
+      "library_id": "/dotnet/aspnetcore.docs",
+      "ecosystem": "nuget",
+      "suggested_queries": [
+        "ASP.NET Core MVC controllers views Razor tag helpers",
+        "ASP.NET Core antiforgery cookie authentication OpenID Connect",
+        "IHttpClientFactory typed client WebApplicationFactory testing"
+      ]
+    }
+  },
+  "security_audit": {
+    "command": "dotnet list package --vulnerable --include-transitive",
+    "findings_pattern": "has the following vulnerable packages",
+    "minimum_version": "10.0.0"
+  }
+}

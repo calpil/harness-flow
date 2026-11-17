@@ -31,6 +31,8 @@ class TestStackManager(unittest.TestCase):
         self.assertIn("golang-hexagonal", ids)
         self.assertIn("angular-product", ids)
         self.assertIn("dotnet-hexagonal", ids)
+        self.assertIn("dotnet-layered", ids)
+        self.assertIn("dotnet-mvc", ids)
         self.assertIn("rust-hexagonal", ids)
         self.assertIn("nextjs-product", ids)
         self.assertIn("springboot-hexagonal", ids)

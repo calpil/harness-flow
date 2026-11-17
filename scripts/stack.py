@@ -2,7 +2,7 @@
 """Gestor de Stacks Tecnologicos de CALPIL en Harness Flow.
 
 Soporta:
-- Deteccion automatica de stack (Golang Hexagonal, Angular Product).
+- Deteccion automatica de stack por manifest (assets/stacks/<id>/manifest.json).
 - Verificacion de cumplimiento normativo (Rules, Skills, Arquitectura, Testing).
 - Normalizacion automatica multi-LLM (Claude Code, Codex, Gemini/AGY, Hermes, Grok, Kimi).
 - Refactorizacion guiada de arquitectura (scaffolding y plan expand-contract).
@@ -181,11 +181,41 @@ def detectar_stack_directorio(repo: Path) -> dict[str, Any]:
             "candidates": [],
         }
 
-    # Ordenar por confianza descendente
-    candidatos.sort(key=lambda x: x["confidence"], reverse=True)
+    # Un stack mas especifico de la misma familia declara a cual desplaza
+    # (`detection.supersedes`): si ambos califican, gana el especifico. Sin esto
+    # decidia el puntaje, y un stack general suma puntos en cualquier repo de su lenguaje.
+    califican = {c["stack"] for c in candidatos}
+    desplazados = {s for man in manifests if man.get("id") in califican
+                   for s in man.get("detection", {}).get("supersedes", [])}
+    candidatos = [c for c in candidatos if c["stack"] not in desplazados] or candidatos
+
+    # Confianza descendente; un empate lo decide el id, no el orden del disco.
+    candidatos.sort(key=lambda x: (-x["confidence"], str(x["stack"])))
     ganador = candidatos[0]
     ganador["candidates"] = candidatos
     return ganador
+
+
+def familia_de(stack_id: str) -> set[str]:
+    """Stacks que compiten por el mismo tipo de repo: los que une `detection.supersedes`.
+
+    `dotnet-layered` y `dotnet-mvc` desplazan a `dotnet-hexagonal`: los tres son
+    una familia. Dentro de un repo de esa familia, la carpeta de un proyecto
+    (`Acme.Api/`) mirada sola puede calificar para otro de los tres; es el mismo
+    codigo del mismo repo, y lo gobierna la norma del repo.
+    """
+    enlaces: dict[str, set[str]] = {}
+    for man in listar_stacks_disponibles():
+        for otro in man.get("detection", {}).get("supersedes", []):
+            enlaces.setdefault(str(man.get("id")), set()).add(otro)
+            enlaces.setdefault(otro, set()).add(str(man.get("id")))
+    familia, pendientes = {stack_id}, [stack_id]
+    while pendientes:
+        for otro in enlaces.get(pendientes.pop(), ()):
+            if otro not in familia:
+                familia.add(otro)
+                pendientes.append(otro)
+    return familia
 
 
 def detectar_todos_los_destinos(root: Path) -> list[dict[str, Any]]:
@@ -197,8 +227,9 @@ def detectar_todos_los_destinos(root: Path) -> list[dict[str, Any]]:
     - De una carpeta sin stack (agrupa repos: `ms-*`, `frontend/` + `backend/`),
       sus repos; si ninguno tiene stack, los del nivel siguiente (`apps/web`).
     - De un repo con stack, las carpetas con OTRO stack que son parte del mismo
-      repo (`api/` Go dentro de un front). Una carpeta del mismo stack es parte
-      del repo, no otro repo. Un clon propio dentro de la raiz (un servicio
+      repo (`api/` Go dentro de un front). Una carpeta del mismo stack, o de su
+      familia (`familia_de`: el proyecto `Acme.Api/` de una solucion .NET), es
+      parte del repo, no otro repo. Un clon propio dentro de la raiz (un servicio
       enlazado) es OTRO repo: no entra solo, lo lista `repos_sin_declarar`.
 
     Antes la raiz se perdia si no estaba declarada o si una subcarpeta cualquiera
@@ -220,8 +251,9 @@ def detectar_todos_los_destinos(root: Path) -> list[dict[str, Any]]:
         subrepos = [detectar_stack_directorio(s) for s in _subrepos(carpeta)]
         if res["stack"] != "generico":
             agregar(res)
+            propios = familia_de(res["stack"])
             for sub in subrepos:
-                if (sub["stack"] not in ("generico", res["stack"])
+                if (sub["stack"] != "generico" and sub["stack"] not in propios
                         and not _es_clon_propio(Path(sub["path"]))):
                     agregar(sub)
             return
@@ -1007,14 +1039,17 @@ def auditar_seguridad_y_versiones(
                 min_prefix = ".".join(min_version.split(".")[:2])
                 if detected_ver < min_prefix:
                     warnings.append(f"Versión de Go en go.mod ({detected_ver}) es inferior a la mínima recomendada ({min_version})")
-        elif stack_id == "dotnet-hexagonal":
-            for csproj in repo.glob("**/*.csproj"):
+        elif manifest.get("framework") == "dotnet":
+            # El TargetFramework vive en cada .csproj o, centralizado, en Directory.Build.props.
+            for csproj in [*repo.glob("**/*.csproj"), *repo.glob("**/Directory.Build.props")]:
                 text = csproj.read_text(encoding="utf-8", errors="ignore")
                 m = re.search(r"<TargetFramework>net([0-9.]+)</TargetFramework>", text)
                 if m:
                     detected_ver = m.group(1)
                     det_parts = tuple(int(x) for x in re.findall(r"\d+", detected_ver))
-                    min_parts = tuple(int(x) for x in re.findall(r"\d+", min_version))
+                    # `net8.0` contra `8.0.0`: se compara lo que el TargetFramework declara.
+                    # Con la tupla entera, (8, 0) < (8, 0, 0) avisaba de la version minima misma.
+                    min_parts = tuple(int(x) for x in re.findall(r"\d+", min_version))[:len(det_parts)]
                     if det_parts < min_parts:
                         warnings.append(f"Versión de .NET en {csproj.name} (net{detected_ver}) es inferior a la mínima recomendada (net{min_version})")
                     break

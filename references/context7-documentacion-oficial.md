@@ -93,6 +93,8 @@ Reinicia el agente después de configurarlo. Si en un host no está disponible:
 | **`golang-hexagonal`** | `/golang/go`, `/go-chi/chi` | [go.dev/doc](https://go.dev/doc/) | `govulncheck ./...` | Go 1.23+ (recomendado 1.24+) |
 | **`angular-product`** | `/angular/angular` | [angular.dev](https://angular.dev) | `npm audit --audit-level=high` | Angular 19+ |
 | **`dotnet-hexagonal`** | `/dotnet/runtime` | [learn.microsoft.com/dotnet](https://learn.microsoft.com/en-us/dotnet/) | `dotnet list package --vulnerable` | .NET 8.0 LTS / .NET 10.0+ |
+| **`dotnet-layered`** | `/dotnet/aspnetcore.docs` | [learn.microsoft.com/aspnet/core](https://learn.microsoft.com/en-us/aspnet/core/) | `dotnet list package --vulnerable --include-transitive` | .NET 10.0+ |
+| **`dotnet-mvc`** | `/dotnet/aspnetcore.docs` | [learn.microsoft.com/aspnet/core/mvc](https://learn.microsoft.com/en-us/aspnet/core/mvc/overview) | `dotnet list package --vulnerable --include-transitive` | .NET 10.0+ |
 | **`rust-hexagonal`** | `/tokio-rs/axum`, `/rust-lang/rust` | [doc.rust-lang.org](https://doc.rust-lang.org/) | `cargo audit` | Rust 2021+ (recomendado 2024) |
 | **`nextjs-product`** | `/vercel/next.js` | [nextjs.org/docs](https://nextjs.org/docs) | `npm audit --audit-level=high` | Next.js 15+ / React 19 |
 | **`springboot-hexagonal`** | `/websites/spring_io_spring-boot` | [docs.spring.io](https://docs.spring.io/spring-boot/) | `./mvnw org.owasp:dependency-check-maven:check` | Java 21 LTS / Spring Boot 3.4+ |
