@@ -154,8 +154,12 @@ def _motivo_frontend(item) -> str | None:
     if not RUTA.fullmatch(archivo) or ".." in PurePosixPath(archivo).parts:
         return "el archivo es una ruta relativa del repo, sin '..'"
     if proyecto.startswith("angular:"):
+        # En un monorepo cada proyecto vive bajo projects/<nombre>/; un proyecto de
+        # raiz (angular.json con root "", el CLI por defecto) tiene sus tests en src/.
+        # Bajo projects/ solo vale la carpeta del proyecto nombrado; fuera de ella,
+        # que el id exista lo deciden la base medida, el delta y la cita del review.
         raiz = "projects/" + proyecto[len("angular:"):] + "/"
-        if not archivo.startswith(raiz):
+        if archivo.startswith("projects/") and not archivo.startswith(raiz):
             return f"los tests de {proyecto} viven bajo {raiz}"
     if CONTROL.search(nombre):
         return "el nombre completo no lleva saltos de linea ni caracteres de control"
