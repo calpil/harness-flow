@@ -71,7 +71,7 @@ Agrega `--delegado --yes` SOLO si el usuario dijo SI a delegar en un formulario 
 eval "$(python3 "${CLAUDE_PLUGIN_ROOT}/scripts/entorno.py" --shell)" && "$PY" "$H/worktree.py" start --feature $ARGUMENTS[0]
 ```
 
-`start` registra el modo (`pair` por defecto) y lo imprime. Si la feature ya
+`start` valida primero contra `origin/<rama_base>` y Memory Hub Postgres que otro dev no la tenga tomada, publica el estado `in_progress` (`desarrollando` con dueño/host/rama) en el repo y en el Hub (con `--offline` solo para emergencias), y registra el modo (`pair` por defecto). Para liberar una feature en curso usa `worktree.py liberar --feature <id>` (`--forzar --yes` si pertenece a otro dev). Si la feature ya
 estaba arrancada y el usuario cambia de idea:
 
 ```bash

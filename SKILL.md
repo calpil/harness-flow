@@ -84,7 +84,7 @@ Al entrar a un proyecto con `harness/feature_list.json`, ANTES de responder nada
 $PY "$H/estado.py"
 ```
 
-Muestra features abiertas, gates pendientes, edad del grafo y en que paso estan el PRD y el SDD (`prd:`/`sdd:`, mas `candidatas:` con la feature de cada `F-n`). Si hay una feature `in_progress`, retómala; no arranques otra. Si falta un documento que exige `require_docs_al_dia`, el siguiente paso es el rol 0, no un spec: `approve-spec` se negaria.
+Muestra features abiertas, gates pendientes, edad del grafo y en que paso estan el PRD y el SDD (`prd:`/`sdd:`, mas `candidatas:` con la feature de cada `F-n`). Con remoto `origin` (`rules.require_sync_remoto: "auto"`), valida **primero** `origin/<rama_base>` y el espejo Memory Hub Postgres para ver que features desarrolla cada dev y bloquear colisiones en `approve-spec`, `worktree.py start` y `gate.py check` (`--offline` solo en emergencias; detalle en [`references/sync-remoto.md`](references/sync-remoto.md)). Si hay una feature `in_progress` propia, retómala; no arranques otra ni tomes una en desarrollo por otro dev. Si falta un documento que exige `require_docs_al_dia`, el siguiente paso es el rol 0, no un spec: `approve-spec` se negaria.
 
 Si dice `vault: ausente` o `vault: desactualizado` y el grafo esta fresco, regenera solo el panel de Obsidian. No relances graphify ni el hub:
 
@@ -251,6 +251,8 @@ base y check medidos. Orden y guardas en
 | `hallazgo.py anotar\|list\|mover\|resolver` | Lo que se encuentra en el código va a una feature abierta o al proyecto, no a una ficha. Ver `references/hallazgos.md` |
 | `postmerge_medido.py base --repo <r> --guardar <j>` | Foto medida de los rojos ANTES del merge |
 | `postmerge_medido.py check --repo <r> --base <j>` | Rojos NUEVOS, build roto o tests desaparecidos (exit 2) |
+| `worktree.py liberar --feature <id>` | Libera una feature `in_progress` -> `todo` en local, `origin/<rama_base>` y Memory Hub (`--forzar --yes` para ajenas) |
+| `worktree.py sync [--feature <id>]` | Sincroniza estado multi-dev desde `origin/<rama_base>` + Hub o publica una feature iniciada `--offline` |
 | `arquitectura.py check [--feature <id>]` | Trinquete de arquitectura: lo heredado no crece; `close` lo corre solo. Ver `references/arquitectura-heredada.md` |
 | `postmerge_terraform.py base\|check ...` | Destinos Terraform (fmt, validate, `terraform test`); `close` lo despacha solo, ver `references/multirepo.md#contrato-terraform-fmt-validate-y-terraform-test` |
 
@@ -458,7 +460,8 @@ Python. Si no hay revisor aislado, puedes revisar localmente con
 | [`references/normalizacion-de-stacks.md`](references/normalizacion-de-stacks.md) | un repo no recibe las rules o skills de su stack, una regla no nombra el código del repo, una copia instalada quedó vieja, worktree sin normativa, `stack.py verificar` |
 | [`references/normas-de-ingenieria.md`](references/normas-de-ingenieria.md) | una norma no llega a un rol, quieres agregar o cambiar una, AC negativos, bloque `documentation`/`security_audit` del manifest, exit de `stack.py auditar` |
 | [`references/hosts.md`](references/hosts.md) | raíces de skills y creación de lecciones por host |
-| [`references/hub.md`](references/hub.md) | esquema del hub, `derivar-graphify`, credenciales |
+| [`references/hub.md`](references/hub.md) | esquema del hub, `derivar-graphify`, `hub.py desarrollo`, credenciales |
+| [`references/sync-remoto.md`](references/sync-remoto.md) | equipo multi-dev: validacion previa contra `origin/<rama_base>` + Hub, commit/push de `desarrollando`, `liberar`, `sync` y `--offline` |
 | [`references/obsidian.md`](references/obsidian.md) | que genera el vault, config sembrada, `--con-grafo` |
 | [`references/atlassian.md`](references/atlassian.md) | mapeo a Jira/Confluence y sus comandos |
 | [`references/claude.md`](references/claude.md) | Claude Code: plugin, comandos, Windows, raices de lecciones, retomar desde otro host una sesion cortada |

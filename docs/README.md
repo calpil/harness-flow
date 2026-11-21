@@ -89,7 +89,8 @@ Los documentos de `docs/` complementan y fundamentan las guías operativas que l
 * [`references/hallazgos.md`](../references/hallazgos.md): Qué hacer con lo que se encuentra en el código mientras se trabaja en otra cosa: enmienda antes que ficha, `hallazgo.py` y cuándo `add.py` crea una ficha.
 * [`references/arquitectura-heredada.md`](../references/arquitectura-heredada.md): Trinquete de arquitectura para proyectos con código anterior al arnés: inventario, base, cuota de normalización y casos límite.
 * [`references/modelos.md`](../references/modelos.md): Modelo y esfuerzo por rol y proveedor; elección de Fable 5.2 u Opus 5.5 en Producto y Leader.
-* [`references/hub.md`](../references/hub.md): Memory Hub Postgres: qué es un servicio, purga de dependencias y cómo apagarlo en tests.
+* [`references/hub.md`](../references/hub.md): Memory Hub Postgres: qué es un servicio, purga de dependencias, features en desarrollo y cómo apagarlo en tests.
+* [`references/sync-remoto.md`](../references/sync-remoto.md): Sincronización multi-desarrollador del estado `desarrollando` en `origin/<rama_base>` (commit/push OCC) y espejo en Memory Hub Postgres, validaciones previas, `liberar`, `sync` y `--offline`.
 
 ---
 

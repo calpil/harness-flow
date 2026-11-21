@@ -34,6 +34,7 @@ from comun import (  # noqa: E402
     load_backlog, n_enmiendas, now_iso, paths, review_path, save_backlog, sello_revision,
     sig_fresh, sign, spec_acs, spec_estado, spec_huella, spec_path, tests_path,
 )
+import sync_remoto  # noqa: E402
 
 ABIERTOS = ("in_progress", "blocked", "review")
 
@@ -48,11 +49,52 @@ def cmd_check(args) -> None:
     print(f"== Harness check: {data.get('project','(sin nombre)')} ==")
     print(f"   raiz: {p['root']}\n")
 
+    offline = getattr(args, "offline", False)
+    por = getattr(args, "por", None)
+    remoto_est = None
+    yo = None
+    try:
+        remoto_est = sync_remoto.leer_remoto(p, data, offline=offline, por=por)
+        yo = remoto_est["yo"]
+    except sync_remoto.ErrorSyncRemoto as exc:
+        r.fallo(f"sync remoto: {exc}", "comprueba conexion/remoto o corre gate.py check --offline")
+        yo = sync_remoto.identidad_actual(sync_remoto.repo_harness(p)[0], por=por)
+
+    if remoto_est and remoto_est["activo"]:
+        hub_tag = (
+            f" · Hub {remoto_est['hub_estado']}"
+            if remoto_est["hub_estado"] != "no_configurado" else ""
+        )
+        r.ok(f"sync remoto: {remoto_est['remoto']}/{remoto_est['base']} @ "
+             f"{remoto_est['remote_sha'][:7]}{hub_tag}")
+        if remoto_est["hub_aviso"]:
+            r.aviso(f"espejo Memory Hub Postgres: {remoto_est['hub_aviso']}")
+        _, conflictos = sync_remoto.aplicar_vista_remota(data, remoto_est)
+        for c in conflictos:
+            r.fallo(
+                f"#{c['id']} conflicto de desarrollo: tomada tambien por "
+                f"{sync_remoto.formato_dueno(c['claim'])} ({c['claim'].get('fuente')})",
+                f"coordina con ese dev o libera con worktree.py liberar --feature {c['id']}",
+            )
+        en_des_rem = remoto_est.get("en_desarrollo") or {}
+        for f in data["features"]:
+            if f.get("status") != "in_progress" or sync_remoto.es_de_otro_dev(f, yo):
+                continue
+            fid = str(f["id"])
+            if fid not in en_des_rem:
+                r.fallo(
+                    f"#{fid} en desarrollo local sin publicar en "
+                    f"{remoto_est['remoto']}/{remoto_est['base']}",
+                    f"publica el estado: worktree.py sync --feature {fid}",
+                )
+    elif offline:
+        r.aviso("sync remoto omitido por --offline: no se valido contra origin ni Memory Hub")
+
     abiertas = [f for f in data["features"] if f.get("status") in ABIERTOS]
     if not abiertas:
         r.info("no hay features abiertas")
     for f in abiertas:
-        _check_feature(p, f, rules, r)
+        _check_feature(p, f, rules, r, yo=yo)
 
     ciclos = detectar_ciclos_dependencias(data)
     if ciclos:
@@ -66,7 +108,7 @@ def cmd_check(args) -> None:
     except ValueError as exc:
         r.fallo(str(exc), "corrigelo en harness/feature_list.json")
     _check_rutas_protegidas(p, rules, r, data)
-    _check_aislamiento(abiertas, r, p, rules)
+    _check_aislamiento(abiertas, r, p, rules, yo=yo)
     _check_arquitectura(p, r)
     r.salir()
 
@@ -94,8 +136,14 @@ def _check_arquitectura(p, r) -> None:
         r.ok(f"arquitectura: lo heredado no crecio ({u} unidades, {a} archivos en la base)")
 
 
-def _check_feature(p, f, rules, r) -> None:
+def _check_feature(p, f, rules, r, yo: dict | None = None) -> None:
     fid = f["id"]
+    if yo is not None and sync_remoto.es_de_otro_dev(f, yo):
+        dueno = sync_remoto.dueno_activo(f)
+        print(f"-- feature #{fid}: {f.get('name')} [{f.get('status')} · desarrollando por {dueno['por']}]")
+        r.info(f"#{fid} en desarrollo por {sync_remoto.formato_dueno(dueno)}: "
+               "validacion local delegada a su dueno")
+        return
     print(f"-- feature #{fid}: {f.get('name')} [{f.get('status')}]")
     sp = spec_path(p, f)
     if not sp.exists():
@@ -355,10 +403,12 @@ def _check_rutas_protegidas(p, rules, r, data: dict | None = None) -> None:
                "solo cambie por producto.py aprobar y el bloque generado")
 
 
-def _check_aislamiento(abiertas, r, p, rules) -> None:
+def _check_aislamiento(abiertas, r, p, rules, yo: dict | None = None) -> None:
     from multirepo import Invalid, check_registered, _path, git as repo_git
     sin_wt, usados = [], {}
     for f in abiertas:
+        if yo is not None and sync_remoto.es_de_otro_dev(f, yo):
+            continue
         worktrees = []
         try:
             if "multi_repo" in f:
@@ -393,6 +443,14 @@ def cmd_check_spec(args) -> None:
     p = paths()
     data = load_backlog(p)
     f = get_feature(data, args.feature)
+    # Valida primero en remoto + Hub que otro dev no la tenga tomada.
+    try:
+        sync_remoto.validar_feature_libre(
+            p, data, f, accion="verificar el spec",
+            offline=getattr(args, "offline", False),
+        )
+    except (sync_remoto.ErrorSyncRemoto, sync_remoto.ErrorConflictoDesarrollo) as exc:
+        sys.exit(f"[!!] {exc}")
     sp = spec_path(p, f)
     if not sp.exists():
         sys.exit(f"[!!] no existe {sp}")
@@ -431,6 +489,14 @@ def cmd_approve_spec(args) -> None:
     p = paths()
     data = load_backlog(p)
     f = get_feature(data, args.feature)
+    # Primero validar contra el remoto + Hub que otro dev no la tenga tomada.
+    try:
+        sync_remoto.validar_feature_libre(
+            p, data, f, accion="aprobar el spec",
+            offline=getattr(args, "offline", False), por=args.por,
+        )
+    except (sync_remoto.ErrorSyncRemoto, sync_remoto.ErrorConflictoDesarrollo) as exc:
+        sys.exit(f"[!!] {exc}")
     sp = spec_path(p, f)
     if not sp.exists():
         sys.exit(f"[!!] no existe {sp}")
@@ -1234,6 +1300,13 @@ def cmd_close(args) -> None:
     rules = data["rules"]
     f = get_feature(data, args.feature)
     fid = f["id"]
+    offline = getattr(args, "offline", False)
+    try:
+        remoto_cierre = sync_remoto.validar_feature_libre(
+            p, data, f, accion="cerrar la feature", offline=offline,
+        )
+    except (sync_remoto.ErrorSyncRemoto, sync_remoto.ErrorConflictoDesarrollo) as exc:
+        sys.exit(f"[!!] {exc}")
     multi = "multi_repo" in f or args.integrated
     if multi and args.status == "done":
         rules = dict(rules, require_spec_approved=True, require_review=True,
@@ -1472,6 +1545,9 @@ def cmd_close(args) -> None:
         with transaction(p, fid):
             f["status"] = args.status
             f["closed_at"] = now_iso()
+            if isinstance(f.get("desarrollo"), dict) and f["desarrollo"].get("por"):
+                f["desarrollado_por"] = f["desarrollo"]["por"]
+            f.pop("desarrollo", None)
             if args.to:
                 f["integrado_en"] = args.to
             if merged:
@@ -1536,6 +1612,14 @@ def cmd_close(args) -> None:
         if aviso:
             print(aviso)
     print("[i]  la integracion es LOCAL: publicar es una decision aparte.")
+    if remoto_cierre.get("activo") and not offline:
+        hub_ok, hub_err = sync_remoto.hub_liberar_desarrollo(
+            str(data.get("project") or p["root"].name), f, nuevo_estado=args.status,
+        )
+        if hub_ok:
+            print("[ok] reclamo de desarrollo liberado en Memory Hub Postgres")
+        elif hub_err:
+            print(f"[!]  espejo Memory Hub Postgres no actualizado al cerrar: {hub_err}")
     if args.status == "done" and not getattr(args, "sin_contexto", False):
         # El cierre cambio el arbol: el grafo, el hub y el vault que quedaron
         # describen el codigo de antes. Se refresca DESPUES del cierre para no
@@ -1573,13 +1657,21 @@ def main() -> None:
     ap = argparse.ArgumentParser(description="Gates del harness-flow (exit!=0 si falta algo)")
     sub = ap.add_subparsers(dest="cmd", required=True)
 
-    sub.add_parser("check").set_defaults(fn=cmd_check)
+    s = sub.add_parser("check")
+    s.add_argument("--offline", action="store_true",
+                   help="emergencia sin red: omite la validacion contra remoto y Hub")
+    s.add_argument("--por", help="identidad del desarrollador para distinguir features propias y ajenas")
+    s.set_defaults(fn=cmd_check)
 
     s = sub.add_parser("check-spec"); s.add_argument("--feature", required=True)
+    s.add_argument("--offline", action="store_true",
+                   help="emergencia sin red: omite la validacion remota")
     s.set_defaults(fn=cmd_check_spec)
 
     s = sub.add_parser("approve-spec"); s.add_argument("--feature", required=True)
     s.add_argument("--yes", action="store_true"); s.add_argument("--por")
+    s.add_argument("--offline", action="store_true",
+                   help="emergencia sin red: omite la validacion remota antes de aprobar")
     s.set_defaults(fn=cmd_approve_spec)
 
     s = sub.add_parser("enmienda"); s.add_argument("--feature", required=True)
@@ -1621,6 +1713,8 @@ def main() -> None:
                    help="no refrescar grafo/hub/vault despues del cierre")
     s.add_argument("--publicar-atlassian", action="store_true", dest="publicar_atlassian",
                    help="despues del cierre, sincroniza Jira y Confluence con atlassian.py push")
+    s.add_argument("--offline", action="store_true",
+                   help="emergencia sin red: omite la validacion y espejo remoto al cerrar")
     s.set_defaults(fn=cmd_close)
 
     args = ap.parse_args()

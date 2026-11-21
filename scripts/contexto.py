@@ -1954,7 +1954,15 @@ def cmd_brief(args) -> None:
 
     L: list[str] = []
     L.append(f"== BRIEF #{f['id']} {f.get('name')} ({proyecto}) ==")
-    L.append(f"estado: {f.get('status')} · rama: {f.get('branch') or '-'} · "
+    des_txt = ""
+    try:
+        import sync_remoto
+        d = sync_remoto.dueno_activo(f)
+        if d:
+            des_txt = f" · desarrollando por: {sync_remoto.formato_dueno(d)}"
+    except Exception:
+        pass
+    L.append(f"estado: {f.get('status')}{des_txt} · rama: {f.get('branch') or '-'} · "
              f"worktree: {f.get('worktree') or '(sin worktree)'}")
     if getattr(args, "con_modo", True):
         L += lineas_modo(f)

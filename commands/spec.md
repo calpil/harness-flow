@@ -167,6 +167,9 @@ eval "$(python3 "${CLAUDE_PLUGIN_ROOT}/scripts/entorno.py" --shell)" && "$PY" "$
 
 Nunca corras eso por tu cuenta ni "para agilizar". El script se niega sin
 `--yes`, y `--yes` significa que el usuario dijo que si — no que tu lo asumiste.
+Con remoto `origin` activo (`rules.require_sync_remoto`), `approve-spec` valida
+primero contra `origin/<rama_base>` y Memory Hub Postgres y bloquea si otro
+desarrollador ya tiene tomada la feature (o si falla la red, salvo `--offline`).
 
 Tambien se niega, con la regla `require_docs_al_dia`, si el proyecto no tiene el
 PRD/SDD que esa regla exige: corre antes `/harness-flow:producto prd|sdd`. No

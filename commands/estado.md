@@ -37,8 +37,7 @@ ANTES de responder nada sustantivo sobre el proyecto.
 
 Del output de `estado.py`, al usuario le importan cuatro cosas y en este orden:
 
-1. **Si hay una feature `in_progress`, retomala.** No arranques otra. Di cual es
-   y en que paso del flujo quedo (spec / evidencia / review / cierre).
+1. **Sincronizacion remota y features en desarrollo.** Si el proyecto tiene remoto `origin`, `estado.py` valida primero `origin/<rama_base>` y el espejo Memory Hub Postgres (falla sin red salvo `--offline`). **Si hay una feature `in_progress` propia, retomala.** No arranques otra ni tomes una marcada `desarrollando por <otro dev>`. Di cual es y en que paso del flujo quedo (spec / evidencia / review / cierre).
 2. **Gates pendientes.** Cual es el proximo gate que toca correr y con que
    comando exacto.
 3. **PRD y SDD.** Las lineas `prd:`/`sdd:` dicen en que paso esta cada uno y

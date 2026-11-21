@@ -300,6 +300,12 @@ def construir(p: dict, *, con_grafo: bool = False, con_grafo_obsidian: bool = Fa
 
         micros = micros_declarados(f)
         modo = f.get("modo")
+        des = f.get("desarrollo") if isinstance(f.get("desarrollo"), dict) else None
+        des_por = (
+            f"{des.get('por')}" + (f" ({des.get('host')})" if des.get("host") else "")
+            if des and des.get("estado") == "desarrollando" and des.get("por")
+            else None
+        )
         cuerpo = [
             "---",
             f"tipo: feature",
@@ -308,11 +314,13 @@ def construir(p: dict, *, con_grafo: bool = False, con_grafo_obsidian: bool = Fa
             f"spec: {estado}",
             f"kind: {f.get('kind','feature')}",
             *(["modo: " + str(modo)] if modo else []),
+            *(["desarrollando_por: " + esc(des_por)] if des_por else []),
             "tags: [harness, feature]",
             "---",
             AVISO, "",
             f"# Feature #{fid} — {esc(f.get('name',''))}", "",
             f"Estado: **{f.get('status')}** · spec **{estado}**"
+            + (f" · desarrollando por **{esc(des_por)}**" if des_por else "")
             + (f" · modo **{modo}**" if modo else "")
             + (f" · review **{sello}**" if sello else ""), "",
             "## Criterios de aceptacion", "",
@@ -472,7 +480,12 @@ def construir(p: dict, *, con_grafo: bool = False, con_grafo_obsidian: bool = Fa
         f"- Hallazgos abiertos: {len(hallazgos_abiertos)}",
         *(["", "## Producto y arquitectura", "", *docs_raiz] if docs_raiz else []),
         "", "## Abiertas", "",
-        *([f"- {feature(f['id'])} — {esc(f.get('name',''))} ({f.get('status')})"
+        *([f"- {feature(f['id'])} — {esc(f.get('name',''))} ({f.get('status')}"
+           + (f" · desarrollando por {esc(f['desarrollo'].get('por', ''))}"
+              if isinstance(f.get("desarrollo"), dict)
+              and f["desarrollo"].get("estado") == "desarrollando"
+              and f["desarrollo"].get("por")
+              else "") + ")"
            for f in abiertas] or ["_nada abierto_"]),
         *(["", "## Estados desconocidos", "",
            *[f"- {feature(f['id'])} — {esc(f.get('name',''))} ({f.get('status')})"

@@ -9,6 +9,7 @@ graph_edges), asi que el historico existente se conserva y se sigue usando.
   hub.py registrar --agente <a> --accion <x> --artefacto <f> [--estado ok]
   hub.py derivar-graphify
   hub.py consultar --artefacto <id>
+  hub.py desarrollo [--proyecto <nombre> | --todos]
 """
 from __future__ import annotations
 
@@ -236,6 +237,48 @@ def cmd_consultar(args) -> None:
     conn.close()
 
 
+def cmd_desarrollo(args) -> None:
+    """Lista las features marcadas como `desarrollando` en el Memory Hub Postgres."""
+    proyecto = args.proyecto
+    if not args.todos and not proyecto:
+        try:
+            proyecto = project_name(paths())
+        except SystemExit:
+            proyecto = None
+    conn = conectar(crear_tablas=False)
+    with conn.cursor() as cur:
+        if proyecto and not args.todos:
+            cur.execute(
+                "SELECT id, props FROM graph_nodes "
+                "WHERE label = 'Feature' AND props->>'proyecto' = %s "
+                "AND props->>'desarrollo_estado' = 'desarrollando' ORDER BY id",
+                (proyecto,),
+            )
+        else:
+            cur.execute(
+                "SELECT id, props FROM graph_nodes "
+                "WHERE label = 'Feature' AND props->>'desarrollo_estado' = 'desarrollando' "
+                "ORDER BY id"
+            )
+        rows = cur.fetchall()
+    conn.close()
+    titulo = f"proyecto {proyecto}" if proyecto and not args.todos else "todos los proyectos"
+    print(f"== Features en desarrollo en el Hub ({titulo}) ==")
+    if not rows:
+        print("   (ninguna feature marcada como desarrollando)")
+        return
+    for nid, props in rows:
+        props = props or {}
+        proj = props.get("proyecto") or str(nid).split("/", 1)[0]
+        fid = props.get("feature_id") or str(nid).rsplit("/", 1)[-1]
+        nombre = props.get("nombre") or ""
+        quien = props.get("desarrollador") or props.get("desarrollador_id") or "(sin dueno)"
+        host = f" ({props['host']})" if props.get("host") else ""
+        rama = props.get("branch") or "-"
+        desde = props.get("desde") or "-"
+        print(f"   - [{proj}] #{fid} {nombre} · {quien}{host} · rama {rama} · desde {desde}")
+
+
 def resolver_servicios(p: dict, nodes: dict) -> dict:
     """id de nodo -> nombre de servicio, usando los repos reales del proyecto.
 
@@ -360,6 +403,10 @@ def main() -> None:
     s.add_argument("--estado", default="ok"); s.set_defaults(fn=cmd_registrar)
     s = sub.add_parser("consultar"); s.add_argument("--artefacto", required=True)
     s.set_defaults(fn=cmd_consultar)
+    s = sub.add_parser("desarrollo", help="lista features actualmente en desarrollo en el Hub")
+    s.add_argument("--proyecto", help="filtrar por nombre de proyecto")
+    s.add_argument("--todos", action="store_true", help="mostrar todos los proyectos del Hub")
+    s.set_defaults(fn=cmd_desarrollo)
     sub.add_parser("derivar-graphify").set_defaults(fn=cmd_derivar_graphify)
     args = ap.parse_args()
     try:

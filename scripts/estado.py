@@ -2,6 +2,7 @@
 """Panorama del proyecto: que hay abierto, que gate falta, que tan viejo esta el grafo."""
 from __future__ import annotations
 
+import argparse
 import sys
 import time
 from pathlib import Path
@@ -11,18 +12,55 @@ from comun import (bloqueos_feature, cubre_acs, detectar_ciclos_dependencias,
                    enmiendas_posteriores, impl_path, load_backlog, paths,
                    requiere_declarados, review_path, sello_revision, sig_fresh,
                    spec_acs, spec_estado, spec_path)
+import sync_remoto  # noqa: E402
 
 ABIERTOS = ("todo", "pending", "in_progress", "blocked", "review")
 CERRADOS = ("done", "superseded")
 
 
-def main() -> None:
+def main(argv: list[str] | None = None) -> None:
+    offline = False
+    por = None
+    if argv is not None:
+        ap = argparse.ArgumentParser(description="Panorama del proyecto y validacion remota inicial")
+        ap.add_argument("--offline", action="store_true",
+                        help="emergencia sin red: consulta solo el estado local sin validar remoto")
+        ap.add_argument("--por", help="identidad del desarrollador para distinguir features propias y ajenas")
+        a = ap.parse_args(argv)
+        offline, por = a.offline, a.por
+
     p = paths()
     data = load_backlog(p)
+
+    # Primero siempre validar contra el remoto y el espejo Memory Hub Postgres.
+    try:
+        remoto_est = sync_remoto.leer_remoto(p, data, offline=offline, por=por)
+    except sync_remoto.ErrorSyncRemoto as exc:
+        sys.exit(f"[!!] {exc}")
+    yo = remoto_est["yo"]
+    data_vista, conflictos = sync_remoto.aplicar_vista_remota(data, remoto_est)
+
     print(f"== {data.get('project','(sin nombre)')} == {p['root']}")
 
     reglas = [k for k, v in data["rules"].items() if k.startswith("require_") and v]
     print(f"   reglas activas: {', '.join(reglas) or 'ninguna'}")
+    if remoto_est["activo"]:
+        hub_tag = (
+            f", Hub Postgres {remoto_est['hub_estado']}"
+            if remoto_est["hub_estado"] != "no_configurado" else ""
+        )
+        print(f"   sync remoto: ok ({remoto_est['remoto']}/{remoto_est['base']} @ "
+              f"{remoto_est['remote_sha'][:7]}{hub_tag})")
+        if remoto_est["hub_aviso"]:
+            print(f"   [!] espejo Memory Hub Postgres: {remoto_est['hub_aviso']}")
+        if remoto_est["atras_local"]:
+            print(f"   [!] tu rama local '{remoto_est['base']}' esta atrasada "
+                  f"{remoto_est['atras_local']} commit(s) respecto a "
+                  f"{remoto_est['remoto']}/{remoto_est['base']} (corre: worktree.py sync o git pull --ff-only)")
+    elif offline:
+        print("   sync remoto: omitido (--offline; mostrando solo estado local)")
+    elif remoto_est.get("omitido_entorno"):
+        print("   sync remoto: omitido (HARNESS_SIN_SYNC_REMOTO)")
 
     if p["graph"].exists():
         edad = (time.time() - p["graph"].stat().st_mtime) / 3600
@@ -107,10 +145,10 @@ def main() -> None:
     except Exception as exc:
         print(f"   [!] no se pudo evaluar PRD/SDD: {exc}")
 
-    abiertas = [f for f in data["features"] if f.get("status") in ABIERTOS]
+    abiertas = [f for f in data_vista["features"] if f.get("status") in ABIERTOS]
     # Un estado nuevo o ausente no prueba un cierre; nunca contar por descarte.
-    cerradas = [f for f in data["features"] if f.get("status") in CERRADOS]
-    desconocidas = [f for f in data["features"]
+    cerradas = [f for f in data_vista["features"] if f.get("status") in CERRADOS]
+    desconocidas = [f for f in data_vista["features"]
                    if f.get("status") not in ABIERTOS + CERRADOS]
     resumen = f"\n   features: {len(abiertas)} abiertas, {len(cerradas)} cerradas"
     desglose = ", ".join(f"{sum(f.get('status') == s for f in cerradas)} {s}"
@@ -119,6 +157,14 @@ def main() -> None:
     if desconocidas:
         resumen += f", {len(desconocidas)} con estado desconocido"
     print(resumen + "\n")
+
+    if conflictos:
+        print("   " + "=" * 68)
+        for c in conflictos:
+            print(f"   [!!] CONFLICTO DE DESARROLLO: #{c['id']} ({c['name']}) tomada tambien por "
+                  f"{sync_remoto.formato_dueno(c['claim'])} [{c['claim'].get('fuente')}]")
+        print("        Coordina con tu equipo antes de seguir o libera el duplicado.")
+        print("   " + "=" * 68 + "\n")
 
     import hallazgo
     linea_hallazgos = hallazgo.linea_estado(data)
@@ -129,7 +175,7 @@ def main() -> None:
         print(f"   [!] #{f['id']} [{f.get('status')}] {f.get('name')}: "
               "estado desconocido; revisa status en feature_list.json")
 
-    f0_obj = next((x for x in data.get("features", []) if str(x.get("id")) == "0"), None)
+    f0_obj = next((x for x in data_vista.get("features", []) if str(x.get("id")) == "0"), None)
     if f0_obj and f0_obj.get("status") != "done":
         print("   " + "=" * 68)
         print("   [!] PRIORIDAD ARQUITECTONICA: Feature #0 requerida antes de nuevas features.")
@@ -158,12 +204,15 @@ def main() -> None:
         return
 
     for f in abiertas:
-        _fila(p, f, data)
+        _fila(p, f, data_vista, yo=yo)
 
     print("\nSiguiente paso sugerido:")
-    en_curso = [f for f in abiertas if f.get("status") == "in_progress"]
+    en_curso = [f for f in abiertas if f.get("status") == "in_progress"
+                and not sync_remoto.es_de_otro_dev(f, yo)]
+    en_curso_ajenas = [f for f in abiertas if f.get("status") == "in_progress"
+                       and sync_remoto.es_de_otro_dev(f, yo)]
     pendientes = [f for f in abiertas if f.get("status") in ("todo", "pending")]
-    listas = [f for f in pendientes if not bloqueos_feature(data, f)]
+    listas = [f for f in pendientes if not bloqueos_feature(data_vista, f)]
     if en_curso:
         print(f"   retoma la feature #{en_curso[0]['id']} (ya esta in_progress)")
     elif pendientes and producto_antes:
@@ -172,19 +221,24 @@ def main() -> None:
         fid = listas[0]["id"]
         print(f"   arranca la #{fid}: worktree.py start --feature {fid}")
     elif pendientes:
-        ciclos = detectar_ciclos_dependencias(data)
+        ciclos = detectar_ciclos_dependencias(data_vista)
         if ciclos:
             ciclo_fmt = " -> ".join(f"#{x}" for x in ciclos[0])
             print(f"   [!] CICLO DETECTADO (CLRS): {ciclo_fmt}: rompe la circularidad en feature_list.json")
         else:
             f0 = pendientes[0]
-            bloq = ", ".join(bloqueos_feature(data, f0))
+            bloq = ", ".join(bloqueos_feature(data_vista, f0))
             print(f"   la #{f0['id']} esta bloqueada por {bloq}: cierra primero su dependencia")
+    elif en_curso_ajenas:
+        otros = ", ".join(f"#{f['id']} ({sync_remoto.formato_dueno(sync_remoto.dueno_activo(f))})"
+                          for f in en_curso_ajenas[:4])
+        print(f"   todas las features en curso pertenecen a otros devs ({otros}); "
+              "crea o coordina otra feature.")
     else:
         print("   revisa las features blocked/review antes de iniciar otra.")
 
 
-def _fila(p, f, data: dict | None = None) -> None:
+def _fila(p, f, data: dict | None = None, yo: dict | None = None) -> None:
     fid = f["id"]
     sp = spec_path(p, f)
     marcas = []
@@ -224,8 +278,27 @@ def _fila(p, f, data: dict | None = None) -> None:
     except Exception:
         pass  # el panorama no se cae por esto: la linea prd/sdd ya dijo que fallo
 
+    dueno = sync_remoto.dueno_activo(f)
+    ajena = bool(dueno and yo and not sync_remoto.mismo_desarrollador(dueno, yo))
+    if dueno:
+        if ajena:
+            etiq = f"desarrollando por {sync_remoto.formato_dueno(dueno)}"
+        else:
+            host = f" · {dueno['host']}" if dueno.get("host") else ""
+            etiq = f"desarrollando (tu{host})"
+        if f.get("_remoto_actualizado") or f.get("_solo_remoto"):
+            etiq += f" [{dueno.get('fuente', 'remoto')}]"
+        if f.get("_sin_publicar_remoto"):
+            etiq += " [SIN publicar en remoto]"
+        marcas.append(etiq)
+    elif f.get("_sin_publicar_remoto"):
+        marcas.append("desarrollando [SIN publicar en remoto]")
+
     wt = f.get("worktree")
-    marcas.append(f"wt {Path(wt).name}" if wt else "SIN worktree")
+    if ajena:
+        marcas.append(f"rama {f.get('branch') or '-'}")
+    else:
+        marcas.append(f"wt {Path(wt).name}" if wt else "SIN worktree")
     if data is not None and requiere_declarados(f):
         bloq = bloqueos_feature(data, f)
         marcas.append(f"bloqueada por {', '.join(bloq)}" if bloq else "dependencias ok")
@@ -234,4 +307,4 @@ def _fila(p, f, data: dict | None = None) -> None:
 
 
 if __name__ == "__main__":
-    main()
+    main(sys.argv[1:])

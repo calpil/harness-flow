@@ -168,6 +168,9 @@ DEFAULT_RULES = {
     # sellar una feature (kind=feature). `true` es el valor que escribian los
     # backlogs viejos, cuando la regla no hacia nada: exige solo el PRD.
     "require_docs_al_dia": ["prd", "sdd"],
+    # Sincronizacion multi-dev del estado `desarrollando` en `origin/<rama_base>`
+    # y espejo en Memory Hub Postgres. `"auto"` se activa sola si hay remoto `origin`.
+    "require_sync_remoto": "auto",
     "rutas_protegidas": ["docs/prd/**", "docs/sdd.md", "docs/constitution.md", ".env"],
 }
 

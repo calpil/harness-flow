@@ -42,7 +42,8 @@ Las lecciones aprendidas son memoria del usuario, no del agente donde se descubr
 - Extrae resúmenes contextuales compactos por feature combinando el backlog, objetivos del PRD, decisiones del SDD y dependencias cruzadas.
 
 ### 5. Memory Hub Postgres & Visualización en Obsidian
-- **Memory Hub (`hub.py`)**: Grafo relacional multi-repo compartido entre máquinas (`graph_nodes`, `graph_edges`) sobre PostgreSQL con `psycopg`. Responde a consultas de impacto transversal antes de diseñar specs. Los servicios salen de los repos reales del proyecto (cada raíz de `harness/grafos.json`), con cualquier nombre; `derivar-graphify` retira las dependencias que ya no están en el grafo; leer no exige permiso de DDL, y `HARNESS_SIN_HUB=1` impide toda conexión.
+- **Memory Hub (`hub.py`)**: Grafo relacional multi-repo compartido entre máquinas (`graph_nodes`, `graph_edges`) sobre PostgreSQL con `psycopg`. Responde a consultas de impacto transversal antes de diseñar specs, y espeja las features actualmente en desarrollo local (`hub.py desarrollo`). Los servicios salen de los repos reales del proyecto (cada raíz de `harness/grafos.json`), con cualquier nombre; `derivar-graphify` retira las dependencias que ya no están en el grafo; leer no exige permiso de DDL, y `HARNESS_SIN_HUB=1` impide toda conexión.
+- **Sincronización Multi-Desarrollador (`sync_remoto.py`, `worktree.py`)**: Activa automáticamente cuando el repo tiene remoto `origin` (`rules.require_sync_remoto: "auto"`). Antes de consultar estado (`estado.py`), aprobar specs (`approve-spec`), iniciar trabajo (`worktree.py start`) o correr `gate.py check`, valida primero `origin/<rama_base>` y el espejo en Memory Hub Postgres para bloquear colisiones entre desarrolladores (con `--offline` solo para emergencias). Al iniciar en local, publica atómicamente (OCC con reintento) `status: "in_progress"` + metadatos `desarrollo` (`desarrollando`, dueño, host, rama) en `origin/<rama_base>` sin ensuciar el árbol local, y ofrece `worktree.py sync` y `worktree.py liberar` ([`references/sync-remoto.md`](references/sync-remoto.md)).
 - **Vault Obsidian (`vault.py`)**: Genera un cuadro de mando de notas interconectadas en `docs/vault/` para visualizar el backlog vivo, el estado de cada feature, specs y decisiones de arquitectura (con grafo estructural opt-in mediante `--con-grafo`).
 
 ### 6. Sincronización Remota con Atlassian (`atlassian.py`)
@@ -311,7 +312,8 @@ harness-flow/
 │   ├── hallazgo.py                   <- Hallazgos del código: a una feature abierta o al proyecto, no a una ficha
 │   ├── producto.py                   <- Rol 0: borradores y aprobación de PRD/SDD
 │   ├── documentacion.py              <- Sincronización de bloques generados en PRD/SDD
-│   ├── worktree.py, multirepo.py     <- Aislamiento de ramas y verificación multi-repo
+│   ├── worktree.py, multirepo.py     <- Aislamiento de ramas, sync multi-dev y verificación multi-repo
+│   ├── sync_remoto.py                <- Coordinación multi-dev: validaciones remotas, commit/push OCC y espejo Hub
 │   ├── revision.py                   <- Generación del paquete de briefing para el revisor
 │   ├── postmerge_medido.py           <- Runner post-merge medido para Go (JSON/-exec)
 │   ├── postmerge_exec.py             <- Instrumentación de ejecución Go
@@ -354,7 +356,7 @@ harness-flow/
 ├── references/                       <- Documentación especializada por host y subsistema
 │   ├── hosts.md, modelos.md, vertical-slice.md, contexto.md, lecciones-del-arnes.md
 │   ├── multirepo.md, claude.md, openai.md, grok.md, grok-sesion-stacks.md, kimi.md, entorno.md
-│   ├── hub.md, obsidian.md, atlassian.md, documentacion.md
+│   ├── hub.md, sync-remoto.md, obsidian.md, atlassian.md, documentacion.md
 │   ├── arquitectura-heredada.md      <- Trinquete: base, cuota de normalización y código anterior al arnés
 │   ├── hallazgos.md                  <- Enmienda antes que ficha: hallazgo.py y cuándo add.py crea una ficha
 │   ├── normalizacion-de-stacks.md    <- Qué repos se normalizan, alcance de las reglas y copias viejas
@@ -382,7 +384,7 @@ El arnés se valida con una suite `unittest` en `tests/`. Lo que cubre, por arch
 - Flujo de documentos y rutas protegidas: `test_prd_sdd_flujo.py`, `test_producto.py`, `test_documentacion.py`.
 - Runners post-merge medidos: `test_measured_runner_go.py`, `test_terraform_runner.py`, `test_frontend_runner.py`, `test_postmerge.py`.
 - Hosts: `test_entorno.py`, `test_leccion_multihost.py`, `test_plugin_claude.py`, `test_indice_hermes.py`, `test_modelo.py`, `test_grok_sesion.py`.
-- Contexto, hub y procesos: `test_contexto.py`, `test_brief_stacks.py`, `test_hub.py`, `test_cbm_procesos.py`.
+- Contexto, hub, sync multi-dev y procesos: `test_contexto.py`, `test_brief_stacks.py`, `test_hub.py`, `test_sync_remoto.py`, `test_cbm_procesos.py`.
 - Stacks y arquitectura: `test_stack.py`, `test_stack_adopcion.py`, `test_stack_normalizar.py`, `test_arquitectura.py`.
 
 ```bash

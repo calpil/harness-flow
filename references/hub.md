@@ -10,7 +10,10 @@ $PY "$H/hub.py" descubrir [--aplicar]                   # repos git bajo la raí
 $PY "$H/hub.py" impacto --microservicio <proy>/<svc>    # quién se rompe si toco esto
 $PY "$H/hub.py" vincular --consumer <a> --target <b>
 $PY "$H/hub.py" derivar-graphify                        # graphify-out/graph.json -> hub
+$PY "$H/hub.py" desarrollo [--proyecto <p> | --todos]   # features en desarrollo activo (espejo multi-dev)
 ```
+
+Cuando el proyecto usa sincronizacion multi-dev (`references/sync-remoto.md`), `worktree.py start`, `liberar` y `gate.py close` reflejan automaticamente cada feature activa en `graph_nodes` (`label='Feature'` y `'Desarrollador'`) y `graph_edges` (`type='DESARROLLANDO'`). `hub.py desarrollo` y las validaciones remotas leen esa vista sin ejecutar DDL.
 
 Esquema real del hub (verificado contra la base en producción): las dependencias
 entre microservicios son aristas de tipo **`DEPENDE_DE`**, y los commits son
