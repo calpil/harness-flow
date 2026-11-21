@@ -496,8 +496,16 @@ Cuando la tarea corre sobre Gemini 4 en AGY / Antigravity o en Hermes, el modelo
   lectura (carece de `run_command` y `write_file`/`write_to_file`), asi que no puede ejecutar
   los comandos de verificacion de los AC ni escribir `docs/review-<id>.md`.
   Alternativa: registrar un subagente para la conversacion con
-  `define_subagent(Name="revisor", EnableWriteTools=True, ...)` usando el
-  cuerpo de `agents/revisor.md` y lanzarlo con `invoke_subagent`.
+  `define_subagent(Name="revisor", EnableWriteTools=True, EnableMCPTools=True, ...)`
+  usando el cuerpo de `agents/revisor.md` y lanzarlo con `invoke_subagent` (sin
+  `EnableMCPTools=True` pierde `codebase-memory-mcp`, `graphify-mcp` y `context7`).
+- **MCP de grafos en AGY (`codebase-memory-mcp` + `graphify-mcp`)**: registra ambos
+  servidores en la configuracion MCP de AGY/Gemini (`codebase-memory-mcp` para simbolos,
+  `trace_path`, `get_code_snippet` y `check_index_coverage`; `graphify-mcp` para
+  `query_graph`, `get_neighbors`, `god_nodes` y `shortest_path`). Cuando un subagente
+  no herede herramientas MCP (o si el daemon cbm tiene el enlace cortado), ejecuta las
+  consultas y `check_index_coverage` en la sesion padre y pasa ese paquete de evidencia
+  en el `Prompt` del subagente, o usa la CLI con `< /dev/null` y `graphify --graph <ruta>`.
 - **Implementer (`--pair` vs `--delegado`)**: el modo por defecto es `--pair`
   en la sesion principal (ciclo tras ciclo sin pausar; `ask_question` solo ante
   decisiones reales). Si se pide `--delegado`, lanza `invoke_subagent` con

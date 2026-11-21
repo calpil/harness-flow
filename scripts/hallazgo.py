@@ -168,6 +168,8 @@ def cmd_anotar(args) -> None:
     save_backlog(p, data)
     donde = f"la #{f['id']} '{f.get('name')}'" if f else "el proyecto (sin feature)"
     bitacora(p, f"hallazgo {h['id']} anotado en {donde}: {texto}")
+    import vault
+    vault.sincronizar_rapido(p)
     print(f"[ok] {h['id']} anotado en {donde}")
     if f:
         print("[i]  se resuelve dentro de esa feature: como AC si el spec no esta sellado, como\n"
@@ -207,6 +209,8 @@ def cmd_mover(args) -> None:
     save_backlog(p, data)
     donde = f"la #{f['id']}" if f else "el proyecto (sin feature)"
     bitacora(p, f"hallazgo {h['id']} movido a {donde}")
+    import vault
+    vault.sincronizar_rapido(p)
     print(f"[ok] {h['id']} ahora esta en {donde}")
 
 
@@ -219,6 +223,8 @@ def cmd_resolver(args) -> None:
     h.update(estado=RESUELTO, como=_una_linea(args.como, "--como"), resuelto_at=now_iso())
     save_backlog(p, data)
     bitacora(p, f"hallazgo {h['id']} resuelto: {h['como']}")
+    import vault
+    vault.sincronizar_rapido(p)
     print(f"[ok] {h['id']} resuelto: {h['como']}")
 
 

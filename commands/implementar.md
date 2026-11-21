@@ -134,6 +134,7 @@ worktree y la salida ENTERA del paso 3:
   indice de sus skills y las normas, cada uno con el comando que imprime su contenido
   (`stack.py skill ...`, `normas.py --ref ...`), con rutas absolutas. No anexes skills
   ni referencias a mano: el subagente las lee con esos comandos.
+- **Evidencia de grafo para subagentes sin MCP.** Si lanzas un subagente en un host donde el hijo no hereda `codebase-memory-mcp` ni `graphify-mcp`, consulta antes en el padre (`search_graph`, `trace_path`, `check_index_coverage`) y pasa en el prompt el proyecto, cobertura, simbolos y rangos omitidos para que el hijo lea exactamente esos archivos.
 - **Pasa `effort`, nunca `model`.** El `effort` de la invocacion le gana al del
   frontmatter, que queda en `xhigh` como red si lo olvidas. Un `model` pisaria
   el Sonnet 5.5 del frontmatter.
@@ -151,6 +152,11 @@ Es el modo de toda feature cuyo modo registrado es `pair`:
 0. **Lee el brief del paso 3 antes de escribir:** las reglas del stack y el
    bloque `NORMAS DE INGENIERIA` mandan sobre tu costumbre. Por cada AC marcado
    `[negativo]`, el test de rechazo va en la lista antes que el camino feliz.
+   Antes de abrir archivos a ciegas, orientate con `codebase-memory-mcp`
+   (`search_graph`, `trace_path`, `get_code_snippet`, `check_index_coverage`) y
+   `graphify-mcp` (`query_graph`, `get_neighbors`, `shortest_path` o CLI
+   `graphify affected|path --graph <ruta>`), confirmando siempre el archivo real
+   dentro del worktree.
 1. **Revisa el plan y escribe la lista de tests (solo nombres):**
    - Contrasta el `## Plan vertical` contra el codigo del worktree. Si algo ya no
      encaja y cambia un AC, es la parada (1). Si no hay plan, escribe uno de ≤5

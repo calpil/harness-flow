@@ -65,9 +65,9 @@ Por que no va fijo en el frontmatter y que hacen los demas roles:
 eval "$(python3 "${CLAUDE_PLUGIN_ROOT}/scripts/entorno.py" --shell)" && "$PY" "$H/contexto.py" brief --feature $ARGUMENTS[0]
 ```
 
-Para consultas puntuales de estructura (quien llama a X, impacto de un cambio) usa
-el MCP `codebase-memory-mcp` (`search_graph`, `trace_path`, `detect_changes`) antes de
-leer archivos a ciegas.
+Para consultas puntuales de estructura antes de leer archivos a ciegas:
+- **Simbolos, llamadas y cobertura exacta**: usa `codebase-memory-mcp` (`search_graph`, `trace_path`, `get_code_snippet`, `check_index_coverage`, nivel `Verify` por defecto; `Auditor` ante afirmaciones exhaustivas).
+- **Arquitectura, comunidades e impacto**: usa `graphify-mcp` (`query_graph`, `get_neighbors`, `god_nodes`, `shortest_path`) o la CLI con la ruta `--graph` que imprime el brief (`graphify query|affected|path|explain --graph <ruta>`). Si el brief avisa `multi-repo sin harness/grafos.json` o `grafo con problemas`, corre antes `contexto.py init-grafos` y `contexto.py refrescar`.
 
 Al final trae el **texto completo de las reglas de cada stack** que toca la
 feature (front y backend, cada repo con las suyas) y el **indice de las skills**
@@ -96,8 +96,7 @@ contexto esta vencido, refresca antes de disenar:
 eval "$(python3 "${CLAUDE_PLUGIN_ROOT}/scripts/entorno.py" --shell)" && "$PY" "$H/contexto.py" refrescar
 ```
 
-Para una pregunta puntual que el brief no cubre,
-`graphify query "<pregunta>" --graph <combinado>`.
+Para una pregunta puntual que el brief no cubre, consulta `graphify-mcp` (`query_graph`, `get_neighbors`, `shortest_path`) o la CLI `graphify query|affected|path "<pregunta>" --graph <ruta>` (la ruta exacta sale en el brief). Abre tambien las notas propias de Obsidian (`tuya` en `docs/vault/notas/`) que aparezcan en `documentos relacionados`.
 
 Despues, los dos que el brief no reemplaza:
 

@@ -94,7 +94,9 @@ eval "$(python3 "${CLAUDE_PLUGIN_ROOT}/scripts/entorno.py" --shell)" && "$PY" "$
 eval "$(python3 "${CLAUDE_PLUGIN_ROOT}/scripts/entorno.py" --shell)" && "$PY" "$H/leccion.py" list
 ```
 
-Para una pregunta puntual sobre el codigo, `graphify query "<pregunta>" --graph <combinado>`.
+Para explorar la arquitectura existente del codigo antes de fijar decisiones `D-n`:
+- **Simbolos y call-graph exacto**: usa `codebase-memory-mcp` (`get_architecture`, `search_graph`, `trace_path`, `check_index_coverage`).
+- **Comunidades, hubs e impacto**: usa `graphify-mcp` (`god_nodes`, `query_graph`, `get_community`, recurso `graphify://report`) o CLI (`graphify god-nodes`, `graphify query "<pregunta>"`, `graphify affected "<nodo>"` con `--graph <combinado>`). Si `contexto.py estado` avisa que falta `harness/grafos.json` en un multi-repo, corre antes `contexto.py init-grafos` y `contexto.py refrescar`.
 
 **La norma de los stacks del proyecto.** El comando del borrador (paso 2)
 imprime los stacks de TODOS los repos del proyecto: para el SDD, con sus

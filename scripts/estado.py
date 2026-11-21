@@ -44,6 +44,13 @@ def main() -> None:
         if not est["fresco"]:
             print(f"   [!] contexto vencido ({', '.join(est['vencidas'])}): "
                   "corre contexto.py refrescar")
+        if est.get("subrepos_sin_grafos"):
+            muestra = ", ".join(est["subrepos_sin_grafos"][:6])
+            extra = f" (+{len(est['subrepos_sin_grafos']) - 6})" if len(est["subrepos_sin_grafos"]) > 6 else ""
+            print(f"   [!] multi-repo sin harness/grafos.json ({muestra}{extra}): "
+                  "corre contexto.py init-grafos")
+        for aviso in est.get("grafo_avisos") or []:
+            print(f"   [!] grafo con problemas: {aviso}")
         for linea in contexto.lineas_cbm_pendiente(est["cbm_pendientes"],
                                                    est.get("cbm_daemon_sin_socket")):
             print("  " + linea)

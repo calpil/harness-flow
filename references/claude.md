@@ -96,6 +96,26 @@ del proyecto: por eso el brief da comandos y no solo rutas. La ruta que muestra
 (`~/.hermes/...`) es la real de la instalación; `~/.claude/skills/harness-flow`
 es un enlace a esos mismos archivos.
 
+## MCP de grafos: `codebase-memory-mcp` y `graphify-mcp`
+
+En Claude Code ambos servidores MCP se registran en `~/.claude.json` bajo `mcpServers`:
+
+- **`codebase-memory-mcp`** (`search_graph`, `trace_path`, `get_code_snippet`,
+  `check_index_coverage`, `get_architecture`): consulta exacta de simbolos, llamadas
+  y cobertura. Usa nivel `Verify` por defecto (`Auditor` para afirmaciones exhaustivas)
+  y valida los archivos candidatos con `check_index_coverage`.
+- **`graphify-mcp`** (`query_graph`, `get_node`, `get_neighbors`, `get_community`,
+  `god_nodes`, `shortest_path`, recursos `graphify://report`, `graphify://god-nodes`):
+  arquitectura, comunidades e impacto sobre el grafo generado/combinado por `contexto.py`.
+  Registra `"graphify": {"command": "<ruta-a>/graphify-mcp", "args": []}`.
+
+`agents/revisor.md` habilita `mcp__codebase-memory-mcp__*` y `mcp__graphify__*` en su
+frontmatter `tools:`. `agents/implementer.md` omite `tools:` a proposito para heredar
+los de la sesion. En entornos donde un subagente no herede MCP (p. ej. `claude -p`
+sin servidor conectado), el padre pasa la evidencia de grafo/cobertura en el prompt y
+el subagente puede caer a la CLI con stdin cerrado (`codebase-memory-mcp cli --quiet ... < /dev/null`
+o `graphify query|affected|path --graph <ruta>`).
+
 ## `$PY` y `$H` no sobreviven entre llamadas Bash
 
 Esta es la diferencia operativa real con Hermes. En Claude Code **cada llamada a

@@ -6,9 +6,18 @@ El vault es **`docs/`**, versionado con el proyecto; las notas generadas viven e
 `docs/vault/`. Son archivos `.md` con wikilinks; Obsidian solo los lee. No hay
 servidor ni base de datos: Obsidian NO se conecta a Postgres.
 
-Es un panel para ti, no una entrada del flujo: ningún rol (leader, implementer,
-revisor) lo lee. El índice del agente es `contexto.py brief`, que sale del grafo
-y del hub.
+Las notas generadas en `docs/vault/` (features, servicios, lecciones, índice) son
+un panel visual para ti, no una entrada de evidencia: ningún rol confía en ellas
+en vez del código o del backlog. En cambio, **tus notas manuales en
+`docs/vault/notas/`** (cuando enlazan `[[Feature-<id>]]` o nombran un servicio) y
+los documentos de decisión en `docs/` (`decision*`, `adr*`, `enmienda*`, `acta*`,
+`errata*`) **sí los rescata `contexto.py brief`** en su sección `documentos
+relacionados` para que Leader e Implementer los abran antes de diseñar.
+
+**Sincronización automática:** además de `worktree.py start` y `gate.py close`,
+los gates rápidos (`add.py`, `gate.py approve-spec`, `sellar-tests`, `enmienda`,
+`revision`, `verify`, `producto.py aprobar` y `hallazgo.py`) regeneran el vault
+en silencio cuando `docs/vault/` ya existe (salvo con `HARNESS_SIN_CONTEXTO=1`).
 
 ¿Por qué `docs/` y no `docs/vault/`? Obsidian no abre archivos fuera de la
 carpeta del vault, y spec, evidencia y review viven en `docs/`: con el vault en
@@ -55,15 +64,16 @@ binarios de terceros a tu repo.
 ## Qué genera `vault.py build`
 
 ```
-docs/                        <- raiz del vault (spec, impl, review, prd/, sdd.md)
+docs/                        <- raiz del vault (spec, tests, impl, review, verify, prd/, sdd.md)
   .obsidian/                 <- config sembrada
   vault/
-    Indice.md                <- panorama: features abiertas, servicios, lecciones
-    features/Feature-<id>.md <- AC como checklist, enlaces a spec/evidencia/review
+    Indice.md                <- panorama: PRD/SDD, features abiertas, hallazgos abiertos, servicios, lecciones
+    features/Feature-<id>.md <- AC como checklist, enlaces a spec/tests/evidencia/review/verify/PRD/SDD y hallazgos
     lecciones/<clase>.md     <- lección + en qué features se usó
     servicios/<nombre>.md    <- microservicio + features que lo tocan
-    grafo/<nodo>.md          <- solo con --con-grafo
-    notas/                   <- TUYAS. El script nunca las toca.
+    grafo/<nodo>.md          <- solo con --con-grafo (notas planas por nodo)
+    grafo-obsidian/          <- solo con --con-grafo-obsidian (`graphify export obsidian`: notas + .canvas)
+    notas/                   <- TUYAS. El script nunca las toca y el brief las rescata si nombran la feature o servicio.
 ```
 
 En la nota de feature, una casilla marcada indica que la evidencia declara el
@@ -87,12 +97,12 @@ el aviso no se toca. Si una nota manual ocupa una ruta generada, `build` falla
 y te pide moverla a `vault/notas/`. Escribe tus notas ahi y enlaza a
 `[[Feature-3]]` desde ahí.
 
-## `--con-grafo`
+## `--con-grafo` y `--con-grafo-obsidian`
 
-Genera una nota por nodo de `graphify-out/graph.json` (tope 2000). Da un mapa
-navegable del código, pero infla el vault: úsalo cuando quieras explorar
-arquitectura, no en cada build. Dos nodos con el mismo nombre reciben archivos
-distintos; los enlaces se limitan a los nodos incluidos en ese tope.
+- `--con-grafo`: genera una nota plana por nodo de `graphify-out/graph.json` en `docs/vault/grafo/` (tope 2000). Dos nodos con el mismo nombre reciben archivos distintos; los enlaces se limitan a los nodos incluidos en ese tope.
+- `--con-grafo-obsidian`: delega a `graphify export obsidian --graph <grafo> --dir docs/vault/grafo-obsidian/` para exportar notas agrupadas por comunidad más el mapa `.canvas` nativo de Obsidian (requiere `graphify` en el PATH y un grafo generado).
+
+Ambos inflan el vault: úsalos cuando quieras explorar arquitectura, no en cada build automático (la config sembrada de `graph.json` excluye `-path:vault/grafo -path:vault/grafo-obsidian` del grafo principal).
 
 ## Relación con Postgres
 

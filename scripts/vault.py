@@ -8,7 +8,7 @@ fuera de la carpeta del vault). Las notas generadas viven en docs/vault/.
 Idempotente: reescribe solo lo generado y borra lo generado que ya no
 corresponde. Los archivos que escribas a mano (sin el aviso) no se tocan.
 
-  vault.py build [--con-grafo] [--sin-config]
+  vault.py build [--con-grafo] [--con-grafo-obsidian] [--sin-config]
 """
 from __future__ import annotations
 
@@ -17,14 +17,17 @@ import hashlib
 import json
 import os
 import re
+import shutil
+import subprocess
 import sys
 from collections import Counter
 from pathlib import Path  # noqa: F401  (lo usa la carga de lecciones)
 
 sys.path.insert(0, str(Path(__file__).parent))
-from comun import (cubre_acs, impl_path, load_backlog, micros_declarados,  # noqa: E402
-                   now_iso, paths, raices_grafo, review_path, sello_revision,
-                   slugify, spec_acs, spec_estado, spec_path)
+from comun import (_es_clon, cubre_acs, impl_path, load_backlog,  # noqa: E402
+                   micros_declarados, now_iso, paths, raices_grafo,
+                   review_path, sello_revision, slugify, spec_acs,
+                   spec_estado, spec_path, tests_path)
 
 AVISO = "<!-- generado por harness-flow vault.py — no editar a mano -->"
 ABIERTOS = ("todo", "pending", "in_progress", "blocked", "review")
@@ -70,7 +73,8 @@ def repos_de_las_raices(p: dict) -> dict[str, list[str]]:
             continue
         vistas.add(raiz)
         for d in sorted(raiz.iterdir()):
-            if d.is_dir() and (d / ".git").exists() and d.name not in ("docs", "harness"):
+            if (d.is_dir() and not d.name.startswith(".") and not d.name.endswith("-wt")
+                    and d.name not in ("docs", "harness", "node_modules") and _es_clon(d)):
                 try:
                     donde = d.relative_to(p["root"]).as_posix()
                 except ValueError:
@@ -143,7 +147,7 @@ SEMILLA_OBSIDIAN: dict[str, dict | list] = {
     # carpeta vault/grafo/ fuera para que no ahogue el dibujo.
     "graph.json": {
         "collapse-filter": False,
-        "search": "-path:vault/grafo",
+        "search": "-path:vault/grafo -path:vault/grafo-obsidian",
         "showTags": False,
         "showAttachments": False,
         "hideUnresolved": True,
@@ -213,26 +217,38 @@ def sembrar_obsidian(v) -> tuple[int, bool]:
     return nuevos, primera
 
 
-def main() -> None:
-    ap = argparse.ArgumentParser()
-    # 'build' es el unico modo; se acepta como palabra opcional para que
-    # `vault.py build` y `vault.py` sean equivalentes.
-    ap.add_argument("cmd", nargs="?", default="build", choices=["build"])
-    ap.add_argument("--con-grafo", action="store_true", dest="con_grafo")
-    ap.add_argument("--sin-config", action="store_true", dest="sin_config",
-                    help="no sembrar docs/.obsidian (config de Obsidian)")
-    a = ap.parse_args()
-    p = paths(); data = load_backlog(p)
+def _exportar_grafo_obsidian(p: dict, v: Path) -> Path:
+    """Delega el grafo visual a `graphify export obsidian` (notas por comunidad + .canvas)."""
+    if not p["graph"].exists():
+        raise SystemExit(f"[!!] no existe {p['graph']}: corre contexto.py refrescar antes de --con-grafo-obsidian.")
+    if not shutil.which("graphify"):
+        raise SystemExit("[!!] graphify no esta en el PATH: no se puede ejecutar `graphify export obsidian`.")
+    destino = v / "grafo-obsidian"
+    destino.mkdir(parents=True, exist_ok=True)
+    r = subprocess.run(
+        ["graphify", "export", "obsidian", "--graph", str(p["graph"]), "--dir", str(destino)],
+        cwd=str(p["root"]), stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=600)
+    if r.returncode != 0:
+        salida = (r.stdout + r.stderr).strip()[-400:]
+        raise SystemExit(f"[!!] graphify export obsidian fallo (exit {r.returncode}): {salida}")
+    return destino
+
+
+def construir(p: dict, *, con_grafo: bool = False, con_grafo_obsidian: bool = False,
+              sin_config: bool = False, silencioso: bool = False) -> dict:
+    """Regenera las notas del vault Obsidian en `docs/vault/`."""
+    data = load_backlog(p)
     v = p["vault"]
     for d in ("features", "lecciones", "servicios", "notas"):
         (v / d).mkdir(parents=True, exist_ok=True)
 
     cfg_nuevos, cfg_primera = (0, False)
-    if not a.sin_config:
+    if not sin_config:
         cfg_nuevos, cfg_primera = sembrar_obsidian(p["docs"])
 
     proyecto = data.get("project", p["root"].name)
     escritas: set[Path] = set()
+    docs_res = p["docs"].resolve()
 
     def escribir(destino: Path, lineas: list[str]) -> None:
         if not destino.resolve().is_relative_to(v.resolve()) or destino.is_symlink():
@@ -244,6 +260,15 @@ def main() -> None:
         destino.write_text("\n".join(lineas) + "\n", encoding="utf-8")
         escritas.add(destino.resolve())
 
+    def enlace_doc(path: Path) -> str | None:
+        if not path.is_file():
+            return None
+        try:
+            rel = path.resolve().relative_to(docs_res).with_suffix("").as_posix()
+        except ValueError:
+            return None
+        return enlace(rel)
+
     def feature(fid) -> str:
         return enlace(f"vault/features/Feature-{fid}")
 
@@ -253,6 +278,10 @@ def main() -> None:
         clase = f.get("leccion")
         return str(clase) if clase and clase != "ninguna" else None
 
+    todos_hallazgos = [h for h in (data.get("hallazgos") or []) if isinstance(h, dict)]
+    prd_master = p["docs"] / "prd" / "PRD-master.md"
+    sdd_doc = p["docs"] / "sdd.md"
+
     # --- una nota por feature ---
     for f in data["features"]:
         fid = f["id"]
@@ -261,13 +290,16 @@ def main() -> None:
         if sp.exists():
             t = sp.read_text(encoding="utf-8")
             acs, estado = spec_acs(t), spec_estado(t)
+        tp = tests_path(p, f)
         ip, rp = impl_path(p, f), review_path(p, f)
+        vp = p["docs"] / f"verify-{fid}.md"
         sello = sello_revision(rp.read_text(encoding="utf-8")) if rp.exists() else None
         faltan: list[str] = []
         if ip.exists():
             _, faltan = cubre_acs(ip.read_text(encoding="utf-8"), acs)
 
         micros = micros_declarados(f)
+        modo = f.get("modo")
         cuerpo = [
             "---",
             f"tipo: feature",
@@ -275,11 +307,13 @@ def main() -> None:
             f"estado: {f.get('status')}",
             f"spec: {estado}",
             f"kind: {f.get('kind','feature')}",
+            *(["modo: " + str(modo)] if modo else []),
             "tags: [harness, feature]",
             "---",
             AVISO, "",
             f"# Feature #{fid} — {esc(f.get('name',''))}", "",
             f"Estado: **{f.get('status')}** · spec **{estado}**"
+            + (f" · modo **{modo}**" if modo else "")
             + (f" · review **{sello}**" if sello else ""), "",
             "## Criterios de aceptacion", "",
             "_Marcado = evidencia con cita archivo:linea; no equivale a verify ni review._", "",
@@ -291,10 +325,26 @@ def main() -> None:
         else:
             cuerpo.append("_El spec no declara AC._")
         cuerpo += ["", "## Documentos", ""]
-        for etiqueta, path in (("Spec", sp), ("Evidencia", ip), ("Review", rp)):
-            if path.exists():
-                rel = path.relative_to(p["docs"]).with_suffix("").as_posix()
-                cuerpo.append(f"- {etiqueta}: {enlace(rel)}")
+        prd_feat = (p["root"] / str(f["prd"])) if f.get("prd") else prd_master
+        for etiqueta, path in (
+            ("Spec", sp),
+            ("Tests (pair)", tp),
+            ("Evidencia", ip),
+            ("Review", rp),
+            ("Verify", vp),
+            ("PRD", prd_feat),
+            ("SDD", sdd_doc),
+        ):
+            lnk = enlace_doc(path)
+            if lnk:
+                cuerpo.append(f"- {etiqueta}: {lnk}")
+        hs = [h for h in todos_hallazgos if str(h.get("feature")) == str(fid)]
+        if hs:
+            cuerpo += ["", "## Hallazgos", ""]
+            for h in hs:
+                resuelto = h.get("estado") == "resuelto"
+                cola = f" — _{esc(h.get('como', ''))}_" if resuelto and h.get("como") else ""
+                cuerpo.append(f"- [{'x' if resuelto else ' '}] **{esc(h.get('id', ''))}**: {esc(h.get('texto', ''))}{cola}")
         if micros:
             cuerpo += ["", "## Microservicios", ""]
             cuerpo += [f"- {enlace('vault/servicios/' + nota(m))}" for m in micros]
@@ -357,8 +407,8 @@ def main() -> None:
         ])
 
     # --- nodos del grafo (opt-in: genera muchos archivos) ---
-    con_grafo = a.con_grafo and p["graph"].exists()
-    if con_grafo:
+    con_grafo_ok = con_grafo and p["graph"].exists()
+    if con_grafo_ok:
         g = json.loads(p["graph"].read_text(encoding="utf-8"))
         gd = v / "grafo"; gd.mkdir(exist_ok=True)
         nodes = g.get("nodes", [])[:2000]
@@ -397,35 +447,53 @@ def main() -> None:
                 *(links or ["_sin aristas_"]),
             ])
 
+    grafo_obsidian_dir = _exportar_grafo_obsidian(p, v) if con_grafo_obsidian else None
+
     # --- indice ---
     abiertas = [f for f in data["features"] if f.get("status") in ABIERTOS]
     desconocidas = [f for f in data["features"]
                    if f.get("status") not in ABIERTOS + CERRADOS]
+    hallazgos_abiertos = [h for h in todos_hallazgos if h.get("estado") == "abierto"]
     conteo = f"{len(data['features'])} ({len(abiertas)} abiertas"
     if desconocidas:
         conteo += f", {len(desconocidas)} con estado desconocido"
     conteo += ")"
-    escribir(v / "Indice.md", [
+    docs_raiz = []
+    for etiqueta, path in (("PRD maestro", prd_master), ("SDD", sdd_doc)):
+        lnk = enlace_doc(path)
+        if lnk:
+            docs_raiz.append(f"- {etiqueta}: {lnk}")
+    lineas_indice = [
         "---", "tipo: indice", "tags: [harness]", "---", AVISO, "",
         f"# {esc(proyecto)}", "", f"Actualizado: {now_iso()}", "",
         f"- Features: {conteo}",
         f"- Microservicios: {len(servicios)}",
         f"- Lecciones aplicadas: {len(clases)}",
+        f"- Hallazgos abiertos: {len(hallazgos_abiertos)}",
+        *(["", "## Producto y arquitectura", "", *docs_raiz] if docs_raiz else []),
         "", "## Abiertas", "",
         *([f"- {feature(f['id'])} — {esc(f.get('name',''))} ({f.get('status')})"
            for f in abiertas] or ["_nada abierto_"]),
         *(["", "## Estados desconocidos", "",
            *[f"- {feature(f['id'])} — {esc(f.get('name',''))} ({f.get('status')})"
              for f in desconocidas]] if desconocidas else []),
+    ]
+    if hallazgos_abiertos:
+        lineas_indice += ["", "## Hallazgos abiertos", ""]
+        for h in hallazgos_abiertos:
+            donde = feature(h["feature"]) if h.get("feature") is not None else "proyecto"
+            lineas_indice.append(f"- **{esc(h.get('id', ''))}** ({donde}): {esc(h.get('texto', ''))}")
+    lineas_indice += [
         "", "## Microservicios", "",
         *[f"- {enlace('vault/servicios/' + clave)}" for clave in sorted(servicios)],
-    ])
+    ]
+    escribir(v / "Indice.md", lineas_indice)
 
     # --- lo generado que ya no corresponde (feature borrada, servicio que
     # cambio de nombre): quedaba para siempre, sin nada que lo enlace. Solo se
     # borra lo que lleva el aviso; grafo/ solo cuando esta corrida lo reescribio.
     borradas = 0
-    for d in ["features", "lecciones", "servicios"] + (["grafo"] if con_grafo else []):
+    for d in ["features", "lecciones", "servicios"] + (["grafo"] if con_grafo_ok else []):
         for viejo in (v / d).glob("*.md"):
             if (not viejo.is_symlink() and viejo.resolve() not in escritas
                     and AVISO in viejo.read_text(
@@ -433,18 +501,53 @@ def main() -> None:
                 viejo.unlink()
                 borradas += 1
 
-    print(f"[ok] vault regenerado: {len(escritas)} notas en {v}"
-          + (f" ({borradas} obsoletas borradas)" if borradas else ""))
-    if cfg_nuevos:
-        print(f"[ok] config de Obsidian sembrada ({cfg_nuevos} archivos en docs/.obsidian/)")
-        if cfg_primera:
-            print("[i]  tema oscuro, grafo coloreado por carpeta y wikilinks cortos.")
-            print("[i]  Dataview es opcional: instalalo y habilitalo en Obsidian ->")
-            print("     Settings > Community plugins > Browse > Dataview.")
-    if (v / ".obsidian").is_dir():
-        print(f"[i]  {v / '.obsidian'} es de cuando el vault era docs/vault/.\n"
-              "     Abre docs/ en Obsidian y borra esa carpeta.")
-    print(f"[i]  abrelo en Obsidian con 'Open folder as vault' -> {p['docs']}")
+    if not silencioso:
+        print(f"[ok] vault regenerado: {len(escritas)} notas en {v}"
+              + (f" ({borradas} obsoletas borradas)" if borradas else ""))
+        if grafo_obsidian_dir:
+            print(f"[ok] grafo Obsidian (notas + canvas) exportado en {grafo_obsidian_dir}")
+        if cfg_nuevos:
+            print(f"[ok] config de Obsidian sembrada ({cfg_nuevos} archivos en docs/.obsidian/)")
+            if cfg_primera:
+                print("[i]  tema oscuro, grafo coloreado por carpeta y wikilinks cortos.")
+                print("[i]  Dataview es opcional: instalalo y habilitalo en Obsidian ->")
+                print("     Settings > Community plugins > Browse > Dataview.")
+        if (v / ".obsidian").is_dir():
+            print(f"[i]  {v / '.obsidian'} es de cuando el vault era docs/vault/.\n"
+                  "     Abre docs/ en Obsidian y borra esa carpeta.")
+        print(f"[i]  abrelo en Obsidian con 'Open folder as vault' -> {p['docs']}")
+    return {"escritas": len(escritas), "borradas": borradas,
+            "grafo_obsidian": str(grafo_obsidian_dir) if grafo_obsidian_dir else None}
+
+
+def sincronizar_rapido(p: dict) -> bool:
+    """Regenera el vault en gates rapidos si el proyecto ya usa vault y el contexto esta activo."""
+    if os.environ.get("HARNESS_SIN_CONTEXTO", "").strip() not in ("", "0", "false"):
+        return False
+    if not p["vault"].is_dir():
+        return False
+    try:
+        construir(p, silencioso=True)
+        return True
+    except (Exception, SystemExit) as exc:
+        print(f"[!] vault no sincronizado: {exc}")
+        return False
+
+
+def main() -> None:
+    ap = argparse.ArgumentParser()
+    # 'build' es el unico modo; se acepta como palabra opcional para que
+    # `vault.py build` y `vault.py` sean equivalentes.
+    ap.add_argument("cmd", nargs="?", default="build", choices=["build"])
+    ap.add_argument("--con-grafo", action="store_true", dest="con_grafo",
+                    help="genera notas por nodo de graphify en docs/vault/grafo/ (tope 2000)")
+    ap.add_argument("--con-grafo-obsidian", action="store_true", dest="con_grafo_obsidian",
+                    help="delega a `graphify export obsidian` (notas por comunidad + .canvas en docs/vault/grafo-obsidian/)")
+    ap.add_argument("--sin-config", action="store_true", dest="sin_config",
+                    help="no sembrar docs/.obsidian (config de Obsidian)")
+    a = ap.parse_args()
+    construir(paths(), con_grafo=a.con_grafo,
+              con_grafo_obsidian=a.con_grafo_obsidian, sin_config=a.sin_config)
 
 
 if __name__ == "__main__":

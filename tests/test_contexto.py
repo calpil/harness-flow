@@ -1314,3 +1314,258 @@ class GrafoNodeModulesTests(unittest.TestCase):
         self.assertEqual(parte["actualizadas"], [])
         self.assertTrue(any("node_modules" in x for x in parte["fallos"]), parte["fallos"])
         self.assertFalse((g.parent / contexto.SELLO_VERIFICADO).exists())
+
+
+class GraphifyMultiRepoYCbmPermanenteTests(unittest.TestCase):
+    """Multi-repo sin grafos.json, contaminacion *-wt/, error pre-coordination y brief."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name) / "proyecto"
+        (self.root / "harness" / "progress").mkdir(parents=True)
+        (self.root / "docs").mkdir()
+        (self.root / "harness" / "feature_list.json").write_text(json.dumps({
+            "project": "demo", "rules": {"require_docs_al_dia": False},
+            "features": [{"id": 1, "name": "Cobro", "status": "todo", "microservicios": ["ms-a"]}],
+        }), encoding="utf-8")
+        (self.root / "docs" / "spec-feature-1-cobro.md").write_text(
+            "# Spec - Feature #1: Cobro\n\nEstado: draft\n\n- AC-1: cobra `verificar: true`\n",
+            encoding="utf-8")
+
+    def _clon(self, nombre: str) -> Path:
+        r = self.root / nombre
+        (r / ".git").mkdir(parents=True)
+        return r
+
+    def test_init_grafos_detecta_subrepos_reales_y_excluye_wt_y_enlaces(self):
+        self._clon("ms-a")
+        self._clon("ms-b")
+        wt = self.root / "ms-a-wt"
+        (wt / ".git").mkdir(parents=True)
+        externo = Path(self.tmp.name) / "infra-ext"
+        (externo / ".git").mkdir(parents=True)
+        (self.root / "gcp-infra").symlink_to(externo, target_is_directory=True)
+
+        p = comun.paths(self.root)
+        cfg = contexto.construir_grafos_config(p)
+        self.assertEqual([r["nombre"] for r in cfg["raices"]], ["ms-a", "ms-b"])
+        self.assertEqual(cfg["combinado"], "graphify-out/merged-graph.json")
+
+        cfg_con_enlaces = contexto.construir_grafos_config(p, incluir_enlaces=True)
+        self.assertIn("gcp-infra", [r["nombre"] for r in cfg_con_enlaces["raices"]])
+
+        with mock.patch.object(contexto, "paths", return_value=p), \
+                contextlib.redirect_stdout(io.StringIO()):
+            contexto.cmd_init_grafos(Namespace(
+                dry_run=False, forzar=False, incluir_raiz=False,
+                incluir_enlaces=False, raices=[], max_horas=12))
+        self.assertTrue(p["grafos"].is_file())
+        leido = json.loads(p["grafos"].read_text(encoding="utf-8"))
+        self.assertEqual([r["nombre"] for r in leido["raices"]], ["ms-a", "ms-b"])
+
+    def test_grafo_con_worktrees_o_sin_subrepos_falla_utilizable(self):
+        g = self.root / "graphify-out" / "graph.json"
+        g.parent.mkdir(parents=True)
+        g.write_text(json.dumps({
+            "nodes": [{"id": 1, "source_file": "front-wt/1-feat/src/app.ts"}],
+            "links": [],
+        }), encoding="utf-8")
+        ok, motivo = contexto._grafo_utilizable(g)
+        self.assertFalse(ok)
+        self.assertIn("worktrees (*-wt)", motivo)
+        self.assertIn("init-grafos", motivo)
+
+        g.write_text(json.dumps({
+            "nodes": [{"id": 1, "source_file": "docs/prd/PRD-master.md"}],
+            "links": [],
+        }), encoding="utf-8")
+        ok2, motivo2 = contexto._grafo_utilizable(g, subrepos=["ms-a", "ms-b"])
+        self.assertFalse(ok2)
+        self.assertIn("sub-repos", motivo2)
+        self.assertIn("ms-a", motivo2)
+
+    def test_pre_coordination_daemon_es_permanente_con_remedio(self):
+        msg = ("codebase-memory-mcp: CBM CLI could not start because an active "
+               "pre-coordination or unverified CBM daemon is running. Close all CBM sessions and commands, then retry.")
+        self.assertEqual(contexto._cbm_clasificar(1, msg), "permanente")
+        p = comun.paths(self.root)
+        parte = {"fallos": []}
+        with mock.patch.dict(os.environ, {"HARNESS_SIN_CBM": "", "HARNESS_CBM_ESPERA_S": "0"}), \
+                mock.patch.object(contexto.shutil, "which", return_value="/x"), \
+                mock.patch.object(contexto, "_rama_indexable", return_value=(True, "develop")), \
+                mock.patch.object(contexto, "_cbm_cli", return_value=(1, msg)) as m_cli, \
+                mock.patch.object(contexto.time, "sleep") as m_sleep:
+            contexto.cbm_indexar(p, parte, verboso=False)
+        self.assertEqual(m_cli.call_count, 1)
+        m_sleep.assert_not_called()
+        self.assertEqual(parte["cbm"]["pendientes"], {})
+        self.assertTrue(any("daemon stop" in f for f in parte["fallos"]), parte["fallos"])
+
+    def test_brief_expone_ruta_grafo_y_tools_mcp(self):
+        self._clon("ms-a")
+        p = comun.paths(self.root)
+        buf = io.StringIO()
+        with mock.patch.dict(os.environ, {"HARNESS_SIN_CBM": "1", "HARNESS_SIN_HUB": "1"}), \
+                mock.patch.object(contexto, "paths", return_value=p), \
+                mock.patch.object(contexto, "_lecciones", return_value=[]), \
+                contextlib.redirect_stdout(buf):
+            contexto.cmd_brief(Namespace(feature="1", max_lineas=200, max_archivos=5,
+                                         max_lecciones=5, con_reglas=False))
+        out = buf.getvalue()
+        self.assertIn("check_index_coverage", out)
+        self.assertIn("graphify-mcp", out)
+        self.assertIn("contexto.py init-grafos", out)
+
+    def test_superficie_resuelve_repo_en_grafos_combinados_alias_y_filtra_vault(self):
+        """Caso real ADR/DEREC: merge-graphs guarda rutas relativas a cada servicio
+        (`internal/...`) y el nombre en `node['repo']`. Antes superficie() devolvia
+        solo docs/vault/servicios/*.md y 0 archivos de codigo."""
+        nodes = [
+            {"id": "a", "repo": "ms-order-service", "source_file": "internal/order/domain/order.go"},
+            {"id": "b", "repo": "ms-order-service", "source_file": "internal/order/app/service.go"},
+            {"id": "c", "repo": "ADR", "source_file": "projects/admin/src/app/orders.ts"},
+            {"id": "v1", "repo": "ADR", "source_file": "docs/vault/servicios/ms-order-service.md"},
+            {"id": "v2", "repo": "ADR", "source_file": "docs/vault/features/Feature-1.md"},
+        ]
+        links = [
+            {"source": "b", "target": "a", "relation": "calls"},
+            {"source": "c", "target": "b", "relation": "calls"},
+            {"source": "v1", "target": "v2", "relation": "references"},
+        ]
+        s = contexto.superficie(_grafo(nodes, links), ["ms-order-service"],
+                                alias_repos={"ADR": "front-adr"})
+        archivos = dict(s["archivos"])
+        self.assertEqual(archivos.get("ms-order-service/internal/order/app/service.go"), 2)
+        self.assertNotIn("ADR/docs/vault/servicios/ms-order-service.md", archivos)
+        self.assertNotIn("front-adr/docs/vault/servicios/ms-order-service.md", archivos)
+        self.assertEqual(s["sin_match"], [])
+
+        s_front = contexto.superficie(_grafo(nodes, links), ["front-adr"],
+                                      alias_repos={"ADR": "front-adr"})
+        self.assertIn("front-adr/projects/admin/src/app/orders.ts", dict(s_front["archivos"]))
+        cruces = {(fs, ft, rel): n for (fs, ft, rel), n in s_front["cruces"]}
+        self.assertIn(("front-adr/projects/admin/src/app/orders.ts",
+                       "ms-order-service/internal/order/app/service.go", "calls"), cruces)
+
+    def test_init_grafos_excluye_meta_repo_rider_con_slnx_sin_codigo_propio(self):
+        """Caso real Rider/DEREC: la raiz tiene DEREC.local.slnx y sub-repos api/sync/web,
+        sin codigo propio fuera de ellos."""
+        (self.root / ".git").mkdir()
+        (self.root / "DEREC.local.slnx").write_text("<Solution/>\n", encoding="utf-8")
+        for sub in ("api", "sync", "web"):
+            self._clon(sub)
+        p = comun.paths(self.root)
+        cfg = contexto.construir_grafos_config(p)
+        self.assertEqual([r["nombre"] for r in cfg["raices"]], ["api", "sync", "web"])
+
+    def test_init_grafos_incluye_raiz_si_tiene_codigo_propio(self):
+        """Caso real WebStorm/ADR: la raiz es un repo Angular con projects/ propio."""
+        (self.root / ".git").mkdir()
+        (self.root / "angular.json").write_text("{}", encoding="utf-8")
+        (self.root / "package.json").write_text(json.dumps({"dependencies": {"@angular/core": "22"}}), encoding="utf-8")
+        (self.root / "projects" / "admin").mkdir(parents=True)
+        self._clon("ms-a")
+        p = comun.paths(self.root)
+        cfg = contexto.construir_grafos_config(p)
+        self.assertEqual([r["nombre"] for r in cfg["raices"]], [self.root.name, "ms-a"])
+
+    def test_revisor_habilita_graphify_mcp_y_cbm(self):
+        revisor = (SCRIPTS.parent / "agents" / "revisor.md").read_text(encoding="utf-8")
+        self.assertIn("mcp__codebase-memory-mcp__*", revisor)
+        self.assertIn("mcp__graphify__*", revisor)
+        self.assertIn("check_index_coverage", revisor)
+
+
+class ObsidianVaultMejorasTests(unittest.TestCase):
+    """Tests de enlaces nuevos, hallazgos, --con-grafo-obsidian y sync en gates rapidos."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name) / "proj"
+        (self.root / "harness" / "progress").mkdir(parents=True)
+        (self.root / "docs" / "prd").mkdir(parents=True)
+        (self.root / "docs" / "vault").mkdir(parents=True)
+        (self.root / "harness" / "feature_list.json").write_text(json.dumps({
+            "project": "proj",
+            "rules": {"require_docs_al_dia": False},
+            "features": [{
+                "id": 1, "name": "Pagos", "status": "in_progress", "modo": "pair",
+                "microservicios": ["ms-pagos"], "prd": "docs/prd/PRD-master.md",
+            }],
+            "hallazgos": [
+                {"id": "H-1", "feature": 1, "texto": "Falta timeout", "estado": "abierto"},
+                {"id": "H-2", "feature": 1, "texto": "Log duplicado", "estado": "resuelto", "como": "AC-1"},
+                {"id": "H-3", "feature": None, "texto": "Bajar deuda CSS", "estado": "abierto"},
+            ],
+        }), encoding="utf-8")
+        (self.root / "docs" / "prd" / "PRD-master.md").write_text("# PRD\n", encoding="utf-8")
+        (self.root / "docs" / "sdd.md").write_text("# SDD\n", encoding="utf-8")
+        (self.root / "docs" / "spec-feature-1-pagos.md").write_text(
+            "# Spec - Feature #1: Pagos\n\nEstado: approved\n\n- AC-1: paga `verificar: true`\n",
+            encoding="utf-8")
+        (self.root / "docs" / "tests-1.md").write_text("- AC-1: test_pago\n", encoding="utf-8")
+        (self.root / "docs" / "verify-1.md").write_text("# Verify\n", encoding="utf-8")
+        self.p = comun.paths(self.root)
+
+    def test_vault_enlaza_tests_verify_prd_sdd_y_hallazgos(self):
+        import vault
+        vault.construir(self.p, silencioso=True)
+        nota_f = (self.root / "docs" / "vault" / "features" / "Feature-1.md").read_text(encoding="utf-8")
+        self.assertIn("modo: pair", nota_f)
+        self.assertIn("Tests (pair): [[tests-1]]", nota_f)
+        self.assertIn("Verify: [[verify-1]]", nota_f)
+        self.assertIn("PRD: [[prd/PRD-master|PRD-master]]", nota_f)
+        self.assertIn("SDD: [[sdd]]", nota_f)
+        self.assertIn("- [ ] **H-1**: Falta timeout", nota_f)
+        self.assertIn("- [x] **H-2**: Log duplicado — _AC-1_", nota_f)
+
+        indice = (self.root / "docs" / "vault" / "Indice.md").read_text(encoding="utf-8")
+        self.assertIn("Hallazgos abiertos: 2", indice)
+        self.assertIn("## Hallazgos abiertos", indice)
+        self.assertIn("**H-1**", indice)
+        self.assertIn("**H-3** (proyecto)", indice)
+        self.assertIn("[[prd/PRD-master|PRD-master]]", indice)
+        self.assertIn("[[sdd]]", indice)
+
+    def test_vault_con_grafo_obsidian_delega_a_graphify(self):
+        import vault
+        g = self.root / "graphify-out" / "graph.json"
+        g.parent.mkdir(parents=True)
+        g.write_text(json.dumps({"nodes": [{"id": "a"}], "links": []}), encoding="utf-8")
+        ok = mock.Mock(returncode=0, stdout="ok", stderr="")
+        with mock.patch.object(vault.shutil, "which", return_value="/usr/local/bin/graphify"), \
+                mock.patch.object(vault.subprocess, "run", return_value=ok) as m_run:
+            res = vault.construir(self.p, con_grafo_obsidian=True, silencioso=True)
+        self.assertIsNotNone(res["grafo_obsidian"])
+        cmd = m_run.call_args.args[0]
+        self.assertEqual(cmd[:3], ["graphify", "export", "obsidian"])
+        self.assertEqual(m_run.call_args.kwargs.get("stdin"), vault.subprocess.DEVNULL)
+
+    def test_sincronizar_rapido_respeta_env_y_actualiza_vault(self):
+        import vault
+        with mock.patch.dict(os.environ, {"HARNESS_SIN_CONTEXTO": "1"}):
+            self.assertFalse(vault.sincronizar_rapido(self.p))
+            self.assertFalse((self.root / "docs" / "vault" / "Indice.md").exists())
+        with mock.patch.dict(os.environ, {"HARNESS_SIN_CONTEXTO": ""}):
+            self.assertTrue(vault.sincronizar_rapido(self.p))
+            self.assertTrue((self.root / "docs" / "vault" / "Indice.md").exists())
+
+    def test_vault_vencido_detecta_tests_verify_y_sdd(self):
+        import vault
+        vault.construir(self.p, silencioso=True)
+        indice = self.root / "docs" / "vault" / "Indice.md"
+        viejo = time.time() - 600
+        os.utime(indice, (viejo, viejo))
+        for f in (self.root / "harness" / "feature_list.json",
+                  self.root / "docs" / "prd" / "PRD-master.md",
+                  self.root / "docs" / "sdd.md",
+                  self.root / "docs" / "spec-feature-1-pagos.md",
+                  self.root / "docs" / "tests-1.md",
+                  self.root / "docs" / "verify-1.md"):
+            os.utime(f, (viejo - 60, viejo - 60))
+        self.assertFalse(contexto._vault_vencido(self.p))
+        ahora = time.time()
+        os.utime(self.root / "docs" / "tests-1.md", (ahora, ahora))
+        self.assertTrue(contexto._vault_vencido(self.p))

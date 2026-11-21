@@ -163,6 +163,8 @@ def main() -> None:
                       encoding="utf-8")
     bitacora(p, f"add #{fid} '{a.name}' ({a.kind})"
              + (f" candidata {a.candidata}" if a.candidata else ""))
+    import vault
+    vault.sincronizar_rapido(p)
     print(f"[ok] feature #{fid} agregada")
     if reqs:
         print(f"[i]  requiere: {', '.join(reqs)}")

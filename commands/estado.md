@@ -46,17 +46,25 @@ Del output de `estado.py`, al usuario le importan cuatro cosas y en este orden:
    `require_docs_al_dia`, el paso siguiente es `/harness-flow:producto`, no un
    spec: `approve-spec` se negaria. Si una feature dice "PRD cambio desde el
    spec", su spec se revisa contra el documento nuevo (`/harness-flow:spec <id>`).
-4. **Edad del contexto.** Si `estado.py` dice que el grafo o el brief estan
-   vencidos, avisa y ofrece refrescarlo. Un contexto viejo miente, y nadie lo
-   refresca solo:
+4. **Edad del contexto y multi-repo.** Si `estado.py` avisa `multi-repo sin harness/grafos.json`
+   o `grafo con problemas` (worktrees `*-wt/` indexados o 0 nodos de sub-repos), ofrece inicializar
+   las raices reales y refrescar:
+
+   ```bash
+   eval "$(python3 "${CLAUDE_PLUGIN_ROOT}/scripts/entorno.py" --shell)" && "$PY" "$H/contexto.py" init-grafos && "$PY" "$H/contexto.py" refrescar
+   ```
+
+   Si `estado.py` dice que el grafo o el brief estan vencidos, avisa y ofrece refrescarlo. Un
+   contexto viejo miente, y nadie lo refresca solo:
 
    ```bash
    eval "$(python3 "${CLAUDE_PLUGIN_ROOT}/scripts/entorno.py" --shell)" && "$PY" "$H/contexto.py" refrescar
    ```
 
    Si lo unico viejo es el vault (`vault: desactualizado` con el contexto
-   fresco), no relances graphify ni el hub; basta regenerarlo. El vault es el
-   panel de Obsidian del usuario; ningun rol lo lee.
+   fresco), no relances graphify ni el hub; basta regenerarlo. Las notas generadas en
+   `docs/vault/` son el panel visual de Obsidian (los gates rapidos ya lo sincronizan);
+   las notas manuales en `docs/vault/notas/` si las rescata `contexto.py brief`:
 
    ```bash
    eval "$(python3 "${CLAUDE_PLUGIN_ROOT}/scripts/entorno.py" --shell)" && "$PY" "$H/vault.py" build

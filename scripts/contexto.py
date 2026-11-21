@@ -25,7 +25,7 @@ import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from comun import (SERVICE_RE, ac_comandos, ac_costuras, bloqueos_feature,  # noqa: E402
+from comun import (SERVICE_RE, _es_clon, ac_comandos, ac_costuras, bloqueos_feature,  # noqa: E402
                    get_feature, grafos_config, graph_path, impl_path,
                    load_backlog, now_iso, paths, raices_grafo,
                    requiere_declarados, review_path, spec_ac_lineas, spec_acs,
@@ -63,7 +63,7 @@ def _edad_raiz_h(g: Path) -> float | None:
 
 
 def _vault_vencido(p: dict) -> bool:
-    """El vault sale del backlog y de spec/evidencia/review, no del grafo.
+    """El vault sale del backlog y de spec/tests/evidencia/review/verify/PRD/SDD, no del grafo.
 
     Mirar solo la edad del grafo lo dejaba mostrando estados viejos toda la
     feature: con el grafo fresco, `start` no lo regeneraba, y aprobar un spec
@@ -73,16 +73,65 @@ def _vault_vencido(p: dict) -> bool:
     indice = p["vault"] / "Indice.md"
     if not indice.exists():
         return True
-    fuentes = [p["backlog"], *p["docs"].glob("spec-feature-*.md"),
-               *p["docs"].glob("impl-*.md"), *p["docs"].glob("review-*.md")]
+    fuentes = [p["backlog"], p["docs"] / "sdd.md", p["docs"] / "prd" / "PRD-master.md",
+               *p["docs"].glob("spec-feature-*.md"), *p["docs"].glob("tests-*.md"),
+               *p["docs"].glob("impl-*.md"), *p["docs"].glob("review-*.md"),
+               *p["docs"].glob("verify-*.md")]
     nueva = max((f.stat().st_mtime for f in fuentes if f.exists()), default=0)
     return indice.stat().st_mtime < nueva
+
+
+def _subrepos_sin_grafos(p: dict, *, incluir_enlaces: bool = False) -> list[Path]:
+    """Sub-repos git bajo la raiz cuando aun no existe harness/grafos.json.
+
+    Una raiz multi-repo sin `harness/grafos.json` deja a graphify indexando
+    worktrees (`*-wt/`) o ignorando los sub-repos que su `.gitignore` excluye, y
+    a cbm omitiendo la raiz si no es git. Se excluyen `docs/`, `harness/`,
+    `node_modules/`, carpetas ocultas y worktrees (`*-wt`).
+    """
+    if grafos_config(p).get("raices"):
+        return []
+    raiz = p["root"].resolve()
+    if not raiz.is_dir():
+        return []
+    encontrados: list[Path] = []
+    for d in sorted(raiz.iterdir()):
+        if (not d.is_dir() or d.name.startswith(".") or d.name.endswith("-wt")
+                or d.name in ("docs", "harness", "node_modules")):
+            continue
+        if d.is_symlink() and not incluir_enlaces:
+            continue
+        if _es_clon(d):
+            encontrados.append(d)
+    return encontrados
+
+
+def _grafo_avisos(p: dict, subrepos: list[str]) -> list[str]:
+    """Problemas estructurales medidos sobre el grafo (y sus raices) ya existentes en disco."""
+    avisos: list[str] = []
+    vistas: set[Path] = set()
+    comb = graph_path(p)
+    if comb.exists():
+        vistas.add(comb.resolve())
+        ok, motivo = _grafo_utilizable(comb, subrepos=subrepos or None)
+        if not ok:
+            avisos.append(motivo)
+    for r in raices_grafo(p):
+        g = Path(r["path"]) / "graphify-out" / "graph.json"
+        if not g.exists() or g.resolve() in vistas:
+            continue
+        vistas.add(g.resolve())
+        ok, motivo = _grafo_utilizable(g)
+        if not ok:
+            avisos.append(f"[{r['nombre']}] {motivo}")
+    return avisos
 
 
 def estado_contexto(p: dict) -> dict:
     cfg = grafos_config(p)
     raices = raices_grafo(p)
     comb = graph_path(p)
+    subrepos = [d.name for d in _subrepos_sin_grafos(p)]
     out = {
         "max_horas": cfg.get("max_horas", 12),
         "combinado": {"path": str(comb), "edad_h": _edad_h(comb),
@@ -94,6 +143,9 @@ def estado_contexto(p: dict) -> dict:
                   "edad_h": _edad_h(p["vault"] / "Indice.md"),
                   "vencido": _vault_vencido(p)},
         "graphify": bool(shutil.which("graphify")),
+        "graphify_mcp": bool(shutil.which("graphify-mcp")),
+        "subrepos_sin_grafos": subrepos,
+        "grafo_avisos": _grafo_avisos(p, subrepos),
         # Lectura de un archivo local: estado no llama al daemon. No entra en
         # 'vencidas': el brief y el vault no dependen de cbm.
         "cbm_pendientes": _cbm_pendientes(p),
@@ -152,6 +204,14 @@ def cmd_estado(args) -> None:
         edad_c = "ausente" if not c["existe"] else f"{c['edad_h']:.1f}h"
         print(f"   combinado: {edad_c}  {c['path']}")
     print(f"   vault: {_estado_vault(e)}")
+    if e.get("subrepos_sin_grafos"):
+        muestra = ", ".join(e["subrepos_sin_grafos"][:6])
+        extra = f" (+{len(e['subrepos_sin_grafos']) - 6})" if len(e["subrepos_sin_grafos"]) > 6 else ""
+        print(f"   [!] raiz multi-repo sin harness/grafos.json (sub-repos: {muestra}{extra}):\n"
+              "       graphify y cbm pueden omitir sub-repos o indexar worktrees (*-wt/).\n"
+              "       corre: contexto.py init-grafos")
+    for aviso in e.get("grafo_avisos") or []:
+        print(f"   [!] grafo con problemas: {aviso}")
     for linea in lineas_cbm_pendiente(e["cbm_pendientes"], e["cbm_daemon_sin_socket"]):
         print("  " + linea)
     if e["fresco"]:
@@ -165,8 +225,8 @@ def cmd_estado(args) -> None:
 
 def _run(cmd: list[str], cwd: Path) -> tuple[int, str]:
     try:
-        r = subprocess.run(cmd, cwd=str(cwd), capture_output=True, text=True,
-                           timeout=1800)
+        r = subprocess.run(cmd, cwd=str(cwd), stdin=subprocess.DEVNULL,
+                           capture_output=True, text=True, timeout=1800)
         return r.returncode, (r.stdout + r.stderr).strip()
     except FileNotFoundError:
         return 127, f"no encontrado: {cmd[0]}"
@@ -184,13 +244,41 @@ def _desactivado() -> bool:
     return os.environ.get("HARNESS_SIN_CONTEXTO", "").strip() not in ("", "0", "false")
 
 
-def _grafo_utilizable(g: Path) -> tuple[bool, str]:
+def _nodos_en_worktrees(nodos: list) -> int:
+    """Nodos cuyo archivo fuente cuelga de un directorio de worktrees (`*-wt`)."""
+    n = 0
+    for nodo in nodos:
+        if not isinstance(nodo, dict):
+            continue
+        ruta = str(nodo.get("source_file") or nodo.get("file") or "")
+        partes = [x for x in ruta.replace("\\", "/").split("/")[:-1] if x]
+        if any(seg.endswith("-wt") for seg in partes):
+            n += 1
+    return n
+
+
+def _nodos_en_subrepos(nodos: list, subrepos: list[str]) -> int:
+    """Nodos cuyo archivo fuente pertenece a alguno de los sub-repos git."""
+    nombres = set(subrepos)
+    n = 0
+    for nodo in nodos:
+        if not isinstance(nodo, dict):
+            continue
+        ruta = str(nodo.get("source_file") or nodo.get("file") or "").replace("\\", "/")
+        partes = [x for x in ruta.split("/")[:-1] if x]
+        if partes and (partes[0] in nombres or (ruta.startswith("/") and any(seg in nombres for seg in partes))):
+            n += 1
+    return n
+
+
+def _grafo_utilizable(g: Path, *, subrepos: list[str] | None = None) -> tuple[bool, str]:
     """Decide si un grafo recien generado sirve, sin confiar en el exit code.
 
     graphify puede salir 0 y no dejar nada util: raiz sin codigo que reconozca,
-    escritura interrumpida, JSON truncado. Contar esos casos como exito es el
-    falso verde: el parte dice "actualizada" y el merge posterior corre sobre
-    datos viejos sin que nadie se entere.
+    escritura interrumpida, JSON truncado, contaminacion por worktrees (`*-wt/`)
+    o raiz multi-repo cuyo `.gitignore` oculta los sub-repos. Contar esos casos
+    como exito es el falso verde: el parte dice "actualizada" y el brief sale
+    vacio o lleno de ruido de ramas viejas.
     """
     if not g.exists():
         return False, f"no dejo el grafo en {g}"
@@ -208,6 +296,15 @@ def _grafo_utilizable(g: Path) -> tuple[bool, str]:
     if dentro:
         return False, (f"el grafo indexo {dentro} nodos dentro de node_modules: "
                        "agrega node_modules/ a .graphifyignore o actualiza graphify")
+    en_wt = _nodos_en_worktrees(datos["nodes"])
+    if en_wt:
+        return False, (f"el grafo indexo {en_wt} nodos dentro de worktrees (*-wt): "
+                       "declara las raices reales en harness/grafos.json (contexto.py init-grafos) "
+                       "o agrega '*-wt/' a .graphifyignore")
+    if subrepos and _nodos_en_subrepos(datos["nodes"], subrepos) == 0:
+        muestra = ", ".join(subrepos[:5]) + ("..." if len(subrepos) > 5 else "")
+        return False, (f"el grafo no contiene ningun nodo de los sub-repos ({muestra}): "
+                       "declara las raices en harness/grafos.json (contexto.py init-grafos)")
     return True, ""
 
 
@@ -281,6 +378,7 @@ CBM_ENFRIAMIENTO_S = 600      # entre reintentos AUTOMATICOS de un pendiente
 # Lo que reintentar no arregla: seguir golpeando solo suma carga al daemon.
 CBM_PERMANENTE = ("fingerprint_mismatch", "different build", "binary image",
                   "different cache directory", "conflicting cbm process",
+                  "pre-coordination", "unverified cbm daemon",
                   "likely dead", "allow-root", "no encontrado")
 # Lo que si pasa con el tiempo: daemon ocupado, arrancando, parandose o con otra
 # mutacion del mismo proyecto en curso. Son los textos del propio binario.
@@ -664,7 +762,12 @@ def cbm_indexar(p: dict, parte: dict, verboso: bool, *, forzar=False,
                              "PENDIENTE (daemon vivo sin socket: no se arregla solo, ver abajo)")
             else:
                 estado["pendientes"].pop(clave, None)
-                parte["fallos"].append(f"cbm index {nombre}: {err}")
+                remedio = ""
+                bajo_err = err.lower()
+                if "pre-coordination" in bajo_err or "unverified cbm daemon" in bajo_err:
+                    remedio = (" -> daemon de version/cohorte incompatible: cierra las sesiones CBM "
+                               "abiertas o corre `codebase-memory-mcp daemon stop` y reintenta")
+                parte["fallos"].append(f"cbm index {nombre}: {err}{remedio}")
                 resultado = "FALLO"
             if verboso:
                 print(f"   cbm index {nombre}: {resultado}")
@@ -722,6 +825,7 @@ def refrescar(p: dict, *, forzar=False, max_horas=None, con_vault=True,
             _construir_vault(p, parte, verboso)
         return parte
 
+    subrepos = e.get("subrepos_sin_grafos") or []
     for r in e["raices"]:
         raiz = Path(r["path"])
         vencido = forzar or not r["existe"] or (r["edad_h"] or 0) > tope
@@ -735,7 +839,9 @@ def refrescar(p: dict, *, forzar=False, max_horas=None, con_vault=True,
         # (raiz sin codigo reconocible, permisos, escritura a medias). Si lo
         # contaramos por el codigo de salida, el parte diria "actualizadas" y
         # el merge de mas abajo se saltearia en silencio sobre datos viejos.
-        ok, motivo = (False, "") if code != 0 else _grafo_utilizable(Path(r["graph"]))
+        comprobar_sub = subrepos if (not r.get("declarada", True) and subrepos) else None
+        ok, motivo = (False, "") if code != 0 else _grafo_utilizable(
+            Path(r["graph"]), subrepos=comprobar_sub)
         if code != 0:
             parte["fallos"].append(f"graphify {sub} {r['nombre']}: {out[-400:]}")
         elif not ok:
@@ -857,6 +963,114 @@ def cmd_limpiar_cbm(args) -> None:
     sys.exit(cbm_procesos.limpiar(matar_huerfanos=not args.solo_avisar))
 
 
+_DIRS_CODIGO_RAIZ = frozenset(("src", "projects", "app", "apps", "packages", "cmd", "internal", "Sources", "lib"))
+_EXTS_CODIGO_RAIZ = frozenset((".go", ".ts", ".tsx", ".js", ".jsx", ".cs", ".py", ".rs", ".java", ".kt", ".swift"))
+
+
+def _raiz_tiene_codigo_propio(raiz: Path, subrepos: list[Path]) -> bool:
+    """True si la raiz tiene codigo fuente propio fuera de sus sub-repos git.
+
+    Evita incluir como raiz de grafo un meta-repo que solo tiene una solucion
+    agregadora (`DEREC.local.slnx`), `deploy/` y `docs/`, mientras si incluye
+    raices reales como `WebstormProjects/ADR` (`projects/`, `angular.json`).
+    """
+    nombres_sub = {s.name for s in subrepos}
+    ignorar = nombres_sub | {"docs", "harness", "graphify-out", "deploy", "node_modules", "dist", "build", "bin", "obj"}
+    for item in raiz.iterdir():
+        if item.name.startswith(".") or item.name.endswith("-wt") or item.name in ignorar:
+            continue
+        if item.is_dir() and item.name in _DIRS_CODIGO_RAIZ:
+            return True
+        if item.is_file() and item.suffix.lower() in _EXTS_CODIGO_RAIZ:
+            return True
+    return False
+
+
+def construir_grafos_config(p: dict, *, incluir_raiz: bool = False,
+                            incluir_enlaces: bool = False,
+                            extras: list[str] | None = None,
+                            max_horas: int = 12) -> dict:
+    """Construye el contenido de harness/grafos.json con los sub-repos reales."""
+    raiz = p["root"].resolve()
+    raices: list[dict[str, str]] = []
+    vistas: set[Path] = set()
+
+    def agregar(nombre: str, ruta_cfg: str, abs_path: Path) -> None:
+        res = abs_path.resolve()
+        if res in vistas:
+            return
+        vistas.add(res)
+        raices.append({"nombre": nombre, "path": ruta_cfg})
+
+    subrepos: list[Path] = []
+    for d in sorted(raiz.iterdir()):
+        if (not d.is_dir() or d.name.startswith(".") or d.name.endswith("-wt")
+                or d.name in ("docs", "harness", "node_modules")):
+            continue
+        if d.is_symlink() and not incluir_enlaces:
+            continue
+        if _es_clon(d):
+            subrepos.append(d)
+
+    if incluir_raiz:
+        agregar(raiz.name, ".", raiz)
+    else:
+        try:
+            import stack
+            if (_es_clon(raiz) and _raiz_tiene_codigo_propio(raiz, subrepos)
+                    and stack.detectar_stack_directorio(raiz)["stack"] != "generico"):
+                agregar(raiz.name, ".", raiz)
+        except Exception:
+            pass
+
+    for d in subrepos:
+        agregar(d.name, d.name, d)
+
+    for item in extras or []:
+        if "=" in item:
+            nombre, crudo = item.split("=", 1)
+            nombre = nombre.strip()
+            crudo = crudo.strip()
+        else:
+            crudo = item.strip()
+            nombre = Path(crudo).expanduser().name
+        ruta = Path(crudo).expanduser()
+        abs_ruta = ruta.resolve() if ruta.is_absolute() else (raiz / ruta).resolve()
+        if not abs_ruta.is_dir():
+            sys.exit(f"[!!] raiz de grafo inexistente: {abs_ruta}")
+        if not nombre:
+            nombre = abs_ruta.name
+        agregar(nombre, crudo, abs_ruta)
+
+    if not raices:
+        agregar(raiz.name, ".", raiz)
+
+    cfg: dict = {"max_horas": max_horas, "raices": raices}
+    if len(raices) > 1:
+        cfg["combinado"] = "graphify-out/merged-graph.json"
+    return cfg
+
+
+def cmd_init_grafos(args) -> None:
+    """Genera harness/grafos.json con los repos reales del proyecto multi-repo."""
+    p = paths()
+    destino = p["grafos"]
+    if destino.exists() and not args.forzar and not args.dry_run:
+        sys.exit(f"[!!] {destino} ya existe. Usa --forzar para regenerarlo o --dry-run para previsualizar.")
+    cfg = construir_grafos_config(
+        p, incluir_raiz=args.incluir_raiz, incluir_enlaces=args.incluir_enlaces,
+        extras=args.raices, max_horas=args.max_horas)
+    texto = json.dumps(cfg, ensure_ascii=False, indent=2) + "\n"
+    if args.dry_run:
+        print(texto, end="")
+        return
+    destino.parent.mkdir(parents=True, exist_ok=True)
+    destino.write_text(texto, encoding="utf-8")
+    nombres = ", ".join(r["nombre"] for r in cfg["raices"])
+    print(f"[ok] {destino} generado con {len(cfg['raices'])} raiz(ces): {nombres}")
+    print("[i]  Siguiente paso: contexto.py refrescar")
+
+
 # --- briefing compacto ------------------------------------------------------
 
 def _cargar_grafo(p: dict):
@@ -874,7 +1088,12 @@ def _servicio_de(src: str) -> str | None:
     return m.group(1) if m else None
 
 
-def superficie(graph: dict, micros: list[str], tope=12) -> dict:
+_PREFIJOS_RUIDO_SUPERFICIE = ("docs/vault/", ".claude/", ".agents/", ".gemini/", ".grok/")
+
+
+def superficie(graph: dict, micros: list[str], tope=12, *,
+               unica_raiz: str | None = None,
+               alias_repos: dict[str, str] | None = None) -> dict:
     """Archivos del/los micros con mas acoplamiento HACIA AFUERA.
 
     El grafo crudo (`graphify query`) devuelve decenas de nodos sin jerarquia y
@@ -882,20 +1101,48 @@ def superficie(graph: dict, micros: list[str], tope=12) -> dict:
     aristas utiles que cruzan el limite del archivo: es lo que un implementer o
     un revisor necesita mirar primero, en una fraccion de los tokens.
 
-    El ambito puede no ser un microservicio: 'admin', 'landing' o
-    'projects/portal' son carpetas del monorepo y no matchean SERVICE_RE. Se
-    cae a coincidencia por ruta antes que devolver vacio; un ambito que no
-    engancha nada se reporta en 'sin_match' en vez de fingir un grafo pobre.
+    Soporta tanto grafos monorepo/carpeta (`source_file: ms-foo/internal/...`)
+    como grafos combinados por servicio (`repo: ms-foo`, `source_file: internal/...`)
+    y proyectos de una sola raiz (`unica_raiz`), descartando notas generadas del
+    vault y carpetas de reglas de agentes para no tapar el codigo real.
     """
-    nodes = {n.get("id"): n for n in graph.get("nodes", [])}
+    nodes = {n.get("id"): n for n in graph.get("nodes", []) if isinstance(n, dict)}
     edges = graph.get("edges") or graph.get("links") or []
     ambitos = [m.strip("/").replace("\\", "/") for m in micros if m.strip("/")]
+    mapa_alias = alias_repos or {}
 
-    def ambito_de(src: str) -> str | None:
-        ruta = str(src or "").replace("\\", "/")
+    def _repo_canonico(n: dict) -> str:
+        crudo = str(n.get("repo") or "").strip()
+        return mapa_alias.get(crudo, crudo)
+
+    def _repo_coincide(repo: str, crudo: str, ambito: str) -> bool:
+        for etiqueta in (repo, crudo):
+            if etiqueta and (etiqueta == ambito or etiqueta.endswith("_" + ambito)):
+                return True
+        return False
+
+    def archivo_de(n: dict) -> str:
+        ruta = str(n.get("source_file") or "").replace("\\", "/").lstrip("./")
+        if not ruta or ruta.startswith(_PREFIJOS_RUIDO_SUPERFICIE):
+            return ""
+        repo = _repo_canonico(n)
+        if repo and not ruta.startswith(repo + "/") and repo not in ruta.split("/")[:2]:
+            return f"{repo}/{ruta}"
+        return ruta
+
+    def ambito_de(n: dict) -> str | None:
+        ruta = str(n.get("source_file") or "").replace("\\", "/").lstrip("./")
+        if not ruta or ruta.startswith(_PREFIJOS_RUIDO_SUPERFICIE):
+            return None
+        crudo = str(n.get("repo") or "").strip()
+        repo = _repo_canonico(n)
         if not ambitos:
-            return _servicio_de(ruta)
+            return repo or _servicio_de(ruta) or unica_raiz
         for a in ambitos:
+            if _repo_coincide(repo, crudo, a):
+                return a
+            if not crudo and unica_raiz and a == unica_raiz:
+                return a
             if a == _servicio_de(ruta) or re.search(
                     rf"(^|/){re.escape(a)}(/|$)", ruta):
                 return a
@@ -910,12 +1157,12 @@ def superficie(graph: dict, micros: list[str], tope=12) -> dict:
         ns, nt = nodes.get(e.get("source")), nodes.get(e.get("target"))
         if not ns or not nt:
             continue
-        fs, ft = ns.get("source_file") or "", nt.get("source_file") or ""
+        fs, ft = archivo_de(ns), archivo_de(nt)
         if fs == ft or not fs or not ft:
             # Un nodo sin source_file no ubica nada: contarlo produce filas
             # "a --references--> " que ocupan lugar y no dicen adonde ir.
             continue
-        ss, st = ambito_de(fs), ambito_de(ft)
+        ss, st = ambito_de(ns), ambito_de(nt)
         if ambitos and ss is None and st is None:
             continue
         for x in (ss, st):
@@ -1626,14 +1873,26 @@ def cmd_brief(args) -> None:
     L += _lineas_impacto(proyecto, micros)
 
     g = _cargar_grafo(p)
+    gp = graph_path(p)
     if g is None:
         L.append("")
-        L.append(f"[!] sin grafo en {graph_path(p)}: corre contexto.py refrescar")
+        L.append(f"[!] sin grafo en {gp}: corre contexto.py refrescar")
     else:
-        s = superficie(g, micros, tope=args.max_archivos)
+        raices_g = raices_grafo(p)
+        unica_raiz = raices_g[0]["nombre"] if len(raices_g) == 1 else None
+        alias_repos: dict[str, str] = {}
+        for r in raices_g:
+            ruta_r = Path(r["path"]).resolve()
+            nombre_r = str(r["nombre"])
+            for etq in (nombre_r, ruta_r.name, f"{ruta_r.parent.name}_{ruta_r.name}"):
+                alias_repos.setdefault(etq, nombre_r)
+        s = superficie(g, micros, tope=args.max_archivos,
+                       unica_raiz=unica_raiz, alias_repos=alias_repos)
         L.append("")
-        L.append(f"superficie de contacto (grafo, {len(g.get('nodes', []))} nodos; "
+        L.append(f"superficie de contacto (grafo: {gp}, {len(g.get('nodes', []))} nodos; "
                  f"{s['n_archivos']} archivos y {s['n_cruces']} cruces, top {args.max_archivos}):")
+        for aviso in e.get("grafo_avisos") or []:
+            L.append(f"  [!] {aviso}")
         for arch, n in s["archivos"]:
             L.append(f"  {n:>4}  {arch}")
         if s["sin_match"]:
@@ -1643,6 +1902,12 @@ def cmd_brief(args) -> None:
             L.append("  cruces entre servicios/paquetes:")
             for (fs, ft, rel), n in s["cruces"]:
                 L.append(f"    {fs} --{rel}--> {ft}  (x{n})")
+    if e.get("subrepos_sin_grafos"):
+        L.append(f"  [!] multi-repo sin harness/grafos.json ({', '.join(e['subrepos_sin_grafos'][:5])}): "
+                 "contexto.py init-grafos")
+    L.append(f"  consulta estructural: codebase-memory-mcp (search_graph, trace_path, get_code_snippet, "
+             f"check_index_coverage) | graphify-mcp (query_graph, get_neighbors, god_nodes, shortest_path) "
+             f"o CLI `graphify query|affected|path --graph {gp}`")
 
     lec = _lecciones(data)
     if lec:
@@ -1714,6 +1979,17 @@ def main() -> None:
                         "inalcanzable) y comprueba que un cliente nuevo conecta; con "
                         "--solo-avisar dice a quien afectaria")
     s.set_defaults(fn=cmd_limpiar_cbm)
+    s = sub.add_parser("init-grafos", help="genera harness/grafos.json con los sub-repos reales del proyecto")
+    s.add_argument("--dry-run", action="store_true", dest="dry_run")
+    s.add_argument("--forzar", action="store_true")
+    s.add_argument("--incluir-raiz", action="store_true", dest="incluir_raiz",
+                   help="incluye la raiz del arnes ('.') aunque no tenga stack propio")
+    s.add_argument("--incluir-enlaces", action="store_true", dest="incluir_enlaces",
+                   help="incluye enlaces simbolicos a otros repos bajo la raiz")
+    s.add_argument("--raiz", action="append", default=[], dest="raices",
+                   help="raiz adicional (NOMBRE=RUTA o RUTA; repetible)")
+    s.add_argument("--max-horas", type=int, default=12, dest="max_horas")
+    s.set_defaults(fn=cmd_init_grafos)
     s = sub.add_parser("stacks", help="stacks de todo el proyecto con sus reglas y skills (rol producto)")
     s.add_argument("--resumen", action="store_true", help="solo que stack hay en cada repo")
     s.set_defaults(fn=cmd_stacks)

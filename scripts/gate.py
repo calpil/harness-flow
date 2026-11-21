@@ -498,6 +498,8 @@ def cmd_approve_spec(args) -> None:
     save_backlog(p, data)
     bitacora(p, f"spec #{f['id']} approved por {quien} ({len(acs)} AC)"
                 + (" modo=pair" if modo_fijado else ""))
+    import vault
+    vault.sincronizar_rapido(p)
     print(f"[ok] spec #{f['id']} aprobado y sellado. AC: {', '.join(acs)}")
     if modo_fijado:
         print(f"[i]  modo pair (por defecto): close exigira la lista de tests sellada\n"
@@ -758,6 +760,8 @@ def cmd_sellar_tests(args) -> None:
     bitacora(p, f"lista de tests #{f['id']} sellada por {quien} ({n} tests)"
                 + (f"; con el si del usuario: quita {len(quitados)}, solo manual {', '.join(manuales) or '-'}"
                    if con_si else ""))
+    import vault
+    vault.sincronizar_rapido(p)
     print(f"[ok] lista de tests de #{f['id']} sellada ({n} tests) -> {tp.name}")
     print("[i]  Muestrale la lista al usuario en el chat y empieza: no esperes su aprobacion.")
 
@@ -955,6 +959,8 @@ def cmd_enmienda(args) -> None:
     _registrar_sello(p, f, sp, text, quien, cuando)
     save_backlog(p, data)
     bitacora(p, f"spec #{fid} enmienda {eid} aprobada por {quien} ({rel}; AC tocados: {detalle})")
+    import vault
+    vault.sincronizar_rapido(p)
     print(f"[ok] enmienda {eid} de #{fid} sellada. AC tocados: {detalle}")
     print(f"     spec re-sellado ({len(acs)} AC) y propuesta sellada: {rel}")
     rp = review_path(p, f)
@@ -1046,6 +1052,8 @@ def cmd_revision(args) -> None:
     f["veredicto"] = args.veredicto
     save_backlog(p, data)
     bitacora(p, f"review #{f['id']} sellado: {args.veredicto} por {quien}")
+    import vault
+    vault.sincronizar_rapido(p)
     print(f"[ok] review #{f['id']} sellado como {args.veredicto} "
           f"(cubre {len(acs)} AC)")
 
@@ -1143,6 +1151,8 @@ def cmd_verify(args) -> None:
     fresco = load_backlog(p)
     get_feature(fresco, f["id"])["last_verify"] = f["last_verify"]
     save_backlog(p, fresco)
+    import vault
+    vault.sincronizar_rapido(p)
     print(f"\n[{'ok' if not fallos else '!!'}] {len(cmds)-fallos}/{len(cmds)} AC en verde -> {vp.name}")
     if sin_comando:
         print(f"[!] {len(sin_comando)}/{len(acs)} AC NO se midieron (sin comando "

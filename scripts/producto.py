@@ -704,6 +704,8 @@ def cmd_aprobar(args) -> None:
         # borrador sigue en draft, que es el estado coherente con "no aprobado".
         borrador.write_text(sellado, encoding="utf-8")
 
+    import vault
+    vault.sincronizar_rapido(p)
     print(f"[ok] {cfg['titulo']} aprobado y sellado por {quien}: {_rel(p['root'], destino)}")
     for aviso in avisos_sdd(sellado) if doc == "sdd" else []:
         print(f"[!]  {aviso}")

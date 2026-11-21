@@ -40,9 +40,15 @@ detente; no los busques ni los inventes.
 2. Lee el spec entero y las lecciones que nombra el brief, antes de disenar. Si
    el spec cita decisiones del SDD (`decisiones que aplica: D2`), leelas en
    `docs/sdd.md`: son la arquitectura acordada, no una sugerencia.
-3. Orientate con `codebase-memory-mcp` (`search_graph`, `trace_path`) si esta
-   disponible. Su indice es de la raiz, no del worktree: confirma leyendo el
-   archivo en el worktree antes de editarlo.
+3. Orientate antes de editar con `codebase-memory-mcp` (`search_graph`, `trace_path`,
+   `get_code_snippet`, `check_index_coverage`) para simbolos/call-graph exacto y con
+   `graphify-mcp` (`query_graph`, `get_neighbors`, `god_nodes`, `shortest_path`) o
+   `graphify affected|path|explain --graph <ruta>` para impacto y arquitectura. Si no
+   heredas MCP en tu host, usa la evidencia de grafo que te paso quien te delego (y lee
+   cualquier rango sin cobertura) o la CLI con stdin cerrado
+   (`codebase-memory-mcp cli --quiet search_graph '{"project":"<p>","name_pattern":".*"}' < /dev/null`).
+   Su indice es de la raiz, no del worktree: confirma leyendo el archivo en el worktree
+   antes de editarlo.
 
 ## Invariantes
 

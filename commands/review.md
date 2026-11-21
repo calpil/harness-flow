@@ -51,6 +51,7 @@ Reglas de esta delegacion:
   anula el punto del paso.
 - No le cuentes al revisor lo que implementaste ni le adelantes que esperas que
   apruebe. Lee el codigo solo.
+- **Evidencia de grafo si el hijo no hereda MCP.** Si el host no pasa `codebase-memory-mcp` ni `graphify-mcp` al subagente revisor, ejecuta en el padre la consulta de grafo y `check_index_coverage` sobre los archivos del diff y adjunta ese paquete (proyecto, cobertura, rangos omitidos) junto al briefing, sin revelar tus conclusiones ni sugerir el veredicto.
 - **Pasa `effort`, nunca `model`.** El `effort` de la invocacion le gana al del
   frontmatter, que queda en `xhigh` como red; un `model` pisaria el Opus 5.5
   del frontmatter. Criterios en `references/modelos.md` ("Seleccion automatica").

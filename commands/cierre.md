@@ -77,10 +77,10 @@ comillas en una misma linea que no sea la del sello. Contrato en
 
 Sin `--integrated`, `close` **ejecuta el merge de verdad** (`git merge --no-ff`).
 Aborta sin tocar el backlog si el arbol esta sucio o el merge conflictua.
-`start` puede dejar `harness/` y `docs/vault/` sucios. `approve-spec` y
-`revision` no regeneran el vault: tocan el spec o el review en `docs/` y el
-backlog en `harness/`. Muestralos con `git status` y pregunta antes de
-commitearlos; no los descartes.
+`start`, `approve-spec`, `sellar-tests`, `revision`, `verify`, `producto.py aprobar`
+y `hallazgo.py` sincronizan `docs/vault/` automaticamente si el proyecto ya tiene
+vault (salvo con `HARNESS_SIN_CONTEXTO=1`), ademas de tocar `docs/` y `harness/`.
+Muestralos con `git status` y pregunta antes de commitearlos; no los descartes.
 Despues del `done`, el close sincroniza PRD/SDD y regenera el vault: vuelven a
 quedar cambios en `docs/` y hay que reportarlos, no darlos por publicados. Si
 `close` avisa que el PRD o el SDD cambio desde que se aprobo el spec, diselo al

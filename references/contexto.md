@@ -34,10 +34,21 @@ derivar-graphify`, `vault.py` y el brief. Sin `grafos.json`, todo funciona
 como antes contra `<raiz>/graphify-out/graph.json`.
 
 ```bash
-$PY "$H/contexto.py" estado              # edad por raiz + combinado + vault
+$PY "$H/contexto.py" init-grafos         # crea harness/grafos.json en raiz multi-repo
+$PY "$H/contexto.py" estado              # edad por raiz + combinado + vault + avisos
 $PY "$H/contexto.py" refrescar           # update por raiz vencida, merge, hub, vault
 $PY "$H/contexto.py" brief --feature <id>  # indice compacto para trabajar
 ```
+
+**Raiz multi-repo sin `harness/grafos.json`:** cuando la raiz tiene sub-repos git
+propios (p. ej. `front-admin-dashboard/`, `calpilingenieria/`, `ms-*-service/`) y
+no existe `harness/grafos.json`, `estado.py` y `contexto.py estado` avisan y
+sugieren `contexto.py init-grafos` (admite `--dry-run`, `--incluir-raiz`,
+`--incluir-enlaces`, `--raiz NOMBRE=RUTA`). Sin ese archivo ocurren dos fallos
+silenciosos: (1) si `.gitignore` de la raiz ignora los sub-repos, graphify y cbm
+indexan 0 nodos de los servicios; (2) si hay carpetas `*-wt/`, graphify indexa
+worktrees viejos. `_grafo_utilizable` ahora detecta y rechaza ambos casos (nodos
+en `*-wt` y grafos multi-repo sin nodos de sus sub-repos) igual que `node_modules`.
 
 `refrescar` solo toca lo vencido (`max_horas`, 12 por defecto); `--forzar`
 reconstruye todo. Sin graphify en el PATH reporta el fallo y salta grafo y hub,
@@ -124,6 +135,46 @@ del revisor lo dicen en la primera linea en vez de fingir estar al dia.
 
 
 
+## graphify-mcp (consulta de arquitectura, comunidades e impacto)
+
+`graphify` incluye el servidor MCP oficial `graphify-mcp` (`graphify/serve.py`), que
+complementa a `codebase-memory-mcp`:
+
+| Necesidad al consultar codigo | Herramienta principal |
+|---|---|
+| Simbolos exactos, llamadas `inbound`/`outbound`, snippets y cobertura de indice | `codebase-memory-mcp` (`search_graph`, `trace_path`, `get_code_snippet`, `check_index_coverage`) |
+| Arquitectura global, comunidades, hubs (`god_nodes`), caminos semanticos, impacto de PRs | `graphify-mcp` (`query_graph`, `get_node`, `get_neighbors`, `get_community`, `god_nodes`, `graph_stats`, `shortest_path`, `list_prs`, `get_pr_impact`, `triage_prs`) |
+| Fallback sin MCP (subagentes o terminal) | `graphify query|affected|path|explain|god-nodes --graph <ruta>` y `codebase-memory-mcp cli --quiet <tool> '<json>' < /dev/null` |
+
+`graphify-mcp` expone ademas 6 recursos de lectura (`graphify://report`, `graphify://stats`,
+`graphify://god-nodes`, `graphify://surprises`, `graphify://audit`, `graphify://questions`),
+recarga automaticamente el `graph.json` cuando cambia su `mtime` y soporta varios proyectos en
+cache LRU (`GRAPHIFY_MAX_CONTEXTS=8`).
+
+**Registro del servidor MCP por host** (ajusta la ruta de `graphify-mcp` si `which graphify-mcp`
+devuelve otra):
+
+- **Claude Code (`~/.claude.json` → `mcpServers`) / AGY / Gemini CLI (`mcpServers`):**
+  ```json
+  "graphify": {
+    "command": "/Users/<usuario>/.local/bin/graphify-mcp",
+    "args": []
+  }
+  ```
+- **Codex (`~/.codex/config.toml`) / Grok (`~/.grok/config.toml`):**
+  ```toml
+  [mcp_servers.graphify]
+  command = "/Users/<usuario>/.local/bin/graphify-mcp"
+  ```
+- **Hermes (`~/.hermes/config.yaml` → `mcp_servers`):**
+  ```yaml
+  graphify:
+    command: "/Users/<usuario>/.local/bin/graphify-mcp"
+  ```
+
+`agents/revisor.md` incluye `mcp__graphify__*` junto a `mcp__codebase-memory-mcp__*`. El brief
+imprime siempre la ruta exacta `--graph <ruta>` del grafo activo para consultas puntuales.
+
 ## codebase-memory-mcp (consulta estructural, complementa a graphify)
 
 [DeusData/codebase-memory-mcp](https://github.com/DeusData/codebase-memory-mcp):
@@ -143,9 +194,14 @@ Reinicia el agente despues. Hermes lo registra en `mcp_servers` de
 
 **Consultar** (antes de leer archivos a ciegas): `list_projects` /
 `index_status`, `search_graph(name_pattern=...)`, `trace_path(function_name=...,
-direction=inbound|outbound|both)`, `get_code_snippet`, `detect_changes`. Un
-agente sin MCP (subagente aislado) puede usar la CLI:
-`codebase-memory-mcp cli --quiet search_graph '{"project":"<p>","name_pattern":".*Foo.*"}'`.
+direction=inbound|outbound|both)`, `get_code_snippet`, `check_index_coverage`,
+`detect_changes`. Niveles de evidencia: `Scout` (consulta rapida provisional),
+`Verify` (por defecto: trazas + snippets + `check_index_coverage`) y `Auditor`
+(cobertura completa y declaracion explicita de rangos omitidos). Antes de lanzar
+un subagente que pueda no heredar MCP, consulta en el padre y pasa el paquete de
+grafo y cobertura (proyecto, simbolos, rangos omitidos). Un agente sin MCP puede
+usar la CLI **siempre con stdin cerrado** (`< /dev/null`):
+`codebase-memory-mcp cli --quiet search_graph '{"project":"<p>","name_pattern":".*Foo.*"}' < /dev/null`.
 El resultado es un indice, no evidencia: un AC no se da por cumplido por un nodo.
 
 **Reindexar**: `contexto.py cbm` (o `refrescar`, o el `close --status done`)
@@ -170,7 +226,7 @@ agente resuelve a su manera:
 | daemon ocupado/arrancando/parandose | 3 intentos con espera 5 s, 15 s; si sigue, **PENDIENTE** | `pendientes` (no es fallo) |
 | ya fallo una raiz por esto | las demas quedan pendientes sin llamarlo (5 raices no pagan 5 esperas) | `pendientes` |
 | daemon **vivo pero sin socket** | pendiente al instante, sin llamarlo ni esperar; **no se arregla solo** | `pendientes` (`causa: daemon_sin_socket`) |
-| build distinto, ruta no indexable, binario ausente | un solo intento, fallo visible | `fallos` |
+| build distinto, daemon pre-coordination/unverified, ruta no indexable, binario ausente | un solo intento, fallo visible con remediacion (cerrar sesiones antiguas / `daemon stop`) | `fallos` |
 | error que no reconoce | un solo intento, fallo visible (no se difiere lo que no se entiende) | `fallos` |
 
 Un pendiente queda en `graphify-out/.cbm_estado.json` (local, ignorado por git), se
