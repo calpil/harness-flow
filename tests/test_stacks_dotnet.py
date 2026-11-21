@@ -440,6 +440,30 @@ class VerificadorMvcTests(Base):
                  "    const string Csp = \"default-src 'self'; script-src 'self' 'unsafe-inline'\";\n}\n")
         self.assertInfraccion("la CSP no admite 'unsafe-inline'")
 
+    def test_platform_no_dibuja_vistas_de_una_feature(self):
+        escribir(self.web / "Platform" / "Limite.cs",
+                 'public sealed class Limite { string v = "~/Views/Pagos/Index.cshtml"; }\n')
+        self.assertInfraccion("Platform/Limite.cs: Platform no conoce features (vista ~/Views/Pagos/)")
+
+    def test_platform_no_usa_modelos_de_una_feature(self):
+        escribir(self.web / "Platform" / "Limite.cs",
+                 "using Acme.Portal.Web.Models;\npublic sealed class Limite { PagoViewModel m; }\n")
+        self.assertInfraccion("Platform/Limite.cs: Platform no conoce features (modelo PagoViewModel de Pagos)")
+
+    def test_platform_no_referencia_controllers(self):
+        escribir(self.web / "Platform" / "Ruta.cs",
+                 "public sealed class Ruta { string n = nameof(PagosController); }\n")
+        self.assertInfraccion("Platform/Ruta.cs: Platform no conoce features (controller PagosController)")
+
+    def test_platform_usa_vistas_compartidas_modelos_transversales_y_rutas(self):
+        escribir(self.web / "Models" / "MantencionViewModel.cs",
+                 "namespace Acme.Portal.Web.Models;\npublic sealed record MantencionViewModel(string Mensaje);\n")
+        escribir(self.web / "Platform" / "Mantencion.cs",
+                 "using Acme.Portal.Web.Models;\n"
+                 "public sealed class Mantencion(MantencionViewModel aviso)\n"
+                 '{ string v = "~/Views/Shared/Mantencion.cshtml"; string e = "/Pagos/Error"; }\n')
+        self.assertEqual([], self.errores())
+
     def test_thread_sleep_en_pruebas_es_infraccion(self):
         escribir(self.repo / "tests" / "Acme.Portal.Web.Tests" / "EsperaTests.cs",
                  "public class EsperaTests { void T() { Thread.Sleep(100); } }\n")

@@ -20,7 +20,7 @@ El portal presenta y captura; no decide reglas de negocio ni guarda datos. `test
   - Prohibido `HttpClient`, `HttpRequestMessage`, el cliente concreto (`WorkItemsApiClient`), acceso a datos y reglas de negocio.
   - Después de un POST exitoso siempre redirige (Post/Redirect/Get); los mensajes viajan en `TempData`.
 - **Services (`Services/`):** única salida hacia los datos. Una interfaz `I*Api` por recurso y su cliente tipado. Traduce los errores esperados a `ApiProblem` y lo inesperado a `ApiUnavailableException`.
-- **Platform (`Platform/`):** transversal (correlación, cabeceras, autenticación). No conoce features.
+- **Platform (`Platform/`):** transversal (correlación, cabeceras, autenticación). No conoce features: no referencia un `XController`, no dibuja vistas fuera de `Views/Shared/` ni usa modelos con el nombre de una feature (`X...ViewModel`). Una política o un filtro de una sola feature va con esa feature. `scripts/check-architecture.py` lo mide.
 - **Composition root:** solo `Program.cs` registra dependencias.
 - **Sin acceso a datos:** ningún paquete ni `using` de `Microsoft.Data.*`, Dapper, Entity Framework u otro proveedor.
 - **Reglas de negocio:** viven en la API. El portal puede anticipar una regla solo para ayudar a la interfaz (por ejemplo, qué botones mostrar) y siempre trata la respuesta de la API como la verdad.

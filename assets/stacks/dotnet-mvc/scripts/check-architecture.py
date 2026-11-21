@@ -14,6 +14,11 @@ Mide:
 4. Sin acceso a datos: ningun paquete ni `using` de un proveedor de base de datos.
 5. CSP sin `'unsafe-inline'` ni `'unsafe-eval'`.
 6. Tests deterministas: sin `Thread.Sleep`.
+7. Platform transversal (`Platform/*.cs`): no conoce features. Una feature es un
+   `XController`; Platform no lo referencia, no dibuja vistas fuera de
+   `Views/Shared/` ni usa modelos con el nombre de una feature (`X...Model`,
+   tambien en singular: `PagosController` -> `PagoViewModel`). Puede usar
+   vistas compartidas, modelos transversales y rutas como `/Home/Error`.
 
 NO mide (queda al review): reglas de negocio dentro de un controller, cambios
 de estado por GET, uso de `[AllowAnonymous]` e `[IgnoreAntiforgeryToken]`, y la
@@ -36,6 +41,7 @@ SLEEP_RE = re.compile(r"\bThread\.Sleep\s*\(")
 PAQUETE_RE = re.compile(r"<Package(?:Reference|Version)\s+Include=[\"']([^\"']+)[\"']", re.IGNORECASE)
 CLIENTE_RE = re.compile(r"\bclass\s+(\w+)\b[^{;]*?:[^{;]*\bI\w*Api\b")
 CSP_RE = re.compile(r"'unsafe-(?:inline|eval)'")
+VISTA_RE = re.compile(r"(?:~/)?\bViews/([A-Za-z0-9_]+)/")
 
 EN_CONTROLLER = re.compile(r"\bHttpClient\b|\bHttpRequestMessage\b|\bSystem\.Net\.Http\b"
                            r"|\bSqlConnection\b|\bDbContext\b")
@@ -57,6 +63,29 @@ def _es_proveedor(nombre: str) -> bool:
                for p in ACCESO_A_DATOS)
 
 
+def _singular(nombre: str) -> str:
+    for sufijo in ("es", "s"):
+        if nombre.endswith(sufijo) and len(nombre) > len(sufijo) + 2:
+            return nombre[: -len(sufijo)]
+    return nombre
+
+
+def _infracciones_platform(rel: str, codigo: str, features: set[str]) -> list[str]:
+    """Platform es transversal: no conoce controllers, vistas ni modelos de una feature."""
+    hallados: list[str] = []
+    for carpeta in sorted({m.group(1) for m in VISTA_RE.finditer(codigo)} - {"Shared"}):
+        hallados.append(f"vista ~/Views/{carpeta}/")
+    for feature in sorted(features):
+        if re.search(rf"\b{re.escape(feature)}Controller\b", codigo):
+            hallados.append(f"controller {feature}Controller")
+        nombres = sorted({feature, _singular(feature)}, key=len, reverse=True)
+        patron = rf"\b(?:{'|'.join(map(re.escape, nombres))})(?:[A-Z]\w*)?(?:ViewModel|Model|Form)\b"
+        for modelo in sorted(set(re.findall(patron, codigo))):
+            hallados.append(f"modelo {modelo} de {feature}")
+    return [f"{rel}: Platform no conoce features ({h}); lo transversal no depende de una pagina"
+            for h in hallados]
+
+
 def check_dotnet_mvc(root: Path) -> tuple[list[str], list[str]]:
     """Devuelve (errores, advertencias)."""
     errors: list[str] = []
@@ -72,6 +101,9 @@ def check_dotnet_mvc(root: Path) -> tuple[list[str], list[str]]:
     clientes = sorted({n for codigo in codigos.values() for n in CLIENTE_RE.findall(codigo)})
     en_cliente = re.compile("|".join(rf"\b{re.escape(n)}\b" for n in clientes)) if clientes else None
 
+    features = {f.name[: -len("Controller.cs")] for f in fuentes
+                if "Controllers" in f.relative_to(root).parts[:-1] and f.name.endswith("Controller.cs")}
+
     controllers = 0
     for f, codigo in codigos.items():
         rel = f.relative_to(root).as_posix()
@@ -82,6 +114,8 @@ def check_dotnet_mvc(root: Path) -> tuple[list[str], list[str]]:
         if CSP_RE.search(codigo):
             errors.append(f"{rel}: la CSP no admite 'unsafe-inline' ni 'unsafe-eval'; "
                           "el script o estilo va a un archivo de wwwroot")
+        if "Platform" in f.relative_to(root).parts[:-1]:
+            errors.extend(_infracciones_platform(rel, codigo, features))
         if "Controllers" not in f.relative_to(root).parts[:-1]:
             continue
         controllers += 1
