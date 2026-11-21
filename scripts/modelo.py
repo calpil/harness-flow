@@ -7,6 +7,7 @@ y los turnos siguientes de ese rol lo reutilizan en vez de volver a preguntar.
 
   modelo.py ver    --feature <id> | --doc prd|sdd
   modelo.py elegir --feature <id> | --doc prd|sdd  --modelo fable|opus
+  modelo.py gemini --rol producto|leader|implementer|revisor|cierre|estado | --todos
 
 Por que un script y no una linea en el comando: el `model` del frontmatter de
 un comando es fijo, y ningun comando puede cambiar el modelo de la sesion; solo
@@ -16,6 +17,10 @@ el turno con /harness-flow:usar-opus o usar-fable, sin pedirle nada al usuario.
 Los demas roles no pasan por aqui: Cierre y Revisor van en Opus 5.5 y el
 Implementer delegado en Sonnet 5.5; en pair implementa la sesion, en Opus 5.5
 (references/modelos.md).
+
+En Gemini 4 (AGY / Gemini CLI / Hermes), la asignacion es fija por rol y la
+consulta `modelo.py gemini --rol <rol>`: Carbon High para Producto y Leader,
+Argon High para Implementer y Revisor, y Hydrogen para Cierre y Estado/rutinas.
 """
 from __future__ import annotations
 
@@ -36,6 +41,93 @@ MODELOS = {
     "opus": {"id": "claude-opus-5-5", "nombre": "Claude Opus 5.5", "effort": "xhigh", "sube": None},
 }
 DOCS = ("prd", "sdd")
+
+GEMINI_4_ROLES = {
+    "producto": {
+        "nombre": "Gemini 4 Carbon (High)",
+        "id": "gemini-4-carbon",
+        "effort": "high",
+        "agy": "sesion principal en Gemini 4 Carbon (High)",
+        "cli": "gemini -m gemini-4-carbon",
+        "siguiente": "al pasar a Implementer/Revisor cambia a Gemini 4 Argon (High)",
+    },
+    "leader": {
+        "nombre": "Gemini 4 Carbon (High)",
+        "id": "gemini-4-carbon",
+        "effort": "high",
+        "agy": "sesion principal en Gemini 4 Carbon (High)",
+        "cli": "gemini -m gemini-4-carbon",
+        "siguiente": "antes de implementar (Rol 2) o delegar Revisor (Rol 3), cambia la sesion a Gemini 4 Argon (High)",
+    },
+    "implementer": {
+        "nombre": "Gemini 4 Argon (High)",
+        "id": "gemini-4-argon",
+        "effort": "high",
+        "agy": ("sesion principal en Gemini 4 Argon (High) (pair); si delegas con invoke_subagent "
+                "(TypeName='self', Model='inherit') hereda el modelo de la sesion — verifica estar en "
+                "Argon High, o usa swarm(action='add', model='Gemini 4 Argon (High)')"),
+        "cli": "gemini -m gemini-4-argon",
+        "siguiente": "al pasar a Cierre/Estado cambia a Gemini 4 Hydrogen",
+    },
+    "revisor": {
+        "nombre": "Gemini 4 Argon (High)",
+        "id": "gemini-4-argon",
+        "effort": "high",
+        "agy": ("invoke_subagent(TypeName='self', Model='inherit', Workspace='inherit') desde sesion en "
+                "Gemini 4 Argon (High) — NO uses 'research' ni fork; si tu sesion esta en otro modelo, "
+                "cambiala antes o usa swarm(action='add', model='Gemini 4 Argon (High)')"),
+        "cli": "gemini -m gemini-4-argon -p '<briefing + agents/revisor.md>' (contexto aislado, sin historial)",
+        "siguiente": "al cerrar (Rol 4) cambia a Gemini 4 Hydrogen",
+    },
+    "cierre": {
+        "nombre": "Gemini 4 Hydrogen",
+        "id": "gemini-4-hydrogen",
+        "effort": "medium/high",
+        "agy": "gates Python + sesion en Gemini 4 Hydrogen",
+        "cli": "gemini -m gemini-4-hydrogen",
+        "siguiente": None,
+    },
+    "estado": {
+        "nombre": "Gemini 4 Hydrogen",
+        "id": "gemini-4-hydrogen",
+        "effort": "low/medium",
+        "agy": "gates Python + sesion en Gemini 4 Hydrogen",
+        "cli": "gemini -m gemini-4-hydrogen",
+        "siguiente": "Producto/Leader: Carbon High · Implementer/Revisor: Argon High · Cierre/Estado: Hydrogen",
+    },
+}
+
+
+def lineas_modelo_gemini(rol: str, solo_si_gemini: bool = True) -> list[str]:
+    """Aviso compacto del modelo Gemini 4 esperado para `rol`. Vacio si el host no es gemini."""
+    if solo_si_gemini:
+        try:
+            import entorno
+            if entorno.host_agente() != "gemini":
+                return []
+        except Exception:
+            return []
+    info = GEMINI_4_ROLES.get(rol)
+    if not info:
+        return []
+    L = [
+        f"modelo Gemini 4 ({rol}): {info['nombre']} (`{info['id']}`, effort {info['effort']})",
+        f"  AGY: {info['agy']}",
+        f"  Gemini CLI: {info['cli']}",
+    ]
+    if info.get("siguiente"):
+        L.append(f"  transicion: {info['siguiente']}")
+    return L
+
+
+def cmd_gemini(args) -> None:
+    if args.todos or not args.rol:
+        print("Politica Gemini 4 por rol (references/gemini.md):")
+        for rol, info in GEMINI_4_ROLES.items():
+            print(f"  {rol:<12} -> {info['nombre']} ({info['id']}, effort {info['effort']})")
+        return
+    for linea in lineas_modelo_gemini(args.rol, solo_si_gemini=False):
+        print(linea)
 
 
 def _clave(args) -> tuple[str, str]:
@@ -120,6 +212,10 @@ def main() -> None:
         if nombre == "elegir":
             s.add_argument("--modelo", required=True, choices=sorted(MODELOS))
         s.set_defaults(fn=fn)
+    g = sub.add_parser("gemini", help="Modelo Gemini 4 por rol (Carbon High / Argon High / Hydrogen)")
+    g.add_argument("--rol", choices=list(GEMINI_4_ROLES))
+    g.add_argument("--todos", action="store_true", help="Muestra la tabla completa de roles")
+    g.set_defaults(fn=cmd_gemini)
     args = ap.parse_args()
     args.fn(args)
 

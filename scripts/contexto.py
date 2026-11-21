@@ -1512,11 +1512,21 @@ def _repos_de_la_feature(p: dict, f: dict, micros: list[str]) -> tuple[list[tupl
             sin_repo.append(m)
         elif ruta.resolve() != raiz.resolve() or principal == raiz:
             agregar(nombre, ruta)
+    sin_alcance_fijado = (
+        not f.get("last_spec_sig")
+        and f.get("status") in ("todo", "pending")
+        and not f.get("worktree")
+        and not (f.get("multi_repo") or {}).get("repos")
+    )
     if (len(repos) == 1 and not micros and not sin_repo
-            and stack.detectar_stack_directorio(principal)["stack"] == "generico"):
+            and (stack.detectar_stack_directorio(principal)["stack"] == "generico"
+                 or sin_alcance_fijado)):
         for d in stack.detectar_todos_los_destinos(raiz):
             if d["stack"] != "generico":
                 agregar(Path(d["path"]).name, Path(d["path"]))
+        for nombre_servicio, info in servicios_del_proyecto(p).items():
+            if stack.detectar_stack_directorio(info["path"])["stack"] != "generico":
+                agregar(nombre_servicio, info["path"])
     return repos, sin_repo
 
 
@@ -1594,6 +1604,10 @@ def lineas_modo(f: dict) -> list[str]:
         + normas.comando("hallazgo.py", "anotar", "--texto", "<hallazgo>") + " [--feature <id>]",
     ]
     if modo == "pair":
+        herramienta = (
+            " (en AGY usa ask_question; en Gemini CLI usa formulario Markdown)"
+            if _host() == "gemini" else ""
+        )
         return ["modo pair automatico: ACTIVADO (por defecto en cualquier repo; registrado en el backlog)",
                 f"  antes de escribir codigo: lista de tests en docs/tests-{f['id']}.md (un test por AC). "
                 "Sellala tu: " + normas.comando("gate.py", "sellar-tests", "--feature", str(f["id"]))
@@ -1605,7 +1619,7 @@ def lineas_modo(f: dict) -> list[str]:
                 "  formulario SOLO para: las paradas (1), (3) y (4); quitar un test sellado; un AC que "
                 "queda solo con verificacion manual; y lo que sella el usuario (enmienda, ficha nueva, "
                 "cierre). Lo demas lo decides tu y lo reportas.",
-                "  como preguntar: junta las preguntas pendientes en UN formulario, con la opcion "
+                f"  como preguntar: junta las preguntas pendientes en UN formulario{herramienta}, con la opcion "
                 "recomendada primero. Mientras esperas, sigue con lo que no depende de la respuesta.",
                 "  si eres un subagente: no puedes preguntar al usuario. Devuelve la pregunta a quien te lanzo."]
     if modo == "delegado":
@@ -1765,6 +1779,12 @@ def lineas_documentacion(sid: str, manifest: dict) -> list[str]:
             # En Hermes el MCP entra como tools diferidas, con otro nombre.
             L.append("    en Hermes: mcp__context7__query_docs con ese libraryId "
                      "(tool_describe y tool_call; mcp__context7__resolve_library_id si no hay id)")
+        elif _host() == "gemini":
+            # En AGY el MCP entra lazy-loaded; en Gemini CLI se invoca directo desde ~/.gemini/settings.json.
+            L.append("    en AGY: context7 es MCP lazy-loaded -> lee <appDataDir>/mcp/context7/ y llama "
+                     "call_mcp_tool(ServerName='context7', ToolName='query-docs'|'resolve-library-id', Arguments=...)")
+            L.append("    en Gemini CLI: invoca las tools MCP resolve-library-id / query-docs "
+                     "(configuradas en ~/.gemini/settings.json)")
     for q in c7.get("suggested_queries", [])[:3]:
         L.append(f"    consulta sugerida: {q}")
     if doc.get("security_advisories"):
@@ -1826,7 +1846,19 @@ def _para_grok(p: dict, f: dict | None, por_stack: dict, rules: dict | None, rol
         return [f"[!] grok sesion: no se pudieron publicar las skills y rules ({exc})"]
 
 
-def lineas_reglas(p: dict, data: dict, f: dict, micros: list[str]) -> list[str]:
+def _para_gemini(p: dict, f: dict | None, por_stack: dict, rules: dict | None, rol: str) -> list[str]:
+    """En Gemini (AGY/CLI), publica en .agents/ y .gemini/ las rules y skills de repos hermanos."""
+    try:
+        import gemini_sesion
+        extras = gemini_sesion.arboles_extra(p["root"], f) if f else []
+        return gemini_sesion.publicar(p["root"], por_stack, rules, rol, extras)
+    except Exception as exc:
+        return [f"[!] gemini sesion: no se pudieron publicar las skills y rules ({exc})"]
+
+
+def lineas_reglas(p: dict, data: dict, f: dict, micros: list[str],
+                  rol: str = "feature",
+                  repos_extra: list[tuple[str, Path]] | None = None) -> list[str]:
     """El TEXTO de las reglas y el indice de skills de cada stack que la feature toca.
 
     El brief solo las nombraba. En un repo fuera del proyecto de la sesion, o en
@@ -1834,9 +1866,15 @@ def lineas_reglas(p: dict, data: dict, f: dict, micros: list[str]) -> list[str]:
     haberlas visto. Aqui llegan por la salida del script, en cualquier host.
     """
     repos, _ = _repos_de_la_feature(p, f, micros)
+    for nombre, ruta in repos_extra or []:
+        res = Path(ruta).resolve()
+        if res.is_dir() and all(res != r for _, r in repos):
+            repos.insert(0, (nombre, res))
     por_stack, _ = _por_stack(repos)
-    return _para_grok(p, f, por_stack, data.get("rules"), "feature") + lineas_normativa(
-        por_stack, data.get("rules"))
+    rol_grok = "feature" if rol in ("leader", "implementer", "revisor") else rol
+    return (_para_grok(p, f, por_stack, data.get("rules"), rol_grok)
+            + _para_gemini(p, f, por_stack, data.get("rules"), rol)
+            + lineas_normativa(por_stack, data.get("rules")))
 
 
 def _repos_del_proyecto(p: dict) -> list[tuple[str, Path]]:
@@ -1891,6 +1929,7 @@ def lineas_stacks_proyecto(p: dict, data: dict, resumen: bool = False) -> list[s
     L.append("El SDD no contradice estas reglas: una decision que se aparte de ellas va como D-n, "
              "con su alternativa descartada.")
     return (_para_grok(p, None, por_stack, data.get("rules"), "sdd")
+            + _para_gemini(p, None, por_stack, data.get("rules"), "sdd")
             + L + lineas_normativa(por_stack, data.get("rules")))
 
 
@@ -1919,6 +1958,12 @@ def cmd_brief(args) -> None:
              f"worktree: {f.get('worktree') or '(sin worktree)'}")
     if getattr(args, "con_modo", True):
         L += lineas_modo(f)
+        try:
+            import modelo
+            rol_gemini = "leader" if not f.get("last_spec_sig") else "implementer"
+            L += modelo.lineas_modelo_gemini(rol_gemini)
+        except Exception:
+            pass
     else:
         # El revisor: sabe como se implemento, sin las ordenes del implementer
         # (sellar la lista, commitear sin pedir permiso) que el no debe cumplir.
@@ -2041,7 +2086,8 @@ def cmd_brief(args) -> None:
     reglas = []
     if getattr(args, "con_reglas", True):
         try:
-            reglas = lineas_reglas(p, data, f, micros)
+            rol_sesion = "leader" if not f.get("last_spec_sig") else "implementer"
+            reglas = lineas_reglas(p, data, f, micros, rol=rol_sesion)
         except Exception as exc:
             reglas = ["", f"[!] no se pudieron cargar las reglas del stack: {exc}"]
         # Las normas de ingenieria salen del mismo registro que el briefing del

@@ -147,8 +147,16 @@ def cmd_briefing(a) -> None:
 
     print("=" * 72)
     print("CONTEXTO PARA EL SUBAGENTE REVISOR "
-          "(delegate_task en Hermes | Agent en Claude Code | invoke_subagent 'self' en AGY/Gemini | spawn_subagent en Grok)")
+          "(delegate_task en Hermes | Agent en Claude Code | invoke_subagent 'self' / swarm en AGY | "
+          "gemini -m gemini-4-argon -p en Gemini CLI | spawn_subagent en Grok)")
     print("=" * 72)
+    try:
+        import modelo
+        lineas_mod = modelo.lineas_modelo_gemini("revisor")
+        if lineas_mod:
+            print("\n".join(lineas_mod) + "\n")
+    except Exception:
+        pass
     for x in (aviso_arbol, aviso_diff):
         if x:
             print(f"[!!] {x}\n"
@@ -269,7 +277,10 @@ Reglas:
                   "  Context7 y el escaner de este stack van abajo, en su bloque DOCUMENTACION VIGENTE.\n")
         # El texto completo de las reglas y el indice de skills: el revisor no depende
         # de que su host los cargue ni de que esten instalados en el repo.
-        reglas = contexto.lineas_reglas(p, load_backlog(p), f, micros)
+        extras_wt = [(Path(wt).name, Path(wt).resolve())] if wt and Path(wt).is_dir() else None
+        reglas = contexto.lineas_reglas(
+            p, load_backlog(p), f, micros, rol="revisor", repos_extra=extras_wt
+        )
         if reglas:
             print("\n".join(reglas) + "\n")
     except Exception as exc:

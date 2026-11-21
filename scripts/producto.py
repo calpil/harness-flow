@@ -661,6 +661,14 @@ def cmd_borrador(args) -> None:
     print("[i]  rellena cada seccion (las guias <!-- --> se reemplazan o se borran),")
     print("     MUESTRASELO al usuario y solo con su SI corre:")
     print(f"     producto.py aprobar --doc {doc} --yes")
+    try:
+        import modelo
+        lineas_mod = modelo.lineas_modelo_gemini("producto")
+        if lineas_mod:
+            print()
+            print("\n".join(lineas_mod))
+    except Exception:
+        pass
     # El rol producto no pasa por el brief de una feature. La norma de los stacks
     # del proyecto le llega aqui, por la salida del comando que si corre siempre:
     # completa para el SDD (es arquitectura), en resumen para el PRD.

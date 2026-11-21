@@ -59,6 +59,12 @@ def main() -> None:
         print(f"   [!] no se pudo evaluar el contexto: {exc}")
     print(f"   vault: {vault}")
     print(f"   jira:  {'configurado' if p['atlassian'].exists() else 'sin binding'}")
+    try:
+        import modelo
+        for linea in modelo.lineas_modelo_gemini("estado"):
+            print(f"   {linea}")
+    except Exception:
+        pass
     norm_info = None
     try:
         import stack

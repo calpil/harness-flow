@@ -469,11 +469,15 @@ def verificar_cumplimiento(repo: Path, stack_id: str | None = None,
 
     agents_md = repo / "AGENTS.md"
     has_agents_md = agents_md.exists()
+    gemini_md = repo / "GEMINI.md"
+    has_gemini_md = gemini_md.exists()
 
     if missing_rules:
         findings.append(f"Reglas modulares faltantes en (.claude/rules/, .agents/rules/ o .gemini/rules/): {', '.join(missing_rules)}")
     if not has_agents_md:
-        warnings.append("Falta AGENTS.md en la raiz del microservicio/repo (recomendado para LLMs no-Claude: Codex, Gemini, Grok, Kimi)")
+        warnings.append("Falta AGENTS.md en la raiz del microservicio/repo (recomendado para LLMs no-Claude: Codex, Gemini/AGY, Grok, Kimi)")
+    if not has_gemini_md:
+        warnings.append("Falta GEMINI.md en la raiz del microservicio/repo (recomendado para Gemini CLI; importa @./AGENTS.md)")
 
     # B. Chequeo de Skills (.claude/skills/, .agents/skills/ o .gemini/skills/)
     skills_claude = repo / ".claude" / "skills"
@@ -580,6 +584,7 @@ def verificar_cumplimiento(repo: Path, stack_id: str | None = None,
         "copias_modificadas": copias_modificadas,
         "multi_llm_ready": multi_llm_ready,
         "full_multi_llm_parity": full_multi_llm_parity,
+        "has_gemini_md": has_gemini_md,
         "hosts_active": hosts_active,
         "findings": findings,
         "warnings": warnings,
@@ -703,9 +708,11 @@ def plan_de_copias(repo: Path, stack_id: str, excluidas=frozenset()) -> list[dic
             plan.append({"rel": rel, "tipo": "carpeta", "etiqueta": etiqueta, "estado": estado,
                          "motivo": motivo, "origen": skill, "huella": copias.huella_arbol(esperado)})
 
-    # AGENTS.md: se genera si falta. Uno que ya existe es del usuario salvo que el
-    # registro pruebe que es el que el arnes genero y nadie lo toco.
+    # AGENTS.md y GEMINI.md: se generan si faltan. Uno que ya existe es del usuario
+    # salvo que el registro pruebe que es el que el arnes genero y nadie lo toco.
     archivo("AGENTS.md", _generar_agents_md(stack_id, manifest).encode("utf-8"),
+            lambda actual: False, "contrato")
+    archivo("GEMINI.md", _generar_gemini_md(stack_id, manifest).encode("utf-8"),
             lambda actual: False, "contrato")
 
     for validador in validadores:
@@ -739,6 +746,8 @@ def copia_vigente(repo: Path, stack_id: str, rel: str) -> dict[str, Any] | None:
 def _instalada(item: dict[str, Any]) -> str:
     rel = item["rel"]
     if item["etiqueta"] == "contrato":
+        if rel == "GEMINI.md":
+            return "Generado contrato Gemini CLI/AGY en GEMINI.md"
         return "Generado contrato multi-LLM en AGENTS.md"
     if item["etiqueta"] == "validador":
         return f"Instalado validador: {rel}"
@@ -818,13 +827,18 @@ def normalizar_repositorio(repo: Path, stack_id: str | None = None, dry_run: boo
             accion = f"Actualizada {item['etiqueta']}: {rel} ({item['motivo']})"
         elif item["etiqueta"] == "contrato":
             texto_actual = (repo / rel).read_text(encoding="utf-8", errors="ignore")
-            if reemplazar and texto_actual.startswith("# AGENTS.md — Contrato Operativo y Normativo ("):
-                accion = "Actualizado contrato multi-LLM en AGENTS.md (--reemplazar)"
+            prefijo = (
+                "# GEMINI.md — Contrato Operativo y Normativo ("
+                if rel == "GEMINI.md"
+                else "# AGENTS.md — Contrato Operativo y Normativo ("
+            )
+            if reemplazar and texto_actual.startswith(prefijo):
+                accion = f"Actualizado contrato multi-LLM en {rel} (--reemplazar)"
             else:
                 if "CALPIL" not in texto_actual:
-                    # Antes se reemplazaba entero por la plantilla del stack: el AGENTS.md del
+                    # Antes se reemplazaba entero por la plantilla del stack: el contrato del
                     # proyecto se perdia. Un archivo que ya existe es del usuario.
-                    avisos.append("AGENTS.md ya existe y no se reemplaza: el contrato del stack queda en las rules instaladas")
+                    avisos.append(f"{rel} ya existe y no se reemplaza: el contrato del stack queda en las rules instaladas")
                 continue
         elif reemplazar:
             accion = f"Reemplazada {item['etiqueta']}: {rel} (--reemplazar)"
@@ -953,6 +967,36 @@ def _generar_agents_md(stack_id: str, manifest: dict[str, Any]) -> str:
         "",
     ])
 
+    return "\n".join(lines)
+
+
+def _generar_gemini_md(stack_id: str, manifest: dict[str, Any]) -> str:
+    """Genera GEMINI.md compacto para Gemini CLI y AGY, importando AGENTS.md."""
+    name = manifest.get("name", stack_id)
+    desc = manifest.get("description", "")
+    doc_cfg = manifest.get("documentation", {})
+    context7_cfg = doc_cfg.get("context7", {})
+    c7_id = context7_cfg.get("library_id")
+
+    lines = [
+        f"# GEMINI.md — Contrato Operativo y Normativo ({name})",
+        "",
+        f"> **Stack Tecnológico (CALPIL):** `{stack_id}`  ",
+        f"> **Descripción:** {desc}  ",
+        "> **Modo de Operación:** Pair Automático activado por defecto (`gate.py approve-spec` / `gate.py sellar-tests`).",
+        "",
+        "@./AGENTS.md",
+        "",
+        "## Convenciones Específicas para Gemini (AGY y Gemini CLI)",
+        "",
+        "- **Rules y Skills del stack:** AGY carga `.agents/rules/` (`trigger: always_on`) y `.agents/skills/`; Gemini CLI carga `.gemini/rules/` y `.gemini/skills/`. En proyectos multi-repo con repos hermanos, `contexto.py brief`, `revision.py --briefing` y `producto.py borrador --doc sdd` publican además las reglas y skills de los otros stacks en la sesión (`<stack>--<nombre>`, excluidas de git).",
+        "- **Política de modelos Gemini 4 por rol:** Producto (PRD/SDD) y Leader (Spec) → `Gemini 4 Carbon (High)` (`gemini-4-carbon`); Implementer y Revisor aislado → `Gemini 4 Argon (High)` (`gemini-4-argon`); Cierre y Estado/rutinas → `Gemini 4 Hydrogen` (`gemini-4-hydrogen`).",
+        ("- **Context7 MCP:** "
+         + (f"library `{c7_id}` " if c7_id else "resuelve el id con `resolve-library-id` ")
+         + "— en AGY es lazy-loaded (`call_mcp_tool` con `ServerName=\"context7\"`); en Gemini CLI se configura en `~/.gemini/settings.json` (`httpUrl`)."),
+        "- **Formularios en Modo Pair:** en AGY usa la herramienta nativa `ask_question`; en Gemini CLI usa formulario estructurado Markdown con la opción recomendada primero.",
+        "",
+    ]
     return "\n".join(lines)
 
 

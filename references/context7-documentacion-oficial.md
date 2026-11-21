@@ -42,10 +42,14 @@ Los modelos de lenguaje (LLMs) tienen fechas de corte de entrenamiento fijas (*k
   ```json
   { "context7": { "httpUrl": "https://mcp.context7.com/mcp" } }
   ```
-* **AGY / Antigravity** (su archivo de configuración MCP, dentro de `mcpServers`):
+* **AGY / Antigravity** (`~/.gemini/config/mcp_config.json`, dentro de `mcpServers`):
   ```json
   { "context7": { "serverUrl": "https://mcp.context7.com/mcp" } }
   ```
+  En AGY las tools de Context7 entran como **MCP lazy-loaded**: lee primero el schema en
+  `<appDataDir>/mcp/context7/<toolName>.json` y llama `call_mcp_tool(ServerName="context7",
+  ToolName="query-docs"|"resolve-library-id", Arguments=...)`. En AGY el brief lo recuerda
+  automáticamente bajo la línea `Context7:`.
 * **Grok:**
   ```bash
   grok mcp add --transport http context7 https://mcp.context7.com/mcp

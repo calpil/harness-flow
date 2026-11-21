@@ -37,7 +37,7 @@ flowchart LR
    * Maximiza la tasa de acierto del **Prompt Caching** del proveedor (reduciendo hasta un 80% la latencia y costo).
 3. **Model Router (Enrutador de Modelos)**:
    * No todas las tareas requieren el modelo de mayor capacidad (y costo).
-   * Enruta tareas mecánicas o extractivas a modelos compactos y ultra-rápidos (*flash*, *haiku*, *luna*), reservando modelos de razonamiento profundo (*opus*, *argon*, *sol*) para arquitectura, síntesis compleja y revisión de código.
+   * Enruta tareas mecánicas o extractivas a modelos compactos y ultra-rápidos (*hydrogen*, *flash*, *haiku*, *luna*), reservando modelos de razonamiento profundo (*carbon*, *argon*, *opus*, *sol*) para arquitectura, síntesis compleja y revisión de código.
 4. **Foundation Model & Structured Outputs (Inferencia Tipada)**:
    * **Prohibido el parsing de texto libre** para integraciones de sistema.
    * Exige siempre salidas estructuradas mediante contratos formales: **JSON Schema**, Function Calling nativo o Grammar-guided sampling.

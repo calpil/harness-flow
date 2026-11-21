@@ -32,6 +32,6 @@ Detalles específicos de cada host:
 
 - [OpenAI GPT / Codex](openai.md)
 - [Claude Code](claude.md)
-- [Gemini / AGY](modelos.md#gemini-4-carbon--argon--hydrogen-en-agy-y-hermes)
+- [Gemini (AGY y Gemini CLI)](gemini.md)
 - [Grok](grok.md)
 - [Kimi Code](kimi.md)
