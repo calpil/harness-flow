@@ -618,3 +618,150 @@ class PlantillasOficialesTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def raiz_multirepo(raiz: Path) -> Path:
+    """La raiz de un proyecto multi-repo: una solucion local y el codigo solo en sus repos y worktrees."""
+    escribir(raiz / "Proyecto.local.slnx", "<Solution />")
+    api_en_capas(raiz / "api")
+    (raiz / "api" / ".git").mkdir()
+    portal_mvc(raiz / "web")
+    (raiz / "web" / ".git").mkdir()
+    escribir(raiz / "api-wt" / "1-pagos" / ".git", "gitdir: /otro/lugar/.git/worktrees/1-pagos\n")
+    api_en_capas(raiz / "api-wt" / "1-pagos")
+    return raiz
+
+
+class StackDeclaradoTests(Base):
+    """El contrato AGENTS.md que genera el arnes declara el stack del repo y manda sobre la heuristica.
+
+    Lo que se midio antes del cambio: la raiz de DEREC (una solucion local `.slnx`, ignorada por git,
+    y el codigo solo en `api/`, `web/`, `sync/` y sus worktrees) se detectaba como `dotnet-hexagonal`
+    en cada arranque. `estado.py` le volvia a instalar la norma hexagonal aunque el usuario le
+    hubiera puesto la MVC con `normalizar --stack dotnet-mvc`.
+    """
+
+    def test_sin_contrato_la_raiz_multirepo_cae_en_el_stack_general(self):
+        self.assertEqual(HEXAGONAL, self.detectado(raiz_multirepo(self.tmp / "raiz")))
+
+    def test_el_contrato_que_deja_normalizar_declara_el_stack(self):
+        raiz = raiz_multirepo(self.tmp / "raiz")
+        stack.normalizar_repositorio(raiz, MVC)
+        res = stack.detectar_stack_directorio(raiz)
+        self.assertEqual(MVC, res["stack"])
+        self.assertEqual(100, res["confidence"])
+        self.assertTrue(any("AGENTS.md" in i for i in res["indicators"]), res["indicators"])
+
+    def test_el_contrato_manda_aunque_la_heuristica_diga_otro_stack(self):
+        repo = api_en_capas(self.tmp / "api")
+        stack.normalizar_repositorio(repo, MVC)
+        self.assertEqual(MVC, self.detectado(repo))
+
+    def test_un_agents_md_del_usuario_no_declara_nada(self):
+        raiz = raiz_multirepo(self.tmp / "raiz")
+        escribir(raiz / "AGENTS.md", "# Contrato del equipo\n\n> **Stack Tecnológico:** `dotnet-mvc`  \n")
+        self.assertEqual(HEXAGONAL, self.detectado(raiz))
+
+    def test_un_stack_declarado_que_no_existe_no_cuenta(self):
+        raiz = raiz_multirepo(self.tmp / "raiz")
+        escribir(raiz / "AGENTS.md", "# AGENTS.md — Contrato Operativo y Normativo (Otro)\n\n"
+                                     "> **Stack Tecnológico:** `cobol-zos`  \n")
+        self.assertEqual(HEXAGONAL, self.detectado(raiz))
+
+    def test_la_raiz_declarada_mvc_no_mide_el_codigo_de_sus_repos(self):
+        raiz = raiz_multirepo(self.tmp / "raiz")
+        stack.normalizar_repositorio(raiz, MVC)
+        diag = stack.verificar_cumplimiento(raiz, MVC)
+        self.assertTrue(diag["architecture_ok"], diag["architecture_errors"])
+
+    def test_la_deteccion_se_puede_serializar(self):
+        """`stack.py detectar --json` caia con 'Circular reference detected': el ganador se contenia a si mismo."""
+        for armar in (api_en_capas, raiz_multirepo):
+            with self.subTest(repo=armar.__name__):
+                json.dumps(stack.detectar_stack_directorio(armar(self.tmp / armar.__name__)))
+
+
+class SubRepoNoSeMideTests(Base):
+    """Un sub-repo o un worktree (carpeta con su propio `.git`) es otro repo: el verificador no lo mide."""
+
+    CASOS = ((MVC, "check_dotnet_mvc", "Controllers/XController.cs",
+              "public sealed class XController(HttpClient http) { }\n"),
+             (LAYERED, "check_dotnet_layered", "Pagos/PagosController.cs",
+              "public sealed class PagosController(IPagoRepository repository) { }\n"),
+             (HEXAGONAL, "check_dotnet_architecture", "Domain/Pago.cs",
+              "using Dapper;\nnamespace Acme.Domain;\npublic sealed class Pago { }\n"))
+
+    def armar(self, stack_id: str) -> Path:
+        repo = self.tmp / stack_id
+        if stack_id == MVC:
+            return portal_mvc(repo)
+        if stack_id == LAYERED:
+            return api_en_capas(repo)
+        escribir(repo / "Acme.sln", "")
+        escribir(repo / "src" / "WebApi" / "Program.cs", "var builder = WebApplication.CreateBuilder(args);\n")
+        return repo
+
+    def test_el_codigo_de_un_sub_repo_o_de_un_worktree_no_se_mide(self):
+        for stack_id, funcion, rel, codigo in self.CASOS:
+            check = getattr(verificador(stack_id), funcion)
+            repo = self.armar(stack_id)
+            base = check(repo)[0]
+            for nombre, git in (("sub-repo", "dir"), ("worktree", "archivo")):
+                with self.subTest(stack=stack_id, carpeta=nombre):
+                    otro = repo / nombre
+                    if git == "dir":
+                        (otro / ".git").mkdir(parents=True)
+                    else:
+                        escribir(otro / ".git", "gitdir: /otro/lugar\n")
+                    escribir(otro / "src" / "Otro.Api" / rel, codigo)
+                    self.assertEqual(base, check(repo)[0])
+
+    def test_la_misma_carpeta_sin_git_si_se_mide(self):
+        for stack_id, funcion, rel, codigo in self.CASOS:
+            with self.subTest(stack=stack_id):
+                check = getattr(verificador(stack_id), funcion)
+                repo = self.armar(stack_id)
+                base = check(repo)[0]
+                escribir(repo / "suelto" / "src" / "Otro.Api" / rel, codigo)
+                self.assertNotEqual(base, check(repo)[0])
+
+    def test_una_raiz_sin_codigo_propio_avisa_y_no_infringe(self):
+        raiz = raiz_multirepo(self.tmp / "raiz")
+        for stack_id, funcion, _, _ in self.CASOS:
+            with self.subTest(stack=stack_id):
+                errores, avisos = getattr(verificador(stack_id), funcion)(raiz)
+                self.assertEqual([], errores)
+                self.assertTrue(any("Sin codigo .NET propio" in a for a in avisos), avisos)
+
+    def test_un_repo_con_codigo_propio_sigue_exigiendo_su_composition_root(self):
+        raiz = raiz_multirepo(self.tmp / "raiz")
+        escribir(raiz / "src" / "Suelto" / "Suelto.cs", "public sealed class Suelto { }\n")
+        for stack_id, funcion, _, _ in self.CASOS:
+            with self.subTest(stack=stack_id):
+                errores = getattr(verificador(stack_id), funcion)(raiz)[0]
+                self.assertTrue(any("omposition" in e and "ausente" in e for e in errores), errores)
+
+    def test_lo_que_git_ignora_no_se_mide(self):
+        for stack_id, funcion, rel, codigo in self.CASOS:
+            with self.subTest(stack=stack_id):
+                check = getattr(verificador(stack_id), funcion)
+                repo = self.armar(stack_id)
+                subprocess.run(["git", "init", "-q"], cwd=repo, check=True)
+                escribir(repo / ".gitignore", "/.local-dev/\n/Suelto.local.cs\n")
+                base = check(repo)[0]
+                escribir(repo / ".local-dev" / "src" / "Otro.Api" / rel, codigo)
+                escribir(repo / "Suelto.local.cs", codigo)
+                self.assertEqual(base, check(repo)[0])
+                escribir(repo / "local-dev" / "src" / "Otro.Api" / rel, codigo)
+                self.assertNotEqual(base, check(repo)[0])
+
+    def test_una_raiz_con_solo_codigo_ignorado_y_sus_repos_avisa_y_no_infringe(self):
+        raiz = raiz_multirepo(self.tmp / "raiz")
+        subprocess.run(["git", "init", "-q"], cwd=raiz, check=True)
+        escribir(raiz / ".gitignore", "/.local-dev/\n/*.local.slnx\n")
+        escribir(raiz / ".local-dev" / "init-db.cs", "using System.Data;\npublic static class InitDb { }\n")
+        for stack_id, funcion, _, _ in self.CASOS:
+            with self.subTest(stack=stack_id):
+                errores, avisos = getattr(verificador(stack_id), funcion)(raiz)
+                self.assertEqual([], errores)
+                self.assertTrue(any("Sin codigo .NET propio" in a for a in avisos), avisos)

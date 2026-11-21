@@ -154,10 +154,49 @@ def evaluar_stack_manifest(manifest: dict[str, Any], repo: Path) -> tuple[int, l
     return confidence, indicators
 
 
+CONTRATO_AGENTS = "# AGENTS.md — Contrato Operativo y Normativo ("
+_STACK_DEL_CONTRATO = re.compile(r"^> \*\*Stack Tecnológico:\*\* `([A-Za-z0-9_-]+)`", re.MULTILINE)
+
+
+def stack_declarado(repo: Path) -> str | None:
+    """El stack que declara el AGENTS.md que el arnes genero para el repo, o None.
+
+    Es la norma que el repo ya lleva, versionada con el: manda sobre la heuristica. Sin
+    esto, la raiz de un proyecto multi-repo (una solucion local que agrupa los repos, y el
+    codigo solo en ellos) se detectaba como `dotnet-hexagonal` en cada arranque, y
+    `estado.py` le reinstalaba esa norma aunque el usuario le hubiera puesto otra. El
+    stack se cambia con `normalizar --stack <id> --reemplazar`, que reescribe el contrato.
+    Un AGENTS.md que no genero el arnes no declara nada.
+    """
+    try:
+        texto = (repo / "AGENTS.md").read_text(encoding="utf-8", errors="ignore")
+    except OSError:
+        return None
+    if not texto.startswith(CONTRATO_AGENTS):
+        return None
+    hallado = _STACK_DEL_CONTRATO.search(texto)
+    return hallado.group(1) if hallado else None
+
+
 def detectar_stack_directorio(repo: Path) -> dict[str, Any]:
-    """Detecta dinámicamente el stack tecnológico predominante usando los manifests de assets/stacks/."""
+    """Detecta dinámicamente el stack tecnológico predominante usando los manifests de assets/stacks/.
+
+    Un repo cuyo AGENTS.md del arnes declara un stack conocido tiene ese stack (`stack_declarado`).
+    """
     repo = repo.resolve()
     manifests = listar_stacks_disponibles()
+
+    declarado = stack_declarado(repo)
+    manifest_declarado = next((m for m in manifests if m.get("id") == declarado), None)
+    if manifest_declarado is not None:
+        elegido = {
+            "stack": declarado,
+            "name": manifest_declarado.get("name", declarado),
+            "confidence": 100,
+            "indicators": [f"AGENTS.md declara `{declarado}`"],
+            "path": str(repo),
+        }
+        return {**elegido, "candidates": [dict(elegido)]}
 
     candidatos = []
     for man in manifests:
@@ -191,9 +230,8 @@ def detectar_stack_directorio(repo: Path) -> dict[str, Any]:
 
     # Confianza descendente; un empate lo decide el id, no el orden del disco.
     candidatos.sort(key=lambda x: (-x["confidence"], str(x["stack"])))
-    ganador = candidatos[0]
-    ganador["candidates"] = candidatos
-    return ganador
+    # Una copia: el ganador dentro de su propia lista de candidatos hacia caer `detectar --json`.
+    return {**candidatos[0], "candidates": candidatos}
 
 
 def familia_de(stack_id: str) -> set[str]:

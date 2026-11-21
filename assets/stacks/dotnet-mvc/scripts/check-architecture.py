@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import argparse
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -53,9 +54,68 @@ def _es_test(rel: Path) -> bool:
     return any("Test" in p for p in rel.parts)
 
 
+# Se vacian al empezar cada medicion: el disco y el .gitignore cambian entre una y otra.
+_CON_GIT: dict[Path, bool] = {}
+_IGNORADOS: dict[Path, frozenset[str]] = {}
+
+
+def _tiene_git(carpeta: Path) -> bool:
+    if carpeta not in _CON_GIT:
+        _CON_GIT[carpeta] = (carpeta / ".git").exists()
+    return _CON_GIT[carpeta]
+
+
+def _ignorados(root: Path) -> frozenset[str]:
+    """Lo que git ignora en `root`, relativo a el ('.local-dev/', 'Local.slnx'); vacio fuera de git."""
+    _vistos = _IGNORADOS
+    if root not in _vistos:
+        try:
+            salida = subprocess.run(["git", "-C", str(root), "ls-files", "--others", "--ignored",
+                                     "--exclude-standard", "--directory"],
+                                    capture_output=True, text=True, timeout=60)
+            _vistos[root] = frozenset(salida.stdout.splitlines()) if salida.returncode == 0 else frozenset()
+        except (OSError, subprocess.SubprocessError):
+            _vistos[root] = frozenset()
+    return _vistos[root]
+
+
+def _en_otro_repo(root: Path, archivo: Path) -> bool:
+    """Lo que no es codigo de este repo no se mide: un sub-repo o un worktree, o algo que git ignora.
+
+    Un sub-repo o un worktree es una carpeta con su propio `.git`. Sin esto, la raiz de un
+    proyecto multi-repo media el codigo de cada repo hermano con la norma de la raiz, el de
+    cada worktree de feature una vez mas, y un script local ignorado (`.local-dev/`) como si
+    fuera del producto.
+    """
+    partes = archivo.relative_to(root).parts
+    ignorados = _ignorados(root)
+    if ignorados and ("/".join(partes) in ignorados
+                      or any("/".join(partes[:i]) + "/" in ignorados for i in range(1, len(partes)))):
+        return True
+    return any(_tiene_git(root.joinpath(*partes[:i])) for i in range(1, len(partes)))
+
+
+SIN_CODIGO_PROPIO = ("Sin codigo .NET propio: todo vive en sub-repos o worktrees (carpetas con su propio .git), "
+                     "que se miden en su repo. Aqui no se midio nada.")
+
+
+def _solo_en_otros_repos(root: Path, patrones: tuple[str, ...] = ("**/*.cs", "**/*.csproj", "**/*.cshtml")) -> bool:
+    """La carpeta no tiene codigo .NET propio y sus sub-repos o worktrees si (la raiz de un multi-repo)."""
+    en_otros = False
+    for patron in patrones:
+        for f in root.glob(patron):
+            if {"obj", "bin"} & set(f.relative_to(root).parts[:-1]):
+                continue
+            if not _en_otro_repo(root, f):
+                return False
+            en_otros = True
+    return en_otros
+
+
 def _fuentes(root: Path, patron: str) -> list[Path]:
     return sorted(f for f in root.glob(patron)
-                  if not {"obj", "bin", "wwwroot"} & set(f.relative_to(root).parts[:-1]))
+                  if not {"obj", "bin", "wwwroot"} & set(f.relative_to(root).parts[:-1])
+                  and not _en_otro_repo(root, f))
 
 
 def _es_proveedor(nombre: str) -> bool:
@@ -90,6 +150,10 @@ def check_dotnet_mvc(root: Path) -> tuple[list[str], list[str]]:
     """Devuelve (errores, advertencias)."""
     errors: list[str] = []
     warnings: list[str] = []
+    _CON_GIT.clear()
+    _IGNORADOS.clear()
+    if _solo_en_otros_repos(root):
+        return errors, [SIN_CODIGO_PROPIO]
     fuentes = [f for f in _fuentes(root, "**/*.cs") if not _es_test(f.relative_to(root))]
     tests = [f for f in _fuentes(root, "**/*.cs") if _es_test(f.relative_to(root))]
     vistas = [f for f in _fuentes(root, "**/*.cshtml") if "Views" in f.relative_to(root).parts[:-1]]

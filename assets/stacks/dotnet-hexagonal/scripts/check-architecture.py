@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -43,13 +44,77 @@ def extract_usings(cs_source: str) -> list[str]:
     return [m.group(1) for m in USING_RE.finditer(cs_source)]
 
 
+# Se vacian al empezar cada medicion: el disco y el .gitignore cambian entre una y otra.
+_CON_GIT: dict[Path, bool] = {}
+_IGNORADOS: dict[Path, frozenset[str]] = {}
+
+
+def _tiene_git(carpeta: Path) -> bool:
+    if carpeta not in _CON_GIT:
+        _CON_GIT[carpeta] = (carpeta / ".git").exists()
+    return _CON_GIT[carpeta]
+
+
+def _ignorados(root: Path) -> frozenset[str]:
+    """Lo que git ignora en `root`, relativo a el ('.local-dev/', 'Local.slnx'); vacio fuera de git."""
+    _vistos = _IGNORADOS
+    if root not in _vistos:
+        try:
+            salida = subprocess.run(["git", "-C", str(root), "ls-files", "--others", "--ignored",
+                                     "--exclude-standard", "--directory"],
+                                    capture_output=True, text=True, timeout=60)
+            _vistos[root] = frozenset(salida.stdout.splitlines()) if salida.returncode == 0 else frozenset()
+        except (OSError, subprocess.SubprocessError):
+            _vistos[root] = frozenset()
+    return _vistos[root]
+
+
+def _en_otro_repo(root: Path, archivo: Path) -> bool:
+    """Lo que no es codigo de este repo no se mide: un sub-repo o un worktree, o algo que git ignora.
+
+    Un sub-repo o un worktree es una carpeta con su propio `.git`. Sin esto, la raiz de un
+    proyecto multi-repo media el codigo de cada repo hermano con la norma de la raiz, el de
+    cada worktree de feature una vez mas, y un script local ignorado (`.local-dev/`) como si
+    fuera del producto.
+    """
+    partes = archivo.relative_to(root).parts
+    ignorados = _ignorados(root)
+    if ignorados and ("/".join(partes) in ignorados
+                      or any("/".join(partes[:i]) + "/" in ignorados for i in range(1, len(partes)))):
+        return True
+    return any(_tiene_git(root.joinpath(*partes[:i])) for i in range(1, len(partes)))
+
+
+SIN_CODIGO_PROPIO = ("Sin codigo .NET propio: todo vive en sub-repos o worktrees (carpetas con su propio .git), "
+                     "que se miden en su repo. Aqui no se midio nada.")
+
+
+def _solo_en_otros_repos(root: Path, patrones: tuple[str, ...] = ("**/*.cs", "**/*.csproj")) -> bool:
+    """La carpeta no tiene codigo .NET propio y sus sub-repos o worktrees si (la raiz de un multi-repo)."""
+    en_otros = False
+    for patron in patrones:
+        for f in root.glob(patron):
+            if {"obj", "bin"} & set(f.relative_to(root).parts[:-1]):
+                continue
+            if not _en_otro_repo(root, f):
+                return False
+            en_otros = True
+    return en_otros
+
+
 def check_dotnet_architecture(root_dir: Path) -> tuple[list[str], list[str]]:
     """Devuelve (errores, advertencias)."""
     errors: list[str] = []
     warnings: list[str] = []
+    _CON_GIT.clear()
+    _IGNORADOS.clear()
+
+    if _solo_en_otros_repos(root_dir):
+        return errors, [SIN_CODIGO_PROPIO]
 
     # 1. Composition Root (Program.cs)
-    program_files = list({p for p in root_dir.glob("**/Program.cs") if "obj" not in p.parts and "bin" not in p.parts})
+    program_files = list({p for p in root_dir.glob("**/Program.cs")
+                          if "obj" not in p.parts and "bin" not in p.parts and not _en_otro_repo(root_dir, p)})
     if not program_files:
         errors.append("Composition Root ausente: se esperaba 'src/**/*.WebApi/Program.cs' o 'Program.cs'")
     else:
@@ -58,8 +123,10 @@ def check_dotnet_architecture(root_dir: Path) -> tuple[list[str], list[str]]:
             warnings.append(f"Composition Root no canónico: encontrado en {[str(p.relative_to(root_dir)) for p in program_files]}, se recomienda bajo WebApi/")
 
     # 2. Domain & Application Projects (.csproj y .cs)
-    cs_files = [f for f in root_dir.glob("**/*.cs") if "obj" not in f.parts and "bin" not in f.parts]
-    csproj_files = [f for f in root_dir.glob("**/*.csproj") if "obj" not in f.parts and "bin" not in f.parts]
+    cs_files = [f for f in root_dir.glob("**/*.cs")
+                if "obj" not in f.parts and "bin" not in f.parts and not _en_otro_repo(root_dir, f)]
+    csproj_files = [f for f in root_dir.glob("**/*.csproj")
+                    if "obj" not in f.parts and "bin" not in f.parts and not _en_otro_repo(root_dir, f)]
 
     # Verificar proyectos .csproj
     for csproj in csproj_files:
