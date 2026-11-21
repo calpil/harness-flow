@@ -1029,15 +1029,15 @@ def auditar_seguridad_y_versiones(
                 findings.append(f"El escáner de dependencias {motivo} ({elegido}): "
                                 "revisa su salida; vulnerabilidades altas o críticas bloquean")
 
-    # 2. Comprobar versión mínima declarada
+    # 2. Comprobar versión mínima declarada (comparación semántica por tuplas, nunca lexicográfica)
+    import seguridad
     if min_version:
         if stack_id == "golang-hexagonal" and (repo / "go.mod").exists():
             mod_text = (repo / "go.mod").read_text(encoding="utf-8", errors="ignore")
             m = re.search(r"^go\s+([0-9.]+)", mod_text, re.MULTILINE)
             if m:
                 detected_ver = m.group(1)
-                min_prefix = ".".join(min_version.split(".")[:2])
-                if detected_ver < min_prefix:
+                if seguridad.version_menor(detected_ver, min_version):
                     warnings.append(f"Versión de Go en go.mod ({detected_ver}) es inferior a la mínima recomendada ({min_version})")
         elif manifest.get("framework") == "dotnet":
             # El TargetFramework vive en cada .csproj o, centralizado, en Directory.Build.props.
@@ -1046,11 +1046,7 @@ def auditar_seguridad_y_versiones(
                 m = re.search(r"<TargetFramework>net([0-9.]+)</TargetFramework>", text)
                 if m:
                     detected_ver = m.group(1)
-                    det_parts = tuple(int(x) for x in re.findall(r"\d+", detected_ver))
-                    # `net8.0` contra `8.0.0`: se compara lo que el TargetFramework declara.
-                    # Con la tupla entera, (8, 0) < (8, 0, 0) avisaba de la version minima misma.
-                    min_parts = tuple(int(x) for x in re.findall(r"\d+", min_version))[:len(det_parts)]
-                    if det_parts < min_parts:
+                    if seguridad.version_menor(detected_ver, min_version):
                         warnings.append(f"Versión de .NET en {csproj.name} (net{detected_ver}) es inferior a la mínima recomendada (net{min_version})")
                     break
         elif stack_id == "rust-hexagonal":
@@ -1060,7 +1056,7 @@ def auditar_seguridad_y_versiones(
                 m = re.search(r'edition\s*=\s*["\']([0-9]+)["\']', text)
                 if m:
                     detected_edition = m.group(1)
-                    if int(detected_edition) < int(min_version):
+                    if seguridad.version_menor(detected_edition, min_version):
                         warnings.append(f"Edición de Rust en {cargo_toml.relative_to(repo)} ({detected_edition}) es inferior a la mínima recomendada ({min_version})")
                     break
         elif stack_id == "ios-swiftui-clean":
@@ -1070,9 +1066,7 @@ def auditar_seguridad_y_versiones(
                 m = re.search(r"swift-tools-version:\s*([0-9.]+)", txt)
                 if m:
                     det_ver = m.group(1)
-                    det_parts = tuple(int(x) for x in re.findall(r"\d+", det_ver))
-                    min_parts = tuple(int(x) for x in re.findall(r"\d+", min_version))
-                    if det_parts < min_parts:
+                    if seguridad.version_menor(det_ver, min_version):
                         warnings.append(f"Versión de Swift en Package.swift ({det_ver}) es inferior a la mínima recomendada ({min_version})")
         elif stack_id == "android-compose-clean":
             versions_file = repo / "gradle" / "libs.versions.toml"
@@ -1081,14 +1075,54 @@ def auditar_seguridad_y_versiones(
                 m = re.search(r'kotlin\s*=\s*["\']([0-9.]+)["\']', txt)
                 if m:
                     det_ver = m.group(1)
-                    det_parts = tuple(int(x) for x in re.findall(r"\d+", det_ver))
-                    min_parts = tuple(int(x) for x in re.findall(r"\d+", min_version))
-                    if det_parts < min_parts:
+                    if seguridad.version_menor(det_ver, min_version):
                         warnings.append(f"Versión de Kotlin en libs.versions.toml ({det_ver}) es inferior a la mínima recomendada ({min_version})")
+        elif stack_id in ("angular-product", "nestjs-hexagonal", "nextjs-product"):
+            pkg_json = repo / "package.json"
+            if pkg_json.exists():
+                dep_key = {"angular-product": "@angular/core", "nestjs-hexagonal": "@nestjs/core",
+                           "nextjs-product": "next"}[stack_id]
+                etiqueta = {"angular-product": "Angular", "nestjs-hexagonal": "NestJS",
+                            "nextjs-product": "Next.js"}[stack_id]
+                try:
+                    pkg_data = json.loads(pkg_json.read_text(encoding="utf-8", errors="ignore"))
+                    all_deps = {**pkg_data.get("dependencies", {}), **pkg_data.get("devDependencies", {})}
+                    raw_ver = all_deps.get(dep_key)
+                    if isinstance(raw_ver, str) and seguridad.version_menor(raw_ver, min_version):
+                        warnings.append(f"Versión de {etiqueta} en package.json ({raw_ver}) es inferior a la mínima recomendada ({min_version})")
+                except Exception:
+                    pass
+        elif stack_id == "python-dataproduct":
+            pyproject = repo / "pyproject.toml"
+            if pyproject.exists():
+                txt = pyproject.read_text(encoding="utf-8", errors="ignore")
+                m = re.search(r'requires-python\s*=\s*["\']([^"\']+)["\']', txt)
+                if m and seguridad.version_menor(m.group(1), min_version):
+                    warnings.append(f"Versión de Python en pyproject.toml ({m.group(1)}) es inferior a la mínima recomendada ({min_version})")
+        elif stack_id == "springboot-hexagonal":
+            pom = repo / "pom.xml"
+            if pom.exists():
+                txt = pom.read_text(encoding="utf-8", errors="ignore")
+                m = re.search(
+                    r"<artifactId>\s*spring-boot-starter-parent\s*</artifactId>.*?<version>\s*([0-9.]+)",
+                    txt, re.DOTALL,
+                )
+                if m and seguridad.version_menor(m.group(1), min_version):
+                    warnings.append(f"Versión de Spring Boot en pom.xml ({m.group(1)}) es inferior a la mínima recomendada ({min_version})")
+            else:
+                for gradle_name in ("build.gradle.kts", "build.gradle"):
+                    gf = repo / gradle_name
+                    if gf.exists():
+                        txt = gf.read_text(encoding="utf-8", errors="ignore")
+                        m = re.search(r"org\.springframework\.boot['\"]\s*\)?\s*version\s*['\"]([0-9.]+)", txt)
+                        if m and seguridad.version_menor(m.group(1), min_version):
+                            warnings.append(f"Versión de Spring Boot en {gradle_name} ({m.group(1)}) es inferior a la mínima recomendada ({min_version})")
+                        break
 
     # 3. Escaneo dinámico DAST (OWASP ZAP) si fue solicitado
     dast_info = None
     if dast:
+        import tempfile
         dast_tool = "OWASP ZAP (zaproxy/zap-stable)"
         has_docker = False
         if shutil.which("docker"):
@@ -1114,50 +1148,93 @@ def auditar_seguridad_y_versiones(
                     found_openapi = cand_path
                     break
 
+        rel_api = (
+            found_openapi.relative_to(repo).as_posix()
+            if (found_openapi and found_openapi.is_relative_to(repo))
+            else (found_openapi.name if found_openapi else None)
+        )
         target = target_url or "http://localhost:8080"
+        docker_target = seguridad.reescribir_url_docker(target)
+        host_gateway_args = (
+            ["--add-host=host.docker.internal:host-gateway"]
+            if sys.platform.startswith("linux") and seguridad.es_url_localhost(target)
+            else []
+        )
         dast_output = ""
         dast_status = "pending"
         dast_mode = "openapi" if found_openapi else "baseline"
         dast_cmd_str = ""
+        dast_alerts: dict[str, int] = {"High": 0, "Medium": 0, "Low": 0, "Informational": 0}
+        dast_high_alerts: list[dict[str, Any]] = []
 
         if has_docker:
-            if found_openapi:
-                rel_api = found_openapi.relative_to(repo) if found_openapi.is_relative_to(repo) else found_openapi.name
-                docker_cmd = [
-                    "docker", "run", "--rm",
-                    "-v", f"{repo}:/zap/wrk/:rw",
-                    "-t", "zaproxy/zap-stable",
-                    "zap-api-scan.py",
-                    "-t", f"/zap/wrk/{rel_api}",
-                    "-f", "openapi",
-                    "-I"
-                ]
+            # Montar un directorio temporal para el reporte JSON (-J) evita ensuciar el repo del usuario.
+            with tempfile.TemporaryDirectory(prefix="harness-zap-") as zap_wrk_str:
+                zap_wrk = Path(zap_wrk_str)
+                report_name = "zap-report.json"
+                if found_openapi:
+                    api_copy = zap_wrk / found_openapi.name
+                    shutil.copy2(found_openapi, api_copy)
+                    docker_cmd = [
+                        "docker", "run", "--rm",
+                        *host_gateway_args,
+                        "-v", f"{zap_wrk}:/zap/wrk/:rw",
+                        "-t", "zaproxy/zap-stable",
+                        "zap-api-scan.py",
+                        "-t", f"/zap/wrk/{found_openapi.name}",
+                        "-f", "openapi",
+                        "-J", report_name,
+                    ]
+                    if target_url:
+                        docker_cmd += ["-O", docker_target]
+                else:
+                    docker_cmd = [
+                        "docker", "run", "--rm",
+                        *host_gateway_args,
+                        "-v", f"{zap_wrk}:/zap/wrk/:rw",
+                        "-t", "zaproxy/zap-stable",
+                        "zap-baseline.py",
+                        "-t", docker_target,
+                        "-J", report_name,
+                    ]
                 dast_cmd_str = " ".join(docker_cmd)
-                code, out = _run_cmd(docker_cmd, cwd=repo)
+                code, out = _run_cmd(docker_cmd, cwd=repo, timeout=300)
                 dast_output = out
-                dast_status = "passed" if code == 0 else "warnings"
-                if code != 0:
-                    warnings.append(f"OWASP ZAP DAST detectó posibles advertencias en contrato {rel_api}")
-            else:
-                docker_cmd = [
-                    "docker", "run", "--rm",
-                    "-t", "zaproxy/zap-stable",
-                    "zap-baseline.py",
-                    "-t", target,
-                    "-I"
-                ]
-                dast_cmd_str = " ".join(docker_cmd)
-                code, out = _run_cmd(docker_cmd, cwd=repo)
-                dast_output = out
-                dast_status = "passed" if code == 0 else "warnings"
-                if code != 0:
-                    warnings.append(f"OWASP ZAP DAST detectó posibles alertas en {target}")
+                report_json = None
+                report_file = zap_wrk / report_name
+                if report_file.is_file():
+                    try:
+                        report_json = json.loads(report_file.read_text(encoding="utf-8", errors="ignore"))
+                    except Exception:
+                        report_json = None
+                ev = seguridad.evaluar_dast_zap(code, out, report_json)
+                dast_status = ev["status"]
+                dast_alerts = ev["alerts"]
+                dast_high_alerts = ev["high_alerts"]
+                objetivo_txt = f"contrato {rel_api}" if found_openapi else target
+                if dast_status == "failed":
+                    nombres = ", ".join(a["name"] for a in dast_high_alerts[:5]) or f"{dast_alerts['High']} alerta(s)"
+                    findings.append(
+                        f"OWASP ZAP DAST reportó {dast_alerts['High']} alerta(s) High en {objetivo_txt}: {nombres}"
+                    )
+                    estado = AUDITORIA_CON_HALLAZGOS
+                elif dast_status == "error":
+                    warnings.append(
+                        f"OWASP ZAP DAST falló al ejecutarse sobre {objetivo_txt} (exit {code}); revisa salida y conectividad"
+                    )
+                elif dast_status == "warnings":
+                    warnings.append(
+                        f"OWASP ZAP DAST detectó alertas en {objetivo_txt} "
+                        f"(Medium={dast_alerts['Medium']}, Low={dast_alerts['Low']})"
+                    )
         else:
             dast_status = "skipped"
+            override_flag = f" -O {docker_target}" if (found_openapi and target_url) else ""
             suggested_cmd = (
-                f"docker run --rm -v {repo}:/zap/wrk/:rw -t zaproxy/zap-stable zap-api-scan.py -t /zap/wrk/{found_openapi.name} -f openapi -I"
+                f"docker run --rm -v {repo}:/zap/wrk/:rw -t zaproxy/zap-stable zap-api-scan.py "
+                f"-t /zap/wrk/{rel_api} -f openapi -J zap-report.json{override_flag}"
                 if found_openapi else
-                f"docker run --rm -t zaproxy/zap-stable zap-baseline.py -t {target} -I"
+                f"docker run --rm -t zaproxy/zap-stable zap-baseline.py -t {docker_target} -J zap-report.json"
             )
             dast_cmd_str = suggested_cmd
             warnings.append("Docker no disponible para ejecutar OWASP ZAP DAST en local. Se sugiere ejecutar en pipeline.")
@@ -1168,6 +1245,9 @@ def auditar_seguridad_y_versiones(
             "mode": dast_mode,
             "status": dast_status,
             "target": target if not found_openapi else str(found_openapi),
+            "target_docker": docker_target,
+            "alerts": dast_alerts,
+            "high_alerts": dast_high_alerts,
             "command": dast_cmd_str,
             "output": dast_output,
         }
@@ -1587,7 +1667,8 @@ app.Use(async (context, next) =>
 {
     context.Response.Headers.Append("X-Content-Type-Options", "nosniff");
     context.Response.Headers.Append("X-Frame-Options", "DENY");
-    context.Response.Headers.Append("X-XSS-Protection", "1; mode=block");
+    context.Response.Headers.Append("Referrer-Policy", "no-referrer");
+    context.Response.Headers.Append("Content-Security-Policy", "default-src 'none'; frame-ancestors 'none'");
     await next();
 });
 
@@ -2235,11 +2316,18 @@ def main() -> None:
                     print(f"  | {line}")
             if res.get("dast"):
                 dast_info = res["dast"]
+                etiqueta_dast = "FAIL" if dast_info.get("status") == "failed" else str(dast_info.get("status")).upper()
                 print("\n" + "-" * 68)
-                print(f"ANÁLISIS DINÁMICO DAST (OWASP ZAP): {dast_info.get('status').upper()}")
+                print(f"ANÁLISIS DINÁMICO DAST (OWASP ZAP): {etiqueta_dast}")
                 print(f"Herramienta: {dast_info.get('tool')}")
                 print(f"Modo:        {dast_info.get('mode')}")
                 print(f"Objetivo:    {dast_info.get('target')}")
+                alertas = dast_info.get("alerts") or {}
+                if alertas:
+                    print(
+                        f"Alertas:     High={alertas.get('High', 0)} · Medium={alertas.get('Medium', 0)} · "
+                        f"Low={alertas.get('Low', 0)} · Info={alertas.get('Informational', 0)}"
+                    )
                 if dast_info.get("command"):
                     print(f"Comando:     {dast_info.get('command')}")
                 if dast_info.get("output"):

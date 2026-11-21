@@ -10,5 +10,5 @@ trigger: always_on
 - Toda credencial sensible debe provenir de variables de entorno (`DATABASE_URL`, etc.) o Azure Key Vault en producción.
 - En Dapper / ADO.NET, todas las consultas SQL deben usar parámetros tipados (`@Id`, `@Title`). Prohibida la interpolación directa de cadenas SQL (`$"SELECT ... WHERE id = '{id}'"`).
 - Respuestas de error estandarizadas bajo RFC 7807 (`application/problem+json`) mediante `GlobalExceptionMiddleware`. Jamás exponer stack traces, detalles de tablas o excepciones internas al cliente.
-- Headers de seguridad obligatorios en toda respuesta HTTP (`X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `X-XSS-Protection: 1; mode=block`).
+- Headers de seguridad obligatorios en toda respuesta HTTP (`X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`, `Content-Security-Policy`). No usar `X-XSS-Protection` (obsoleta según OWASP).
 - Trazabilidad y correlación obligatoria mediante `X-Correlation-ID` en logs estructurados.

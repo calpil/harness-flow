@@ -135,12 +135,15 @@ evidencia y el codigo tu mismo.
   - **Violación de Corrección vs Robustez (Mayor):** Invención de datos de negocio ficticios (saldos, folios simulados, defaults no comprobados) en zonas donde el SDD o el dominio exige corrección estricta.
   - **Cero debate de Layout:** Delegar indentación, espacios y llaves al formateador del stack sin abrir observaciones cosméticas.
 - **Auditoría de Seguridad en Aplicaciones Web (OWASP Top 10 & CLASP - ver `references/seguridad-owasp-y-zap.md`):**
-  - **Inyección y Concatenación de Comandos/SQL (A03 - Bloqueante):** Cualquier concatenación dinámica de parámetros en queries SQL/NoSQL, scripts o shell sin prepared statements ni tipado estricto.
-  - **Secretos y Credenciales Hardcodeadas (A02 - Bloqueante):** Presencia de passwords, API keys, tokens o certificados en el diff o commits.
+  - **Inyección SQL/NoSQL/Shell y XSS (A03 - Bloqueante):** Cualquier concatenación dinámica de parámetros en queries SQL/NoSQL, scripts o shell sin prepared statements ni tipado estricto, o emisión de HTML crudo sin sanitizar (`innerHTML`, `dangerouslySetInnerHTML`, `bypassSecurityTrustHtml`, `Html.Raw`).
+  - **Secretos y Credenciales Hardcodeadas (A02 - Bloqueante):** Presencia de passwords, API keys, tokens o certificados en el diff o commits (si el briefing reporta una alerta automática `[!!]`, verifícala sin imprimir el secreto en el acta).
   - **Control de Acceso y Tenant Crossing (A01 - Bloqueante):** Endpoints o queries que no filtran por el tenant/usuario autenticado, permitiendo IDOR o acceso horizontal no autorizado.
+  - **Autenticación y JWT (A07 - Bloqueante):** Validación incompleta de JWT (sin firma, `iss`, `aud` o `exp`, o admitiendo `alg: none`) o bypass de sesión.
+  - **Deserialización Insegura (A08 - Bloqueante):** Uso de `pickle.loads` o deserializadores binarios sin lista blanca sobre datos no confiables.
   - **Server-Side Request Forgery / SSRF (A10 - Mayor):** Peticiones HTTP salientes hacia URLs externas no validadas contra una whitelist estricta o sin bloqueo de IPs privadas/metadata cloud.
+  - **Fuga de Secretos/PII en Logs (A09 - Mayor):** Contraseñas, tokens, secretos o PII registrados en logs o trazas.
   - **Falta de Tests Negativos (Mayor):** Endpoints con autenticación/autorización que no incluyen al menos un test de rechazo (401/403/422).
-  - **Configuración Insegura y Headers Omitidos (A05 - Menor):** Respuestas web sin headers de seguridad recomendados (CSP, HSTS) o exposición de stack traces.
+  - **Configuración Insegura y Rate Limiting (A05/A04 - Menor):** Respuestas web sin cabeceras recomendadas (CSP, HSTS, `X-Content-Type-Options: nosniff`; no recomendar `X-XSS-Protection` obsoleta), cookies sin `HttpOnly`/`Secure`/`SameSite`, falta de rate limiting en auth o exposición de stack traces.
 - **Concisión técnica ASD-STE100 (Estándar Karpathy):**
   - Redacta cada observación y hallazgo en **frases de máximo 20 palabras**, en voz activa y citando `archivo:línea`.
   - Prohibido emitir sugerencias cosméticas de estilo o párrafos decorativos: si no viola un AC, la seguridad o la arquitectura, no es un hallazgo. Ver [`references/comunicacion-ste100-y-prompts.md`](references/comunicacion-ste100-y-prompts.md).

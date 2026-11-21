@@ -9,6 +9,6 @@ trigger: always_on
 - Prohibido incluir secretos, credenciales, tokens o connection strings hardcodeados en código o archivos de configuración.
 - Toda configuración sensible se inyecta por variables de entorno leídas a través de `internal/platform/config`.
 - Las respuestas de error hacia el cliente deben seguir RFC 7807 (`application/problem+json`) y jamás exponer stack traces, nombres de tablas, queries SQL ni detalles internos del runtime.
-- Headers de seguridad mandatorios en toda respuesta HTTP (`X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `X-XSS-Protection`).
+- Headers de seguridad mandatorios en toda respuesta HTTP (`X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`, `Content-Security-Policy`). No usar `X-XSS-Protection` (obsoleta según OWASP).
 - Correlación obligatoria mediante `X-Correlation-ID` en logs y trazas de error para auditoría sin filtrar datos PII.
 - Validar rigurosamente los payloads entrantes (`Validate()` en DTOs) antes de llegar a la capa de aplicación.

@@ -70,7 +70,8 @@ autoinforme, igual que la evidencia del implementer. Antes de sellar:
 
 - cada fila cita un `archivo:linea` que **existe** y dice lo que la fila afirma;
 - las citas salen del arbol de la feature, no de la raiz parada en integracion;
-- hay una fila por CADA AC del spec, sin AC mudos.
+- hay una fila por CADA AC del spec, sin AC mudos;
+- si el briefing mostro `ALERTAS AUTOMATICAS DE SEGURIDAD (OWASP)` (secretos A02 o dependencias tocadas A06), el acta verifica que no queden secretos y que `stack.py auditar --repo <repo>` salio en verde (exit 0).
 
 Si una fila no aguanta, no selles: devuelve el hallazgo.
 

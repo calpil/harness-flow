@@ -242,6 +242,34 @@ def avisos_sdd(text: str) -> list[str]:
     return []
 
 
+_PRD_SEGURIDAD_RE = re.compile(
+    r"\b(?:abuso|misuse|seguridad|permis\w*|autoriz\w*|autentic\w*|tenant|no\s+autorizad\w*|"
+    r"rechaz\w*|owasp|confidencial\w*|acceso\s+indebid\w*)\b",
+    re.IGNORECASE,
+)
+_SDD_SEGURIDAD_RE = re.compile(
+    r"\b(?:frontera\w*\s+de\s+confianza|trust\s+boundar\w*|autentic\w*|autoriz\w*|rbac|abac|"
+    r"jwt|oidc|oauth|tenant|tls|cifrad\w*|argon2|bcrypt|secret\w*|ssrf|owasp|seguridad)\b",
+    re.IGNORECASE,
+)
+
+
+def avisos_seguridad_producto(text: str, doc: str) -> list[str]:
+    """Avisos (no bloqueantes) OWASP CLASP sobre PRD (casos de abuso) y SDD (fronteras/auth)."""
+    limpio = COMENTARIO_RE.sub("", text)
+    if doc == "prd" and not _PRD_SEGURIDAD_RE.search(limpio):
+        return [
+            "seguridad (OWASP CLASP): el PRD no menciona casos de abuso, permisos ni restricciones "
+            "de acceso; considera documentar quien puede operar y que se rechaza"
+        ]
+    if doc == "sdd" and not _SDD_SEGURIDAD_RE.search(limpio):
+        return [
+            "seguridad (OWASP CLASP): el SDD no menciona fronteras de confianza, autenticacion, "
+            "autorizacion ni gestion de secretos; formaliza las decisiones de seguridad como D-n"
+        ]
+    return []
+
+
 def _etiqueta_con_contenido(seccion: str, etiqueta: str) -> bool:
     """`Hoy: texto` en la linea, o `Hoy:` y el parrafo debajo (hasta el blanco o la otra etiqueta)."""
     pat = re.compile(rf"^[^\S\n]*[*_]{{0,2}}{etiqueta}[*_]{{0,2}}[^\S\n]*:[^\S\n]*(.*)$", re.M | re.I)
@@ -707,7 +735,7 @@ def cmd_aprobar(args) -> None:
     import vault
     vault.sincronizar_rapido(p)
     print(f"[ok] {cfg['titulo']} aprobado y sellado por {quien}: {_rel(p['root'], destino)}")
-    for aviso in avisos_sdd(sellado) if doc == "sdd" else []:
+    for aviso in (avisos_sdd(sellado) if doc == "sdd" else []) + avisos_seguridad_producto(sellado, doc):
         print(f"[!]  {aviso}")
     if doc == "prd":
         print("[i]  gate.py check acepta ese cuerpo por el sello; commitea docs/prd/PRD-master.md")

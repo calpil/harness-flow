@@ -10,7 +10,7 @@ Activar antes de un release, tras cambios en vistas, controllers, autenticación
 
 ## Inspección obligatoria
 Antes de escribir código, lee:
-1. `.claude/rules/security.md`: la regla que se audita.
+1. La regla `security.md` del stack (`.agents/rules/security.md`, `.claude/rules/security.md`, `.gemini/rules/security.md` o `.grok/rules/dotnet-mvc--security.md`): la regla que se audita.
 2. `src/Calpil.Template.Web/Views/**`: toda salida de datos.
 3. `src/Calpil.Template.Web/Controllers/**`: acciones, métodos HTTP y atributos de autorización.
 4. `src/Calpil.Template.Web/Program.cs` y `src/Calpil.Template.Web/Platform/`: filtros globales, cabeceras, cookies y OIDC.

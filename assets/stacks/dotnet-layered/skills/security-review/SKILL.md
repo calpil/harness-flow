@@ -10,7 +10,7 @@ Activar antes de un release, tras cambios en controllers, repositorios, configur
 
 ## Inspección obligatoria
 Antes de escribir código, lee:
-1. `.claude/rules/security.md`: la regla que se audita.
+1. La regla `security.md` del stack (`.agents/rules/security.md`, `.claude/rules/security.md`, `.gemini/rules/security.md` o `.grok/rules/dotnet-layered--security.md`): la regla que se audita.
 2. `src/Calpil.Template.Api/**/*Repository.cs` y `db/migrations/`: todo el SQL.
 3. `src/Calpil.Template.Api/Platform/`: manejo de errores, correlación, cabeceras y `DatabaseOptions`.
 4. `Dockerfile`, `compose.yaml`, `.env.example`, `appsettings*.json`, `nuget.config`.

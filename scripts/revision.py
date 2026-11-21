@@ -147,7 +147,7 @@ def cmd_briefing(a) -> None:
 
     print("=" * 72)
     print("CONTEXTO PARA EL SUBAGENTE REVISOR "
-          "(delegate_task.context en Hermes | Agent en Claude Code | invoke_subagent 'self' en AGY)")
+          "(delegate_task en Hermes | Agent en Claude Code | invoke_subagent 'self' en AGY/Gemini | spawn_subagent en Grok)")
     print("=" * 72)
     for x in (aviso_arbol, aviso_diff):
         if x:
@@ -285,6 +285,22 @@ Lo nuevo que veas sin buscarlo va a Observaciones, salvo que sea bloqueante o
 mayor. Tope: dos rondas por feature. Si aparece algo mayor NUEVO, no pidas otra
 ronda: escalalo al usuario en el veredicto, con su evidencia.
 """)
+    # Chequeo automatizado OWASP sobre el diff (secretos A02 y manifiestos de dependencias A06).
+    try:
+        import seguridad
+        sec = seguridad.auditar_diff_feature(p, load_backlog(p), f)
+        if sec["secrets"] or sec["deps_por_repo"]:
+            print("ALERTAS AUTOMATICAS DE SEGURIDAD (OWASP):")
+            for s in sec["secrets"]:
+                print(f"  [!!] BLOQUEANTE (A02): posible {s['rule']} en {s['file']}:{s['line']} — "
+                      "verifica en el arbol de la feature sin imprimir el valor del secreto.")
+            for dep in sec["deps_por_repo"]:
+                archivos = ", ".join(dep["files"][:5]) + ("..." if len(dep["files"]) > 5 else "")
+                print(f"  [!] DEPENDENCIAS TOCADAS (A06) en {dep['repo_name']} ({archivos}): "
+                      f"ejecuta `stack.py auditar --repo {dep['repo_path']}` y exige exit 0.")
+            print()
+    except Exception:
+        pass
     print("-" * 72)
     print("DIFF DE LA FEATURE")
     print("-" * 72)

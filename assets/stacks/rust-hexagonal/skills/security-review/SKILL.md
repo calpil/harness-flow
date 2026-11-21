@@ -14,11 +14,11 @@ Antes de emitir el reporte de seguridad:
 - Revisar las cabeceras HTTP inyectadas en `crates/api/src/middlewares/correlation_id.rs`.
 - Revisar el formato de errores en `crates/api/src/problem_details.rs`.
 - Inspeccionar `Dockerfile` y validar usuario no root.
-- Revisar `.agents/rules/security.md` (o `.claude/rules/security.md`).
+- Revisar la regla de seguridad del stack (`rules/security.md` en `.agents/rules/`, `.claude/rules/`, `.gemini/rules/` o `.grok/rules/`).
 
 ## Procedimiento ejecutable
 1. **Auditar consultas a bases de datos:** Verificar que el 100% de las consultas en `crates/infrastructure` utilicen sentencias preparadas con parámetros vinculados (`bind(...)`) y que ninguna concatene variables de usuario.
-2. **Auditar cabeceras de seguridad:** Comprobar que el middleware HTTP agregue `x-content-type-options: nosniff`, `x-frame-options: DENY` y `x-xss-protection: 1; mode=block`.
+2. **Auditar cabeceras de seguridad:** Comprobar que el middleware HTTP agregue `x-content-type-options: nosniff`, `x-frame-options: DENY`, `referrer-policy: no-referrer` y `content-security-policy` (no recomendar `x-xss-protection`, obsoleta según OWASP).
 3. **Validar trazabilidad de Correlation ID:** Confirmar que `x-correlation-id` sea recibido o generado con UUID v4 y propagado en la respuesta.
 4. **Verificar respuestas de error RFC 7807:** Comprobar que en ningún escenario de error se envíen stack traces internos, credenciales de conexión o información de infraestructura a los clientes.
 5. **Escanear secretos en el repositorio:** Verificar que `.env`, archivos con contraseñas o tokens privados estén ignorados en `.gitignore`.

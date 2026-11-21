@@ -245,29 +245,42 @@ NORMAS: list[dict] = [
         "titulo": "Seguridad de aplicaciones (OWASP Top 10, CLASP)",
         "ref": "seguridad-owasp-y-zap.md",
         "cuando": "el cambio expone un endpoint, consulta datos, llama a una URL externa o toca credenciales",
-        "producto": {"prd": ["El PRD incluye los casos de abuso: quien podria usar mal la funcionalidad y que "
-                             "no debe poder hacer."],
+        "producto": {"prd": ["El PRD incluye los casos de abuso: quien podria usar mal la funcionalidad, "
+                             "que datos sensibles toca y que no debe poder hacer."],
                      "sdd": ["El diagrama de componentes marca las fronteras de confianza. Autenticacion, "
-                             "cifrado y salidas a URLs externas van como `D-n`."]},
+                             "cifrado, rate limiting y salidas a URLs externas van como `D-n`."]},
         "spec": ["Todo AC que expone un endpoint o una accion con permisos lleva al menos un AC negativo, "
                  "marcado `[negativo]`: que pasa SIN permiso, con entrada invalida o fuera del limite. "
                  "Si la feature no tiene nada que rechazar, dilo en `## Fuera de alcance`."],
         "construye": [
             "Por cada AC `[negativo]` el test de rechazo (401/403/422 o el error de dominio) se escribe "
             "antes que el camino feliz de ese AC.",
-            "Consultas siempre parametrizadas: ninguna concatenacion de parametros en SQL, NoSQL, shell o scripts.",
+            "Consultas siempre parametrizadas: ninguna concatenacion de parametros en SQL, NoSQL, shell o scripts; "
+            "en frontends/vistas usa escape automatico y nunca `innerHTML`, `dangerouslySetInnerHTML`, "
+            "`bypassSecurityTrustHtml` ni `Html.Raw` con datos no confiables.",
             "Ningun secreto, token, clave ni certificado en el codigo, los tests, los fixtures o los commits.",
             "Todo acceso a datos filtra por el tenant y el usuario autenticado: nada de IDs que otro puede adivinar.",
+            "Valida JWT de forma estricta (firma, `iss`, `aud`, `exp`, nunca `alg: none`), protege cookies de sesion "
+            "con `HttpOnly`/`Secure`/`SameSite` y aplica rate limiting en login y operaciones sensibles.",
+            "Nunca deserialices entrada externa con `pickle.loads` o deserializadores binarios inseguros; "
+            "registra eventos de seguridad sin volcar passwords, tokens ni PII en los logs.",
             "Una peticion saliente a una URL que viene de fuera se valida contra una lista permitida y "
             "bloquea IPs privadas y metadata de la nube.",
         ],
         "audita": [
-            (BLOQUEANTE, "inyeccion (A03): concatenacion dinamica de parametros en SQL/NoSQL, scripts o shell"),
+            (BLOQUEANTE, "inyeccion (A03): concatenacion dinamica de parametros en SQL/NoSQL, scripts o shell, "
+                         "o XSS por HTML crudo sin sanitizar (`innerHTML`, `dangerouslySetInnerHTML`, "
+                         "`bypassSecurityTrustHtml`, `Html.Raw`)"),
             (BLOQUEANTE, "secretos o credenciales en el diff o en los commits (A02)"),
             (BLOQUEANTE, "control de acceso roto (A01): endpoints o queries que no filtran por tenant/usuario (IDOR)"),
+            (BLOQUEANTE, "autenticacion rota (A07): JWT sin validar firma/iss/aud/exp, algoritmo `none` o bypass de sesion"),
+            (BLOQUEANTE, "deserializacion insegura (A08): `pickle.loads` o deserializadores binarios sobre entrada no confiable"),
             (MAYOR, "SSRF (A10): peticiones salientes a URLs externas sin lista permitida ni bloqueo de IPs privadas"),
+            (MAYOR, "fuga en logs (A09): passwords, tokens, secretos o PII expuestos en logs o trazas"),
             (MAYOR, "falta de tests negativos: endpoints con autenticacion o autorizacion sin un test de rechazo"),
-            (MENOR, "configuracion insegura (A05): cabeceras de seguridad omitidas o stack traces expuestos"),
+            (MENOR, "configuracion insegura (A05/A04): cabeceras de seguridad omitidas (CSP, HSTS, nosniff; "
+                    "sin `X-XSS-Protection` obsoleta), cookies sin `HttpOnly`/`Secure`/`SameSite`, falta de "
+                    "rate limiting en auth o stack traces expuestos"),
         ],
     },
     {

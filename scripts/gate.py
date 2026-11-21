@@ -1413,6 +1413,22 @@ def cmd_close(args) -> None:
         fallos.extend(f"arquitectura: {x}" for x in fallos_arq)
         avisos_cierre.extend(f"arquitectura: {x}" for x in avisos_arq)
 
+        # Guardia OWASP sobre el diff: secretos hardcodeados bloquean (A02);
+        # cambios en manifiestos/lockfiles avisan para confirmar `stack.py auditar` (A06).
+        import seguridad
+        sec = seguridad.auditar_diff_feature(p, data, f)
+        for s in sec["secrets"]:
+            fallos.append(
+                f"seguridad (OWASP A02): posible {s['rule']} en {s['file']}:{s['line']} "
+                "(retira el secreto y rotalo; usa '# harness-ignore-secret' solo si es un valor sintetico de prueba)"
+            )
+        for dep in sec["deps_por_repo"]:
+            archivos = ", ".join(dep["files"][:5]) + ("..." if len(dep["files"]) > 5 else "")
+            avisos_cierre.append(
+                f"seguridad (OWASP A06): el diff en {dep['repo_name']} toco dependencias ({archivos}); "
+                f"confirma que corriste `stack.py auditar --repo {dep['repo_path']}` (exit 0)"
+            )
+
     if fallos:
         print(f"[!!] close #{fid} BLOQUEADO por {len(fallos)} regla(s):")
         for x in fallos:

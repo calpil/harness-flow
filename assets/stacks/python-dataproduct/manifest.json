@@ -77,7 +77,8 @@
     }
   },
   "security_audit": {
-    "command": "pip-audit"
+    "command": "pip-audit",
+    "minimum_version": "3.11"
   },
   "runners": {
     "test_command": "pytest -q"

@@ -18,7 +18,7 @@ Antes de emitir el reporte, inspecciona:
 ## Procedimiento ejecutable
 1. **Auditoría de Inyección SQL en Dapper:** Inspeccionar cada sentencia `ExecuteAsync`, `QueryAsync` y `QuerySingleOrDefaultAsync`. Verificar que todas utilicen parámetros nombrados (`@Id`, `@Title`) y `CommandDefinition`. Prohibir `$""` o `+` en SQL.
 2. **Auditoría de Secretos y Configuración:** Comprobar que `appsettings.json` solo contenga placeholders para desarrollo local y que `.env` esté en `.gitignore`.
-3. **Revisión de Cabeceras HTTP:** Verificar la presencia de cabeceras de endurecimiento en `Program.cs`: `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `X-XSS-Protection`.
+3. **Revisión de Cabeceras HTTP:** Verificar la presencia de cabeceras de endurecimiento en `Program.cs`: `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer` y `Content-Security-Policy` (no recomendar `X-XSS-Protection`, obsoleta según OWASP).
 4. **Verificación de Correlación y Logs:** Confirmar que `CorrelationIdMiddleware` capture o genere `X-Correlation-ID` y lo asigne a `context.TraceIdentifier` sin registrar datos personales (PII) en los logs.
 5. **Revisión de Respuestas de Error:** Comprobar que en ambientes de producción los errores no controlados emitan RFC 7807 genérico con el ID de correlación y nunca el stack trace interno.
 6. **Verificación de Contenedor Docker:** Asegurar que el `Dockerfile` ejecute la aplicación bajo un usuario sin privilegios `appuser`.

@@ -101,6 +101,8 @@ roto o tests desaparecidos. Al verificar el exit a mano **no uses un pipe**
 Si aparecen rojos nuevos: anota el choque (`hallazgo.py anotar`) y muestraselo al
 usuario, que decide si es una ficha de bug. No bajes la asercion que lo detecto.
 
+Si `close` bloquea por `seguridad (OWASP A02)` (secreto hardcodeado en el diff), retira y rota la credencial antes de reintentar (nunca imprimas su valor). Si avisa `seguridad (OWASP A06)` porque cambiaron manifiestos de dependencias, confirma que corriste `stack.py auditar --repo <ruta>` (y `--dast` con OWASP ZAP si la feature expone endpoints y se solicito escaneo dinamico).
+
 `close` se niega si la feature tiene hallazgos anotados sin resolver. Resuelve
 cada uno (`hallazgo.py resolver --id H-n --como "<AC-n, E-n o commit>"`) o pasalo
 a otra feature abierta o al proyecto (`hallazgo.py mover`).

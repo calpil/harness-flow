@@ -98,7 +98,8 @@
     }
   },
   "security_audit": {
-    "command": "npm audit --audit-level=high"
+    "command": "npm audit --audit-level=high",
+    "minimum_version": "15.0.0"
   },
   "runners": {
     "test_command": "npm test",

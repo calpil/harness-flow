@@ -798,7 +798,7 @@ def avisos_vertical_spec(text: str, rules: dict | None = None) -> list[str]:
             "prueba comportamiento en la interfaz publica mas alta practica"
         )
     expuestos = [ac for ac, val in costuras.items() if _COSTURA_EXPUESTA_RE.search(val)]
-    if expuestos and not ac_negativos(limpio):
+    if expuestos and not ac_negativos(limpio) and not _fuera_de_alcance_exime_negativo(limpio):
         avisos.append(
             f"seguridad: {', '.join(expuestos)} exponen un endpoint y ningun AC es negativo; el revisor "
             "marca como MAYOR un endpoint sin test de rechazo. Agrega un AC '[negativo]' (sin permiso, "
@@ -808,18 +808,53 @@ def avisos_vertical_spec(text: str, rules: dict | None = None) -> list[str]:
 
 
 # Un AC negativo dice que pasa cuando NO debe funcionar: sin permiso, con entrada
-# invalida, fuera del limite. Se marca en su linea, igual que la costura.
-_AC_NEGATIVO_RE = re.compile(r"\[\s*negativo\s*\]", re.IGNORECASE)
-_COSTURA_EXPUESTA_RE = re.compile(r"\b(endpoint|api|http|rest|grpc|webhook)\b", re.IGNORECASE)
+# invalida, fuera del limite. Se marca en su linea o en una linea hija del AC.
+_AC_NEGATIVO_RE = re.compile(
+    r"(?:\[\s*negativ[oa]?\s*\]|\(\s*negativ[oa]?\s*\)|`\s*negativ[oa]?\s*`"
+    r"|\[\s*negative\s*\]|\(\s*negative\s*\)|(?:^|·|\|)\s*tipo\s*:\s*`?negativ[oa]?`?)",
+    re.IGNORECASE,
+)
+_COSTURA_EXPUESTA_RE = re.compile(
+    r"\b(endpoint|api|http|rest|grpc|webhook|graphql|websocket|ws|bff|auth|login|controller|action)\b",
+    re.IGNORECASE,
+)
+_FUERA_ALCANCE_SEC_RE = re.compile(
+    r"^##[^\S\n]+Fuera\s+de\s+alcance\b.*$", re.IGNORECASE | re.MULTILINE,
+)
+_EXENCION_NEGATIVO_RE = re.compile(
+    r"\b(?:negativ\w*|rechaz\w*|401|403|sin\s+permisos?|sin\s+autenticaci[oó]n|"
+    r"p[uú]blic[oa]\s+sin\s+auth|no\s+aplica\w*\s+(?:seguridad|auth|negativ\w*))\b",
+    re.IGNORECASE,
+)
+
+
+def _fuera_de_alcance_exime_negativo(limpio: str) -> bool:
+    """True si '## Fuera de alcance' explica explicitamente por que no aplica un AC negativo."""
+    m = _FUERA_ALCANCE_SEC_RE.search(limpio)
+    if not m:
+        return False
+    resto = limpio[m.end():]
+    fin = re.search(r"^#{1,2}[^\S\n#]", resto, re.MULTILINE)
+    cuerpo = resto[:fin.start()] if fin else resto
+    return bool(_EXENCION_NEGATIVO_RE.search(cuerpo))
 
 
 def ac_negativos(text: str) -> list[str]:
-    """Los AC marcados `[negativo]` en su linea."""
-    out = []
+    """Los AC marcados `[negativo]` (o `(negativo)` / `[negative]` / `Tipo: negativo`)."""
+    out: list[str] = []
+    actual: str | None = None
     for ln in re.sub(r"<!--.*?-->", "", text, flags=re.S).splitlines():
         m = AC_RE.match(ln)
-        if m and _AC_NEGATIVO_RE.search(ln):
-            out.append(m.group(1))
+        if m:
+            actual = m.group(1)
+            if _AC_NEGATIVO_RE.search(ln):
+                out.append(actual)
+            continue
+        if ENCABEZADO_RE.match(ln):
+            actual = None
+            continue
+        if actual and actual not in out and _AC_NEGATIVO_RE.search(ln):
+            out.append(actual)
     return out
 
 # --- huella del spec por partes ---------------------------------------------

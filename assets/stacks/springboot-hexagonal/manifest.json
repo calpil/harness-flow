@@ -83,7 +83,8 @@
     "command": "./mvnw -q org.owasp:dependency-check-maven:check",
     "alternative_commands": [
       "./gradlew dependencyCheckAnalyze"
-    ]
+    ],
+    "minimum_version": "3.2.0"
   },
   "runners": {
     "test_command": "./mvnw test",

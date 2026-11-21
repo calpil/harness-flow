@@ -18,7 +18,7 @@ Antes de emitir el reporte, inspecciona:
 ## Procedimiento ejecutable
 1. **Auditoría de Inyección SQL:** Revisar cada llamada `Exec`, `Query` y `QueryRow` en adaptadores PostgreSQL. Confirmar que ninguna sentencia use `fmt.Sprintf` o concatenación con valores externos; todas deben usar `$1, $2`.
 2. **Auditoría de Manejo de Secretos:** Buscar en todo el repositorio cadenas hardcodeadas (`password`, `secret`, `key`, `token`). Asegurar que `.env` esté en `.gitignore` y que solo exista `.env.example` con valores de plantilla.
-3. **Revisión de Cabeceras HTTP:** Verificar que el router aplique cabeceras de endurecimiento (`X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `X-XSS-Protection`).
+3. **Revisión de Cabeceras HTTP:** Verificar que el router aplique cabeceras de endurecimiento (`X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`, `Content-Security-Policy`; no recomendar `X-XSS-Protection`, obsoleta según OWASP).
 4. **Verificación de Trazabilidad:** Confirmar que `X-Correlation-ID` sea capturado o generado en cada request y propagado a los logs sin imprimir datos personales o sensibles.
 5. **Revisión de Timeouts del Servidor:** Validar que `http.Server` tenga configurados `ReadTimeout`, `WriteTimeout` e `IdleTimeout` para mitigar ataques de denegación de servicio (Slowloris).
 6. **Validación de Payloads y Errores:** Comprobar que los errores 500 no envíen el stack trace al cliente y que las respuestas sigan el formato estándar RFC 7807.

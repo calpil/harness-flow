@@ -10,7 +10,7 @@ trigger: always_on
   - Prohibido concatenar o formatear cadenas SQL dinámicamente (`format!("SELECT ... WHERE id = '{}'")`).
   - Todas las consultas en `crates/infrastructure` deben utilizar parámetros tipados vinculados mediante `sqlx::query!` o `sqlx::query_as` (`$1, $2, ...`).
 - **Seguridad en HTTP y Cabeceras:**
-  - Todo endpoint debe responder con cabeceras de seguridad: `x-content-type-options: nosniff`, `x-frame-options: DENY`, `x-xss-protection: 1; mode=block`.
+  - Todo endpoint debe responder con cabeceras de seguridad: `x-content-type-options: nosniff`, `x-frame-options: DENY`, `referrer-policy: no-referrer` y `content-security-policy`. No usar `x-xss-protection` (obsoleta según OWASP).
   - Propagación y retorno mandatorio de cabecera de trazabilidad `x-correlation-id` en todas las respuestas HTTP.
   - Respuestas de error sin filtración de trazas internas o datos sensibles; emisión estricta de RFC 7807 `application/problem+json`.
 - **Cero Secretos en Código o Repositorio:**

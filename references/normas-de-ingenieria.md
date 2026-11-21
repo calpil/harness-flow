@@ -170,9 +170,11 @@ conecta a Context7. Cómo conectarlo por host:
 | 2 | No se pudo medir: escáner no instalado, stack sin escáner o repo sin stack |
 
 Un exit 2 no es un verde. Un wrapper del repo (`./mvnw`, `./gradlew`) se busca
-en el repo, no en el `PATH`. `--dast` (OWASP ZAP) es informativo y no cambia el
-exit. Ningún gate corre `auditar` solo: lo corren el implementer y el revisor
-cuando el diff toca dependencias.
+en el repo, no en el `PATH`. Con `--dast` (OWASP ZAP), las alertas `High`
+marcan `FAIL` y elevan el exit a `1` (hallazgos); las `Medium`/`Low` quedan como
+advertencias y sin Docker se marca `skipped` sin bloquear. `gate.py close`
+bloquea automáticamente ante secretos hardcodeados en el diff (OWASP A02) y avisa
+si cambiaron manifiestos de dependencias para confirmar `stack.py auditar` (A06).
 
 ## Los libros detras de las normas
 

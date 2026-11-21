@@ -165,12 +165,14 @@ El revisor evalúa el diff bajo la siguiente tabla de severidad estricta:
 | :--- | :--- | :--- |
 | **Bloqueante** | **A01** (Tenant crossing o bypass de auth sin control) | Veredicto `changes_requested` o `blocked`. |
 | **Bloqueante** | **A02** (Secretos o API keys hardcodeadas en código/tests) | Veredicto `blocked`. Requerir rotación y limpieza en git. |
-| **Bloqueante** | **A03** (Concatenación de strings en SQL, shell o HTML) | Veredicto `changes_requested`. |
+| **Bloqueante** | **A03** (Concatenación de strings en SQL/shell o XSS por HTML crudo sin sanitizar) | Veredicto `changes_requested`. |
 | **Bloqueante** | **A06** (Dependencia introducida con CVE Alta o Crítica) | Veredicto `changes_requested`. |
+| **Bloqueante** | **A07** (JWT sin validar firma/`iss`/`aud`/`exp`, `alg: none` o bypass de sesión) | Veredicto `changes_requested`. |
+| **Bloqueante** | **A08** (Deserialización insegura: `pickle.loads` o binarios sin whitelist) | Veredicto `changes_requested`. |
 | **Mayor** | **A10** (Petición HTTP saliente a URL externa no whitelistada) | Veredicto `changes_requested`. |
-| **Mayor** | **A09** (`catch` vacíos que silencian fallos de seguridad) | Veredicto `changes_requested`. |
+| **Mayor** | **A09** (`catch` vacíos o fuga de passwords/tokens/PII en logs) | Veredicto `changes_requested`. |
 | **Mayor** | Falta de test negativo para endpoint protegido | Veredicto `changes_requested`. |
-| **Menor** | **A05** (Headers de seguridad omitidos en respuestas web) | Observación menor en el acta (no bloquea el cierre). |
+| **Menor** | **A05/A04** (Headers omitidos —sin `X-XSS-Protection` obsoleta—, cookies inseguras o falta de rate limiting) | Observación menor en el acta (no bloquea el cierre). |
 
 ---
 
@@ -211,10 +213,10 @@ $PY "$H/stack.py" auditar --dast [--openapi ruta/a/openapi.json] [--target-url h
 ```
 
 * **Comportamiento:**
-  1. Si `docker` está disponible, ejecuta el escáner ligero de ZAP contra la URL o especificación OpenAPI.
-  2. Parsea las alertas generadas (`High`, `Medium`, `Low`, `Informational`).
-  3. Si se detectan alertas de nivel **High** (ej. SQLi confirmada o bypass de acceso), el reporte marca **FAIL**.
-  4. Si Docker no está instalado en el host, emite un aviso con el comando listo para ejecución y no bloquea el flujo si la verificación estática está en orden.
+  1. Si `docker` está disponible, monta un directorio temporal en `/zap/wrk` (sin ensuciar el repo), reescribe `localhost`/`127.0.0.1` a `host.docker.internal` en Docker Desktop (macOS/Windows), pasa `-O <url>` en modo OpenAPI si se indicó `--target-url` y genera reporte JSON (`-J`).
+  2. Parsea las alertas generadas (`High`, `Medium`, `Low`, `Informational`) desde el JSON (o desde stdout como respaldo).
+  3. Si se detectan alertas de nivel **High** (ej. SQLi confirmada o bypass de acceso), el reporte marca **FAIL** y eleva la salida de `stack.py auditar` a **exit 1** (`hallazgos`). Alertas `Medium`/`Low` se reportan como advertencias.
+  4. Si Docker no está instalado en el host, emite un aviso con el comando exacto listo para ejecución y no bloquea el flujo si la verificación estática está en orden.
 
 ---
 
@@ -228,5 +230,5 @@ $PY "$H/stack.py" auditar --dast [--openapi ruta/a/openapi.json] [--target-url h
 | **Patrones GoF** | Proxy de Auth, Value Objects autovalidados, Adapter HTTP seguro. | `references/design-patterns-gof.md` |
 | **Implementer** | Test-first negativo, Prepared Statements y Zero Hardcoded Secrets. | Código fuente y tests de costura |
 | **Revisor Aislado** | Auditoría estricta contra OWASP Top 10 en diffs: norma `[seguridad]` del briefing (`revision.py --briefing`), igual en todos los hosts. | `docs/review-<id>.md` |
-| **Implementer y Revisor**| Escáner de dependencias (`stack.py auditar`, exit 1 = hallazgos, exit 2 = sin medir) cuando el diff toca dependencias; DAST (`stack.py auditar --dast`, OWASP ZAP) a pedido. Ningún gate los corre solo. | Salida de `auditar` y reportes ZAP |
-| **Cierre / Post-Mortem**| Registro de incidentes y lecciones aprendidas institucionales. | `references/lecciones-del-arnes.md` |
+| **Implementer y Revisor**| Escáner de dependencias (`stack.py auditar`, exit 1 = hallazgos, exit 2 = sin medir) cuando el diff toca dependencias; DAST (`stack.py auditar --dast`, OWASP ZAP; alertas `High` => exit 1) a pedido. `revision.py --briefing` alerta automáticamente ante secretos o dependencias tocadas en el diff. | Salida de `auditar` y reportes ZAP |
+| **Cierre / Post-Mortem**| `gate.py close` bloquea automáticamente si detecta secretos hardcodeados en el diff (A02) y avisa si cambiaron dependencias (A06); incidentes se institucionalizan vía `leccion.py`. | `gate.py close` y `references/lecciones-del-arnes.md` |
