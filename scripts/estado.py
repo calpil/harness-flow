@@ -52,7 +52,8 @@ def main() -> None:
         for aviso in est.get("grafo_avisos") or []:
             print(f"   [!] grafo con problemas: {aviso}")
         for linea in contexto.lineas_cbm_pendiente(est["cbm_pendientes"],
-                                                   est.get("cbm_daemon_sin_socket")):
+                                                   est.get("cbm_daemon_sin_socket"),
+                                                   est.get("cbm_daemon_sin_identidad")):
             print("  " + linea)
     except Exception as exc:
         print(f"   [!] no se pudo evaluar el contexto: {exc}")

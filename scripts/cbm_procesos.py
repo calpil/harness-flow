@@ -212,6 +212,62 @@ def daemon_sin_socket(procesos: list[dict], *, rutas=rutas_socket,
     return out
 
 
+def daemon_sin_identidad(procesos: list[dict], *, rutas=rutas_socket,
+                         existe=os.path.exists) -> list[int]:
+    """Pids de daemons vivos cuyo `.sock` existe pero perdieron `.sock.identity`.
+
+    Sin `.sock.identity` el daemon sigue vivo y su socket existe, pero todo cliente
+    CLI nuevo falla al instante con `active pre-coordination or unverified CBM daemon`.
+    En macOS `lsof` suele listar solo las rutas `.anc` del daemon: por eso derivamos
+    el `.sock` hermano (`<stem>.anc` -> `<stem>.sock`) y comprobamos si ese `.sock`
+    existe en disco sin su `<stem>.sock.identity`. Disjunto de `daemon_sin_socket`.
+    """
+    out = []
+    for p in procesos:
+        if p["rol"] != "daemon":
+            continue
+        propias = rutas(p["pid"])
+        candidatos_sock: list[str] = []
+        for r in propias:
+            if r.endswith(".sock"):
+                candidatos_sock.append(r)
+            elif r.endswith(".anc"):
+                candidatos_sock.append(r[:-4] + ".sock")
+        socks_vivos = sorted({s for s in candidatos_sock if existe(s)})
+        if socks_vivos and not any(existe(s + ".identity") for s in socks_vivos):
+            out.append(p["pid"])
+    return out
+
+
+def _daemon_pertenece_a_runtime(pid: int, runtime_dir: str, *, rutas=rutas_socket) -> bool:
+    """True si el daemon tiene algun socket bajo `runtime_dir`."""
+    try:
+        base = os.path.realpath(runtime_dir).rstrip(os.sep) + os.sep
+    except OSError:
+        base = runtime_dir.rstrip(os.sep) + os.sep
+    for r in rutas(pid):
+        try:
+            rr = os.path.realpath(r)
+        except OSError:
+            rr = r
+        if rr.startswith(base) or r.startswith(runtime_dir.rstrip(os.sep) + os.sep):
+            return True
+    return False
+
+
+def etiqueta_proyecto_daemon(pid: int, *, rutas=rutas_socket) -> str:
+    """Nombre del proyecto si el daemon corre en un runtime aislado de `cbm_proyecto`."""
+    try:
+        import cbm_proyecto
+    except Exception:
+        return ""
+    for r in rutas(pid):
+        meta = cbm_proyecto.proyecto_de_socket(r)
+        if meta and meta.get("name"):
+            return f" [proyecto: {meta['name']}]"
+    return ""
+
+
 def cache_dir() -> Path:
     return Path(os.environ.get("CBM_CACHE_DIR") or Path.home() / ".cache" / "codebase-memory-mcp")
 
@@ -266,7 +322,8 @@ def matar(p: dict, *, kill=os.kill, vivo=_vivo, comando=_comando, dormir=time.sl
 
 
 def limpiar(*, matar_huerfanos=True, enlaces=enlaces_cortados,
-            sin_socket=daemon_sin_socket, cwds=cwds_de, **inyectado) -> int:
+            sin_socket=daemon_sin_socket, sin_identidad=None,
+            cwds=cwds_de, **inyectado) -> int:
     """Imprime el estado de cada proceso cbm y, salvo --solo-avisar, quita lo huerfano."""
     if ES_WINDOWS:
         print("[i]  limpiar-cbm usa `ps`: no esta soportado en Windows.")
@@ -278,6 +335,7 @@ def limpiar(*, matar_huerfanos=True, enlaces=enlaces_cortados,
     # el padre de una sesion es el agente (claude, agy...): su carpeta dice que terminal es
     donde = cwds([p["ppid"] for p in filas if p["rol"] == "sesion" and p["estado"] == "EN USO"
                   and p["ppid"] not in (0, 1)])
+    usar_etiqueta_daemon = (sin_socket is daemon_sin_socket and sin_identidad is None)
     print("== procesos de codebase-memory-mcp ==")
     if not filas:
         print("   (ninguno)")
@@ -289,8 +347,9 @@ def limpiar(*, matar_huerfanos=True, enlaces=enlaces_cortados,
             fallos += "NO SE PUDO" in accion
         corte = "  | enlace al daemon CORTADO" if p["pid"] in cortadas else ""
         en = f" en {donde[p['ppid']]}" if p["rol"] == "sesion" and p["ppid"] in donde else ""
+        proy = etiqueta_proyecto_daemon(p["pid"]) if (p["rol"] == "daemon" and usar_etiqueta_daemon) else ""
         print(f"   {p['estado']:<8} pid={p['pid']:<6} {p['rol']:<7} {p['rss_mb']:>6.0f}MB "
-              f"{p['etime']:>11}  {p['motivo']}{en}{corte}{accion}")
+              f"{p['etime']:>11}  {p['motivo']}{proy}{en}{corte}{accion}")
     huerfanos = [p for p in filas if p["estado"] == "HUERFANO"]
     if not huerfanos:
         print("[ok] ninguno es huerfano: nada que matar.")
@@ -309,6 +368,17 @@ def limpiar(*, matar_huerfanos=True, enlaces=enlaces_cortados,
               "socket ya no existe: ningun cliente nuevo puede conectar y no se arregla solo.\n"
               "     Reinicialo con `contexto.py limpiar-cbm --reiniciar-daemon` (las sesiones "
               "conectadas pierden cbm hasta reconectar con `/mcp`).")
+    det_id = sin_identidad if sin_identidad is not None else (
+        daemon_sin_identidad if sin_socket is daemon_sin_socket else (lambda ps: [])
+    )
+    huerfano_id = [pid for pid in det_id(procesos) if pid not in huerfano_socket]
+    if huerfano_id:
+        print(f"[!]  el daemon cbm (pid {', '.join(map(str, huerfano_id))}) conserva su `.sock` "
+              "pero perdio `.sock.identity` (unverified CBM daemon): ningun cliente CLI nuevo "
+              "puede conectar y no se arregla solo.\n"
+              "     Reinicialo con `contexto.py limpiar-cbm --reiniciar-daemon` (las sesiones "
+              "conectadas pierden cbm hasta reconectar con `/mcp`) o aisla cada proyecto fuera "
+              "de `/tmp` con `cbm_proyecto.py --harness-config-mcp`.")
     restos = stage_abandonado(procesos)
     for f in restos:
         mb = f.stat().st_size / 1048576
@@ -324,16 +394,17 @@ def limpiar(*, matar_huerfanos=True, enlaces=enlaces_cortados,
     return 1 if fallos else 0
 
 
-def _verificar_cliente(*, correr=None) -> tuple[bool, str]:
+def _verificar_cliente(*, correr=None, env: dict[str, str] | None = None) -> tuple[bool, str]:
     """Un cliente nuevo tiene que conectar: es la prueba de que el reinicio sirvio.
     Lo arranca el propio cliente (efimero); aqui no se levanta ningun daemon."""
     t = time.time()
+    kw: dict = {"stdin": subprocess.DEVNULL, "capture_output": True, "text": True, "timeout": 60}
+    if env is not None:
+        kw["env"] = env
     try:
         # Sin argumentos el cli LEE su JSON de stdin: heredar un stdin abierto (un agente
         # en segundo plano, un pipe) lo deja esperando un EOF que nunca llega.
-        r = (correr or subprocess.run)([EXE, "cli", "--quiet", "list_projects"],
-                                       stdin=subprocess.DEVNULL, capture_output=True,
-                                       text=True, timeout=60)
+        r = (correr or subprocess.run)([EXE, "cli", "--quiet", "list_projects"], **kw)
     except (OSError, subprocess.TimeoutExpired) as exc:
         return False, str(exc)[:200]
     if r.returncode == 0:
@@ -342,28 +413,47 @@ def _verificar_cliente(*, correr=None) -> tuple[bool, str]:
 
 
 def reiniciar_daemon(*, solo_avisar=False, leer=leer_procesos, detectar=daemon_sin_socket,
+                     detectar_identidad=None, env_cbm: dict[str, str] | None = None,
                      enlaces=enlaces_cortados, verificar=_verificar_cliente,
                      cwds=cwds_de, dormir=time.sleep, **inyectado) -> int:
-    """Termina el daemon cbm SOLO si su socket desaparecio, y comprueba que un cliente
-    nuevo conecta despues.
+    """Termina el daemon cbm SOLO si su socket o `.sock.identity` desaparecio, y
+    comprueba que un cliente nuevo conecta despues.
 
-    Es la unica vez que el arnes toca el daemon: un daemon que conserva su socket es
-    de todas las sesiones y se rechaza. Antes de actuar avisa que sesiones perderan
-    cbm. No arranca ningun daemon (`daemon start` deja uno permanente): el primer
-    cliente levanta uno efimero.
+    Es la unica vez que el arnes toca el daemon: un daemon sano es de todas las
+    sesiones y se rechaza. Antes de actuar avisa que sesiones perderan cbm. Si se
+    pasa `env_cbm` con `CBM_RUNTIME_DIR` (modo aislado por proyecto), solo inspecciona
+    y reinicia el daemon de ESE runtime sin tocar otros proyectos.
     """
     if ES_WINDOWS:
         print("[i]  limpiar-cbm usa `ps`: no esta soportado en Windows.")
         return 1
     procesos, todos = leer()
     daemons = [p for p in procesos if p["rol"] == "daemon"]
+    rt_scope = (env_cbm or {}).get("CBM_RUNTIME_DIR")
+    if rt_scope:
+        daemons = [p for p in daemons if _daemon_pertenece_a_runtime(p["pid"], rt_scope)]
     if not daemons:
         print("[ok] no hay daemon cbm vivo: el proximo cliente arranca uno solo; nada que reiniciar.")
         return 0
-    huerfanos = detectar(procesos)
+
+    det_id = detectar_identidad if detectar_identidad is not None else (
+        daemon_sin_identidad if detectar is daemon_sin_socket else None
+    )
+
+    def _medir() -> tuple[list[int], list[int]]:
+        ss = detectar(daemons)
+        si = [x for x in (det_id(daemons) if det_id is not None else []) if x not in ss]
+        return ss, si
+
+    h_sock, h_id = _medir()
+    huerfanos = sorted(set(h_sock) | set(h_id))
     if huerfanos:
         dormir(1)  # un daemon que se esta parando tambien pierde el socket un instante
-        huerfanos = [x for x in huerfanos if x in detectar(procesos)]
+        h_sock2, h_id2 = _medir()
+        vivos_rotos = set(h_sock2) | set(h_id2)
+        h_sock = [x for x in h_sock if x in vivos_rotos]
+        h_id = [x for x in h_id if x in vivos_rotos]
+        huerfanos = sorted(set(h_sock) | set(h_id))
     if not huerfanos:
         pids = ", ".join(str(p["pid"]) for p in daemons)
         print(f"[ok] el daemon cbm (pid {pids}) conserva su socket: no esta huerfano, no se "
@@ -377,10 +467,15 @@ def reiniciar_daemon(*, solo_avisar=False, leer=leer_procesos, detectar=daemon_s
     cortadas = enlaces([p["pid"] for p in sesiones if p["ppid"] not in (0, 1)])
     conectadas = [p for p in sesiones if p["ppid"] not in (0, 1) and p["pid"] not in cortadas]
 
-    print("== daemon cbm sin socket ==")
+    titulo = "== daemon cbm sin .sock.identity (unverified) ==" if (h_id and not h_sock) else "== daemon cbm sin socket =="
+    print(titulo)
     for p in victimas:
-        print(f"   pid={p['pid']}  vivo desde {p['etime']}, pero su socket ya no existe: ningun "
-              "cliente nuevo puede conectar y `daemon stop` no lo alcanza")
+        motivo_txt = (
+            "conserva su `.sock` pero perdio `.sock.identity`: todo cliente nuevo falla como unverified"
+            if p["pid"] in h_id else
+            "su socket ya no existe: ningun cliente nuevo puede conectar y `daemon stop` no lo alcanza"
+        )
+        print(f"   pid={p['pid']}  vivo desde {p['etime']}, pero {motivo_txt}")
     if conectadas:
         print(f"   Al reiniciarlo, {len(conectadas)} sesion(es) conectada(s) pierden cbm hasta "
               "reconectar el MCP (`/mcp` en Claude Code) o reiniciarse:")
@@ -403,7 +498,11 @@ def reiniciar_daemon(*, solo_avisar=False, leer=leer_procesos, detectar=daemon_s
     if fallos:
         print("[!]  no se pudo terminar el daemon: no se verifica nada mas.")
         return 1
-    ok, detalle = verificar()
+    if env_cbm and verificar is _verificar_cliente:
+        env_full = dict(os.environ, **env_cbm)
+        ok, detalle = verificar(env=env_full)
+    else:
+        ok, detalle = verificar()
     if not ok:
         print(f"[!]  el daemon se termino pero un cliente nuevo aun no conecta: {detalle}")
         return 1

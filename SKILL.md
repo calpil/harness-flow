@@ -342,9 +342,9 @@ requiere accion: el arnes lo reintenta solo. No lo reintentes a mano ni mates el
 procesos cbm a mano (`kill`, `pkill`): dejas sin cbm a las sesiones de los demas agentes. Para
 procesos cbm sobrantes: `$PY "$H/contexto.py" limpiar-cbm` (avisa cuales estan en uso, cuales
 sesiones tienen el enlace cortado y mata solo los huerfanos). Excepcion: si el aviso dice
-"daemon vivo pero sin socket", eso NO se arregla solo; avisa a la persona usuaria y, con su
+"daemon vivo pero sin socket" o "perdio `.sock.identity` (unverified)", eso NO se arregla solo; avisa a la persona usuaria y, con su
 aprobacion, `$PY "$H/contexto.py" limpiar-cbm --reiniciar-daemon` (`--solo-avisar` muestra a
-quien afecta). Nunca lo corras por tu cuenta: corta cbm en las sesiones conectadas.
+quien afecta). Nunca lo corras por tu cuenta: corta cbm en las sesiones conectadas. Para aislar un daemon CBM por proyecto fuera de `/tmp`: `$PY "$H/cbm_proyecto.py" --harness-config-mcp` y `--harness-activar`.
 Detalles de refresco, cobertura y fallos: [`references/contexto.md`](references/contexto.md)
 y [`references/hub.md`](references/hub.md).
 

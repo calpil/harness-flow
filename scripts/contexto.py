@@ -149,12 +149,16 @@ def estado_contexto(p: dict) -> dict:
         # Lectura de un archivo local: estado no llama al daemon. No entra en
         # 'vencidas': el brief y el vault no dependen de cbm.
         "cbm_pendientes": _cbm_pendientes(p),
-        # Estado en vivo (no lo guardado): un daemon sin socket se ve al arrancar la
-        # sesion aunque ningun cierre haya quedado pendiente todavia. Una lectura de
-        # `ps` y `lsof`; vacio si cbm esta apagado o no esta instalado.
-        "cbm_daemon_sin_socket": (_cbm_daemon_sin_socket()
+        # Estado en vivo (no lo guardado): un daemon sin socket o sin `.sock.identity`
+        # se ve al arrancar la sesion aunque ningun cierre haya quedado pendiente todavia.
+        # Una lectura de `ps` y `lsof`; vacio si cbm esta apagado o no esta instalado.
+        "cbm_aislado": _cbm_aislado_activo(p),
+        "cbm_daemon_sin_socket": (_cbm_daemon_sin_socket(p)
                                   if not _cbm_desactivado() and shutil.which("codebase-memory-mcp")
                                   else []),
+        "cbm_daemon_sin_identidad": (_cbm_daemon_sin_identidad(p)
+                                     if not _cbm_desactivado() and shutil.which("codebase-memory-mcp")
+                                     else []),
     }
     for r in raices:
         g = r["path"] / "graphify-out" / "graph.json"
@@ -212,7 +216,8 @@ def cmd_estado(args) -> None:
               "       corre: contexto.py init-grafos")
     for aviso in e.get("grafo_avisos") or []:
         print(f"   [!] grafo con problemas: {aviso}")
-    for linea in lineas_cbm_pendiente(e["cbm_pendientes"], e["cbm_daemon_sin_socket"]):
+    for linea in lineas_cbm_pendiente(e["cbm_pendientes"], e["cbm_daemon_sin_socket"],
+                                      e.get("cbm_daemon_sin_identidad")):
         print("  " + linea)
     if e["fresco"]:
         print("   [ok] contexto fresco")
@@ -223,10 +228,11 @@ def cmd_estado(args) -> None:
 
 # --- refresco ---------------------------------------------------------------
 
-def _run(cmd: list[str], cwd: Path) -> tuple[int, str]:
+def _run(cmd: list[str], cwd: Path, *, env_extra: dict[str, str] | None = None) -> tuple[int, str]:
+    env = dict(os.environ, **env_extra) if env_extra else None
     try:
         r = subprocess.run(cmd, cwd=str(cwd), stdin=subprocess.DEVNULL,
-                           capture_output=True, text=True, timeout=1800)
+                           capture_output=True, text=True, timeout=1800, env=env)
         return r.returncode, (r.stdout + r.stderr).strip()
     except FileNotFoundError:
         return 127, f"no encontrado: {cmd[0]}"
@@ -327,9 +333,27 @@ def _cbm_desactivado() -> bool:
     return os.environ.get("HARNESS_SIN_CBM", "").strip() not in ("", "0", "false")
 
 
-def _cbm_cli(tool: str, args: dict, cwd: Path) -> tuple[int, str]:
-    return _run(["codebase-memory-mcp", "cli", "--quiet", tool,
-                 json.dumps(args)], cwd)
+def _cbm_aislado_activo(p: dict | None = None) -> bool:
+    try:
+        import cbm_proyecto
+        raiz = Path(p["root"]) if p and p.get("root") else None
+        return cbm_proyecto.modo_aislado_activo(raiz)
+    except Exception:
+        return False
+
+
+def _cbm_env_proyecto(p: dict | None = None, *, preparar: bool = True) -> dict[str, str]:
+    try:
+        import cbm_proyecto
+        raiz = Path(p["root"]) if p and p.get("root") else None
+        return cbm_proyecto.env_si_aislado(raiz, preparar=preparar)
+    except Exception:
+        return {}
+
+
+def _cbm_cli(tool: str, args: dict, cwd: Path, *, env_extra: dict[str, str] | None = None) -> tuple[int, str]:
+    cmd = ["codebase-memory-mcp", "cli", "--quiet", tool, json.dumps(args)]
+    return _run(cmd, cwd, env_extra=env_extra) if env_extra else _run(cmd, cwd)
 
 
 RAMAS_CBM = ("develop", "main", "master", "release", "release/*", "release-*")
@@ -390,7 +414,8 @@ CBM_TRANSITORIO = ("could not accept this client", "connection capacity",
                    "timeout:")
 
 
-CAUSA_SIN_SOCKET = "daemon_sin_socket"   # el proceso vive pero su socket ya no existe
+CAUSA_SIN_SOCKET = "daemon_sin_socket"         # el proceso vive pero su socket ya no existe
+CAUSA_SIN_IDENTIDAD = "daemon_sin_identidad"   # conserva `.sock` pero perdio `.sock.identity` (unverified)
 
 
 def _env_num(nombre: str, defecto: float) -> float:
@@ -458,13 +483,16 @@ def _cbm_clasificar(code: int, out: str) -> str:
     return "desconocido"
 
 
-def _cbm_indexar_raiz(raiz: Path, intentos: int) -> tuple[bool, str, str, int, str]:
+def _cbm_indexar_raiz(raiz: Path, intentos: int, *,
+                      env_extra: dict[str, str] | None = None) -> tuple[bool, str, str, int, str]:
     """(ok, ultimo_error, clase, intentos_usados, salida_del_exito). Reintenta solo
     lo transitorio."""
     espera = _env_num("HARNESS_CBM_ESPERA_S", CBM_ESPERA_S)
     err, clase = "", "desconocido"
     for n in range(1, max(intentos, 1) + 1):
-        code, out = _cbm_cli("index_repository", {"repo_path": str(raiz)}, raiz)
+        code, out = (_cbm_cli("index_repository", {"repo_path": str(raiz)}, raiz, env_extra=env_extra)
+                     if env_extra else
+                     _cbm_cli("index_repository", {"repo_path": str(raiz)}, raiz))
         # El exit code solo no alcanza: se exige el status que reporta la tool.
         if code == 0 and '"status":"indexed"' in out.replace(" ", ""):
             return True, "", "", n, out
@@ -517,7 +545,20 @@ def _cbm_en_enfriamiento(pendiente: dict | None) -> bool:
     return (time.time() - float(pendiente.get("ts") or 0)) < tope
 
 
-def _cbm_daemon_sin_socket() -> list[int]:
+def _cbm_daemons_relevantes(p: dict | None = None) -> list[dict]:
+    import cbm_procesos
+    if cbm_procesos.ES_WINDOWS:
+        return []
+    procs = cbm_procesos.leer_procesos()[0]
+    env_p = _cbm_env_proyecto(p, preparar=False)
+    rt = env_p.get("CBM_RUNTIME_DIR") or os.environ.get("CBM_RUNTIME_DIR")
+    if rt:
+        return [x for x in procs if x["rol"] == "daemon"
+                and cbm_procesos._daemon_pertenece_a_runtime(x["pid"], rt)]
+    return procs
+
+
+def _cbm_daemon_sin_socket(p: dict | None = None) -> list[int]:
     """Pids de daemons cbm vivos sin socket: ningun cliente puede conectar, pero el
     proceso sostiene el lock, asi que tampoco arranca otro. Reintentar solo gasta 30 s
     por intento. Una lectura de `ps` y de `lsof`; nunca toca el daemon."""
@@ -525,17 +566,29 @@ def _cbm_daemon_sin_socket() -> list[int]:
         import cbm_procesos
         if cbm_procesos.ES_WINDOWS:
             return []
-        return cbm_procesos.daemon_sin_socket(cbm_procesos.leer_procesos()[0])
+        return cbm_procesos.daemon_sin_socket(_cbm_daemons_relevantes(p))
     except (OSError, subprocess.SubprocessError, ValueError):
         return []
 
 
-def _cbm_diagnostico(sin_socket: list[int] | None = None) -> dict:
+def _cbm_daemon_sin_identidad(p: dict | None = None) -> list[int]:
+    """Pids de daemons cbm vivos con `.sock` en disco pero sin `.sock.identity` (unverified)."""
+    try:
+        import cbm_procesos
+        if cbm_procesos.ES_WINDOWS:
+            return []
+        return cbm_procesos.daemon_sin_identidad(_cbm_daemons_relevantes(p))
+    except (OSError, subprocess.SubprocessError, ValueError):
+        return []
+
+
+def _cbm_diagnostico(sin_socket: list[int] | None = None,
+                     sin_identidad: list[int] | None = None) -> dict:
     """Foto barata de la maquina cuando cbm no atiende. No toca el daemon.
 
     Deja datos en vez de hipotesis: el "no acepta clientes" tiene mas de una causa
-    (daemon ocupado, o vivo pero sin socket) y el texto del cliente es el mismo.
-    Es telemetria: cualquier fallo al medir se omite.
+    (daemon ocupado, vivo sin socket, o sin `.sock.identity`) y el texto del cliente es
+    similar. Es telemetria: cualquier fallo al medir se omite.
     """
     d: dict = {"at": now_iso()}
     cbm: list = []
@@ -554,6 +607,7 @@ def _cbm_diagnostico(sin_socket: list[int] | None = None) -> dict:
         d["sesiones_cortadas"] = len(cbm_procesos.enlaces_cortados(
             [p["pid"] for p in cbm if p["rol"] == "sesion"]))
         sin_socket = cbm_procesos.daemon_sin_socket(cbm) if sin_socket is None else sin_socket
+        sin_identidad = cbm_procesos.daemon_sin_identidad(cbm) if sin_identidad is None else sin_identidad
         log = cbm_procesos.cache_dir() / "logs" / "cbm-daemon.log"
         with open(log, "rb") as fh:  # solo la cola: el log crece sin limite
             fh.seek(0, os.SEEK_END)
@@ -563,12 +617,16 @@ def _cbm_diagnostico(sin_socket: list[int] | None = None) -> dict:
                          for m in ("watcher.changed", "daemon.start", "ui.unavailable")}
     except (OSError, subprocess.SubprocessError, ValueError):
         pass
+    rotos = list(sin_socket or []) + [x for x in (sin_identidad or []) if x not in (sin_socket or [])]
     if sin_socket:
         d[CAUSA_SIN_SOCKET] = list(sin_socket)
+    if sin_identidad:
+        d[CAUSA_SIN_IDENTIDAD] = list(sin_identidad)
+    if rotos:
         try:
             import cbm_procesos
-            d["runtime_dir"] = cbm_procesos.huella_runtime(sin_socket[0])
-            d["daemon_desde"] = next((p.get("etime") for p in cbm if p["pid"] == sin_socket[0]), None)
+            d["runtime_dir"] = cbm_procesos.huella_runtime(rotos[0])
+            d["daemon_desde"] = next((p.get("etime") for p in cbm if p["pid"] == rotos[0]), None)
         except (OSError, subprocess.SubprocessError, ValueError):
             pass
     if sys.platform == "darwin":
@@ -601,17 +659,21 @@ def _resumen_diagnostico(d: dict) -> str:
     return ", ".join(partes)
 
 
-def lineas_cbm_pendiente(pendientes: dict, sin_socket: list[int] | None = None) -> list[str]:
+def lineas_cbm_pendiente(pendientes: dict, sin_socket: list[int] | None = None,
+                         sin_identidad: list[int] | None = None) -> list[str]:
     """Texto para quien lee el cierre: que paso, que NO hacer y cuando se resuelve.
 
-    `sin_socket` son los daemons sin socket medidos AHORA (estado/arranque). Con None
-    (el cierre) se usa lo que dejo la foto del fallo; con una lista, esa lista manda:
-    si ya reiniciaron el daemon, un pendiente viejo no puede seguir acusandolo.
+    `sin_socket` y `sin_identidad` son los daemons rotos medidos AHORA (estado/arranque).
+    Con None (el cierre) se usa lo que dejo la foto del fallo; con una lista, esa lista
+    manda: si ya reiniciaron el daemon, un pendiente viejo no puede seguir acusandolo.
     """
     if sin_socket is None:
         sin_socket = sorted({pid for v in (pendientes or {}).values()
                              for pid in (v.get("diagnostico") or {}).get(CAUSA_SIN_SOCKET, [])})
-    if not pendientes and not sin_socket:
+    if sin_identidad is None:
+        sin_identidad = sorted({pid for v in (pendientes or {}).values()
+                                for pid in (v.get("diagnostico") or {}).get(CAUSA_SIN_IDENTIDAD, [])})
+    if not pendientes and not sin_socket and not sin_identidad:
         return []
     cuales = ", ".join(f"{n} ({(v.get('motivo') or '?')[:110]})"
                        for n, v in pendientes.items())
@@ -625,6 +687,17 @@ def lineas_cbm_pendiente(pendientes: dict, sin_socket: list[int] | None = None) 
             "sesiones conectadas hasta `/mcp`, asi que no lo hagas por tu cuenta.",
             "     Con su aprobacion: `contexto.py limpiar-cbm --reiniciar-daemon` (`--solo-avisar` "
             "muestra a quien afecta). El pendiente se reintenta solo despues."] + _lineas_diagnostico(pendientes)
+    if sin_identidad:
+        pids = ", ".join(map(str, sorted(sin_identidad)))
+        cab = ([f"[i]  cbm pendiente (el cierre no depende de el): {cuales}."] if pendientes else [])
+        return cab + [
+            f"{'     ' if cab else '[!]  '}El daemon cbm (pid {pids}) conserva su `.sock` pero "
+            "perdio `.sock.identity` (unverified CBM daemon): ningun cliente CLI nuevo puede conectar.",
+            "     Reintentar no sirve. Avisa a la persona usuaria: reiniciarlo corta cbm en las "
+            "sesiones conectadas hasta `/mcp`, asi que no lo hagas por tu cuenta.",
+            "     Con su aprobacion: `contexto.py limpiar-cbm --reiniciar-daemon` (`--solo-avisar` "
+            "muestra a quien afecta), o aisla cada proyecto fuera de `/tmp` con "
+            "`cbm_proyecto.py --harness-config-mcp`."] + _lineas_diagnostico(pendientes)
     return [f"[i]  cbm pendiente (el cierre no depende de el): {cuales}.",
             "     El arnes lo reintenta solo en el proximo `worktree start` o cierre."
             " No lo reintentes a mano",
@@ -697,10 +770,10 @@ def cbm_indexar(p: dict, parte: dict, verboso: bool, *, forzar=False,
                       "sin llamar al daemon)")
             continue
         previo = estado["pendientes"].get(clave)
-        # Con el daemon sin socket no hay nada que enfriar: re-mirar es una lectura de
-        # lsof, y en cuanto lo reinicien el siguiente refresco ya indexa.
+        # Con el daemon sin socket o sin identidad no hay nada que enfriar: re-mirar es
+        # una lectura de lsof, y en cuanto lo reinicien el siguiente refresco ya indexa.
         if (respetar_enfriamiento and _cbm_en_enfriamiento(previo)
-                and (previo or {}).get("causa") != CAUSA_SIN_SOCKET):
+                and (previo or {}).get("causa") not in (CAUSA_SIN_SOCKET, CAUSA_SIN_IDENTIDAD)):
             cbm["pendientes"][nombre] = previo
             if verboso:
                 print(f"   cbm index {nombre}: pendiente, en espera antes de reintentar")
@@ -708,11 +781,19 @@ def cbm_indexar(p: dict, parte: dict, verboso: bool, *, forzar=False,
         plan.append((r, raiz, clave, huella))
 
     if plan:
-        sin_socket = _cbm_daemon_sin_socket()
-        circuito_abierto = bool(sin_socket)
-        motivo_circuito = ("daemon no disponible (sin llamarlo de nuevo)" if not sin_socket else
-                           f"daemon cbm (pid {', '.join(map(str, sin_socket))}) vivo pero sin "
-                           "socket: ningun cliente puede conectar")
+        env_cbm = _cbm_env_proyecto(p, preparar=True)
+        sin_socket = _cbm_daemon_sin_socket(p)
+        sin_identidad = [] if sin_socket else _cbm_daemon_sin_identidad(p)
+        circuito_abierto = bool(sin_socket or sin_identidad)
+        motivo_circuito = (
+            f"daemon cbm (pid {', '.join(map(str, sin_socket))}) vivo pero sin "
+            "socket: ningun cliente puede conectar"
+            if sin_socket else
+            f"daemon cbm (pid {', '.join(map(str, sin_identidad))}) vivo pero sin "
+            "`.sock.identity` (unverified): ningun cliente CLI puede conectar"
+            if sin_identidad else
+            "daemon no disponible (sin llamarlo de nuevo)"
+        )
         diag = None
         for r, raiz, clave, huella in plan:
             nombre = r["nombre"]
@@ -725,7 +806,8 @@ def cbm_indexar(p: dict, parte: dict, verboso: bool, *, forzar=False,
                 ok, clase, usados = False, "transitorio", 0
                 err = motivo_circuito
             else:
-                ok, err, clase, usados, salida = _cbm_indexar_raiz(raiz, intentos)
+                ok, err, clase, usados, salida = (_cbm_indexar_raiz(raiz, intentos, env_extra=env_cbm)
+                                                  if env_cbm else _cbm_indexar_raiz(raiz, intentos))
             if ok:
                 indicio = _cbm_node_modules_indexado(raiz, salida)
                 if indicio:
@@ -746,6 +828,8 @@ def cbm_indexar(p: dict, parte: dict, verboso: bool, *, forzar=False,
             elif clase == "transitorio":
                 if diag is None:
                     diag = _cbm_diagnostico(sin_socket or None)
+                    if sin_identidad and isinstance(diag, dict):
+                        diag.setdefault(CAUSA_SIN_IDENTIDAD, list(sin_identidad))
                     previas = estado.get("diagnosticos") or []
                     estado["diagnosticos"] = (previas + [{"raiz": nombre, "motivo": err, **diag}])[-20:]
                 circuito_abierto = True
@@ -755,18 +839,26 @@ def cbm_indexar(p: dict, parte: dict, verboso: bool, *, forzar=False,
                         "diagnostico": diag}
                 if diag.get(CAUSA_SIN_SOCKET):
                     pend["causa"] = CAUSA_SIN_SOCKET
+                elif diag.get(CAUSA_SIN_IDENTIDAD):
+                    pend["causa"] = CAUSA_SIN_IDENTIDAD
                 estado["pendientes"][clave] = pend
                 cbm["pendientes"][nombre] = pend
-                resultado = (f"PENDIENTE ({usados} intento(s); se reintenta solo)"
-                             if not pend.get("causa") else
-                             "PENDIENTE (daemon vivo sin socket: no se arregla solo, ver abajo)")
+                resultado = (
+                    "PENDIENTE (daemon vivo sin socket: no se arregla solo, ver abajo)"
+                    if pend.get("causa") == CAUSA_SIN_SOCKET else
+                    "PENDIENTE (daemon vivo sin .sock.identity / unverified: no se arregla solo, ver abajo)"
+                    if pend.get("causa") == CAUSA_SIN_IDENTIDAD else
+                    f"PENDIENTE ({usados} intento(s); se reintenta solo)"
+                )
             else:
                 estado["pendientes"].pop(clave, None)
                 remedio = ""
                 bajo_err = err.lower()
                 if "pre-coordination" in bajo_err or "unverified cbm daemon" in bajo_err:
-                    remedio = (" -> daemon de version/cohorte incompatible: cierra las sesiones CBM "
-                               "abiertas o corre `codebase-memory-mcp daemon stop` y reintenta")
+                    remedio = (" -> daemon sin `.sock.identity` o de version incompatible: corre "
+                               "`contexto.py limpiar-cbm --reiniciar-daemon` (con aprobacion), "
+                               "`codebase-memory-mcp daemon stop`, o aisla cada proyecto con "
+                               "`cbm_proyecto.py --harness-config-mcp`")
                 parte["fallos"].append(f"cbm index {nombre}: {err}{remedio}")
                 resultado = "FALLO"
             if verboso:
@@ -777,6 +869,11 @@ def cbm_indexar(p: dict, parte: dict, verboso: bool, *, forzar=False,
                for v in cbm["pendientes"].values()):
             cbm["accion"] = ("el daemon cbm esta vivo sin socket y no se arregla solo: avisa a la "
                              "persona usuaria y, con su aprobacion, "
+                             "`contexto.py limpiar-cbm --reiniciar-daemon`")
+        elif any((v.get("diagnostico") or {}).get(CAUSA_SIN_IDENTIDAD)
+                 for v in cbm["pendientes"].values()):
+            cbm["accion"] = ("el daemon cbm perdio `.sock.identity` (unverified) y no se arregla solo: "
+                             "avisa a la persona usuaria y, con su aprobacion, "
                              "`contexto.py limpiar-cbm --reiniciar-daemon`")
         else:
             cbm["accion"] = ("pendiente: se reintenta solo en el proximo worktree start o "
@@ -959,7 +1056,13 @@ def cmd_cbm(args) -> None:
 def cmd_limpiar_cbm(args) -> None:
     import cbm_procesos
     if args.reiniciar_daemon:
-        sys.exit(cbm_procesos.reiniciar_daemon(solo_avisar=args.solo_avisar))
+        env_cbm: dict[str, str] = {}
+        try:
+            env_cbm = _cbm_env_proyecto(paths(), preparar=False)
+        except SystemExit:
+            pass
+        sys.exit(cbm_procesos.reiniciar_daemon(solo_avisar=args.solo_avisar,
+                                               env_cbm=env_cbm or None))
     sys.exit(cbm_procesos.limpiar(matar_huerfanos=not args.solo_avisar))
 
 

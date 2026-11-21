@@ -225,8 +225,8 @@ agente resuelve a su manera:
 | indexa | sella HEAD (solo si el arbol estaba limpio) | `indexadas` |
 | daemon ocupado/arrancando/parandose | 3 intentos con espera 5 s, 15 s; si sigue, **PENDIENTE** | `pendientes` (no es fallo) |
 | ya fallo una raiz por esto | las demas quedan pendientes sin llamarlo (5 raices no pagan 5 esperas) | `pendientes` |
-| daemon **vivo pero sin socket** | pendiente al instante, sin llamarlo ni esperar; **no se arregla solo** | `pendientes` (`causa: daemon_sin_socket`) |
-| build distinto, daemon pre-coordination/unverified, ruta no indexable, binario ausente | un solo intento, fallo visible con remediacion (cerrar sesiones antiguas / `daemon stop`) | `fallos` |
+| daemon **vivo pero sin socket** o **sin `.sock.identity`** (`unverified`) | pendiente al instante, sin llamarlo ni esperar; **no se arregla solo** | `pendientes` (`causa: daemon_sin_socket` / `daemon_sin_identidad`) |
+| build distinto, ruta no indexable, binario ausente | un solo intento, fallo visible con remediacion | `fallos` |
 | error que no reconoce | un solo intento, fallo visible (no se difiere lo que no se entiende) | `fallos` |
 
 Un pendiente queda en `graphify-out/.cbm_estado.json` (local, ignorado por git), se
@@ -301,8 +301,8 @@ el remedio. Se reevalua en cada refresco (es una lectura de `lsof`, no hay que e
 quedado pendiente: lo medido en ese momento manda sobre un pendiente viejo.
 
 `contexto.py limpiar-cbm --reiniciar-daemon [--solo-avisar]` es lo unico que toca el
-daemon: **solo si esta probado sin socket** (lo confirma dos veces con 1 s de pausa; un
-daemon que conserva su socket se rechaza y se remite a `daemon stop`). Antes de matar
+daemon: **solo si esta probado sin socket o sin `.sock.identity` (`unverified`)** (lo confirma dos veces con 1 s de pausa; un
+daemon sano se rechaza y se remite a `daemon stop`). Antes de matar
 lista las sesiones conectadas que perderan cbm hasta `/mcp` (las ya cortadas no), termina
 al daemon y a sus workers (SIGTERM, luego SIGKILL; nunca sesiones) y comprueba que un
 cliente nuevo conecta (`cli list_projects`, con stdin cerrado: **sin argumentos el `cli` lee
@@ -310,6 +310,27 @@ su JSON de stdin** y con un stdin heredado y abierto espera para siempre; con el
 argumento, que es como lo llama el cierre, no pasa). No usa `daemon start`: deja un daemon
 **permanente**; el primer cliente levanta uno efimero. `--solo-avisar` solo muestra a
 quien afectaria. Cuando reiniciar lo decide la persona usuaria, no el agente.
+
+**Aislamiento por proyecto fuera de `/tmp` (`scripts/cbm_proyecto.py`):** cuando trabajas
+con varios proyectos en paralelo durante dias, compartir `/private/tmp/cbm-daemon-<uid>/`
+hace que un reinicio o la desaparicion de `.sock.identity` corte a todos los proyectos a la
+vez. `scripts/cbm_proyecto.py` actua como wrapper MCP y CLI sin procesos extra (`os.execvpe`)
+que asigna un `CBM_RUNTIME_DIR` y `CBM_CACHE_DIR` deterministas por proyecto bajo
+`~/.cbm/p/<hash12>/{r,c}` (fuera de `/tmp`, respetando el limite de 104 bytes de `sun_path`
+en macOS). Agrupa todos los sub-repos y worktrees de un mismo proyecto en la raiz que declara
+`harness/feature_list.json` (o la raiz git principal).
+
+```bash
+"$PY" "$H/cbm_proyecto.py" --harness-info          # muestra raiz, runtime y cache del proyecto
+"$PY" "$H/cbm_proyecto.py" --harness-config-mcp    # snippets MCP para Claude, AGY, Gemini, Grok, Codex, Hermes
+"$PY" "$H/cbm_proyecto.py" --harness-activar       # alinea contexto.py con el modo aislado (~/.cbm/modo-aislado)
+"$PY" "$H/cbm_proyecto.py" --harness-desactivar    # vuelve al daemon global
+```
+
+Una vez activado (`--harness-activar` o `"cbm_aislado": true` en `harness/grafos.json`),
+`contexto.py cbm`, `refrescar`, `estado` y `limpiar-cbm --reiniciar-daemon` operan solo sobre
+el daemon del proyecto actual sin tocar los de otros proyectos. `HARNESS_CBM_GLOBAL=1` o
+`HARNESS_CBM_AISLADO=0` fuerzan el daemon global puntualmente.
 
 **Que borro el socket: no esta establecido, y se probo mucho.** Lo que SI se sabe de
 la unica vez que se vio (2026-10-29): el daemon era efimero (`--cbm-daemon-internal`) y
