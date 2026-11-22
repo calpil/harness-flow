@@ -139,7 +139,7 @@ Reporta el ciclo en una línea y **sigue con el siguiente sin preguntar**:
 
 #### Paso 4. Chequeo final (`4. Check`)
 Cuando toda la lista de tests está en verde:
-- Pide al usuario, en un solo formulario, los criterios de **verificación manual** (`[costura: manual]`).
+- Los criterios de **verificación manual** (`[costura: manual]`) los compruebas tú primero en la aplicación y los registras con su evidencia (`comprobacion.py registrar`). Al usuario le llegan, en un solo formulario, solo los que no pudiste comprobar.
 - Si algo se repite o quedó desprolijo dentro de los archivos de la feature, **refactoriza con los tests en verde, en su propio commit**. Un refactor que cambia una interfaz pública o sale de esos archivos es una decisión de diseño: parada 1.
 - Si se tomó una decisión que aplica a todo el proyecto, propón registrarla en una lección (`leccion.py`) o en la guía del proyecto.
 - Escribe `docs/impl-<id>.md` en la raíz con una sección `## AC-n` por cada criterio citando `archivo:linea` y el comando ejecutado.
@@ -186,7 +186,8 @@ El agente avanza solo. No pausa tras cada ciclo ni pregunta si sigue. Un formula
 | Parada 4: dos intentos sin verde | Seguir a ciegas gasta más que preguntar |
 | La lista quita un test sellado, o deja un AC solo manual que el spec no declara | El gate lo exige (`sellar-tests --yes`) |
 | Lo que sella el usuario: enmienda, ficha nueva, y el cierre o la publicación que el proyecto reserve | Son sus rituales |
-| Verificación manual, al final | Solo el usuario puede mirarlo |
+| Verificación manual, al final: solo los AC que no pudiste comprobar tú en la aplicación | Lo demás ya lo comprobaste y lo registraste |
+| Agregar, promover o desactivar un guardrail | Prohíbe algo en todo el proyecto (`guardrails.py ... --yes`) |
 
 ### Cuándo NO hace falta
 

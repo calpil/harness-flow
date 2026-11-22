@@ -29,7 +29,8 @@ Cuando un agente escribe código y dice "listo" sin probar la aplicación real, 
 ### Regla activa por defecto (`rules.require_feature_map: true`)
 - `init.py` crea el esqueleto `harness/feature-map.json`.
 - `contexto.py brief --feature <id>` inyecta el bloque `FEATURE MAP Y FEEDBACK LOOP` con las entradas relacionadas de la feature.
-- **`gate.py close --status done` BLOQUEA (exit 1)** cuando `rules.require_feature_map` es `true` (valor por defecto) y:
+- **Rige para los specs que se aprueban desde ahora.** `gate.py approve-spec` deja `autocomprobacion: true` en la feature la primera vez que sella su spec. Una feature aprobada antes no tiene esa marca: `close` le muestra los mismos mensajes como aviso y no la bloquea. A una feature en curso no se le cambia la regla a mitad de camino.
+- **`gate.py close --status done` BLOQUEA (exit 1)** cuando `rules.require_feature_map` es `true` (valor por defecto), la feature tiene la marca y:
   - Una feature declara costuras expuestas (`ui`, `componente`, `pantalla`, `vista`, `endpoint`, `api`, `http`, `rest`, `grpc`, `graphql`, `bff`, `webhook`, `cli`) pero no tiene una entrada válida en `harness/feature-map.json`.
   - Una ficha `--kind bug` no incluye una sección `## Reproduccion` (o `Reproduccion:`) en `docs/impl-<id>.md` con **evidencia verificable** (comando en backticks, `archivo:linea`, respuesta HTTP/exit code o ruta de captura/log) que demuestre que el agente reprodujo el fallo antes del fix.
 
@@ -141,9 +142,14 @@ $PY "$H/guardrails.py" init --perfil spacex --forzar
 # Auditar la feature o los cambios locales
 $PY "$H/guardrails.py" check --feature 1
 
-# Agregar regla nueva o promover una regla desde una skill/leccion
-$PY "$H/guardrails.py" agregar --id no-any --patron ":\s*any\b" --glob "**/*.ts" --mensaje "Prohibido any explicito"
-$PY "$H/guardrails.py" promover --desde-skill react-hooks --id no-use-effect --patron "\b(?:React\.)?useEffect\s*\(" --glob "**/*.tsx" --mensaje "Prohibido useEffect; deriva estado o usa handlers"
+# Agregar regla nueva o promover una regla desde una skill/leccion: lo PROPONE el agente y lo
+# decide el usuario. Sin --yes --por el comando muestra la propuesta y no registra nada.
+$PY "$H/guardrails.py" agregar --id no-any --patron ":\s*any\b" --glob "**/*.ts" --mensaje "Prohibido any explicito" --yes --por "<usuario>"
+$PY "$H/guardrails.py" promover --desde-skill react-hooks --id no-use-effect --patron "\b(?:React\.)?useEffect\s*\(" --glob "**/*.tsx" --mensaje "Prohibido useEffect; deriva estado o usa handlers" --yes --por "<usuario>"
+
+# Hook pre-push: bloquea la subida de lineas que infringen un guardrail (lo instala el usuario)
+$PY "$H/guardrails.py" instalar-hook --yes
+$PY "$H/guardrails.py" quitar-hook
 
 # Desactivar una regla default (solo con el SI del usuario)
 $PY "$H/guardrails.py" desactivar --id no-debugger --motivo "Motivo explicito auditado" --yes
@@ -163,3 +169,47 @@ $PY "$H/guardrails.py" list
 | **2. Implementer** | Verifica en la app real; reproduce bugs en rojo y documenta `## Reproduccion`; actualiza Feature Map | Si edita/crea una skill, corre `evals.py` | Corre `guardrails.py check --feature <id>` antes de commitear |
 | **3. Revisor Aislado** | Audita alertas de Feature Map y evidencia de reproducción | Revisa alertas sobre skills nuevas/modificadas | Audita `ALERTAS AUTOMATICAS DE GUARDRAILS DETERMINISTAS` |
 | **4. Cierre (`gate.py`)** | `close` bloquea sin Feature Map en UI/endpoints ni reproducción en bugs (`require_feature_map: true`) | `close` bloquea si `require_skill_eval: true` y la lección no está `PASS` y fresca | `verify` y `close` bloquean con `exit 1` ante cualquier violación `block` |
+
+---
+
+## Decisiones del usuario sobre los tres mecanismos (2026-11-22)
+
+Cuatro decisiones y un límite. Las fija `tests/test_autonomia_decisiones.py`.
+
+### 1. Los AC de verificación manual los comprueba primero el agente (`comprobacion.py`)
+
+Un AC que la lista de tests cubre solo con `verificacion manual` no lo mide ningún test. No va directo al usuario.
+
+- El agente lo comprueba en la aplicación con las herramientas de su host. El Feature Map dice cómo llegar.
+- Registra cada uno con su evidencia: `comprobacion.py registrar --feature <id> --ac AC-n --resultado ok --como "<qué hice>" --observado "<qué vi>" --evidencia <archivo>`. La evidencia es la captura, la salida del comando o la respuesta; queda su huella.
+- Lo que no pudo comprobar se registra con `--resultado no-pude` y llega al usuario en **un** formulario. Su respuesta se registra con `--usuario --yes --por <su nombre>`. El agente no puede registrar por el usuario.
+- `gate.py close` exige una comprobación `ok` por cada AC solo manual. Una comprobación que falló, o anterior a una enmienda del spec, no vale.
+- `comprobacion.py pendientes --feature <id>` dice quién comprobó cada uno.
+
+### 2. Un guardrail lo propone el agente y lo registra el SÍ del usuario
+
+`guardrails.py agregar` y `guardrails.py promover` exigen `--yes --por <usuario>`. Sin eso muestran la propuesta (patrón, alcance y mensaje) y salen con error. `desactivar` ya lo exigía.
+
+### 3. Los guardrails bloquean también la subida
+
+`guardrails.py instalar-hook --yes` instala un hook `pre-push` en cada repo del proyecto. Es configuración persistente en el repo: lo corre el usuario.
+
+- Mide las líneas que se suben contra lo que ya está en el remoto, con las reglas del proyecto, los defaults del stack, la política de comentarios y las fronteras. No corre los `comandos` de `guardrails.json`.
+- Deja pasar las líneas commiteadas antes de que la regla rigiera: una regla del proyecto rige desde su `added_at`; un default, desde que se instaló el hook. Así una subida que lleva trabajo viejo (promover la rama de integración) no queda bloqueada.
+- No reemplaza un `pre-push` ajeno ni toca `core.hooksPath`: imprime la línea para agregarla a mano.
+- No se versiona: cada clon lo instala. `estado.py` dice en cuántos repos está.
+- Si no encuentra el arnés o no puede medir, bloquea.
+
+### 4. Un eval lleva un grupo de control
+
+`evals.py init <skill> --control 1` (o `"corridas_control": 1` en la suite) pide, por caso, corridas que resuelven la tarea **sin** la skill.
+
+- El coordinador las numera después de las corridas con la skill y las mezcla. El juez no sabe cuáles son.
+- Al registrar se nombran: `evals.py registrar <skill> --resultado <json> --control E-1:4`.
+- No entran al score. Si la skill no sube el score al menos 15 puntos sobre el control, el examen no mide lo que la skill aporta y la ronda **no aprueba**.
+- Sin grupo de control, `briefing` y `registrar` avisan que no se sabe si el examen puede fallar.
+
+### Límite: la regla rige para los specs nuevos
+
+La exigencia del Feature Map, de la reproducción de bugs y de la comprobación de los AC manuales entra con la primera aprobación del spec (`autocomprobacion` en el backlog). Las features que ya estaban en curso reciben avisos, no bloqueos. Los guardrails y sus defaults sí miden todas las features: actúan sobre las líneas nuevas.
+

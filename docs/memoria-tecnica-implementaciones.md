@@ -1053,11 +1053,32 @@ El usuario había pedido "pair automatic", y aun así una corrección chica cost
 
 ---
 
-## 41. Estado de Verificación y Métricas de Calidad
+## 41. Hito 39: Tres Mecanismos de Autonomía y las Decisiones del Usuario
 
-* **Batería de Pruebas Automatizadas**: 64 archivos de test en `tests/`, 1.341 tests. Última medición (2026-11-17, sobre el árbol del Hito 38, antes de su commit), en una sola corrida con el toolchain de frontend (`~/.harness-flow/frontend-toolchain`: Angular 22.2.1, Vitest 4.1.11, Node 22):
-  * 1.341 tests, 1.341 pasaron. Ningún test falla ni queda sin medir. Duración: 20 minutos.
-  * Son los 1.286 que traía el árbol anterior (`deec6f8`) más los 55 de `test_stacks_dotnet.py`.
+**Problema.** Un agente al que hay que revisarle cada paso deja al humano como el paso lento. Origen: los tres mecanismos de una ingeniera de SpaceX que coordina decenas de agentes (feedback loop, agent evals y guardrails; resumen en `https://www.youtube.com/watch?v=PXd2KzUhDUc`).
+
+**Qué se implementó en `6f03db9`.** `scripts/feature_map.py` (mapa de funcionalidades en `harness/feature-map.json`, en el brief, y reproducción de bugs en `docs/impl-<id>.md`), `scripts/evals.py` (examen de una skill: corridas en paralelo, juez aislado, score y hash de la skill) y `scripts/guardrails.py` (reglas del proyecto y defaults por stack, política de comentarios y fronteras; bloquean `verify` y `close`). Guía: [`references/autonomia-agentes-spacex.md`](../references/autonomia-agentes-spacex.md). Tests: `tests/test_mecanismos_autonomia.py`.
+
+**Decisiones del usuario (2026-11-22) y qué se agregó para cumplirlas.**
+
+- **Los AC de verificación manual los comprueba primero el agente** (`scripts/comprobacion.py`, nuevo). Antes iban directo al usuario y `close` cerraba sin constancia de que alguien los mirara. `registrar` guarda qué hizo el agente, qué vio y la huella de la evidencia. Lo que no pudo comprobar (`no-pude`) llega al usuario, y su respuesta se registra con `--usuario --yes --por`; el agente no puede registrar por él. `gate.py close` exige una comprobación `ok` por cada AC que la lista de tests cubre solo con verificación manual. Una comprobación anterior a una enmienda no vale.
+- **Un guardrail lo propone el agente y lo registra el SÍ del usuario.** `guardrails.py agregar` y `promover` registraban sin preguntar. Ahora, sin `--yes --por`, muestran la propuesta y salen con error.
+- **Los guardrails bloquean también la subida.** `guardrails.py instalar-hook --yes` instala un hook `pre-push` por repo. Mide las líneas que se suben con el mismo motor. Deja pasar las líneas commiteadas antes de que la regla rigiera (una subida puede llevar trabajo viejo). No reemplaza un hook ajeno ni toca `core.hooksPath`. Si no puede medir, bloquea.
+- **Un eval lleva un grupo de control.** Corridas que resuelven el caso sin la skill, que el juez corrige sin saberlo (`corridas_control` en la suite, `registrar --control <caso>:<n>`). No entran al score. Si la skill no sube el score 15 puntos sobre el control, la ronda no aprueba: un examen que se aprueba igual sin la skill no dice nada de la skill.
+- **La regla rige para los specs nuevos.** `require_feature_map` bloqueaba en `close` también a las features que ya estaban en curso. Ahora `approve-spec` deja `autocomprobacion` en la primera aprobación, y solo esas features se bloquean por el mapa, la reproducción de bugs y los AC manuales. Las demás reciben el mismo mensaje como aviso.
+
+**Verificación.** [`tests/test_autonomia_decisiones.py`](../tests/test_autonomia_decisiones.py): 36 tests. Se actualizó un test de `test_mecanismos_autonomia.py` que promovía un guardrail sin el SÍ.
+
+**Lo que este hito no hace.** No usa la aplicación por el agente ni lanza los agentes de un eval: eso lo hace el host. El arnés guarda la huella de la evidencia; no mira la captura. El hook no corre los `comandos` de `guardrails.json` y no se versiona: cada clon lo instala. Los guardrails por defecto sí miden las features en curso, porque actúan sobre las líneas nuevas.
+
+---
+
+## 42. Estado de Verificación y Métricas de Calidad
+
+* **Batería de Pruebas Automatizadas**: 70 archivos de test en `tests/`, 1.473 tests. Última medición (2026-11-22, sobre el árbol del Hito 39, antes de su commit), en una sola corrida con el toolchain de frontend (`~/.harness-flow/frontend-toolchain`: Angular 22.2.1, Vitest 4.1.11, Node 22):
+  * 1.473 tests, 1.473 pasaron. Ningún test falla ni queda sin medir. Duración: 30 minutos.
+  * Son los 1.437 que traía el árbol anterior (`6f03db9`) más los 36 de `test_autonomia_decisiones.py`.
+  * Medición anterior (2026-11-17, sobre el árbol del Hito 38, antes de su commit): 1.341 tests, 1.341 pasaron, 20 minutos. Son los 1.286 de `deec6f8` más los 55 de `test_stacks_dotnet.py`.
   * Medición anterior (2026-11-13, sobre el árbol del Hito 36, antes de su commit): 1.260 tests, 1.260 pasaron, 29 minutos. Son los 1.232 de antes más los 28 de `test_pair_automatico.py`.
   * Medición anterior (2026-11-13, sobre el árbol del Hito 35, `86379f6`): 1.232 tests, 1.232 pasaron, 24 minutos. Son los 1.198 de antes más los 34 de `test_hallazgos.py`.
   * Medición anterior (2026-11-13, sobre `2475ba3`): 1.198 tests, 1.198 pasaron. Cubre los hitos 33 y 34 y los tres commits posteriores: paridad de Gemini/AGY (`3f7d0ba`), esperas de los tests Go sin `internal/` (`10c29ec`) y el verificador de `angular-product` que mide `shared` y `core` (`cf8bbf7`).

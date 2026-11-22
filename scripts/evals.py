@@ -6,9 +6,10 @@ saber si los agentes realmente las siguen. Host-neutral (patron `revision.py`):
 los scripts gestionan el examen, los briefings para N corridas paralelas y el
 juez aislado, y validan/sellan el puntaje con exit != 0 y hash SHA-256 de la skill.
 
-  evals.py init      <skill> [--global] [--umbral 0.85] [--corridas 3] [--skill-path <ruta>]
+  evals.py init      <skill> [--global] [--umbral 0.85] [--corridas 3] [--control 1] [--skill-path <ruta>]
   evals.py briefing  <skill> [--fase ejecutar|juez] [--ronda N] [--corridas K] [--skill-path <ruta>]
-  evals.py registrar <skill> --resultado <json> [--ronda N] [--por <autor>] [--skill-path <ruta>]
+  evals.py registrar <skill> --resultado <json> [--ronda N] [--por <autor>] [--control <caso>:<n> ...]
+                     [--skill-path <ruta>]
   evals.py estado    [--skill <skill>] [--json]
 """
 from __future__ import annotations
@@ -30,6 +31,9 @@ import leccion  # noqa: E402
 UMBRAL_DEFAULT = 0.85
 CORRIDAS_DEFAULT = 3
 MAX_RONDAS_DEFAULT = 3
+# Grupo de control: corridas que resuelven el caso SIN la skill. Si la skill no sube el
+# score al menos este margen sobre el control, el examen no mide lo que la skill aporta.
+MARGEN_CONTROL = 0.15
 TOPE_SKILLS_HIGIENE = 15
 _PLACEHOLDER_RE = re.compile(r"<[^>\n]{2,}>|<!--")
 _STOPWORDS = frozenset({
@@ -150,6 +154,9 @@ def validar_suite(suite: Any) -> list[str]:
     corridas = suite.get("corridas_por_caso", CORRIDAS_DEFAULT)
     if not isinstance(corridas, int) or corridas < 1:
         fallos.append(f"corridas_por_caso invalido ({corridas!r}): debe ser entero >= 1")
+    control = suite.get("corridas_control", 0)
+    if type(control) is not int or control < 0:
+        fallos.append(f"corridas_control invalido ({control!r}): debe ser entero >= 0")
     casos = suite.get("casos")
     if not isinstance(casos, list) or not casos:
         fallos.append("la suite debe declarar al menos un caso en 'casos'")
@@ -188,11 +195,22 @@ def validar_suite(suite: Any) -> list[str]:
     return fallos
 
 
-def evaluar_ronda(suite: dict[str, Any], payload: Any) -> dict[str, Any]:
+def _score_corrida(rdata: dict[str, Any], criterios_def: dict[str, Any], peso_total: float) -> float:
+    if rdata["senales_prohibidas_detectadas"] or not peso_total:
+        return 0.0
+    return sum(float(criterios_def[crid].get("peso", 1.0))
+               for crid, ev in rdata["criterios"].items() if ev["cumplido"]) / peso_total
+
+
+def evaluar_ronda(suite: dict[str, Any], payload: Any,
+                  control: set[tuple[str, int]] | None = None) -> dict[str, Any]:
     """Valida y califica deterministamente el JSON devuelto por el juez aislado.
 
     Rechaza resultados parciales, corridas insuficientes o criterios sin evidencia.
+    `control` nombra las corridas (caso, numero) que se resolvieron SIN la skill: el
+    juez las corrige sin saberlo, no entran al score y dan el score de control.
     """
+    control = control or set()
     if not isinstance(payload, dict):
         raise ValueError("el archivo de resultado debe ser un objeto JSON")
     corridas_raw = payload.get("corridas")
@@ -264,10 +282,21 @@ def evaluar_ronda(suite: dict[str, Any], payload: Any) -> dict[str, Any]:
             "senales_prohibidas_detectadas": prohibidas_limpias,
         }
 
+    min_control = int(suite.get("corridas_control", 0) or 0)
+    for cid, num in sorted(control):
+        if num not in por_caso.get(cid, {}):
+            errores.append(f"--control {cid}:{num}: el juez no evaluo esa corrida")
     for cid, runs in por_caso.items():
-        if len(runs) < min_corridas:
+        propias = [n for n in runs if (cid, n) not in control]
+        de_control = [n for n in runs if (cid, n) in control]
+        if len(propias) < min_corridas:
             errores.append(
-                f"caso {cid}: se evaluaron {len(runs)} corrida(s) y la suite exige al menos {min_corridas}"
+                f"caso {cid}: se evaluaron {len(propias)} corrida(s) con la skill y la suite exige al menos {min_corridas}"
+            )
+        if len(de_control) < min_control:
+            errores.append(
+                f"caso {cid}: la suite exige {min_control} corrida(s) de control (sin la skill) y se "
+                f"declararon {len(de_control)}: registrar --control {cid}:<n>"
             )
 
     if errores:
@@ -279,10 +308,13 @@ def evaluar_ronda(suite: dict[str, Any], payload: Any) -> dict[str, Any]:
     brechas_cuenta: dict[str, dict[str, Any]] = {}
     scores_casos: list[float] = []
 
+    scores_control: list[float] = []
     for cid, caso in casos_map.items():
-        runs = por_caso[cid]
         criterios_def = {str(cr["id"]): cr for cr in caso["criterios"]}
         peso_total = sum(float(cr.get("peso", 1.0)) for cr in caso["criterios"])
+        scores_control += [_score_corrida(r, criterios_def, peso_total)
+                           for n, r in por_caso[cid].items() if (cid, n) in control]
+        runs = {n: r for n, r in por_caso[cid].items() if (cid, n) not in control}
         scores_run: list[float] = []
 
         for num, rdata in sorted(runs.items()):
@@ -328,11 +360,21 @@ def evaluar_ronda(suite: dict[str, Any], payload: Any) -> dict[str, Any]:
     score_global = round(sum(scores_casos) / len(scores_casos), 4)
     brechas = sorted(brechas_cuenta.values(), key=lambda x: (-x["fallos"], x["caso"], x["criterio"]))
     aprobado = (score_global >= umbral) and (not fallos_obligatorios)
+    info_control = None
+    if scores_control:
+        score_control = round(sum(scores_control) / len(scores_control), 4)
+        margen = round(score_global - score_control, 4)
+        info_control = {"score": score_control, "corridas": len(scores_control), "margen": margen,
+                        "distingue": margen >= MARGEN_CONTROL}
+        if not info_control["distingue"]:
+            # Un examen que se aprueba igual sin la skill no dice nada de la skill.
+            aprobado = False
 
     return {
         "score": score_global,
         "umbral": umbral,
         "aprobado": aprobado,
+        "control": info_control,
         "casos": detalle_casos,
         "fallos_obligatorios": fallos_obligatorios,
         "brechas": brechas,
@@ -581,6 +623,7 @@ def cmd_init(args) -> None:
         "skill": args.skill,
         "umbral": float(args.umbral),
         "corridas_por_caso": int(args.corridas),
+        "corridas_control": int(args.control),
         "max_rondas_mejora": int(args.max_rondas),
         "casos": [
             {
@@ -644,7 +687,17 @@ def cmd_briefing(args) -> None:
         print("    * Codex / CLI: codex exec / gemini -p en sesiones limpias")
         print("- Entrega a cada subagente SOLO el texto de la skill y la tarea del caso.")
         print("- PROHIBIDO mostrar la rubrica del juez ni las senales prohibidas a los ejecutores.")
-        print("- Guarda cada salida en un archivo (ej. /tmp/eval-<skill>-r<ronda>-<caso>-c<n>.md).\n")
+        print("- Guarda cada salida en un archivo (ej. /tmp/eval-<skill>-r<ronda>-<caso>-c<n>.md).")
+        n_control = int(suite.get("corridas_control", 0) or 0)
+        if n_control:
+            print(f"- GRUPO DE CONTROL: lanza ademas {n_control} subagente(s) por caso SOLO con la tarea, SIN la skill.")
+            print(f"  Numera sus salidas como corridas {corridas + 1}..{corridas + n_control} y mezclalas con las demas:")
+            print("  el juez NO debe saber cuales son de control. Al registrar, nombralas: --control <caso>:<n>.")
+            print("  Si sin la skill sacan casi el mismo score, el examen no mide lo que la skill aporta.")
+        else:
+            print("- [!] sin grupo de control (corridas_control = 0 en la suite): no se sabra si este examen")
+            print("  puede fallar sin la skill. Agregalo: \"corridas_control\": 1 en la suite.")
+        print()
         print("CASOS A EJECUTAR:")
         for c in suite["casos"]:
             print(f"\n### {c['id']}")
@@ -715,8 +768,14 @@ def cmd_registrar(args) -> None:
     except (OSError, ValueError) as exc:
         sys.exit(f"[!!] resultado JSON invalido: {exc}")
 
+    control: set[tuple[str, int]] = set()
+    for item in args.control or []:
+        cid, _, num = item.rpartition(":")
+        if not cid or not num.isdigit():
+            sys.exit(f"[!!] --control invalido ({item!r}): usa <caso>:<numero de corrida>, p. ej. E-1:4")
+        control.add((cid, int(num)))
     try:
-        ev = evaluar_ronda(suite, payload)
+        ev = evaluar_ronda(suite, payload, control)
     except ValueError as exc:
         sys.exit(f"[!!] {exc}")
 
@@ -743,6 +802,7 @@ def cmd_registrar(args) -> None:
         "casos": ev["casos"],
         "fallos_obligatorios": ev["fallos_obligatorios"],
         "brechas": ev["brechas"],
+        "control": ev["control"],
     }
     if args.notas:
         registro["notas"] = args.notas.strip()
@@ -757,6 +817,15 @@ def cmd_registrar(args) -> None:
             f"{'PASS' if ev['aprobado'] else 'FAIL'} ({ev['score']:.0%}, umbral {ev['umbral']:.0%})",
         )
 
+    ctl = ev["control"]
+    if ctl is None:
+        print("[!]  sin grupo de control: no se sabe si este examen puede fallar sin la skill "
+              "(\"corridas_control\": 1 en la suite y registrar --control <caso>:<n>)")
+    elif ctl["distingue"]:
+        print(f"[i]  control sin la skill: {ctl['score']:.0%}. La skill sube el score {ctl['margen']:.0%}.")
+    else:
+        print(f"[!!] control sin la skill: {ctl['score']:.0%}. El examen no mide lo que la skill aporta "
+              f"(margen {ctl['margen']:.0%} < {MARGEN_CONTROL:.0%}): endurece los casos o retira la skill.")
     if ev["aprobado"]:
         print(f"[ok] eval '{args.skill}' ronda {ronda}: PASS ({ev['score']:.0%} >= {ev['umbral']:.0%}) -> {res_p}")
         return
@@ -827,6 +896,8 @@ def main() -> None:
                    help="guardar evals.json junto al SKILL.md en vez de harness/evals/")
     s.add_argument("--umbral", type=float, default=UMBRAL_DEFAULT)
     s.add_argument("--corridas", type=int, default=CORRIDAS_DEFAULT)
+    s.add_argument("--control", type=int, default=0,
+                   help="corridas por caso SIN la skill (grupo de control): prueban que el examen puede fallar")
     s.add_argument("--max-rondas", type=int, default=MAX_RONDAS_DEFAULT, dest="max_rondas")
     s.add_argument("--skill-path", dest="skill_path", help="ruta explicita al SKILL.md o carpeta")
     s.add_argument("--forzar", action="store_true")
@@ -846,6 +917,8 @@ def main() -> None:
     s.add_argument("--ronda", type=int)
     s.add_argument("--por")
     s.add_argument("--notas")
+    s.add_argument("--control", action="append", metavar="CASO:N",
+                   help="corrida que se resolvio SIN la skill (repetible); el juez no lo sabe")
     s.add_argument("--skill-path", dest="skill_path")
     s.set_defaults(fn=cmd_registrar)
 

@@ -138,7 +138,8 @@ def main(argv: list[str] | None = None) -> None:
         print(f"   feature-map: [!] no se pudo evaluar: {exc}")
     try:
         import guardrails
-        print(f"   guardrails:  {guardrails.resumen_estado(p)}")
+        hook = guardrails.resumen_hook(p)
+        print(f"   guardrails:  {guardrails.resumen_estado(p)}" + (f" · {hook}" if hook else ""))
     except Exception as exc:
         print(f"   guardrails:  [!] no se pudo evaluar: {exc}")
     try:

@@ -531,6 +531,7 @@ class GuardrailsDeterministasTests(unittest.TestCase):
             "--patron", r"\b(?:React\.)?useEffect\s*\(",
             "--glob", "**/*.tsx",
             "--mensaje", "useEffect prohibido; deriva estado",
+            "--yes", "--por", "T",
             cwd=root, env_extra=env,
         )
         self.assertEqual(0, r_prom.returncode, r_prom.stdout + r_prom.stderr)

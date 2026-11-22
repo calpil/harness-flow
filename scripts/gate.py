@@ -567,6 +567,10 @@ def cmd_approve_spec(args) -> None:
     primera_aprobacion = not f.get("last_spec_sig")
     _registrar_sello(p, f, sp, text, quien, cuando)
     modo_fijado = _fijar_modo_al_aprobar(f, primera_aprobacion)
+    if primera_aprobacion:
+        # Feedback loop (feature_map.py, comprobacion.py): la exigencia entra con la primera
+        # aprobacion del spec. A una feature en curso no se le cambia la regla a mitad de camino.
+        f["autocomprobacion"] = True
     arquitectura.registrar_aprobacion(p, data, f)
     save_backlog(p, data)
     bitacora(p, f"spec #{f['id']} approved por {quien} ({len(acs)} AC)"
@@ -1546,6 +1550,10 @@ def cmd_close(args) -> None:
         fm_fallos, fm_avisos = feature_map.validar_feature(p, data, f, stext, modo_check=False)
         fallos.extend(fm_fallos)
         avisos_cierre.extend(fm_avisos)
+        # Los AC de verificacion manual los comprueba primero el agente, con evidencia;
+        # al usuario le llega solo lo que el agente no pudo comprobar.
+        import comprobacion
+        fallos.extend(comprobacion.fallos_de_cierre(p, f))
 
         # Mecanismo 2 (Agent Evals de lecciones): opt-in por rules.require_skill_eval.
         if args.leccion and args.leccion != "ninguna":

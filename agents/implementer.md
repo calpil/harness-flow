@@ -172,7 +172,8 @@ detente; no los busques ni los inventes.
 - **Autonomía verificable: Feedback Loop, Feature Map y Guardrails (ver `references/autonomia-agentes-spacex.md`):**
   - **Feedback Loop + Feature Map:** consulta el bloque `FEATURE MAP Y FEEDBACK LOOP` del brief; además de unit tests, comprueba la funcionalidad interactuando con la app/costura real (Playwright, Chrome DevTools MCP, HTTP o CLI). Si la feature expone UI o endpoints, actualiza `harness/feature-map.json` (`feature_map.py registrar`) antes de cerrar.
   - **Bugs (`--kind bug`):** localiza la funcionalidad con `feature_map.py buscar`, reproduce el bug en rojo ANTES de editar código y documenta comando y evidencia verificable en `## Reproduccion` de `docs/impl-<id>.md`.
-  - **Guardrails deterministas:** corre `guardrails.py check --feature <id>` antes de commitear. Cero patrones prohibidos, cero comentarios narrativos/ruido de IA (`// Changed...`, `// Updated...`) y cero imports cruzados entre capas internas de features distintas.
+  - **AC de verificación manual:** compruébalos tú primero en la app y registra cada uno con su evidencia (`comprobacion.py registrar`). Lo que no puedas comprobar (`--resultado no-pude`) lo devuelves a quien te delegó; no registras por el usuario.
+  - **Guardrails deterministas:** corre `guardrails.py check --feature <id>` antes de commitear. Agregar o promover un guardrail lo propones tú y lo decide el usuario (`--yes --por`). Cero patrones prohibidos, cero comentarios narrativos/ruido de IA (`// Changed...`, `// Updated...`) y cero imports cruzados entre capas internas de features distintas.
 
 ## Evidencia
 

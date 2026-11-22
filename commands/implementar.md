@@ -32,7 +32,9 @@ de opciones en otros hosts) hace falta SOLO en estos casos:**
    solo con verificacion manual sin que el spec lo declare `[costura: manual]`.
 5. **Lo que sella el usuario:** una enmienda, una ficha nueva, y el cierre o la
    publicacion que el proyecto reserve.
-6. **Verificacion manual:** al final, los AC que solo el usuario puede mirar.
+6. **Verificacion manual:** al final, solo los AC que no pudiste comprobar tu en la
+   aplicacion (`comprobacion.py registrar --resultado no-pude`).
+7. **Un guardrail:** agregar, promover o desactivar una regla que bloquea (`guardrails.py ... --yes`).
 
 **No preguntes** si sigues con el test siguiente, el orden o el nombre de los
 tests, el mensaje de un commit, un refactor en verde dentro de los archivos de
@@ -209,8 +211,11 @@ Es el modo de toda feature cuyo modo registrado es `pair`:
 4. **Commits:** commitea en la rama de la feature cada unidad logica en verde,
    sin pedir permiso, separando funcionalidad (`feat:`/`fix:`) y refactor
    (`refactor:`). Sigue la convencion de commits del proyecto.
-5. **Cierre del rol:** con toda la lista en verde, pide al usuario en un solo
-   formulario los AC de verificacion manual, y escribe `docs/impl-$ARGUMENTS[0].md`.
+5. **Cierre del rol:** con toda la lista en verde, comprueba TU en la aplicacion los AC
+   de verificacion manual y registra cada uno con su evidencia
+   (`comprobacion.py registrar --feature $ARGUMENTS[0] --ac AC-n --resultado ok ...`).
+   Pide al usuario, en un solo formulario, solo los que no pudiste comprobar
+   (`--resultado no-pude`), y escribe `docs/impl-$ARGUMENTS[0].md`.
 
 **Varias features en paralelo.** Si el usuario pide avanzar varias a la vez y el
 host tiene subagentes, lanza un implementer por feature, cada uno en su worktree

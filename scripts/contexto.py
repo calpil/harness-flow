@@ -1617,8 +1617,9 @@ def lineas_modo(f: dict) -> list[str]:
                 "en commits separados. Pausa tras cada ciclo solo si el usuario pide \"paso a paso\".",
                 *protocolo,
                 "  formulario SOLO para: las paradas (1), (3) y (4); quitar un test sellado; un AC que "
-                "queda solo con verificacion manual; y lo que sella el usuario (enmienda, ficha nueva, "
-                "cierre). Lo demas lo decides tu y lo reportas.",
+                "queda solo con verificacion manual; lo que sella el usuario (enmienda, ficha nueva, "
+                "cierre, un guardrail); y los AC manuales que no pudiste comprobar tu en la aplicacion. "
+                "Lo demas lo decides tu y lo reportas.",
                 f"  como preguntar: junta las preguntas pendientes en UN formulario{herramienta}, con la opcion "
                 "recomendada primero. Mientras esperas, sigue con lo que no depende de la respuesta.",
                 "  si eres un subagente: no puedes preguntar al usuario. Devuelve la pregunta a quien te lanzo."]

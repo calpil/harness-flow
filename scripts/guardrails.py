@@ -9,9 +9,16 @@ para que el camino mas corto sea tambien el correcto.
   guardrails.py check [--feature <id>] [--repo <ruta>] [--json]
   guardrails.py agregar --id <id> --patron "<regex>" --mensaje "<msg>"
                         [--glob <g> ...] [--excluir <e> ...]
-                        [--severidad block|warn] [--stack <sid> ...]
+                        [--severidad block|warn] [--stack <sid> ...] --yes --por <usuario>
   guardrails.py promover --desde-skill <clase> --id <id> --patron "<regex>"
-                         --mensaje "<msg>" [--glob <g> ...] [--stack <sid> ...]
+                         --mensaje "<msg>" [--glob <g> ...] [--stack <sid> ...] --yes --por <usuario>
+  guardrails.py instalar-hook [--repo <ruta>] --yes
+  guardrails.py quitar-hook [--repo <ruta>]
+
+Agregar o promover un guardrail lo PROPONE el agente y lo decide el usuario: sin
+`--yes --por` el comando muestra la propuesta y no registra nada. El hook
+`pre-push` bloquea la subida de lineas que infringen un guardrail; lo instala el
+usuario, no se versiona y no reemplaza un hook ajeno.
   guardrails.py desactivar --id <id> --motivo "<por que>" --yes
   guardrails.py list [--repo <ruta>]
 """
@@ -22,14 +29,16 @@ import fnmatch
 import json
 import os
 import re
+import shlex
 import subprocess
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 sys.path.insert(0, str(Path(__file__).parent))
 from comun import (  # noqa: E402
-    bitacora, get_feature, load_backlog, now_iso, paths,
+    bitacora, get_feature, git, load_backlog, now_iso, paths,
 )
 import seguridad  # noqa: E402
 
@@ -628,6 +637,15 @@ def resumen_estado(p: dict) -> str:
     )
 
 
+def resumen_hook(p: dict) -> str | None:
+    """En cuantos repos del proyecto esta el hook pre-push; None si no se pudo evaluar."""
+    try:
+        repos = repos_del_proyecto(p)
+    except Exception:
+        return None
+    return f"hook pre-push en {sum(1 for r in repos if hook_propio(r))}/{len(repos)} repo(s)" if repos else None
+
+
 # --- CLI -------------------------------------------------------------------
 
 def cmd_init(args) -> None:
@@ -690,7 +708,28 @@ def _agregar_regla(
     return nueva
 
 
+def _exigir_si(args, accion: str) -> str:
+    """Un guardrail prohibe algo en todo el proyecto: lo propone el agente y lo decide el usuario."""
+    quien = (getattr(args, "por", None) or "").strip()
+    if args.yes and quien:
+        return quien
+    try:
+        re.compile(args.patron)
+    except re.error as exc:
+        sys.exit(f"[!!] --patron regex invalido: {exc}")
+    print(f"guardrail propuesto: {args.id}")
+    print(f"  patron:    {args.patron}")
+    print(f"  en:        {', '.join(args.glob) or 'todos los archivos de codigo'}"
+          + (f" (salvo {', '.join(args.excluir)})" if args.excluir else ""))
+    print(f"  mensaje:   {args.mensaje}")
+    print(f"  severidad: {getattr(args, 'severidad', 'block')}")
+    sys.exit(f"[!!] {accion} un guardrail lo decide el USUARIO: prohibe algo en todo el proyecto.\n"
+             "     PREGUNTALE con un formulario (que prohibe, donde y que error lo motivo) y, con su SI,\n"
+             "     repite el comando con --yes --por <su nombre>.")
+
+
 def cmd_agregar(args) -> None:
+    quien = _exigir_si(args, "agregar")
     p = paths()
     _agregar_regla(
         p,
@@ -702,7 +741,7 @@ def cmd_agregar(args) -> None:
         severidad=args.severidad,
         stacks=args.stack or [],
     )
-    bitacora(p, f"guardrail agregado: {args.id} ({args.severidad})")
+    bitacora(p, f"guardrail agregado con el si de {quien}: {args.id} ({args.severidad})")
     print(f"[ok] guardrail '{args.id}' ({args.severidad}) guardado en {ruta_config(p)}")
 
 
@@ -712,6 +751,7 @@ def cmd_promover(args) -> None:
     p = paths()
     if not leccion.buscar(args.desde_skill):
         sys.exit(f"[!!] la skill/leccion '{args.desde_skill}' no existe (revisa con leccion.py list)")
+    quien = _exigir_si(args, "promover a")
     _agregar_regla(
         p,
         rid=args.id,
@@ -723,7 +763,7 @@ def cmd_promover(args) -> None:
         stacks=args.stack or [],
         origen_skill=args.desde_skill,
     )
-    bitacora(p, f"guardrail promovido desde skill '{args.desde_skill}': {args.id} (block)")
+    bitacora(p, f"guardrail promovido desde skill '{args.desde_skill}' con el si de {quien}: {args.id} (block)")
     print(f"[ok] regla de skill '{args.desde_skill}' promovida a guardrail BLOQUEANTE '{args.id}' -> {ruta_config(p)}")
 
 
@@ -808,6 +848,176 @@ def cmd_check(args) -> None:
     if not args.json:
         print(f"[ok] guardrails limpios (comentarios={res['perfil']}, {len(res['avisos'])} aviso(s))")
 
+# --- hook pre-push ---------------------------------------------------------
+#
+# verify y close miden la feature. El hook mide lo que se sube: bloquea la subida
+# de lineas que infringen un guardrail aunque nadie haya corrido un gate. Lo
+# instala el usuario (configuracion persistente en su repo) y no se versiona.
+
+MARCA_HOOK = "harness-flow:guardrails"
+_CEROS = "0" * 40
+
+
+def repos_del_proyecto(p: dict) -> list[Path]:
+    """Repos git del proyecto: la raiz del arnes y los destinos con stack."""
+    import stack
+    candidatos = [p["root"], *[Path(d["path"]) for d in stack.detectar_todos_los_destinos(p["root"])]]
+    repos: list[Path] = []
+    for c in candidatos:
+        code, out = git(["rev-parse", "--show-toplevel"], c) if Path(c).is_dir() else (1, "")
+        top = Path(out.strip()).resolve() if code == 0 and out.strip() else None
+        if top and top not in repos:
+            repos.append(top)
+    return repos
+
+
+def _ruta_hook(repo: Path) -> Path | None:
+    code, out = git(["rev-parse", "--git-path", "hooks/pre-push"], repo)
+    if code != 0 or not out.strip():
+        return None
+    r = Path(out.strip())
+    return r if r.is_absolute() else repo / r
+
+
+def hook_propio(repo: Path) -> bool:
+    h = _ruta_hook(repo)
+    try:
+        return bool(h) and h.is_file() and MARCA_HOOK in h.read_text(encoding="utf-8", errors="ignore")
+    except OSError:
+        return False
+
+
+def _texto_hook(p: dict) -> str:
+    orden = " ".join(shlex.quote(Path(x).as_posix()) for x in (sys.executable, Path(__file__).resolve()))
+    return ("#!/bin/sh\n"
+            f"# {MARCA_HOOK}: instalado por guardrails.py instalar-hook. Lo quita: guardrails.py quitar-hook\n"
+            "# Bloquea la subida si las lineas nuevas infringen un guardrail del proyecto.\n"
+            f"exec {orden} hook-pre-push --raiz {shlex.quote(p['root'].as_posix())} "
+            f"--desde {now_iso()} \"$@\"\n")
+
+
+def _base_de_subida(repo: Path, local: str, remoto_sha: str, remoto: str, rama_base: str) -> str | None:
+    if remoto_sha != _CEROS:
+        return remoto_sha
+    for ref in (f"{remoto}/{rama_base}", rama_base):   # rama nueva: lo que no venia de la rama base
+        code, out = git(["merge-base", local, ref], repo)
+        if code == 0 and out.strip():
+            return out.strip()
+    return None
+
+
+def _epoch(iso: str | None) -> float | None:
+    try:
+        return datetime.strptime(str(iso), "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc).timestamp()
+    except ValueError:
+        return None
+
+
+def _linea_anterior_a_la_regla(repo: Path, sha: str, bloqueo: dict, cfg: dict, desde: str | None) -> bool:
+    """True si la linea se commiteo ANTES de que la regla rigiera: es heredada y no bloquea la subida.
+
+    Una subida puede llevar trabajo viejo (promover la rama de integracion). Una regla
+    del proyecto rige desde su `added_at`; un default del stack o la politica de
+    comentarios, desde que se instalo el hook. Si no se puede saber cuando se escribio
+    la linea, bloquea.
+    """
+    propia = next((r for r in cfg.get("reglas") or [] if r.get("id") == bloqueo.get("id")), None)
+    limite = _epoch((propia or {}).get("added_at")) or _epoch(desde)
+    if limite is None or not bloqueo.get("line"):
+        return False
+    code, out = git(["blame", "--porcelain", "-L", f"{bloqueo['line']},{bloqueo['line']}", sha, "--",
+                     bloqueo["file"]], repo)
+    m = re.search(r"^committer-time (\d+)$", out, flags=re.M) if code == 0 else None
+    return bool(m) and int(m.group(1)) < limite
+
+
+def cmd_instalar_hook(args) -> None:
+    p = paths()
+    repos = [Path(args.repo).resolve()] if args.repo else repos_del_proyecto(p)
+    if not args.yes:
+        print("El hook pre-push bloquea la subida si las lineas nuevas infringen un guardrail. Se instalaria en:")
+        for repo in repos:
+            print(f"  - {repo}")
+        sys.exit("[!!] es configuracion persistente en los repos: lo decide el USUARIO. Con su SI: --yes")
+    hechos = 0
+    for repo in repos:
+        code, out = git(["config", "--get", "core.hooksPath"], repo)
+        destino = _ruta_hook(repo)
+        orden = _texto_hook(p).splitlines()[-1]
+        if destino is None:
+            print(f"[!] {repo}: no es un repo git; no se instala")
+        elif code == 0 and out.strip():
+            print(f"[!] {repo}: usa core.hooksPath ({out.strip()}); no se toca. Agrega tu esta linea a "
+                  f"su pre-push:\n      {orden}")
+        elif destino.exists() and not hook_propio(repo):
+            print(f"[!] {repo}: ya tiene un pre-push propio; no se reemplaza. Agrega tu esta linea:\n"
+                  f"      {orden}")
+        else:
+            destino.parent.mkdir(parents=True, exist_ok=True)
+            destino.write_text(_texto_hook(p), encoding="utf-8")
+            destino.chmod(0o755)
+            hechos += 1
+            print(f"[ok] {repo}: hook pre-push instalado")
+    print(f"[i]  {hechos}/{len(repos)} repo(s) con el hook. No se versiona: cada clon lo instala.")
+
+
+def cmd_quitar_hook(args) -> None:
+    p = paths()
+    for repo in [Path(args.repo).resolve()] if args.repo else repos_del_proyecto(p):
+        if hook_propio(repo):
+            _ruta_hook(repo).unlink()
+            print(f"[ok] {repo}: hook pre-push quitado")
+        else:
+            print(f"[i]  {repo}: sin hook de guardrails")
+
+
+def cmd_hook_pre_push(args) -> None:
+    """Lo llama git: remoto y url por argumento, y por stdin `<ref local> <sha> <ref remoto> <sha>`."""
+    raiz = Path(args.raiz)
+    if not (raiz / "harness" / "feature_list.json").is_file():
+        sys.exit(f"[!!] guardrails: no se encuentra el arnes en {raiz}. Un chequeo que no se puede "
+                 "medir no pasa: reinstala (guardrails.py instalar-hook) o quita el hook (quitar-hook).")
+    p = paths(raiz)
+    try:
+        cfg = cargar_config(p)
+    except ValueError as exc:
+        sys.exit(f"[!!] guardrails: {exc}")
+    repo = Path.cwd()
+    remoto = args.resto[0] if args.resto else "origin"
+    rama_base = (load_backlog(p).get("rules") or {}).get("rama_base") or "develop"
+    sid = _detectar_stack_seguro(repo)
+    fallos: list[str] = []
+    for renglon in sys.stdin.read().splitlines():
+        partes = renglon.split()
+        if len(partes) != 4 or partes[1] == _CEROS:      # borrar una rama no sube lineas
+            continue
+        base = _base_de_subida(repo, partes[1], partes[3], remoto, rama_base)
+        if base is None:
+            fallos.append(f"{partes[0]}: no se pudo medir contra que se sube (sin base comun con "
+                          f"{rama_base}); un guardrail sin medir no pasa")
+            continue
+        r = subprocess.run(["git", "diff", "--no-ext-diff", "--no-textconv", "-U0", base, partes[1], "--"],
+                           cwd=str(repo), capture_output=True, text=True)
+        if r.returncode != 0:
+            fallos.append(f"{partes[0]}: git diff fallo; un guardrail sin medir no pasa")
+            continue
+        try:
+            res = escanear_diff_guardrails(r.stdout, cfg, stack_id=sid)
+        except ValueError as exc:
+            sys.exit(f"[!!] guardrails: {exc}")
+        for bl in res["bloqueos"]:
+            if _linea_anterior_a_la_regla(repo, partes[1], bl, cfg, args.desde):
+                continue
+            loc = f"{bl['file']}:{bl['line']}" if bl["line"] else bl["file"]
+            fallos.append(f"[{bl['id']}] {loc}: {bl['mensaje']}")
+    if fallos:
+        print(f"[!!] subida BLOQUEADA por {len(fallos)} infraccion(es) de guardrails del proyecto:",
+              file=sys.stderr)
+        for x in fallos:
+            print(f"     - {x}", file=sys.stderr)
+        print("     Corrige las lineas y vuelve a subir. Los guardrails: guardrails.py list", file=sys.stderr)
+        sys.exit(1)
+
 
 def main() -> None:
     ap = argparse.ArgumentParser(description="Guardrails deterministas de harness-flow")
@@ -832,6 +1042,8 @@ def main() -> None:
     s.add_argument("--excluir", action="append", default=[])
     s.add_argument("--severidad", choices=["block", "warn"], default="block")
     s.add_argument("--stack", action="append", default=[])
+    s.add_argument("--yes", action="store_true", help="el SI del usuario; sin el solo se muestra la propuesta")
+    s.add_argument("--por", help="nombre del usuario que aprobo")
     s.set_defaults(fn=cmd_agregar)
 
     s = sub.add_parser("promover", help="promueve una regla de una skill/leccion a guardrail bloqueante")
@@ -842,6 +1054,8 @@ def main() -> None:
     s.add_argument("--glob", action="append", default=[])
     s.add_argument("--excluir", action="append", default=[])
     s.add_argument("--stack", action="append", default=[])
+    s.add_argument("--yes", action="store_true", help="el SI del usuario; sin el solo se muestra la propuesta")
+    s.add_argument("--por", help="nombre del usuario que aprobo")
     s.set_defaults(fn=cmd_promover)
 
     s = sub.add_parser("desactivar", help="desactiva una regla default (requiere --yes del usuario)")
@@ -853,6 +1067,21 @@ def main() -> None:
     s = sub.add_parser("list", help="lista los guardrails activos")
     s.add_argument("--repo")
     s.set_defaults(fn=cmd_list)
+
+    s = sub.add_parser("instalar-hook", help="hook pre-push en los repos del proyecto (decision del usuario)")
+    s.add_argument("--repo")
+    s.add_argument("--yes", action="store_true")
+    s.set_defaults(fn=cmd_instalar_hook)
+
+    s = sub.add_parser("quitar-hook", help="quita el hook pre-push de guardrails")
+    s.add_argument("--repo")
+    s.set_defaults(fn=cmd_quitar_hook)
+
+    s = sub.add_parser("hook-pre-push", help="lo llama git desde el hook instalado")
+    s.add_argument("--raiz", required=True)
+    s.add_argument("--desde")
+    s.add_argument("resto", nargs="*")
+    s.set_defaults(fn=cmd_hook_pre_push)
 
     a = ap.parse_args()
     a.fn(a)

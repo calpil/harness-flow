@@ -244,6 +244,8 @@ def validar_feature(
       - Feature `kind == 'bug'` exige evidencia de reproduccion previa al fix en `docs/impl-<id>.md`.
     - En `modo_check` sobre una feature `in_progress`, los faltantes son avisos
       para no bloquear trabajo en curso; en `close` son fallos bloqueantes.
+    - Una feature cuyo spec se aprobo antes de esta regla (sin `autocomprobacion`
+      en el backlog) solo recibe avisos: no se le cambia la regla a mitad de camino.
     """
     fallos: list[str] = []
     avisos: list[str] = []
@@ -251,6 +253,9 @@ def validar_feature(
         requerido = regla_activa(data.get("rules"))
     except ValueError as exc:
         return [str(exc)], []
+    # La exigencia entra con la primera aprobacion del spec (gate.py approve-spec deja
+    # `autocomprobacion`). Una feature aprobada antes sigue recibiendo el aviso, sin bloqueo.
+    requerido = requerido and bool(f.get("autocomprobacion"))
 
     try:
         mapa = cargar_mapa(p)
@@ -362,6 +367,11 @@ def lineas_brief(p: dict, data: dict, f: dict, micros: list[str], stext: str) ->
         L.append("  feedback loop: tras pasar unit tests, comprueba el flujo real en la app/costura "
                  "(Playwright, Chrome DevTools MCP, HTTP o CLI); si falla, usa el error para corregir y "
                  "reintentar (max 2 intentos antes de parada 4).")
+    try:
+        import comprobacion
+        L += comprobacion.lineas_brief(p, f)
+    except Exception as exc:
+        L.append(f"  [!] comprobacion de AC manuales no disponible: {exc}")
     return L
 
 

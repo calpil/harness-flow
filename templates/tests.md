@@ -8,8 +8,10 @@ Estado: draft
      necesita al menos una linea. Muestrala en el chat y empieza: no esperes
      aprobacion. Si la lista crece, vuelve a sellarla: close exige el sello fresco.
      Quitar un test sellado, o dejar un AC solo con verificacion manual sin que el
-     spec lo declare `[costura: manual]`, lo decide el usuario: sellar-tests --yes. -->
+     spec lo declare `[costura: manual]`, lo decide el usuario: sellar-tests --yes.
+     Un AC de verificacion manual lo compruebas TU primero en la aplicacion
+     (comprobacion.py registrar); al usuario le llega solo el que no pudiste. -->
 
 - AC-1: <nombre_del_test> [costura: endpoint|servicio|ui|integracion]
 - AC-1: <otro_test_del_mismo_ac> [costura: ...]
-- AC-2: verificacion manual: <que mira el usuario y donde>
+- AC-2: verificacion manual: <que se mira en la aplicacion y donde>

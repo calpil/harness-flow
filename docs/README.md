@@ -60,9 +60,10 @@ flowchart TD
     H35["<b>Hito 35: Un Hallazgo no Abre una Ficha</b><br/>Enmienda antes que ficha: hallazgo.py, add.py con el SÍ y el peso, close sin hallazgos abiertos"]
     H36["<b>Hito 36: El Pair Avanza Solo</b><br/>La lista de tests la sella quien implementa; formulario solo en las paradas que preguntan"]
     H37["<b>Hito 37: Grok Carga el Stack del Rol</b><br/>Rules y skills de front y backend en .grok/ de la sesión, con nombre de stack"]
+    H39["<b>Hito 39: Tres Mecanismos de Autonomía</b><br/>Feature Map, evals y guardrails; AC manuales por el agente, hook pre-push y SÍ del usuario"]
     H38["<b>Hito 38: Stacks .NET en Capas y .NET MVC</b><br/>dotnet-layered y dotnet-mvc; el stack específico desplaza al general (supersedes)"]
 
-    H1 --> H2 --> H3 --> H4 --> H5 --> H6 --> H7 --> H8 --> H9 --> H10 --> H11 --> H12 --> H13 --> H14 --> H15 --> H16 --> H17 --> H18 --> H19 --> H20 --> H21 --> H22 --> H23 --> H24 --> H25 --> H26 --> H27 --> H28 --> H29 --> H30 --> H31 --> H32 --> H33 --> H34 --> H35 --> H36 --> H37 --> H38
+    H1 --> H2 --> H3 --> H4 --> H5 --> H6 --> H7 --> H8 --> H9 --> H10 --> H11 --> H12 --> H13 --> H14 --> H15 --> H16 --> H17 --> H18 --> H19 --> H20 --> H21 --> H22 --> H23 --> H24 --> H25 --> H26 --> H27 --> H28 --> H29 --> H30 --> H31 --> H32 --> H33 --> H34 --> H35 --> H36 --> H37 --> H38 --> H39
 ```
 
 ---
