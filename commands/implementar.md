@@ -99,10 +99,14 @@ skill del stack cubre, abre su `SKILL.md` en la ruta del indice y siguela: la
 ruta existe aunque la skill no este instalada en el repo.
 
 Trae tambien el bloque **`NORMAS DE INGENIERIA`** (datos, diseno, refactor,
-rendimiento, IA, servicios, construccion, seguridad, versiones y Context7) y, por
-cada stack, su **`DOCUMENTACION VIGENTE`**. Es la misma lista que audita el
+rendimiento, IA, servicios, construccion, seguridad, versiones, Context7 y
+autonomia), el bloque **`FEATURE MAP Y FEEDBACK LOOP`** y **`GUARDRAILS DETERMINISTAS`**,
+junto con **`DOCUMENTACION VIGENTE`** de cada stack. Es la misma lista que audita el
 revisor: cumplela en modo pair y en delegado. Cada norma aplica solo si el
 cambio toca su materia; su violacion es hallazgo bloqueante o mayor.
+Antes de commitear: si la feature expone UI/endpoints actualiza `harness/feature-map.json`
+(`feature_map.py registrar`), si es `--kind bug` incluye `## Reproduccion` verificable en
+`docs/impl-$ARGUMENTS[0].md`, y corre `guardrails.py check --feature $ARGUMENTS[0]`.
 
 ## 4. Elige el effort
 

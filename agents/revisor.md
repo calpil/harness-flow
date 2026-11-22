@@ -147,6 +147,10 @@ evidencia y el codigo tu mismo.
 - **Concisión técnica ASD-STE100 (Estándar Karpathy):**
   - Redacta cada observación y hallazgo en **frases de máximo 20 palabras**, en voz activa y citando `archivo:línea`.
   - Prohibido emitir sugerencias cosméticas de estilo o párrafos decorativos: si no viola un AC, la seguridad o la arquitectura, no es un hallazgo. Ver [`references/comunicacion-ste100-y-prompts.md`](references/comunicacion-ste100-y-prompts.md).
+- **Auditoría de Autonomía: Guardrails Deterministas y Feature Map (ver `references/autonomia-agentes-spacex.md`):**
+  - Si el briefing reporta `ALERTAS AUTOMATICAS DE GUARDRAILS DETERMINISTAS` (patrón prohibido, ruido narrativo de IA o frontera entre features rota), clasifica cada bloqueo `[!!]` como hallazgo **bloqueante**.
+  - Si el briefing reporta `ALERTAS DE FEATURE MAP Y FEEDBACK LOOP` (feature con UI/endpoint sin entrada en `harness/feature-map.json` o `--kind bug` sin evidencia verificable en `## Reproduccion`), clasifícalo como hallazgo **mayor**.
+  - Detecta atajos de acoplamiento ("camino corto incorrecto") que mezclen capas internas de features o módulos separados.
 - **No selles.** No escribas una linea `Revisado:` ni `Veredicto:` con formato de
   sello. El sello lo estampa `gate.py revision` en la sesion principal, y un
   sello tipeado a mano es exactamente lo que ese gate existe para rechazar.

@@ -89,7 +89,7 @@ AGY descubre `.agents/rules/*.md` y `.agents/skills/*/SKILL.md` subiendo desde e
 - **Pair es el modo por defecto en cualquier repo** (lo sella `gate.py approve-spec`, lo confirma `worktree.py start`, y `gate.py close` exige `docs/tests-<id>.md` sellada por `gate.py sellar-tests`). No hace falta ningún flag `--pair`.
 - En **AGY**: todas las paradas que preguntan (paradas 1, 3 y 4; enmienda; ficha nueva; cierre) van en **un** formulario usando `ask_question` con la recomendación `(Recommended)` primera.
 - En **Gemini CLI**: usa un formulario estructurado Markdown (`[A]`, `[B]`, `[C]` con `(Recomendada)`).
-- El protocolo completo, los 12 libros (`scripts/normas.py`), el texto de las reglas y el índice de skills llegan por la salida del brief en ambos clientes.
+- El protocolo completo, las 13 normas (`scripts/normas.py`, incluidos Feedback Loop/Feature Map, Agent Evals y Guardrails), el texto de las reglas y el índice de skills llegan por la salida del brief en ambos clientes.
 
 ## 6. Revisor aislado (Rol 3)
 

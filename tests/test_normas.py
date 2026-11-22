@@ -70,7 +70,7 @@ class RegistroTests(unittest.TestCase):
     def test_el_cuadro_norma_por_rol_no_tiene_ninguna_celda_vacia(self):
         """El cuadro que se le mostro al usuario, como invariante: todo en Si."""
         filas = normas.cuadro()
-        self.assertEqual(12, len(filas))
+        self.assertEqual(13, len(filas))
         for titulo, celdas in filas:
             for rol in normas.ROLES:
                 with self.subTest(norma=titulo, rol=rol):
@@ -80,7 +80,7 @@ class RegistroTests(unittest.TestCase):
         r = harness("normas.py", "--cuadro", cwd=RAIZ)
         self.assertEqual(0, r.returncode, r.stdout + r.stderr)
         self.assertNotIn("NO", r.stdout)
-        self.assertEqual(12 * 5, r.stdout.count("| Sí"))
+        self.assertEqual(13 * 5, r.stdout.count("| Sí"))
 
     def test_una_celda_vacia_haria_fallar_el_cuadro(self):
         """El verde no es evidencia: el cuadro tiene que poder decir NO."""
@@ -113,7 +113,7 @@ class RegistroTests(unittest.TestCase):
     def test_estan_los_libros_que_el_readme_promete(self):
         titulos = " ".join(n["titulo"] for n in normas.NORMAS)
         for libro in ("DDIA", "Ousterhout", "Fowler", "GoF", "CLRS", "Chip Huyen", "Sam Newman",
-                      "McConnell", "OWASP", "Context7", "STE100", "Orosz"):
+                      "McConnell", "OWASP", "Context7", "STE100", "Orosz", "Guardrails"):
             with self.subTest(libro=libro):
                 self.assertIn(libro, titulos)
 

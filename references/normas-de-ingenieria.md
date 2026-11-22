@@ -26,7 +26,7 @@ esa salida: si contradicen al script, gana el script.
 "$PY" "$H/normas.py" --cuadro      # exit 1 si una celda queda vacía
 ```
 
-Son 12 normas y 5 columnas. Todas las celdas dicen "Sí" y un test falla si una
+Son 13 normas y 5 columnas. Todas las celdas dicen "Sí" y un test falla si una
 queda vacía (`tests/test_normas.py`).
 
 | id | Norma | Referencia |
@@ -43,6 +43,7 @@ queda vacía (`tests/test_normas.py`).
 | `documentacion` | Versiones vigentes y documentación oficial (Context7) | `context7-documentacion-oficial.md` |
 | `comunicacion` | ASD-STE100 y principios de Karpathy | `comunicacion-ste100-y-prompts.md` |
 | `revision` | Entrega predecible y code review pragmático (Orosz) | `ingenieria-software-gergely-orosz.md` |
+| `autonomia` | Autonomía y confianza en agentes (Feedback Loop, Agent Evals y Guardrails) | `autonomia-agentes-spacex.md` |
 
 Cada norma dice a qué cambios aplica (`cuando`). Una feature sin llamadas a un
 modelo de lenguaje no tiene nada que cumplir de la norma `ia`.

@@ -131,6 +131,23 @@ def main(argv: list[str] | None = None) -> None:
             print(f"   arquitectura: {linea_arq}")
     except (Exception, SystemExit) as exc:
         print(f"   arquitectura: [!] no se pudo evaluar: {exc}")
+    try:
+        import feature_map
+        print(f"   feature-map: {feature_map.resumen_estado(p, data)}")
+    except Exception as exc:
+        print(f"   feature-map: [!] no se pudo evaluar: {exc}")
+    try:
+        import guardrails
+        print(f"   guardrails:  {guardrails.resumen_estado(p)}")
+    except Exception as exc:
+        print(f"   guardrails:  [!] no se pudo evaluar: {exc}")
+    try:
+        import evals
+        linea_ev = evals.resumen_estado(p, data)
+        if linea_ev:
+            print(f"   evals:       {linea_ev}")
+    except Exception as exc:
+        print(f"   evals:       [!] no se pudo evaluar: {exc}")
     faltan_docs: list[str] = []
     try:
         import producto

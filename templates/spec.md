@@ -35,6 +35,10 @@ Patrón de ACs para Features de IA / Predictivas (Chip Huyen - ver `references/a
 AC negativos (OWASP - ver `references/seguridad-owasp-y-zap.md`): todo AC que expone un endpoint o
 una acción con permisos lleva al menos un AC marcado `[negativo]` (sin permiso, entrada inválida,
 fuera de límite). `approve-spec` avisa si falta; el revisor lo marca como hallazgo mayor.
+Feedback Loop y Feature Map (ver `references/autonomia-agentes-spacex.md`): todo AC con costura
+`ui`/`endpoint`/`cli` se registra en `harness/feature-map.json` (`feature_map.py registrar`) para
+que los agentes sepan cómo acceder y verificarlo sobre la app; todo `--kind bug` exige paso de
+reproducción autónoma en rojo antes del fix.
 Apunta a 2-5 AC por vertical slice; si necesita mas de 5, considera dividir la
 feature en slices verticales mas chicos antes de aprobar.
 

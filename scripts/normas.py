@@ -343,6 +343,40 @@ NORMAS: list[dict] = [
                     "a '## Observaciones' y NO abren otra ronda"),
         ],
     },
+    {
+        "id": "autonomia",
+        "titulo": "Autonomia y confianza en agentes (Feedback Loop, Agent Evals y Guardrails)",
+        "ref": "autonomia-agentes-spacex.md",
+        "cuando": "todo cambio con UI, endpoints, bugs, nuevas lecciones/skills o limites entre modulos",
+        "producto": {
+            "prd": ["Cada flujo observable define como un agente lo comprueba por si mismo (costura E2E/app) "
+                    "sin convertir al humano en cuello de botella."],
+            "sdd": ["La estructura de modulos/features se disena con railes para agentes ('el camino mas corto "
+                    "es el correcto'): fronteras verificables y guardrails deterministas en harness/guardrails.json."],
+        },
+        "spec": ["Todo AC con costura UI/endpoint se vincula al Feature Map (harness/feature-map.json) y "
+                 "declara como verificarlo sobre la app; todo bug (--kind bug) exige reproduccion autonoma previa al fix."],
+        "construye": [
+            "Feedback Loop: ademas de unit tests, comprueba el comportamiento interactuando con la app/costura "
+            "real usando harness/feature-map.json; en bugs, reproduce el fallo en rojo antes de editar codigo y "
+            "registra comando y evidencia en `## Reproduccion` de docs/impl-<id>.md.",
+            "Feature Map al dia: al agregar o cambiar rutas UI, endpoints o flujos, actualiza harness/feature-map.json "
+            "con `feature_map.py registrar` antes de cerrar.",
+            "Agent Evals: al crear o modificar una leccion/skill, evalua que los agentes la sigan con `evals.py` "
+            "(corridas paralelas + juez aislado); si tras el tope de rondas siguen fallando, promueve la regla a "
+            "guardrail determinista con `guardrails.py promover`.",
+            "Guardrails: corre `guardrails.py check --feature <id>` antes de commitear; cero patrones prohibidos, "
+            "cero comentarios narrativos de IA y cero imports cruzados entre capas internas de features distintas.",
+        ],
+        "audita": [
+            (BLOQUEANTE, "violacion de guardrail determinista activo en el diff (patron prohibido, frontera "
+                         "entre features rota o comentario bloqueado por harness/guardrails.json)"),
+            (MAYOR, "feature con UI/endpoint sin entrada vigente en harness/feature-map.json o bug sin evidencia "
+                    "verificable de reproduccion previa al fix en docs/impl-<id>.md"),
+            (MAYOR, "atajo de acoplamiento entre modulos/features que rompe el aislamiento por funcionalidad"),
+            (MENOR, "leccion nueva/modificada sin eval vigente en evals.py o comentarios redundantes de IA"),
+        ],
+    },
 ]
 
 

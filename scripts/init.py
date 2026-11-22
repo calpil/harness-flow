@@ -30,7 +30,7 @@ def main() -> None:
 
     root = Path(a.root).resolve()
     h = root / "harness"
-    for d in (h / "progress", root / "docs" / "prd",
+    for d in (h / "progress", h / "evals", root / "docs" / "prd",
               root / "docs" / "vault"):
         d.mkdir(parents=True, exist_ok=True)
 
@@ -42,6 +42,20 @@ def main() -> None:
             {"project": a.project, "rules": DEFAULT_RULES, "features": []},
             ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         print(f"[ok] {backlog}")
+
+    fmap = h / "feature-map.json"
+    if not fmap.exists():
+        import feature_map
+        fmap.write_text(json.dumps(feature_map.crear_esqueleto(), ensure_ascii=False, indent=2) + "\n",
+                        encoding="utf-8")
+        print(f"[ok] {fmap}")
+
+    gr = h / "guardrails.json"
+    if not gr.exists():
+        import guardrails
+        gr.write_text(json.dumps(guardrails.config_default("estandar"), ensure_ascii=False, indent=2) + "\n",
+                      encoding="utf-8")
+        print(f"[ok] {gr}")
 
     hist = h / "progress" / "history.md"
     if not hist.exists():

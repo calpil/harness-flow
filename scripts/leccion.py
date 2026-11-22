@@ -489,6 +489,11 @@ def cmd_list(args) -> None:
     raices = skills_roots(todos_los_hosts=True)
     vistos: set[str] = set()
     filas = 0
+    try:
+        import evals as _evals
+        p_opt = _evals._proyecto_opcional()
+    except Exception:
+        _evals, p_opt = None, None
     for raiz in raices:
         print("Skills en " + str(raiz) + "\n")
         encontradas = sorted(raiz.glob("*/*/SKILL.md")) + sorted(raiz.glob("*/SKILL.md"))
@@ -502,9 +507,10 @@ def cmd_list(args) -> None:
             filas += 1
             n = len(sm.read_text(encoding="utf-8").splitlines())
             marca = "  <- sobre el tope: muevele detalle a references/" if n > TOPE_LINEAS else ""
+            badge = _evals.insignia_eval(nombre, p_opt, skill_md=sm) if _evals else ""
             cat = sm.parent.parent.name
             prefijo = "" if cat == raiz.name else cat + "/"
-            print("   %-46s %4d lineas%s" % (prefijo + nombre, n, marca))
+            print("   %-46s %4d lineas%s%s" % (prefijo + nombre, n, badge, marca))
             d = descripcion(sm)
             if d:
                 print("      " + d[:100])
@@ -514,6 +520,7 @@ def cmd_list(args) -> None:
     if not filas:
         print("   (ninguna todavia)")
     print("[i]  PATCHEA la leccion que estuvo en juego antes de crear otra.")
+    print("[i]  Evalua skills nuevas o editadas con: evals.py init/briefing/registrar <clase>")
 
 
 def cmd_ver(args) -> None:

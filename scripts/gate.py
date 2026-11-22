@@ -200,6 +200,13 @@ def _check_feature(p, f, rules, r, yo: dict | None = None) -> None:
     elif f.get("status") != "in_progress":
         r.fallo(f"#{fid} sin evidencia ({ip.name})", "escribe la evidencia por AC")
 
+    import feature_map
+    fm_fallos, fm_avisos = feature_map.validar_feature(p, load_backlog(p), f, text, modo_check=True)
+    for x in fm_fallos:
+        r.fallo(f"#{fid} {x}")
+    for x in fm_avisos:
+        r.aviso(f"#{fid} {x}")
+
     if rules.get("require_review"):
         rp = review_path(p, f)
         if not rp.exists():
@@ -1177,7 +1184,7 @@ def cmd_verify(args) -> None:
                   f"({p['root']}), que esta en la rama de integracion.")
     out = [f"# Verify - Feature #{f['id']}", "", f"Corrido: {now_iso()}",
            f"Arbol: {cwd}", ""]
-    fallos = 0
+    fallos_ac = 0
     for ac, cmd in cmds.items():
         print(f"-- {ac}: {cmd}")
         try:
@@ -1188,16 +1195,46 @@ def cmd_verify(args) -> None:
             code, salida = 124, f"TIMEOUT tras {timeout}s"
         estado = "PASS" if code == 0 else "FAIL"
         if code != 0:
-            fallos += 1
+            fallos_ac += 1
         print(f"   {estado} (exit {code})")
         out += [f"## {ac} — {estado} (exit {code})", "", f"Comando: `{cmd}`", "",
                 "```", salida.strip() or "(sin salida)", "```", ""]
+
+    # Mecanismo 3 (Guardrails deterministas): corre sobre el diff y comandos del proyecto.
+    fallos_gr = 0
+    try:
+        import guardrails
+        gr = guardrails.auditar_feature(p, data, f)
+        bloqueos_gr = gr["bloqueos"]
+        errores_gr = gr["errores_medicion"]
+        avisos_gr = gr["avisos"]
+        fallos_gr = len(bloqueos_gr) + len(errores_gr)
+        estado_gr = "PASS" if fallos_gr == 0 else "FAIL"
+        print(f"-- guardrails deterministas: {estado_gr} ({len(bloqueos_gr)} bloqueo(s), {len(avisos_gr)} aviso(s))")
+        lineas_gr = []
+        for bl in bloqueos_gr:
+            loc = f"{bl['file']}:{bl['line']}" if bl["line"] else bl["file"]
+            lineas_gr.append(f"[!!] [{bl['id']}] {loc}: {bl['mensaje']}")
+        for em in errores_gr:
+            lineas_gr.append(f"[!!] SIN MEDIR: {em}")
+        for av in avisos_gr:
+            loc = f"{av['file']}:{av['line']}" if av["line"] else av["file"]
+            lineas_gr.append(f"[!]  [{av['id']}] {loc}: {av['mensaje']}")
+        out += [f"## Guardrails deterministas — {estado_gr}", "",
+                "```", "\n".join(lineas_gr) or "Limpio", "```", ""]
+    except ValueError as exc:
+        fallos_gr = 1
+        print(f"-- guardrails deterministas: FAIL ({exc})")
+        out += ["## Guardrails deterministas — FAIL", "", "```", str(exc), "```", ""]
+
+    fallos = fallos_ac + fallos_gr
     vp = p["docs"] / f"verify-{f['id']}.md"
     vp.parent.mkdir(parents=True, exist_ok=True)
     vp.write_text("\n".join(out), encoding="utf-8")
     f["last_verify"] = {"at": now_iso(), "fallos": fallos, "total": len(cmds),
                         "acs_declarados": len(acs),
                         "sin_comando": sin_comando,
+                        "guardrails_fallos": fallos_gr,
                         "enmiendas": n_enmiendas(f)}
     if contexto:
         from multirepo import Invalid, context
@@ -1219,7 +1256,9 @@ def cmd_verify(args) -> None:
     save_backlog(p, fresco)
     import vault
     vault.sincronizar_rapido(p)
-    print(f"\n[{'ok' if not fallos else '!!'}] {len(cmds)-fallos}/{len(cmds)} AC en verde -> {vp.name}")
+    print(f"\n[{'ok' if not fallos_ac else '!!'}] {len(cmds)-fallos_ac}/{len(cmds)} AC en verde -> {vp.name}")
+    if fallos_gr:
+        print(f"[!!] guardrails deterministas: {fallos_gr} bloqueo(s) registrados en {vp.name}")
     if sin_comando:
         print(f"[!] {len(sin_comando)}/{len(acs)} AC NO se midieron (sin comando "
               f"declarado): {', '.join(sin_comando)}\n"
@@ -1501,6 +1540,34 @@ def cmd_close(args) -> None:
                 f"seguridad (OWASP A06): el diff en {dep['repo_name']} toco dependencias ({archivos}); "
                 f"confirma que corriste `stack.py auditar --repo {dep['repo_path']}` (exit 0)"
             )
+
+        # Mecanismo 1 (Feedback Loop + Feature Map): obligatorio por defecto (rules.require_feature_map).
+        import feature_map
+        fm_fallos, fm_avisos = feature_map.validar_feature(p, data, f, stext, modo_check=False)
+        fallos.extend(fm_fallos)
+        avisos_cierre.extend(fm_avisos)
+
+        # Mecanismo 2 (Agent Evals de lecciones): opt-in por rules.require_skill_eval.
+        if args.leccion and args.leccion != "ninguna":
+            import evals
+            ev_fallos, ev_avisos = evals.validar_leccion_para_cierre(p, data, args.leccion)
+            fallos.extend(ev_fallos)
+            avisos_cierre.extend(ev_avisos)
+
+        # Mecanismo 3 (Guardrails deterministas): bloquea violaciones de patrones, ruido de IA y fronteras.
+        import guardrails
+        try:
+            gr = guardrails.auditar_feature(p, data, f)
+            for bl in gr["bloqueos"]:
+                loc = f"{bl['file']}:{bl['line']}" if bl["line"] else bl["file"]
+                fallos.append(f"guardrails [{bl['id']}] en {loc}: {bl['mensaje']}")
+            for em in gr["errores_medicion"]:
+                fallos.append(f"guardrails (no se pudo medir): {em}")
+            for av in gr["avisos"]:
+                loc = f"{av['file']}:{av['line']}" if av["line"] else av["file"]
+                avisos_cierre.append(f"guardrails [{av['id']}] en {loc}: {av['mensaje']}")
+        except ValueError as exc:
+            fallos.append(f"guardrails: {exc}")
 
     if fallos:
         print(f"[!!] close #{fid} BLOQUEADO por {len(fallos)} regla(s):")

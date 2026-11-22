@@ -2103,6 +2103,17 @@ def cmd_brief(args) -> None:
         # y en cualquier host. Lo del spec se pide mientras el spec no esta sellado.
         import normas
         reglas += normas.lineas_para_construir(con_spec=not f.get("last_spec_sig"))
+        if getattr(args, "con_modo", True):
+            try:
+                import feature_map
+                reglas += feature_map.lineas_brief(p, data, f, micros, stext)
+            except Exception as exc:
+                reglas.append(f"[!] feature-map no disponible: {exc}")
+            try:
+                import guardrails
+                reglas += guardrails.lineas_brief(p, data, f)
+            except Exception as exc:
+                reglas.append(f"[!] guardrails no disponible: {exc}")
 
     if args.max_lineas and len(L) + len(pie) > args.max_lineas:
         # El recorte va por el MEDIO: truncar por el final se comia las rutas

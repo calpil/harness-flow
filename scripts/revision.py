@@ -312,6 +312,35 @@ ronda: escalalo al usuario en el veredicto, con su evidencia.
             print()
     except Exception:
         pass
+    # Chequeo automatizado de Guardrails deterministas y Feature Map / Feedback Loop.
+    try:
+        import guardrails
+        gr = guardrails.auditar_feature(p, load_backlog(p), f)
+        if gr["bloqueos"] or gr["avisos"] or gr["errores_medicion"]:
+            print("ALERTAS AUTOMATICAS DE GUARDRAILS DETERMINISTAS:")
+            for bl in gr["bloqueos"]:
+                loc = f"{bl['file']}:{bl['line']}" if bl["line"] else bl["file"]
+                print(f"  [!!] BLOQUEANTE [{bl['id']}] en {loc}: {bl['mensaje']}")
+            for em in gr["errores_medicion"]:
+                print(f"  [!!] BLOQUEANTE (sin medir): {em}")
+            for av in gr["avisos"]:
+                loc = f"{av['file']}:{av['line']}" if av["line"] else av["file"]
+                print(f"  [!]  AVISO [{av['id']}] en {loc}: {av['mensaje']}")
+            print()
+    except Exception as exc:
+        print(f"ALERTAS AUTOMATICAS DE GUARDRAILS DETERMINISTAS:\n  [!!] error al evaluar guardrails: {exc}\n")
+    try:
+        import feature_map
+        fm_fallos, fm_avisos = feature_map.validar_feature(p, load_backlog(p), f, stext, modo_check=False)
+        if fm_fallos or fm_avisos:
+            print("ALERTAS DE FEATURE MAP Y FEEDBACK LOOP:")
+            for x in fm_fallos:
+                print(f"  [!!] MAYOR: {x}")
+            for x in fm_avisos:
+                print(f"  [!]  AVISO: {x}")
+            print()
+    except Exception:
+        pass
     print("-" * 72)
     print("DIFF DE LA FEATURE")
     print("-" * 72)

@@ -141,6 +141,12 @@ Para proyectos con mucho código anterior al arnés. En vez de bloquear todo el 
 - **Verificadores sin falsos positivos**: workspaces Angular con varios proyectos, servicios Go sin `internal/` (aviso) y raíces de `grafos.json` como objetos.
 - **Context7** documentado para Claude Code, Codex, Gemini CLI, Antigravity, Grok y Hermes; el revisor tiene Context7 y lectura web entre sus herramientas.
 
+### 10. Los 3 Mecanismos de Autonomía y Confianza en Agentes (`feature_map.py`, `evals.py`, `guardrails.py`)
+Inspirados en el flujo multi-agente de alta confianza (*Feedback Loop*, *Agent Evals* y *Guardrails* — guía completa en [`references/autonomia-agentes-spacex.md`](references/autonomia-agentes-spacex.md)):
+- **Feedback Loop + Feature Map (`feature_map.py`)**: `harness/feature-map.json` documenta dónde vive cada funcionalidad, cómo acceder a ella (`rutas_ui`, `endpoints`, `pasos_acceso`) y cómo comprobarla sobre la app viva (`como_verificar`), inyectándose automáticamente en `contexto.py brief`. Con `rules.require_feature_map: true` (activo por defecto), `gate.py close` bloquea features con UI/endpoints sin entrada vigente en el mapa y bugs (`--kind bug`) sin sección `## Reproduccion` verificable en `docs/impl-<id>.md`.
+- **Agent Evals de Skills/Lecciones (`evals.py`)**: evita acumular lecciones contradictorias o ineficaces. Define exámenes (`evals.py init`), genera briefings host-neutrales para lanzar N ejecutores en paralelo + un juez aislado (`evals.py briefing --fase ejecutar|juez`), sella puntajes y hash SHA-256 de `SKILL.md` (`evals.py registrar`, con invalidación automática `STALE` si la skill cambia), audita higiene de skills (`evals.py estado` y badges en `leccion.py list`) y soporta `rules.require_skill_eval: true` (opt-in) en `gate.py close`.
+- **Guardrails Deterministas (`guardrails.py`)**: barreras ineludibles en `harness/guardrails.json` + defaults seguros por stack (patrones prohibidos, política de comentarios `anti-ruido` por defecto o `sin-comentarios` con `--perfil spacex`, fronteras `aislamiento-entre-features` para que *el camino más corto sea el correcto*, y comandos linter). `guardrails.py promover --desde-skill <clase>` promueve reglas fallidas de una skill a bloqueos duros. Se ejecutan automáticamente en `gate.py verify`, `revision.py --briefing` y bloquean `gate.py close`.
+
 ## Políticas de Modelos y Reasoning Effort
 
 El arnés gestiona el modelo y el esfuerzo cognitivo según el proveedor del agente (ver detalles en [`references/modelos.md`](references/modelos.md)):

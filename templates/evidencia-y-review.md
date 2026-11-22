@@ -14,6 +14,10 @@ Como se comprobo: salida de `pytest -q` en verde.
 
 ## AC-2
 `ms-orders-service/internal/order.go:77`.
+
+## Reproduccion (obligatorio si la feature es --kind bug)
+<!-- Comando, paso de Feature Map o traza con la que el agente reprodujo el fallo en ROJO antes del fix y lo confirmo en VERDE despues. -->
+Reproducido antes del fix con `npx playwright test e2e/checkout.spec.ts` (fallo HTTP 500 en `poc-ui/src/checkout.ts:42`); tras el fix pasa en verde.
 ```
 
 Tambien vale la forma compacta, con la cita en la misma linea:

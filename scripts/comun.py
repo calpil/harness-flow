@@ -36,6 +36,9 @@ def paths(root: Path | None = None) -> dict:
         "vault": r / "docs" / "vault",
         "grafos": r / "harness" / "grafos.json",
         "atlassian": r / "harness" / "atlassian.json",
+        "feature_map": r / "harness" / "feature-map.json",
+        "guardrails": r / "harness" / "guardrails.json",
+        "evals": r / "harness" / "evals",
     }
     # "graph" es el grafo que TODO el arnes consulta. Con varias raices
     # declaradas es el combinado; con una sola, el de esa raiz. Nunca se
@@ -171,6 +174,11 @@ DEFAULT_RULES = {
     # Sincronizacion multi-dev del estado `desarrollando` en `origin/<rama_base>`
     # y espejo en Memory Hub Postgres. `"auto"` se activa sola si hay remoto `origin`.
     "require_sync_remoto": "auto",
+    # Mecanismo 1 (Feedback Loop + Feature Map): obligatorio por defecto para
+    # features que exponen UI/endpoints y para evidencia de reproduccion en bugs.
+    "require_feature_map": True,
+    # Mecanismo 2 (Agent Evals de skills/lecciones): opt-in por proyecto.
+    "require_skill_eval": False,
     "rutas_protegidas": ["docs/prd/**", "docs/sdd.md", "docs/constitution.md", ".env"],
 }
 
